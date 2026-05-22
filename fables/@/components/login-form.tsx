@@ -119,19 +119,37 @@ export function LoginForm({
         <CardContent>
           <form onSubmit={handleSubmit}>
             <FieldGroup>
-          
               <Field className="space-y-3">
-              
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                />
+                <FieldDescription>
+                  Enter your email address to sign in.
+                </FieldDescription>
+
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="••••••••"
+                />
+                <FieldDescription>
+                  Your password is kept secure.
+                </FieldDescription>
 
                 <Button
-                  type="button"
-                  onClick={handleDiscordSignIn}
+                  type="submit"
                   disabled={isLoading}
                   className="w-full bg-red-600 text-white hover:bg-red-700"
                 >
-                  {isLoading
-                    ? "Signing in..."
-                    : "Log in with Discord"}
+                  {isLoading ? "Signing in..." : "Log in with Discord"}
                 </Button>
 
                 {error && (
@@ -140,13 +158,13 @@ export function LoginForm({
                   </div>
                 )}
 
-               <button
-  type="button"
-  onClick={handleDiscordSignIn}
-  className="underline underline-offset-4"
->
-  Sign up
-</button>
+                <button
+                  type="button"
+                  onClick={handleDiscordSignIn}
+                  className="underline underline-offset-4"
+                >
+                  Sign up
+                </button>
               </Field>
             </FieldGroup>
           </form>
