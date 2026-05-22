@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
+import "./index.css";
 
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);

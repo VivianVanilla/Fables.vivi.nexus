@@ -14,6 +14,8 @@ import {
 
 type LoginFormProps = ComponentProps<"div">;
 
+
+
 async function signInWithDiscord() {
   const redirectTo = `${window.location.origin}/dashboard`;
 
