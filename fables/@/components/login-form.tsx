@@ -1,11 +1,9 @@
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { cn } from "@/lib/utils";
 
 import { supabase } from "../../src/supabase";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-
 import {
   Card,
   CardContent,
@@ -14,26 +12,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-
-type LoginFormProps = React.ComponentProps<"div">;
-
-export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  return { data, error };
-}
+type LoginFormProps = ComponentProps<"div">;
 
 async function signInWithDiscord() {
-  const redirectTo = `${window.location.origin}/Dashboard`;
+  const redirectTo = `${window.location.origin}/dashboard`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "discord",
@@ -50,38 +32,9 @@ async function signInWithDiscord() {
   return data;
 }
 
-export function LoginForm({
-  className,
-  ...props
-}: LoginFormProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
+export function LoginForm({ className, ...props }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-
-    try {
-      setError(null);
-      setIsLoading(true);
-
-      const { error } = await signIn(email, password);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to sign in"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   async function handleDiscordSignIn() {
     try {
@@ -117,57 +70,20 @@ export function LoginForm({
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit}>
-            <FieldGroup>
-              <Field className="space-y-3">
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                />
-                <FieldDescription>
-                  Enter your email address to sign in.
-                </FieldDescription>
+          <Button
+            type="button"
+            onClick={handleDiscordSignIn}
+            disabled={isLoading}
+            className="w-full bg-red-600 text-white hover:bg-red-700"
+          >
+            {isLoading ? "Signing in..." : "Log in with Discord"}
+          </Button>
 
-                <FieldLabel htmlFor="password">Password</FieldLabel>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="••••••••"
-                />
-                <FieldDescription>
-                  Your password is kept secure.
-                </FieldDescription>
-
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full bg-red-600 text-white hover:bg-red-700"
-                >
-                  {isLoading ? "Signing in..." : "Log in with Discord"}
-                </Button>
-
-                {error && (
-                  <div className="rounded border border-red-400 bg-red-100 px-4 py-3 text-sm text-red-700">
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDiscordSignIn}
-                  className="underline underline-offset-4"
-                >
-                  Sign up
-                </button>
-              </Field>
-            </FieldGroup>
-          </form>
+          {error && (
+            <div className="mt-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
