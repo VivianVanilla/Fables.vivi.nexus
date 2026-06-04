@@ -1,4 +1,5 @@
-import { useUser } from "./contexts/UserContext";
+import { useEffect, useState } from "react";
+import { supabase } from "./supabase";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -17,7 +18,16 @@ import {
 import "./index.css";
 
 export default function Dashboard() {
-  const user = useUser();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    }
+
+    loadUser();
+  }, []);
 
   const fullName =
     user?.user_metadata?.full_name ||
