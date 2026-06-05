@@ -60,13 +60,13 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
       className={cn("flex flex-col gap-6", className)}
       {...props}
     >
-      <Card className="mt-10 w-full bg-taupe-200">
+      <Card className="mt-10 w-full bg-card text-foreground">
         <CardHeader>
           <CardTitle className="text-xl font-bold">
             Login to your account
           </CardTitle>
 
-          <CardDescription className="text-black">
+          <CardDescription className="text-muted-foreground">
           I proudly only set up one way to log into this app. If you want more, submit a formal request.
           </CardDescription>
         </CardHeader>

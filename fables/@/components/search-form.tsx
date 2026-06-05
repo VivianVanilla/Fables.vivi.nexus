@@ -50,10 +50,10 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
         +
       </Button>
       {open && (
-        <div className=" absolute top-full z-50 mt-2 w-72 overflow-hidden rounded-md bg-white shadow-lg">
+        <div className=" absolute top-full z-50 mt-2 w-72 overflow-hidden rounded-md bg-card shadow-lg ring-1 ring-border">
     <div className="p-4">
-      <h3 className="text-sm font-medium text-gray-900">Create a New Fable</h3>
-      <p className="mt-1 text-sm text-gray-500"></p>
+      <h3 className="text-sm font-medium text-foreground">Create a New Fable</h3>
+      <p className="mt-1 text-sm text-muted-foreground"></p>
       <div className="mt-4 flex flex-col gap-2">
 
          <Dialog>

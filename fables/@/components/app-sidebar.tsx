@@ -1,3 +1,4 @@
+// ----- Imports -----
 import * as React from "react"
 import {
   ChevronDown,
@@ -9,61 +10,35 @@ import {
   GripVertical,
 } from "lucide-react"
 
+// ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
 import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
+import { buildObjectTree, extractFolderColor, reorderWithinParent } from "@/components/sidebar-utils"
+import type { SidebarObject } from "@/components/sidebar-utils"
 
-type SidebarObject = userInfo.Objects & { children: SidebarObject[] }
-
+// ----- Types & Metadata -----
 type ObjectType = "folder" | "note" | "character" | "monster" | "campaign"
 
-const typeMeta: Record<ObjectType, { label: string; icon: typeof Folder; color: string }> = {
-  folder: { label: "Folder", icon: Folder, color: "text-indigo-500" },
-  note: { label: "Note", icon: FileText, color: "text-amber-500" },
-  character: { label: "Character", icon: User2, color: "text-emerald-500" },
-  monster: { label: "Monster", icon: Skull, color: "text-rose-500" },
-  campaign: { label: "Campaign", icon: Sparkles, color: "text-sky-500" },
+const typeMeta: Record<ObjectType, { label: string; icon: typeof Folder; bg: string; fg?: string }> = {
+  folder: { label: "Folder", icon: Folder, bg: "#000000" },
+  note: { label: "Note", icon: FileText, bg: "#F59E0B" },
+  character: { label: "Character", icon: User2, bg: "#1da0b8" },
+  monster: { label: "Monster", icon: Skull, bg: "#91091f" },
+  campaign: { label: "Campaign", icon: Sparkles, bg: "#070605" },
 }
 
-function sortByPosition(a: userInfo.Objects, b: userInfo.Objects) {
-  return (a.position ?? 0) - (b.position ?? 0)
-}
-
-function buildObjectTree(items: userInfo.Objects[]) {
-  const map = new Map<string, SidebarObject>()
-  const nodes: SidebarObject[] = items.map((item) => ({ ...item, children: [] }))
-
-  nodes.forEach((node) => map.set(node.id, node))
-
-  nodes.sort(sortByPosition)
-
-  const roots: SidebarObject[] = []
-
-  nodes.forEach((node) => {
-    if (node.parent_id && map.has(node.parent_id)) {
-      map.get(node.parent_id)!.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  })
-
-  function sortRecursive(list: SidebarObject[]) {
-    list.sort((a, b) => sortByPosition(a, b))
-    list.forEach((item) => sortRecursive(item.children))
-  }
-
-  sortRecursive(roots)
-  return roots
-}
-
+// ----- Component -----
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  // State & Context
   const { objects, loading } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
   const [draggedId, setDraggedId] = React.useState<string | null>(null)
   const [items, setItems] = React.useState<userInfo.Objects[]>([])
 
+  // Effects
   React.useEffect(() => {
     setItems(objects)
   }, [objects])
@@ -74,43 +49,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
+  // ----- Drag / Drop Handlers -----
+
   const handleDrop = (targetId: string) => {
     if (!draggedId) return
     if (draggedId === targetId) return
 
-    setItems((prevItems) => {
-      const dragged = prevItems.find((item) => item.id === draggedId)
-      const target = prevItems.find((item) => item.id === targetId)
-      if (!dragged || !target) return prevItems
-      if (dragged.parent_id !== target.parent_id) return prevItems
-
-      const siblings = prevItems
-        .filter((item) => item.parent_id === dragged.parent_id)
-        .sort(sortByPosition)
-
-      const draggedIndex = siblings.findIndex((item) => item.id === draggedId)
-      const targetIndex = siblings.findIndex((item) => item.id === targetId)
-      if (draggedIndex === -1 || targetIndex === -1) return prevItems
-
-      const newOrder = [...siblings]
-      newOrder.splice(draggedIndex, 1)
-      newOrder.splice(targetIndex, 0, dragged)
-
-      return prevItems.map((item) => {
-        const index = newOrder.findIndex((node) => node.id === item.id)
-        if (index === -1) return item
-        return { ...item, position: index }
-      })
-    })
-
+    setItems((prev) => reorderWithinParent(prev, draggedId, targetId))
     setDraggedId(null)
   }
+
+  // ----- Render Helpers -----
 
   const renderItem = (node: SidebarObject, level = 0) => {
     const meta = typeMeta[(node.type as ObjectType) ?? "note"] || typeMeta.note
     const Icon = meta.icon
     const isFolder = node.type === "folder"
     const isOpen = openGroups[node.id]
+
+    const folderColor = extractFolderColor(node)
 
     return (
       <div key={node.id}>
@@ -122,12 +79,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition hover:bg-sidebar-accent ${
             level > 0 ? "ml-4" : ""
           }`}
-          style={{ paddingLeft: `${level * 1.25}rem` }}
+         
         >
           <GripVertical className="size-4 text-muted-foreground" />
-          <Icon className={`size-4 ${meta.color}`} />
+          <span
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md"
+            style={{ backgroundColor: folderColor ?? meta.bg }}
+          >
+            <Icon className="size-4 text-white" aria-hidden />
+          </span>
           <div className="min-w-0 flex-1 text-left">
-            <div className="truncate font-medium">{node.name}</div>
+            <div className="truncate font-medium flex items-center gap-2">
+      
+              <span className="truncate">{node.name}</span>
+            </div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/50">
               {meta.label}
             </div>
@@ -153,6 +118,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </div>
     )
   }
+
+  // ----- Render (JSX) -----
 
   return (
     <Sidebar {...props}>
