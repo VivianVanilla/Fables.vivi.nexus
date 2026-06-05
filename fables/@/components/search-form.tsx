@@ -21,12 +21,12 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
-export function SearchForm({ ...props }: React.ComponentProps<"form">) {
+export function SearchForm({ ...props }: React.ComponentProps<"div">) {
   const [open, setOpen] = useState(false)
   const [level, setLevel] = useState<number>(1)
 
   return (
-    <form {...props} className="relative">
+    <div {...props} className="relative">
       <div className="flex items-center gap-2">
       <SidebarGroup className="py-0">
         <SidebarGroupContent className="relative">
@@ -72,12 +72,12 @@ export function SearchForm({ ...props }: React.ComponentProps<"form">) {
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <Label htmlFor="name-1">Name</Label>
-              <Input id="name-1" name="name" defaultValue="Default Folder" />
+              <Label htmlFor="folder-name">Name</Label>
+              <Input id="folder-name" name="name" defaultValue="Default Folder" />
             </Field>
             <Field>
-              <Label htmlFor="username-1">Color</Label>
-              <Input type="color" id="username-1" name="color" defaultValue="#000000" className="w-16 h-16 p-1" />
+              <Label htmlFor="folder-color">Color</Label>
+              <Input type="color" id="folder-color" name="color" defaultValue="#000000" className="w-16 h-16 p-1" />
             </Field>
           </FieldGroup>
           <DialogFooter>
@@ -107,11 +107,11 @@ export function SearchForm({ ...props }: React.ComponentProps<"form">) {
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <Label  htmlFor="name-1">Character Name</Label>
-              <Input id="name-1" required name="name" defaultValue="Default Dink" />
+              <Label htmlFor="character-name">Character Name</Label>
+              <Input id="character-name" required name="name" defaultValue="Default Dink" />
             </Field>
             <Field>
-              <Label htmlFor="username-1">Level</Label>
+              <Label htmlFor="character-level">Level</Label>
               <div className="mt-1 flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -122,7 +122,7 @@ export function SearchForm({ ...props }: React.ComponentProps<"form">) {
                   −
                 </Button>
                 <Input
-                  id="username-1"
+                  id="character-level"
                   name="level"
                   type="number"
                   min={1}
@@ -137,7 +137,7 @@ export function SearchForm({ ...props }: React.ComponentProps<"form">) {
                 <Button
                   variant="outline"
                   size="sm"
-                  type="button"
+                  type="button"  
                   onClick={() => setLevel((v) => Math.min(20, v + 1))}
                 >
                   +
@@ -155,12 +155,68 @@ export function SearchForm({ ...props }: React.ComponentProps<"form">) {
       </form>
     </Dialog>
 
-        <Button variant="outline" size="sm" type="button">
-         Monster Page
+                <Dialog>
+      <form className="flex flex-col gap-2">
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" type="button">
+          Monster Page
         </Button>
-         <Button variant="outline" size="sm" type="button">
-         Note Page
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create a Monster</DialogTitle>
+            <DialogDescription>
+             Choose a name for your new monster. You can always change these later.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <Label htmlFor="monster-name">Monster Name</Label>
+              <Input id="monster-name" required name="name" defaultValue="Default Dinkasaurus" />
+            </Field>
+            <Field>
+              
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button type="submit">Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </form>
+    </Dialog>
+
+          <Dialog>
+      <form className="flex flex-col gap-2">
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" type="button">
+          Note Page
         </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create a Note</DialogTitle>
+            <DialogDescription>
+             Choose a name for your new note. You can always change this later.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <Label htmlFor="note-name">Note Name</Label>
+              <Input id="note-name" required name="name" defaultValue="Default Note" />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button type="submit">Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </form>
+    </Dialog>
       </div>
     </div>
   </div>
@@ -168,6 +224,6 @@ export function SearchForm({ ...props }: React.ComponentProps<"form">) {
 
 
           </div>
-    </form>
+    </div>
   )
 }
