@@ -3,16 +3,19 @@ export namespace userInfo {
   export interface Objects {
     id: string; // uuid
     name: string;
-    slug: string;
-    parent_folder: string | null; // uuid
-    user_id: string; // uuid
+    data: JSON;
+    created_at: string; // timestamp
+    type: string;
+    parent_id: string | null; // uuid
+    owner_id: string; // uuid
+    position: number;
   }
 
   export interface ObjectsInsert
-    extends Omit<Objects, "id" | "created_at" | "updated_at"> {}
+    extends Omit<Objects, "id" | "created_at" > {}
 
   export interface ObjectsUpdate
-    extends Partial<Omit<Objects, "id" | "created_at" | "updated_at">> {}
+    extends Partial<Omit<Objects, "id" | "created_at">> {}
 }
 
 // Type alias for convenience
