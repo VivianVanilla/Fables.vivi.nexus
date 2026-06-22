@@ -11,7 +11,6 @@ export function buildObjectTree(items: userInfo.Objects[]) {
   const nodes: SidebarObject[] = items.map((item) => ({ ...item, children: [] }))
 
   nodes.forEach((node) => map.set(node.id, node))
-
   nodes.sort(sortByPosition)
 
   const roots: SidebarObject[] = []
@@ -39,11 +38,9 @@ export function extractFolderColor(node: userInfo.Objects): string | null {
     const d: any = typeof node.data === "string" ? JSON.parse(node.data) : node.data
     if (d && d.color) {
       let color = String(d.color).trim()
-      // If color looks like a hex string without '#', add it.
       if (/^[0-9A-Fa-f]{3}$/.test(color) || /^[0-9A-Fa-f]{6}$/.test(color)) {
         color = `#${color}`
       }
-      // Normalize shorthand 3-char hex to 6-char? leave as-is — browsers support 3-char hex
       return color
     }
   } catch (e) {
@@ -52,8 +49,29 @@ export function extractFolderColor(node: userInfo.Objects): string | null {
   return null
 }
 
-// Reorder items within same parent, returns new items with updated positions
-export function reorderWithinParent(
+/**
+ * Returns true if `ancestorId` is the same as `nodeId` or any ancestor of it.
+ * Prevents dropping a folder into itself or any of its own descendants.
+ */
+function isDescendantOrSelf(
+  items: userInfo.Objects[],
+  nodeId: string,
+  ancestorId: string
+): boolean {
+  if (nodeId === ancestorId) return true
+  const node = items.find((item) => item.id === nodeId)
+  if (!node || !node.parent_id) return false
+  return isDescendantOrSelf(items, node.parent_id, ancestorId)
+}
+
+/**
+ * Reorders sidebar items with support for:
+ * - Reordering within the same parent (original behaviour)
+ * - Dropping onto a folder → moves dragged item into that folder as last child
+ *
+ * Returns the same array reference if nothing changed.
+ */
+export function reorderSidebarItems(
   prevItems: userInfo.Objects[],
   draggedId: string,
   targetId: string
@@ -61,7 +79,30 @@ export function reorderWithinParent(
   const dragged = prevItems.find((item) => item.id === draggedId)
   const target = prevItems.find((item) => item.id === targetId)
   if (!dragged || !target) return prevItems
-  if (dragged.parent_id !== target.parent_id) return prevItems
+
+  // ── Guard: never drop an item into itself or its own descendants ────────────
+  if (isDescendantOrSelf(prevItems, targetId, draggedId)) return prevItems
+
+  // ── Case 1: dropped onto a folder → move into that folder ──────────────────
+  if (target.type === "folder") {
+    const newParentId = target.id
+
+    // Siblings already inside the target folder (excluding dragged item)
+    const siblings = prevItems
+      .filter((item) => item.parent_id === newParentId && item.id !== draggedId)
+      .sort(sortByPosition)
+
+    const newPosition = siblings.length // append at end
+
+    return prevItems.map((item) =>
+      item.id === draggedId
+        ? { ...item, parent_id: newParentId, position: newPosition }
+        : item
+    )
+  }
+
+  // ── Case 2: dropped onto a non-folder → reorder within same parent ─────────
+  if (dragged.parent_id !== target.parent_id) return prevItems // cross-level non-folder drops are ignored
 
   const siblings = prevItems
     .filter((item) => item.parent_id === dragged.parent_id)

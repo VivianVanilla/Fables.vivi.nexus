@@ -8,6 +8,7 @@ import {
   Skull,
   Sparkles,
   GripVertical,
+  Pencil,
 } from "lucide-react"
 
 // ----- UI & Helper Imports -----
@@ -16,7 +17,7 @@ import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
-import { buildObjectTree, extractFolderColor, reorderWithinParent } from "@/components/sidebar-utils"
+import { buildObjectTree, extractFolderColor, reorderSidebarItems } from "@/components/sidebar-utils"
 import type { SidebarObject } from "@/components/sidebar-utils"
 
 // ----- Types & Metadata -----
@@ -32,16 +33,27 @@ const typeMeta: Record<ObjectType, { label: string; icon: typeof Folder; bg: str
 
 // ----- Component -----
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  // State & Context
-  const { objects, loading } = useUserContext()
+  const { objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
   const [draggedId, setDraggedId] = React.useState<string | null>(null)
   const [items, setItems] = React.useState<userInfo.Objects[]>([])
+  const [contextMenu, setContextMenu] = React.useState<{
+    x: number
+    y: number
+    item: SidebarObject
+  } | null>(null)
 
-  // Effects
   React.useEffect(() => {
     setItems(objects)
   }, [objects])
+
+  // Dismiss context menu on any outside click
+  React.useEffect(() => {
+    if (!contextMenu) return
+    const handler = () => setContextMenu(null)
+    window.addEventListener("click", handler)
+    return () => window.removeEventListener("click", handler)
+  }, [contextMenu])
 
   const tree = React.useMemo(() => buildObjectTree(items), [items])
 
@@ -49,14 +61,78 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  // ----- Drag / Drop Handlers -----
+  // ----- Drag / Drop -----
 
-  const handleDrop = (targetId: string) => {
-    if (!draggedId) return
-    if (draggedId === targetId) return
+  const handleDrop = async (targetId: string) => {
+    if (!draggedId || draggedId === targetId) return
 
-    setItems((prev) => reorderWithinParent(prev, draggedId, targetId))
+    const newItems = reorderSidebarItems(items, draggedId, targetId)
+    if (newItems === items) {
+      setDraggedId(null)
+      return
+    }
+
+    const previousItems = items
+    setItems(newItems)
     setDraggedId(null)
+
+    const changed = newItems
+      .filter((item) => {
+        const original = previousItems.find((o) => o.id === item.id)
+        return original && (original.parent_id !== item.parent_id || original.position !== item.position)
+      })
+      .map((item) => ({
+        id: item.id,
+        parent_id: item.parent_id ?? null,
+        position: item.position ?? 0,
+      }))
+
+    try {
+      await batchUpdateObjects(changed)
+    } catch (error) {
+      console.error("Error saving reorder:", error)
+      setItems(previousItems)
+    }
+  }
+
+  // ----- Context Menu -----
+
+  const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>, item: SidebarObject) => {
+    event.preventDefault()
+    event.stopPropagation() // prevent the window click handler from immediately closing it
+    setContextMenu({ x: event.clientX, y: event.clientY, item })
+  }
+
+  const handleRename = async (item: SidebarObject) => {
+    setContextMenu(null)
+    const nextName = window.prompt("Rename item", item.name)?.trim()
+    if (!nextName || nextName === item.name) return
+
+    const previousItems = items
+    setItems((prev) => prev.map((entry) => (entry.id === item.id ? { ...entry, name: nextName } : entry)))
+
+    try {
+      await updateObject(item.id, { name: nextName })
+    } catch (error) {
+      console.error("Rename failed:", error)
+      setItems(previousItems)
+    }
+  }
+
+  const handleDelete = async (item: SidebarObject) => {
+    setContextMenu(null)
+    const confirmation = window.prompt(`Type DELETE to confirm deleting "${item.name}"`, "")
+    if (confirmation !== "DELETE") return
+
+    const previousItems = items
+    setItems((prev) => prev.filter((entry) => entry.id !== item.id))
+
+    try {
+      await deleteObject(item.id)
+    } catch (error) {
+      console.error("Delete failed:", error)
+      setItems(previousItems)
+    }
   }
 
   // ----- Render Helpers -----
@@ -64,9 +140,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const renderItem = (node: SidebarObject, level = 0) => {
     const meta = typeMeta[(node.type as ObjectType) ?? "note"] || typeMeta.note
     const Icon = meta.icon
+    // FIX: use type === "folder", not hasChildren — empty folders still need a toggle
     const isFolder = node.type === "folder"
-    const isOpen = openGroups[node.id]
-
+    const isOpen = openGroups[node.id] ?? false
     const folderColor = extractFolderColor(node)
 
     return (
@@ -76,10 +152,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           onDragStart={() => setDraggedId(node.id)}
           onDragOver={(event) => event.preventDefault()}
           onDrop={() => handleDrop(node.id)}
+          onContextMenu={(event) => handleContextMenu(event, node)}
           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition hover:bg-sidebar-accent ${
             level > 0 ? "ml-4" : ""
           }`}
-         
         >
           <GripVertical className="size-4 text-muted-foreground" />
           <span
@@ -90,13 +166,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </span>
           <div className="min-w-0 flex-1 text-left">
             <div className="truncate font-medium flex items-center gap-2">
-      
               <span className="truncate">{node.name}</span>
             </div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/50">
               {meta.label}
             </div>
           </div>
+          {/* FIX: chevron only on folders, regardless of whether they have children */}
           {isFolder ? (
             <button
               type="button"
@@ -108,6 +184,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               />
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              handleRename(node)
+            }}
+            className="flex h-7 w-7 items-center justify-center rounded-full p-1 text-sidebar-foreground/70 hover:text-sidebar-foreground md:hidden"
+            aria-label={`Rename ${node.name}`}
+          >
+            <Pencil className="size-4" />
+          </button>
         </div>
 
         {isFolder && isOpen && node.children.length > 0 && (
@@ -138,6 +225,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )}
         </div>
       </SidebarContent>
+
+      {contextMenu ? (
+        <div
+          className="fixed z-50 rounded-md border border-border bg-popover p-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 160 }}
+          onClick={(e) => e.stopPropagation()} // keep menu open when clicking inside it
+        >
+          <button
+            type="button"
+            onClick={() => handleRename(contextMenu.item)}
+            className="block w-full rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            Rename
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDelete(contextMenu.item)}
+            className="block w-full rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
+
       <SidebarRail />
     </Sidebar>
   )
