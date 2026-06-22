@@ -22,6 +22,7 @@ interface UserContextType {
   objects: userInfo.Objects[]
   loading: boolean
   refreshObjects: () => Promise<void>
+  createObject: (payload: { name: string; type: string; parent_id?: string | null; data?: Record<string, unknown> }) => Promise<userInfo.Objects>
   updateObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
   deleteObject: (id: string) => Promise<void>
   batchUpdateObjects: (changes: Array<userInfo.ObjectsUpdate & { id: string }>) => Promise<userInfo.Objects[]>
@@ -71,6 +72,44 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(false)
+  }
+
+  async function createObject({
+    name,
+    type,
+    parent_id = null,
+    data = {},
+  }: {
+    name: string
+    type: string
+    parent_id?: string | null
+    data?: Record<string, unknown>
+  }) {
+    if (!user?.id) throw new Error("No authenticated user")
+
+    // Position = end of sibling list
+    const siblings = objects.filter((o) => (o.parent_id ?? null) === (parent_id ?? null))
+    const position = siblings.length
+
+    const { data: row, error } = await supabase
+      .from("objects")
+      .insert({
+        name,
+        type,
+        parent_id: parent_id ?? null,
+        data,
+        owner_id: user.id,
+        position,
+        created_date: new Date().toISOString().split("T")[0],
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    const created = row as userInfo.Objects
+    setObjects((prev) => [...prev, created])
+    return created
   }
 
   async function updateObject(id: string, updates: userInfo.ObjectsUpdate) {
@@ -146,6 +185,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         objects,
         loading,
         refreshObjects,
+        createObject,
         updateObject,
         deleteObject,
         batchUpdateObjects,

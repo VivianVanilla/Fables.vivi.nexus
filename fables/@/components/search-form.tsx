@@ -7,223 +7,394 @@ import {
 import { SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
-import { Dialog,
+import {
+  Dialog,
   DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger, } from "@/components/ui/dialog"
-import {
-  Field,
-  FieldGroup,
-} from "@/components/ui/field"
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Field, FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useUserContext } from "../../src/contexts/UserContext"
+
+// ── Test Data ────────────────────────────────────────────────────────────
+const RACES = [
+  "Human", "Elf", "Dwarf", "Halfling", "Gnome", "Half-Elf",
+  "Half-Orc", "Tiefling", "Dragonborn", "Aasimar", "Tabaxi", "Other",
+]
+
+const CLASSES = [
+  "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
+  "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard", "Artificer",
+]
+
+// ── Tiny helpers ──────────────────────────────────────────────────────────────
+function clampLevel(n: number) {
+  return Math.min(20, Math.max(1, Math.floor(n) || 1))
+}
+
+interface ClassEntry { cls: string; level: number }
+
+// ── Sub-forms ─────────────────────────────────────────────────────────────────
+
+function FolderForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [name, setName] = useState("New Folder")
+  const [color, setColor] = useState("#000000")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      await createObject({ name, type: "folder", data: { color } })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create folder")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>Create a Folder</DialogTitle>
+        <DialogDescription>Choose a name and color. You can change these later.</DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <Label htmlFor="folder-name">Name</Label>
+          <Input id="folder-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field>
+          <Label htmlFor="folder-color">Color</Label>
+          <Input
+            type="color"
+            id="folder-color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="w-16 h-16 p-1"
+          />
+        </Field>
+      </FieldGroup>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim()}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+function CharacterForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [name, setName] = useState("New Character")
+  const [race, setRace] = useState(RACES[0])
+  const [multiclass, setMulticlass] = useState(false)
+  const [classes, setClasses] = useState<ClassEntry[]>([{ cls: CLASSES[0], level: 1 }])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const totalLevel = classes.reduce((sum, c) => sum + c.level, 0)
+
+  function setClassEntry(index: number, field: keyof ClassEntry, value: string | number) {
+    setClasses((prev) =>
+      prev.map((entry, i) =>
+        i === index ? { ...entry, [field]: field === "level" ? clampLevel(Number(value)) : value } : entry
+      )
+    )
+  }
+
+  function addClass() {
+    if (totalLevel >= 20) return
+    setClasses((prev) => [...prev, { cls: CLASSES[0], level: 1 }])
+  }
+
+  function removeClass(index: number) {
+    setClasses((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      await createObject({
+        name,
+        type: "character",
+        data: {
+          characterName: name,
+          race,
+          multiclass,
+          classes,
+          totalLevel,
+        },
+      })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create character")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Create a Character</DialogTitle>
+        <DialogDescription>Fill in the basics. Everything can be edited later.</DialogDescription>
+      </DialogHeader>
+
+      <FieldGroup>
+        {/* Name */}
+        <Field>
+          <Label htmlFor="char-name">Name</Label>
+          <Input id="char-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+
+        {/* Race */}
+        <Field>
+          <Label htmlFor="char-race">Race</Label>
+          <select
+            id="char-race"
+            value={race}
+            onChange={(e) => setRace(e.target.value)}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {RACES.map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </Field>
+
+        {/* Multiclass toggle */}
+        <Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={multiclass}
+              onChange={(e) => {
+                setMulticlass(e.target.checked)
+                if (!e.target.checked) setClasses([classes[0]])
+              }}
+              className="rounded border-input"
+            />
+            Multiclass
+          </label>
+        </Field>
+
+        {/* Class entries */}
+        <div className="flex flex-col gap-2">
+          {classes.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                value={entry.cls}
+                onChange={(e) => setClassEntry(i, "cls", e.target.value)}
+                className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {CLASSES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline" size="sm" type="button"
+                  onClick={() => setClassEntry(i, "level", entry.level - 1)}
+                  disabled={entry.level <= 1}
+                >−</Button>
+                <Input
+                  type="number" min={1} max={20}
+                  value={entry.level}
+                  onChange={(e) => setClassEntry(i, "level", e.target.value)}
+                  className="w-14 text-center"
+                />
+                <Button
+                  variant="outline" size="sm" type="button"
+                  onClick={() => setClassEntry(i, "level", entry.level + 1)}
+                  disabled={totalLevel >= 20}
+                >+</Button>
+              </div>
+              {multiclass && classes.length > 1 && (
+                <Button variant="ghost" size="sm" type="button" onClick={() => removeClass(i)}>✕</Button>
+              )}
+            </div>
+          ))}
+
+          {multiclass && totalLevel < 20 && (
+            <Button variant="outline" size="sm" type="button" onClick={addClass}>
+              + Add Class
+            </Button>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Total level: <span className={totalLevel > 20 ? "text-destructive font-bold" : "font-medium"}>{totalLevel}</span>
+            {totalLevel > 20 && " — exceeds level 20 cap"}
+          </p>
+        </div>
+      </FieldGroup>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim() || totalLevel > 20}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+function SimpleForm({
+  title,
+  description,
+  type,
+  defaultName,
+  onCreated,
+}: {
+  title: string
+  description: string
+  type: string
+  defaultName: string
+  onCreated: () => void
+}) {
+  const { createObject } = useUserContext()
+  const [name, setName] = useState(defaultName)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      await createObject({ name, type, data: {} })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <Label htmlFor={`${type}-name`}>Name</Label>
+          <Input
+            id={`${type}-name`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+      </FieldGroup>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim()}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export function SearchForm({ ...props }: React.ComponentProps<"div">) {
-  const [open, setOpen] = useState(false)
-  const [level, setLevel] = useState<number>(1)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  function closeAll() {
+    setMenuOpen(false)
+  }
 
   return (
     <div {...props} className="relative">
       <div className="flex items-center gap-2">
-      <SidebarGroup className="py-0">
-        <SidebarGroupContent className="relative">
-          <Label htmlFor="search" className="sr-only">
-            Search
-          </Label>
-          <SidebarInput
-            id="search"
-            placeholder="Search your stories"
-            className="pl-8"
-          />
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 opacity-50 select-none" />
-        </SidebarGroupContent>
-      </SidebarGroup>
-      <Button
-        variant="outline"
-        size="icon"
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-      >
-        +
-      </Button>
-      {open && (
-        <div className=" absolute top-full z-50 mt-2 w-72 overflow-hidden rounded-md bg-card shadow-lg ring-1 ring-border">
-    <div className="p-4">
-      <h3 className="text-sm font-medium text-foreground">Create a New Fable</h3>
-      <p className="mt-1 text-sm text-muted-foreground"></p>
-      <div className="mt-4 flex flex-col gap-2">
+        <SidebarGroup className="py-0">
+          <SidebarGroupContent className="relative">
+            <Label htmlFor="search" className="sr-only">Search</Label>
+            <SidebarInput
+              id="search"
+              placeholder="Search your stories"
+              className="pl-8"
+            />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 opacity-50 select-none" />
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-         <Dialog>
-      <form className="mt-4 flex flex-col">
-        <DialogTrigger asChild>
-          <Button variant="outline" size="sm" type="button">
-          Folder
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          +
         </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Create a Folder</DialogTitle>
-            <DialogDescription>
-             Choose a name and a color for your new folder. You can always change these later.
-            </DialogDescription>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <Label htmlFor="folder-name">Name</Label>
-              <Input id="folder-name" name="name" defaultValue="Default Folder" />
-            </Field>
-            <Field>
-              <Label htmlFor="folder-color">Color</Label>
-              <Input type="color" id="folder-color" name="color" defaultValue="#000000" className="w-16 h-16 p-1" />
-            </Field>
-          </FieldGroup>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button type="submit">Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </form>
-    </Dialog>
-
-     
-          <Dialog>
-      <form className="flex flex-col gap-2">
-        <DialogTrigger asChild>
-          <Button variant="outline" size="sm" type="button">
-          Character Page
-        </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Create a Character</DialogTitle>
-            <DialogDescription>
-             Choose a name for your new character. You can always change these later.
-            </DialogDescription>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <Label htmlFor="character-name">Character Name</Label>
-              <Input id="character-name" required name="name" defaultValue="Default Dink" />
-            </Field>
-            <Field>
-              <Label htmlFor="character-level">Level</Label>
-              <div className="mt-1 flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => setLevel((v) => Math.max(1, v - 1))}
-                >
-                  −
-                </Button>
-                <Input
-                  id="character-level"
-                  name="level"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={level}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    const n = Number(e.target.value) || 1
-                    setLevel(Math.min(20, Math.max(1, Math.floor(n))))
-                  }}
-                  className="w-20 text-center"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"  
-                  onClick={() => setLevel((v) => Math.min(20, v + 1))}
-                >
-                  +
-                </Button>
-              </div>
-            </Field>
-          </FieldGroup>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button type="submit">Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </form>
-    </Dialog>
-
-                <Dialog>
-      <form className="flex flex-col gap-2">
-        <DialogTrigger asChild>
-          <Button variant="outline" size="sm" type="button">
-          Monster Page
-        </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Create a Monster</DialogTitle>
-            <DialogDescription>
-             Choose a name for your new monster. You can always change these later.
-            </DialogDescription>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <Label htmlFor="monster-name">Monster Name</Label>
-              <Input id="monster-name" required name="name" defaultValue="Default Dinkasaurus" />
-            </Field>
-            <Field>
-              
-            </Field>
-          </FieldGroup>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button type="submit">Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </form>
-    </Dialog>
-
-          <Dialog>
-      <form className="flex flex-col gap-2">
-        <DialogTrigger asChild>
-          <Button variant="outline" size="sm" type="button">
-          Note Page
-        </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Create a Note</DialogTitle>
-            <DialogDescription>
-             Choose a name for your new note. You can always change this later.
-            </DialogDescription>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <Label htmlFor="note-name">Note Name</Label>
-              <Input id="note-name" required name="name" defaultValue="Default Note" />
-            </Field>
-          </FieldGroup>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button type="submit">Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </form>
-    </Dialog>
       </div>
-    </div>
-  </div>
-)}
 
+      {menuOpen && (
+        <div className="absolute top-full right-0 z-50 mt-2 w-56 overflow-hidden rounded-md bg-card shadow-lg ring-1 ring-border">
+          <div className="p-3">
+            <h3 className="text-sm font-medium text-foreground mb-2">Create New</h3>
+            <div className="flex flex-col gap-1">
 
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full">Folder</Button>
+                </DialogTrigger>
+                <FolderForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Character</Button>
+                </DialogTrigger>
+                <CharacterForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Monster</Button>
+                </DialogTrigger>
+                <SimpleForm
+                  title="Create a Monster"
+                  description="Choose a name for your monster. You can edit details later."
+                  type="monster"
+                  defaultName="New Monster"
+                  onCreated={closeAll}
+                />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Note</Button>
+                </DialogTrigger>
+                <SimpleForm
+                  title="Create a Note"
+                  description="Choose a name for your note."
+                  type="note"
+                  defaultName="New Note"
+                  onCreated={closeAll}
+                />
+              </Dialog>
+
+            </div>
           </div>
+        </div>
+      )}
     </div>
   )
 }
