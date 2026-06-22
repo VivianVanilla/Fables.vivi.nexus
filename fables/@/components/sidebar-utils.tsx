@@ -50,6 +50,28 @@ export function extractFolderColor(node: userInfo.Objects): string | null {
 }
 
 /**
+ * Moves an item to root (parent_id = null), appended after existing root items.
+ * No-op if the item is already at root.
+ */
+export function moveToRoot(
+  prevItems: userInfo.Objects[],
+  draggedId: string
+): userInfo.Objects[] {
+  const dragged = prevItems.find((item) => item.id === draggedId)
+  if (!dragged || dragged.parent_id === null || dragged.parent_id === undefined) return prevItems
+
+  const rootItems = prevItems
+    .filter((item) => !item.parent_id && item.id !== draggedId)
+    .sort(sortByPosition)
+
+  const newPosition = rootItems.length
+
+  return prevItems.map((item) =>
+    item.id === draggedId ? { ...item, parent_id: null, position: newPosition } : item
+  )
+}
+
+/**
  * Returns true if `ancestorId` is the same as `nodeId` or any ancestor of it.
  * Prevents dropping a folder into itself or any of its own descendants.
  */

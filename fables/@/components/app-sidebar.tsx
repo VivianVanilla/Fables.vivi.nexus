@@ -17,7 +17,7 @@ import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
-import { buildObjectTree, extractFolderColor, reorderSidebarItems } from "@/components/sidebar-utils"
+import { buildObjectTree, extractFolderColor, reorderSidebarItems, moveToRoot } from "@/components/sidebar-utils"
 import type { SidebarObject } from "@/components/sidebar-utils"
 
 // ----- Types & Metadata -----
@@ -36,6 +36,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
   const [draggedId, setDraggedId] = React.useState<string | null>(null)
+  const [isOverRoot, setIsOverRoot] = React.useState(false)
   const [items, setItems] = React.useState<userInfo.Objects[]>([])
   const [contextMenu, setContextMenu] = React.useState<{
     x: number
@@ -91,6 +92,39 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       await batchUpdateObjects(changed)
     } catch (error) {
       console.error("Error saving reorder:", error)
+      setItems(previousItems)
+    }
+  }
+
+  const handleDropToRoot = async () => {
+    setIsOverRoot(false)
+    if (!draggedId) return
+
+    const newItems = moveToRoot(items, draggedId)
+    if (newItems === items) {
+      setDraggedId(null)
+      return
+    }
+
+    const previousItems = items
+    setItems(newItems)
+    setDraggedId(null)
+
+    const changed = newItems
+      .filter((item) => {
+        const original = previousItems.find((o) => o.id === item.id)
+        return original && (original.parent_id !== item.parent_id || original.position !== item.position)
+      })
+      .map((item) => ({
+        id: item.id,
+        parent_id: item.parent_id ?? null,
+        position: item.position ?? 0,
+      }))
+
+    try {
+      await batchUpdateObjects(changed)
+    } catch (error) {
+      console.error("Error moving to root:", error)
       setItems(previousItems)
     }
   }
@@ -224,6 +258,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             tree.map((item) => renderItem(item))
           )}
         </div>
+
+        {/* Root drop zone — only visible while dragging */}
+        {draggedId && (
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsOverRoot(true) }}
+            onDragLeave={() => setIsOverRoot(false)}
+            onDrop={handleDropToRoot}
+            className={`mx-2 mb-2 rounded-md border-2 border-dashed px-3 py-3 text-center text-xs transition-colors ${
+              isOverRoot
+                ? "border-sidebar-foreground/50 bg-sidebar-accent text-sidebar-foreground"
+                : "border-sidebar-foreground/20 text-sidebar-foreground/40"
+            }`}
+          >
+            Drop here to move to root
+          </div>
+        )}
       </SidebarContent>
 
       {contextMenu ? (
