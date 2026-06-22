@@ -2,11 +2,6 @@
 import * as React from "react"
 import {
   ChevronDown,
-  Folder,
-  FileText,
-  User2,
-  Skull,
-  Sparkles,
   GripVertical,
   Pencil,
 } from "lucide-react"
@@ -17,18 +12,18 @@ import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
-import { buildObjectTree, extractFolderColor, reorderSidebarItems, moveToRoot } from "@/components/sidebar-utils"
+import { buildObjectTree, reorderSidebarItems, moveToRoot } from "@/components/sidebar-utils"
 import type { SidebarObject } from "@/components/sidebar-utils"
 
 // ----- Types & Metadata -----
 type ObjectType = "folder" | "note" | "character" | "monster" | "campaign"
 
-const typeMeta: Record<ObjectType, { label: string; icon: typeof Folder; bg: string; fg?: string }> = {
-  folder: { label: "Folder", icon: Folder, bg: "#000000" },
-  note: { label: "Note", icon: FileText, bg: "#F59E0B" },
-  character: { label: "Character", icon: User2, bg: "#1da0b8" },
-  monster: { label: "Monster", icon: Skull, bg: "#91091f" },
-  campaign: { label: "Campaign", icon: Sparkles, bg: "#070605" },
+const typeMeta: Record<ObjectType, { label: string }> = {
+  folder: { label: "Folder"},
+  note: { label: "Note"},
+  character: { label: "Character"},
+  monster: { label: "Monster" },
+  campaign: { label: "Campaign"},
 }
 
 // ----- Component -----
@@ -173,10 +168,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const renderItem = (node: SidebarObject, level = 0) => {
     const meta = typeMeta[(node.type as ObjectType) ?? "note"] || typeMeta.note
-    const Icon = meta.icon
     const isFolder = node.type === "folder"
     const isOpen = openGroups[node.id] ?? false
-    const folderColor = extractFolderColor(node)
     const isDragging = draggedId === node.id
 
     return (
@@ -204,17 +197,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         >
           <GripVertical className="size-3.5 shrink-0 text-muted-foreground/50" />
 
-          <span
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded"
-            style={{ backgroundColor: folderColor ?? meta.bg }}
-          >
-            <Icon className="size-3.5 text-white" aria-hidden />
-          </span>
-
-          <div className="min-w-0 flex-1 text-left">
-            <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
-            <div className="text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
-              {meta.label}
+        
+          <div className="min-w-0 flex-1 text-left"  >
+            <div className="truncate text-sm font-medium leading-tight ">{node.name} </div>
+            <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
+             
+              <span>{meta.label}</span>
             </div>
           </div>
 
