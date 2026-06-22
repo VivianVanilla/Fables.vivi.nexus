@@ -174,66 +174,94 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const renderItem = (node: SidebarObject, level = 0) => {
     const meta = typeMeta[(node.type as ObjectType) ?? "note"] || typeMeta.note
     const Icon = meta.icon
-    // FIX: use type === "folder", not hasChildren — empty folders still need a toggle
     const isFolder = node.type === "folder"
     const isOpen = openGroups[node.id] ?? false
     const folderColor = extractFolderColor(node)
+    const isDragging = draggedId === node.id
 
     return (
-      <div key={node.id}>
+      <div key={node.id} className="relative">
+        {/* Indent guide lines for nested levels */}
+        {level > 0 && (
+          <div
+            className="absolute top-0 bottom-0  border-sidebar-foreground/10 pointer-events-none"
+            style={{ left: level * 16 - 8 }}
+          />
+        )}
+
         <div
           draggable
           onDragStart={() => setDraggedId(node.id)}
+          onDragEnd={() => setDraggedId(null)}
           onDragOver={(event) => event.preventDefault()}
-          onDrop={() => handleDrop(node.id)}
+          onDrop={(e) => { e.stopPropagation(); handleDrop(node.id) }}
           onContextMenu={(event) => handleContextMenu(event, node)}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition hover:bg-sidebar-accent ${
-            level > 0 ? "ml-4" : ""
-          }`}
+          style={{ paddingLeft: level * 10 }}
+          className={`flex w-full items-center gap-2 rounded-md pr-2 py-1.5 text-sm transition-all cursor-grab active:cursor-grabbing
+            hover:bg-sidebar-accent
+            ${isDragging ? "opacity-40" : "opacity-100"}
+          `}
         >
-          <GripVertical className="size-4 text-muted-foreground" />
+          <GripVertical className="size-3.5 shrink-0 text-muted-foreground/50" />
+
           <span
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded"
             style={{ backgroundColor: folderColor ?? meta.bg }}
           >
-            <Icon className="size-4 text-white" aria-hidden />
+            <Icon className="size-3.5 text-white" aria-hidden />
           </span>
+
           <div className="min-w-0 flex-1 text-left">
-            <div className="truncate font-medium flex items-center gap-2">
-              <span className="truncate">{node.name}</span>
-            </div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/50">
+            <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
+            <div className="text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
               {meta.label}
             </div>
           </div>
-          {/* FIX: chevron only on folders, regardless of whether they have children */}
-          {isFolder ? (
+
+          {isFolder && (
             <button
               type="button"
               onClick={() => toggleGroup(node.id)}
-              className="rounded-full p-1 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+              className="shrink-0 rounded p-0.5 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors"
             >
               <ChevronDown
-                className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                className={`size-3.5 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
               />
             </button>
-          ) : null}
+          )}
+
           <button
             type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              handleRename(node)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-full p-1 text-sidebar-foreground/70 hover:text-sidebar-foreground md:hidden"
+            onClick={(event) => { event.stopPropagation(); handleRename(node) }}
+            className="shrink-0 flex h-6 w-6 items-center justify-center rounded p-0.5 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors md:hidden"
             aria-label={`Rename ${node.name}`}
           >
-            <Pencil className="size-4" />
+            <Pencil className="size-3.5" />
           </button>
         </div>
 
-        {isFolder && isOpen && node.children.length > 0 && (
-          <div className="space-y-1">
-            {node.children.map((child) => renderItem(child, level + 1))}
+        {/* Children — wrapped in a left-bordered container for visual grouping */}
+        {isFolder && isOpen && (
+          <div
+            className={`mt-0.5 mb-0.5 transition-all ${
+              node.children.length > 0
+                ? "ml-4 pl-0 border-l-2 border-sidebar-foreground/10 rounded-bl"
+                : ""
+            }`}
+          >
+            {node.children.length > 0
+              ? node.children.map((child) => renderItem(child, level + 1))
+              : (
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.stopPropagation(); handleDrop(node.id) }}
+                  className="py-2 text-center text-[10px] text-sidebar-foreground/30 italic select-none"
+                  style={{ paddingLeft: (level + 0.5) * 16 + 8 }}
+                >
+                  Empty folder — drop items here
+                </div>
+              )
+            }
           </div>
         )}
       </div>
@@ -259,8 +287,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )}
         </div>
 
-        {/* Root drop zone — only visible while dragging */}
-        {draggedId && (
+        {/* Root drop zone — only visible while dragging a non-root item */}
+        {draggedId && items.find((i) => i.id === draggedId)?.parent_id && (
           <div
             onDragOver={(e) => { e.preventDefault(); setIsOverRoot(true) }}
             onDragLeave={() => setIsOverRoot(false)}
