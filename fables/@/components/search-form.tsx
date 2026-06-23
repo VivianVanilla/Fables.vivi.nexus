@@ -206,7 +206,7 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
                 <Button
                   variant="outline" size="sm" type="button"
                   onClick={() => setClassEntry(i, "level", entry.level + 1)}
-                  disabled={totalLevel >= 20} 
+                  disabled={totalLevel >= 20}
                 >+</Button>
               </div>
               {multiclass && classes.length > 1 && (

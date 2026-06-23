@@ -2,6 +2,15 @@ import type { userInfo } from "../types/userInfo"
 
 export type SidebarObject = userInfo.Objects & { children: SidebarObject[] }
 
+// ── Drop indicator position ───────────────────────────────────────────────────
+// "before" | "after" = insert sibling, "inside" = move into folder
+export type DropPosition = "before" | "after" | "inside"
+
+export interface DropTarget {
+  id: string
+  position: DropPosition
+}
+
 export function sortByPosition(a: userInfo.Objects, b: userInfo.Objects) {
   return (a.position ?? 0) - (b.position ?? 0)
 }
@@ -32,26 +41,35 @@ export function buildObjectTree(items: userInfo.Objects[]) {
   return roots
 }
 
-export function extractFolderColor(node: userInfo.Objects): string | null {
-  if (!node.data) return null
+/**
+ * Returns true if the item has data.noNesting = true.
+ */
+export function isNoNesting(item: userInfo.Objects): boolean {
+  if (!item.data) return false
   try {
-    const d: any = typeof node.data === "string" ? JSON.parse(node.data) : node.data
-    if (d && d.color) {
-      let color = String(d.color).trim()
-      if (/^[0-9A-Fa-f]{3}$/.test(color) || /^[0-9A-Fa-f]{6}$/.test(color)) {
-        color = `#${color}`
-      }
-      return color
-    }
-  } catch (e) {
-    // ignore parse errors
+    const d: any = typeof item.data === "string" ? JSON.parse(item.data) : item.data
+    return d?.noNesting === true
+  } catch {
+    return false
   }
-  return null
+}
+
+/**
+ * Returns true if `ancestorId` is the same as `nodeId` or any ancestor of it.
+ */
+function isDescendantOrSelf(
+  items: userInfo.Objects[],
+  nodeId: string,
+  ancestorId: string
+): boolean {
+  if (nodeId === ancestorId) return true
+  const node = items.find((item) => item.id === nodeId)
+  if (!node || !node.parent_id) return false
+  return isDescendantOrSelf(items, node.parent_id, ancestorId)
 }
 
 /**
  * Moves an item to root (parent_id = null), appended after existing root items.
- * No-op if the item is already at root.
  */
 export function moveToRoot(
   prevItems: userInfo.Objects[],
@@ -72,75 +90,71 @@ export function moveToRoot(
 }
 
 /**
- * Returns true if `ancestorId` is the same as `nodeId` or any ancestor of it.
- * Prevents dropping a folder into itself or any of its own descendants.
+ * Applies a drop: inserts dragged item before/after target, or inside a folder.
+ * Returns same array reference if the drop is invalid.
  */
-function isDescendantOrSelf(
-  items: userInfo.Objects[],
-  nodeId: string,
-  ancestorId: string
-): boolean {
-  if (nodeId === ancestorId) return true
-  const node = items.find((item) => item.id === nodeId)
-  if (!node || !node.parent_id) return false
-  return isDescendantOrSelf(items, node.parent_id, ancestorId)
-}
-
-/**
- * Reorders sidebar items with support for:
- * - Reordering within the same parent (original behaviour)
- * - Dropping onto a folder → moves dragged item into that folder as last child
- *
- * Returns the same array reference if nothing changed.
- */
-export function reorderSidebarItems(
+export function applyDrop(
   prevItems: userInfo.Objects[],
   draggedId: string,
-  targetId: string
+  drop: DropTarget
 ): userInfo.Objects[] {
   const dragged = prevItems.find((item) => item.id === draggedId)
-  const target = prevItems.find((item) => item.id === targetId)
-  if (!dragged || !target) return prevItems
+  const target = prevItems.find((item) => item.id === drop.id)
+  if (!dragged || !target || draggedId === drop.id) return prevItems
 
-  // ── Guard: never drop an item into itself or its own descendants ────────────
-  if (isDescendantOrSelf(prevItems, targetId, draggedId)) return prevItems
+  // Guard: no dropping into own descendants
+  if (isDescendantOrSelf(prevItems, drop.id, draggedId)) return prevItems
 
-  // ── Case 1: dropped onto a folder → move into that folder ──────────────────
-  if (target.type === "folder") {
-    const newParentId = target.id
+  // Guard: no-nesting folders can't go inside other folders
+  if (isNoNesting(dragged) && (drop.position === "inside")) {
+    if (drop.position === "inside") return prevItems
+  }
 
-    // Siblings already inside the target folder (excluding dragged item)
+  // ── Inside: move into folder ──────────────────────────────────────────────
+  if (drop.position === "inside") {
+    if (target.type !== "folder") return prevItems
+    if (isNoNesting(dragged)) return prevItems
+
     const siblings = prevItems
-      .filter((item) => item.parent_id === newParentId && item.id !== draggedId)
+      .filter((item) => item.parent_id === target.id && item.id !== draggedId)
       .sort(sortByPosition)
-
-    const newPosition = siblings.length // append at end
 
     return prevItems.map((item) =>
       item.id === draggedId
-        ? { ...item, parent_id: newParentId, position: newPosition }
+        ? { ...item, parent_id: target.id, position: siblings.length }
         : item
     )
   }
 
-  // ── Case 2: dropped onto a non-folder → reorder within same parent ─────────
-  if (dragged.parent_id !== target.parent_id) return prevItems // cross-level non-folder drops are ignored
+  // ── Before / After: insert into target's parent at the right index ─────────
+  const newParentId = target.parent_id ?? null
+
+  // No-nesting folders must stay at root
+  if (isNoNesting(dragged) && newParentId !== null) return prevItems
 
   const siblings = prevItems
-    .filter((item) => item.parent_id === dragged.parent_id)
+    .filter((item) => (item.parent_id ?? null) === newParentId && item.id !== draggedId)
     .sort(sortByPosition)
 
-  const draggedIndex = siblings.findIndex((item) => item.id === draggedId)
-  const targetIndex = siblings.findIndex((item) => item.id === targetId)
-  if (draggedIndex === -1 || targetIndex === -1) return prevItems
+  const targetIndex = siblings.findIndex((item) => item.id === target.id)
+  if (targetIndex === -1) return prevItems
+
+  const insertAt = drop.position === "before" ? targetIndex : targetIndex + 1
 
   const newOrder = [...siblings]
-  newOrder.splice(draggedIndex, 1)
-  newOrder.splice(targetIndex, 0, dragged)
+  newOrder.splice(insertAt, 0, dragged)
+
+  // Build a map of new positions for siblings + dragged
+  const positionMap = new Map<string, number>()
+  newOrder.forEach((item, i) => positionMap.set(item.id, i))
 
   return prevItems.map((item) => {
-    const index = newOrder.findIndex((node) => node.id === item.id)
-    if (index === -1) return item
-    return { ...item, position: index }
+    if (item.id === draggedId) {
+      return { ...item, parent_id: newParentId, position: positionMap.get(item.id) ?? 0 }
+    }
+    if (positionMap.has(item.id)) {
+      return { ...item, position: positionMap.get(item.id)! }
+    }
+    return item
   })
 }

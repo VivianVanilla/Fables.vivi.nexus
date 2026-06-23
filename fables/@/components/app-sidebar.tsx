@@ -1,9 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import {
-  ChevronDown,
-  GripVertical,
-} from "lucide-react"
+import { ChevronDown, GripVertical } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -11,18 +8,18 @@ import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
-import { buildObjectTree, reorderSidebarItems, moveToRoot } from "@/components/sidebar-utils"
-import type { SidebarObject } from "@/components/sidebar-utils"
+import { buildObjectTree, applyDrop, moveToRoot, isNoNesting } from "@/components/sidebar-utils"
+import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
 
 // ----- Types & Metadata -----
 type ObjectType = "folder" | "note" | "character" | "monster" | "campaign"
 
 const typeMeta: Record<ObjectType, { label: string }> = {
-  folder: { label: "Folder"},
-  note: { label: "Note"},
-  character: { label: "Character"},
+  folder: { label: "Folder" },
+  note: { label: "Note" },
+  character: { label: "Character" },
   monster: { label: "Monster" },
-  campaign: { label: "Campaign"},
+  campaign: { label: "Campaign" },
 }
 
 // ----- Component -----
@@ -30,6 +27,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
   const [draggedId, setDraggedId] = React.useState<string | null>(null)
+  const [dropTarget, setDropTarget] = React.useState<DropTarget | null>(null)
   const [isOverRoot, setIsOverRoot] = React.useState(false)
   const [items, setItems] = React.useState<userInfo.Objects[]>([])
   const [contextMenu, setContextMenu] = React.useState<{
@@ -42,7 +40,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setItems(objects)
   }, [objects])
 
-  // Dismiss context menu on any outside click
   React.useEffect(() => {
     if (!contextMenu) return
     const handler = () => setContextMenu(null)
@@ -58,10 +55,48 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // ----- Drag / Drop -----
 
-  const handleDrop = async (targetId: string) => {
-    if (!draggedId || draggedId === targetId) return
+  // Determine drop position (before / inside / after) based on mouse Y within the element
+  const getDropPosition = (
+    event: React.DragEvent<HTMLDivElement>,
+    isFolder: boolean
+  ): DropPosition => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const y = event.clientY - rect.top
+    const pct = y / rect.height
 
-    const newItems = reorderSidebarItems(items, draggedId, targetId)
+    if (isFolder) {
+      // Top 25% = before, middle 50% = inside, bottom 25% = after
+      if (pct < 0.25) return "before"
+      if (pct > 0.75) return "after"
+      return "inside"
+    }
+    // Non-folders: top half = before, bottom half = after
+    return pct < 0.5 ? "before" : "after"
+  }
+
+  const handleDragOver = (
+    event: React.DragEvent<HTMLDivElement>,
+    node: SidebarObject
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!draggedId || draggedId === node.id) return
+    const position = getDropPosition(event, node.type === "folder")
+    setDropTarget({ id: node.id, position })
+    setIsOverRoot(false)
+  }
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    if (!draggedId || !dropTarget) {
+      setDraggedId(null)
+      setDropTarget(null)
+      return
+    }
+
+    const newItems = applyDrop(items, draggedId, dropTarget)
+    setDropTarget(null)
+
     if (newItems === items) {
       setDraggedId(null)
       return
@@ -74,7 +109,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const changed = newItems
       .filter((item) => {
         const original = previousItems.find((o) => o.id === item.id)
-        return original && (original.parent_id !== item.parent_id || original.position !== item.position)
+        return original && (
+          original.parent_id !== item.parent_id ||
+          original.position !== item.position
+        )
       })
       .map((item) => ({
         id: item.id,
@@ -127,7 +165,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>, item: SidebarObject) => {
     event.preventDefault()
-    event.stopPropagation() // prevent the window click handler from immediately closing it
+    event.stopPropagation()
     setContextMenu({ x: event.clientX, y: event.clientY, item })
   }
 
@@ -163,7 +201,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
+  const handleSetRootFolder = async (item: SidebarObject) => {
+    const currentData: any = typeof item.data === "string"
+      ? JSON.parse(item.data ?? "{}")
+      : (item.data ?? {})
+    const isCurrentlyNoNesting = currentData?.noNesting === true
+    const newData = { ...currentData, noNesting: !isCurrentlyNoNesting }
+
+    const newItems = !isCurrentlyNoNesting ? moveToRoot(items, item.id) : items
+    const previousItems = items
+
+    setItems(newItems.map((i) => i.id === item.id ? { ...i, data: newData } : i))
+
+    try {
+      await updateObject(item.id, {
+        data: newData,
+        ...(!isCurrentlyNoNesting && newItems !== items ? {
+          parent_id: null,
+          position: newItems.find((i) => i.id === item.id)?.position ?? 0,
+        } : {}),
+      })
+    } catch (error) {
+      console.error("Failed to update no-nesting flag:", error)
+      setItems(previousItems)
+    }
+  }
+
   // ----- Render Helpers -----
+
+  // A thin coloured line shown between/around items during drag
+  const DropIndicator = ({ active }: { active: boolean }) => (
+    <div
+      className={`h-0.5 w-full rounded-full transition-opacity duration-75 ${
+        active ? "opacity-100 bg-primary" : "opacity-0"
+      }`}
+    />
+  )
 
   const renderItem = (node: SidebarObject, level = 0) => {
     const meta = typeMeta[(node.type as ObjectType) ?? "note"] || typeMeta.note
@@ -171,36 +244,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const isOpen = openGroups[node.id] ?? false
     const isDragging = draggedId === node.id
 
+    const isDropBefore = dropTarget?.id === node.id && dropTarget.position === "before"
+    const isDropAfter  = dropTarget?.id === node.id && dropTarget.position === "after"
+    const isDropInside = dropTarget?.id === node.id && dropTarget.position === "inside"
+
     return (
       <div key={node.id} className="relative">
-        {/* Indent guide lines for nested levels */}
-        {level > 0 && (
-          <div
-            className="absolute top-0 bottom-0  border-sidebar-foreground/10 pointer-events-none"
-            style={{ left: level * 16 - 8 }}
-          />
-        )}
+        {/* BEFORE indicator */}
+        <DropIndicator active={isDropBefore} />
 
         <div
           draggable
           onDragStart={() => setDraggedId(node.id)}
-          onDragEnd={() => setDraggedId(null)}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(e) => { e.stopPropagation(); handleDrop(node.id) }}
+          onDragEnd={() => { setDraggedId(null); setDropTarget(null) }}
+          onDragOver={(e) => handleDragOver(e, node)}
+          onDrop={handleDrop}
           onContextMenu={(event) => handleContextMenu(event, node)}
           style={{ paddingLeft: level * 10 }}
           className={`flex w-full items-center gap-2 rounded-md pr-2 py-1.5 text-sm transition-all cursor-grab active:cursor-grabbing
             hover:bg-sidebar-accent
             ${isDragging ? "opacity-40" : "opacity-100"}
+            ${isDropInside ? "ring-1 ring-primary bg-sidebar-accent" : ""}
           `}
         >
           <GripVertical className="size-3.5 shrink-0 text-muted-foreground/50" />
-        
-          <div className="min-w-0 flex-1 text-left"  >
-            <div className="truncate text-sm font-medium leading-tight ">{node.name} </div>
+
+          <div className="min-w-0 flex-1 text-left">
+            <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
             <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
-             
               <span>{meta.label}</span>
+              {isFolder && isNoNesting(node) && (
+                <span className="rounded px-1 bg-sidebar-foreground/10 text-sidebar-foreground/50 tracking-normal normal-case">
+                  no-nest
+                </span>
+              )}
             </div>
           </div>
 
@@ -215,25 +292,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               />
             </button>
           )}
+        </div>
 
-         
-                 </div>
+        {/* AFTER indicator */}
+        <DropIndicator active={isDropAfter} />
 
-        {/* Children — wrapped in a left-bordered container for visual grouping */}
+        {/* Children */}
         {isFolder && isOpen && (
-          <div
-            className={`mt-0.5 mb-0.5 transition-all ${
-              node.children.length > 0
-                ? "ml-4 pl-0 border-l-2 border-sidebar-foreground/10 rounded-bl"
-                : ""
-            }`}
-          >
+          <div className={`mt-0.5 mb-0.5 ${node.children.length > 0 ? "ml-4 border-l-2 border-sidebar-foreground/10 rounded-bl" : ""}`}>
             {node.children.length > 0
               ? node.children.map((child) => renderItem(child, level + 1))
               : (
                 <div
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.stopPropagation(); handleDrop(node.id) }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+                  onDrop={handleDrop}
                   className="py-2 text-center text-[10px] text-sidebar-foreground/30 italic select-none"
                   style={{ paddingLeft: (level + 0.5) * 16 + 8 }}
                 >
@@ -256,7 +328,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SearchForm />
       </SidebarHeader>
       <SidebarContent>
-        <div className="space-y-2 px-2 py-2">
+        <div
+          className="space-y-0 px-2 py-2"
+          onDragLeave={(e) => {
+            // Clear drop target when leaving the list entirely
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setDropTarget(null)
+            }
+          }}
+        >
           {loading ? (
             <div className="text-xs text-sidebar-foreground/70">Loading items…</div>
           ) : tree.length === 0 ? (
@@ -266,15 +346,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )}
         </div>
 
-        {/* Root drop zone — only visible while dragging a non-root item */}
+        {/* Root drop zone — only for non-root items */}
         {draggedId && items.find((i) => i.id === draggedId)?.parent_id && (
           <div
-            onDragOver={(e) => { e.preventDefault(); setIsOverRoot(true) }}
+            onDragOver={(e) => { e.preventDefault(); setIsOverRoot(true); setDropTarget(null) }}
             onDragLeave={() => setIsOverRoot(false)}
             onDrop={handleDropToRoot}
             className={`mx-2 mb-2 rounded-md border-2 border-dashed px-3 py-3 text-center text-xs transition-colors ${
               isOverRoot
-                ? "border-sidebar-foreground/50 bg-sidebar-accent text-sidebar-foreground"
+                ? "border-primary bg-sidebar-accent text-sidebar-foreground"
                 : "border-sidebar-foreground/20 text-sidebar-foreground/40"
             }`}
           >
@@ -287,7 +367,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div
           className="fixed z-50 rounded-md border border-border bg-popover p-1 shadow-lg"
           style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 160 }}
-          onClick={(e) => e.stopPropagation()} // keep menu open when clicking inside it
+          onClick={(e) => e.stopPropagation()}
         >
           <button
             type="button"
@@ -303,6 +383,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           >
             Delete
           </button>
+
+          {contextMenu.item.type === "folder" && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                type="button"
+                onClick={() => {
+                  handleSetRootFolder(contextMenu.item)
+                  setContextMenu(null)
+                }}
+                className="block w-full rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                {isNoNesting(contextMenu.item)
+                  ? "✓ No-Nesting (click to disable)"
+                  : "Set Folder to 'No Nesting'"}
+              </button>
+            </>
+          )}
         </div>
       ) : null}
 
