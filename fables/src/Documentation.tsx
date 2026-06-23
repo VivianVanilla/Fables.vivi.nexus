@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import "./index.css";
 
-export default function Dashboard() {
+export default function Documentation() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {

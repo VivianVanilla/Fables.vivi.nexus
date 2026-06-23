@@ -5,6 +5,7 @@ import Dashboard from "./Dashboard"
 import { Routes, Route, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 import { useEffect } from "react"
+import Documentation from "./Documentation"
 
 
 
@@ -48,6 +49,7 @@ useEffect(() => {
         </div>
       } />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/documentation" element={<Documentation />} />
     </Routes>
   )
 }

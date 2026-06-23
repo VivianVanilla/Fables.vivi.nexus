@@ -2,9 +2,8 @@ import { Label } from "@/components/ui/label"
 import {
   SidebarGroup,
   SidebarGroupContent,
-  SidebarInput,
 } from "@/components/ui/sidebar"
-import { SearchIcon } from "lucide-react"
+import { BookOpenText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import {
@@ -20,6 +19,9 @@ import {
 import { Field, FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useUserContext } from "../../src/contexts/UserContext"
+import { Link } from "react-router-dom"
+
+
 
 // ── Test Data ────────────────────────────────────────────────────────────
 const RACES = [
@@ -306,6 +308,7 @@ function SimpleForm({
 export function SearchForm({ ...props }: React.ComponentProps<"div">) {
   const [menuOpen, setMenuOpen] = useState(false)
 
+
   function closeAll() {
     setMenuOpen(false)
   }
@@ -315,13 +318,12 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
       <div className="flex items-center gap-2">
         <SidebarGroup className="py-0">
           <SidebarGroupContent className="relative">
-            <Label htmlFor="search" className="sr-only">Search</Label>
-            <SidebarInput
-              id="search"
-              placeholder="Search your stories"
-              className="pl-8"
-            />
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 opacity-50 select-none" />
+
+              <Link to="/documentation" className="flex items-center gap-2 w-full px-2 py-1 text-sm text-muted-foreground hover:bg-muted/50 rounded-md" > 
+            <BookOpenText className="" /> 
+            <p>Documentation</p>
+           </Link> 
+            
           </SidebarGroupContent>
         </SidebarGroup>
 
