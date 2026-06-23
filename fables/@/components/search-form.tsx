@@ -44,7 +44,6 @@ interface ClassEntry { cls: string; level: number }
 function FolderForm({ onCreated }: { onCreated: () => void }) {
   const { createObject } = useUserContext()
   const [name, setName] = useState("New Folder")
-  const [color, setColor] = useState("#000000")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,7 +51,7 @@ function FolderForm({ onCreated }: { onCreated: () => void }) {
     setSaving(true)
     setError(null)
     try {
-      await createObject({ name, type: "folder", data: { color } })
+      await createObject({ name, type: "folder" })
       onCreated()
     } catch (e: any) {
       setError(e.message ?? "Failed to create folder")
@@ -65,23 +64,14 @@ function FolderForm({ onCreated }: { onCreated: () => void }) {
     <DialogContent className="sm:max-w-sm">
       <DialogHeader>
         <DialogTitle>Create a Folder</DialogTitle>
-        <DialogDescription>Choose a name and color. You can change these later.</DialogDescription>
+        <DialogDescription>Choose a name. You can change this later.</DialogDescription>
       </DialogHeader>
       <FieldGroup>
         <Field>
           <Label htmlFor="folder-name">Name</Label>
           <Input id="folder-name" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field>
-          <Label htmlFor="folder-color">Color</Label>
-          <Input
-            type="color"
-            id="folder-color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="w-16 h-16 p-1"
-          />
-        </Field>
+      
       </FieldGroup>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <DialogFooter>
@@ -211,12 +201,12 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
                   type="number" min={1} max={20}
                   value={entry.level}
                   onChange={(e) => setClassEntry(i, "level", e.target.value)}
-                  className="w-14 text-center"
+                  className="w-14 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <Button
                   variant="outline" size="sm" type="button"
                   onClick={() => setClassEntry(i, "level", entry.level + 1)}
-                  disabled={totalLevel >= 20}
+                  disabled={totalLevel >= 20} 
                 >+</Button>
               </div>
               {multiclass && classes.length > 1 && (

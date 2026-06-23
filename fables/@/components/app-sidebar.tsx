@@ -3,7 +3,6 @@ import * as React from "react"
 import {
   ChevronDown,
   GripVertical,
-  Pencil,
 } from "lucide-react"
 
 // ----- UI & Helper Imports -----
@@ -196,7 +195,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           `}
         >
           <GripVertical className="size-3.5 shrink-0 text-muted-foreground/50" />
-
         
           <div className="min-w-0 flex-1 text-left"  >
             <div className="truncate text-sm font-medium leading-tight ">{node.name} </div>
@@ -218,15 +216,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); handleRename(node) }}
-            className="shrink-0 flex h-6 w-6 items-center justify-center rounded p-0.5 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors md:hidden"
-            aria-label={`Rename ${node.name}`}
-          >
-            <Pencil className="size-3.5" />
-          </button>
-        </div>
+         
+                 </div>
 
         {/* Children — wrapped in a left-bordered container for visual grouping */}
         {isFolder && isOpen && (
