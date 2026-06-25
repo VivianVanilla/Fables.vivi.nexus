@@ -34,23 +34,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [dropTarget, setDropTarget] = React.useState<DropTarget | null>(null)
   const [isOverRoot, setIsOverRoot] = React.useState(false)
 
-  // Touch drag state
-  const [touchDragId, setTouchDragId] = React.useState<string | null>(null)
+  // Touch drag state — use refs for perf-critical values updated on every move
+  const touchDragIdRef = React.useRef<string | null>(null)
+  const touchDropTargetRef = React.useRef<DropTarget | null>(null)
+  const touchOverRootRef = React.useRef(false)
+  const [touchDragId, setTouchDragId] = React.useState<string | null>(null) // only for re-render triggers
   const [touchDropTarget, setTouchDropTarget] = React.useState<DropTarget | null>(null)
-  const [touchGhost, setTouchGhost] = React.useState<{ x: number; y: number; label: string } | null>(null)
   const [touchOverRoot, setTouchOverRoot] = React.useState(false)
+  const [touchGhost, setTouchGhost] = React.useState<{ x: number; y: number; label: string } | null>(null)
 
   const [items, setItems] = React.useState<userInfo.Objects[]>([])
-  const [contextMenu, setContextMenu] = React.useState<{
-    x: number; y: number; item: SidebarObject
-  } | null>(null)
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; item: SidebarObject } | null>(null)
 
-  // Refs for touch timers
+  // Refs
   const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const gripDragTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const touchMoved = React.useRef(false)
+  const isDraggable = React.useRef(false)
+  const [draggableId, setDraggableId] = React.useState<string | null>(null)
+  const longPressFired = React.useRef(false) // track if long press already triggered
   const itemRefs = React.useRef<Map<string, HTMLDivElement>>(new Map())
   const rootZoneRef = React.useRef<HTMLDivElement | null>(null)
+  const ghostRef = React.useRef<{ x: number; y: number; label: string } | null>(null)
 
   React.useEffect(() => { setItems(objects) }, [objects])
 
@@ -62,47 +66,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [contextMenu])
 
   const tree = React.useMemo(() => buildObjectTree(items), [items])
-
-  const toggleGroup = (id: string) =>
-    setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
+  const toggleGroup = (id: string) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
 
   // ── Shared: commit a drop ─────────────────────────────────────────────────
 
-  const commitDrop = async (
-    activeId: string,
-    target: DropTarget | null,
-    toRoot: boolean
-  ) => {
+  const commitDrop = async (activeId: string, target: DropTarget | null, toRoot: boolean) => {
     if (toRoot) {
       const newItems = moveToRoot(items, activeId)
-      if (newItems === items) return
-      await persistChanges(newItems)
+      if (newItems !== items) await persistChanges(newItems)
       return
     }
     if (!target) return
     const newItems = applyDrop(items, activeId, target)
-    if (newItems === items) return
-    await persistChanges(newItems)
+    if (newItems !== items) await persistChanges(newItems)
   }
 
   const persistChanges = async (newItems: userInfo.Objects[]) => {
     const previousItems = items
     setItems(newItems)
-
     const changed = newItems
       .filter((item) => {
         const original = previousItems.find((o) => o.id === item.id)
-        return original && (
-          original.parent_id !== item.parent_id ||
-          original.position !== item.position
-        )
+        return original && (original.parent_id !== item.parent_id || original.position !== item.position)
       })
-      .map((item) => ({
-        id: item.id,
-        parent_id: item.parent_id ?? null,
-        position: item.position ?? 0,
-      }))
-
+      .map((item) => ({ id: item.id, parent_id: item.parent_id ?? null, position: item.position ?? 0 }))
     try {
       await batchUpdateObjects(changed)
     } catch (error) {
@@ -111,25 +98,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
-  // ── Desktop drag handlers ─────────────────────────────────────────────────
+  // ── Desktop drag ──────────────────────────────────────────────────────────
 
-  const getDropPosition = (
-    event: React.DragEvent<HTMLDivElement>,
-    isFolder: boolean
-  ): DropPosition => {
+  const getDropPosition = (event: React.DragEvent<HTMLDivElement>, isFolder: boolean): DropPosition => {
     const rect = event.currentTarget.getBoundingClientRect()
     const pct = (event.clientY - rect.top) / rect.height
-    if (isFolder) {
-      if (pct < 0.25) return "before"
-      if (pct > 0.75) return "after"
-      return "inside"
-    }
+    if (isFolder) { if (pct < 0.25) return "before"; if (pct > 0.75) return "after"; return "inside" }
     return pct < 0.5 ? "before" : "after"
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, node: SidebarObject) => {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     if (!draggedId || draggedId === node.id) return
     setDropTarget({ id: node.id, position: getDropPosition(e, node.type === "folder") })
     setIsOverRoot(false)
@@ -137,10 +116,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.stopPropagation()
-    const activeId = draggedId
-    const target = dropTarget
-    setDraggedId(null)
-    setDropTarget(null)
+    const activeId = draggedId; const target = dropTarget
+    setDraggedId(null); setDropTarget(null)
     if (!activeId) return
     await commitDrop(activeId, target, false)
   }
@@ -148,128 +125,124 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const handleDropToRoot = async () => {
     setIsOverRoot(false)
     const activeId = draggedId
-    setDraggedId(null)
-    setDropTarget(null)
+    setDraggedId(null); setDropTarget(null)
     if (!activeId) return
     await commitDrop(activeId, null, true)
   }
 
-  // ── Touch: long-press on row → context menu ───────────────────────────────
+  // ── Touch: long-press on text area → context menu ─────────────────────────
 
-  const handleRowTouchStart = (e: React.TouchEvent<HTMLDivElement>, node: SidebarObject) => {
-    // Only fire if NOT touching the grip (grip has its own handler)
-    touchMoved.current = false
+  const handleTextTouchStart = (e: React.TouchEvent<HTMLDivElement>, node: SidebarObject) => {
+    // Don't start long press if a grip drag is already in progress
+    if (touchDragIdRef.current) return
+    longPressFired.current = false
+    const touch = e.touches[0]
+    const startX = touch.clientX
+    const startY = touch.clientY
+
     longPressTimer.current = setTimeout(() => {
-      if (!touchMoved.current) {
-        const touch = e.touches[0]
-        setContextMenu({ x: touch.clientX, y: touch.clientY, item: node })
-      }
+      longPressFired.current = true
+      setContextMenu({ x: startX, y: startY, item: node })
     }, LONG_PRESS_MS)
   }
 
-  const handleRowTouchMove = () => {
-    touchMoved.current = true
+  const handleTextTouchMove = () => {
+    // Cancel long press if finger moves more than 8px
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
     }
   }
 
-  const handleRowTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
+  const handleTextTouchEnd = () => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
   }
 
-  // ── Touch: grip hold → drag ───────────────────────────────────────────────
+  // ── Touch: grip → drag ────────────────────────────────────────────────────
 
   const getDropPositionFromY = (rect: DOMRect, clientY: number, isFolder: boolean): DropPosition => {
     const pct = (clientY - rect.top) / rect.height
-    if (isFolder) {
-      if (pct < 0.25) return "before"
-      if (pct > 0.75) return "after"
-      return "inside"
-    }
+    if (isFolder) { if (pct < 0.25) return "before"; if (pct > 0.75) return "after"; return "inside" }
     return pct < 0.5 ? "before" : "after"
   }
 
   const resolveDropTargetFromPoint = (clientX: number, clientY: number): { target: DropTarget | null; overRoot: boolean } => {
-    // Check root zone first
     if (rootZoneRef.current) {
       const r = rootZoneRef.current.getBoundingClientRect()
-      if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+      if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom)
         return { target: null, overRoot: true }
-      }
     }
-
-    // Check item rects
     for (const [id, el] of itemRefs.current.entries()) {
-      if (id === touchDragId) continue
+      if (id === touchDragIdRef.current) continue
       const r = el.getBoundingClientRect()
       if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
         const node = items.find((i) => i.id === id)
-        const isFolder = node?.type === "folder"
-        const position = getDropPositionFromY(r, clientY, !!isFolder)
-        return { target: { id, position }, overRoot: false }
+        return { target: { id, position: getDropPositionFromY(r, clientY, node?.type === "folder") }, overRoot: false }
       }
     }
-
     return { target: null, overRoot: false }
   }
 
   const handleGripTouchStart = (e: React.TouchEvent<HTMLDivElement>, node: SidebarObject) => {
-    e.stopPropagation() // don't fire the row long-press
-    const touch = e.touches[0]
+    e.stopPropagation() // prevent row long-press from firing
+    // Also cancel any row long-press that may have started
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
 
+    const touch = e.touches[0]
     gripDragTimer.current = setTimeout(() => {
+      touchDragIdRef.current = node.id
+      ghostRef.current = { x: touch.clientX, y: touch.clientY, label: node.name }
       setTouchDragId(node.id)
       setTouchGhost({ x: touch.clientX, y: touch.clientY, label: node.name })
     }, LONG_PRESS_MS)
   }
 
   const handleGripTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    // Cancel grip timer if finger moves before hold completes
-    if (gripDragTimer.current && !touchDragId) {
-      clearTimeout(gripDragTimer.current)
-      gripDragTimer.current = null
+    // If drag hasn't started yet, any movement cancels the timer
+    if (!touchDragIdRef.current) {
+      if (gripDragTimer.current) { clearTimeout(gripDragTimer.current); gripDragTimer.current = null }
       return
     }
-    if (!touchDragId) return
 
-    
+    e.preventDefault() // block scroll only while actually dragging
     const touch = e.touches[0]
-    setTouchGhost({ x: touch.clientX, y: touch.clientY, label: touchGhost?.label ?? "" })
+
+    // Update ghost position via ref + batched state (avoids excessive renders)
+    ghostRef.current = { x: touch.clientX, y: touch.clientY, label: ghostRef.current?.label ?? "" }
+    setTouchGhost({ ...ghostRef.current })
 
     const { target, overRoot } = resolveDropTargetFromPoint(touch.clientX, touch.clientY)
+    touchDropTargetRef.current = target
+    touchOverRootRef.current = overRoot
     setTouchDropTarget(target)
     setTouchOverRoot(overRoot)
   }
 
   const handleGripTouchEnd = async () => {
-    if (gripDragTimer.current) {
-      clearTimeout(gripDragTimer.current)
-      gripDragTimer.current = null
-    }
-    if (!touchDragId) return
+    if (gripDragTimer.current) { clearTimeout(gripDragTimer.current); gripDragTimer.current = null }
 
-    const activeId = touchDragId
-    const target = touchDropTarget
-    const toRoot = touchOverRoot
+    const activeId = touchDragIdRef.current
+    const target = touchDropTargetRef.current
+    const toRoot = touchOverRootRef.current
 
+    // Clear all touch state synchronously before async work
+    touchDragIdRef.current = null
+    touchDropTargetRef.current = null
+    touchOverRootRef.current = false
+    ghostRef.current = null
     setTouchDragId(null)
     setTouchGhost(null)
     setTouchDropTarget(null)
     setTouchOverRoot(false)
 
+    if (!activeId) return
     await commitDrop(activeId, target, toRoot)
   }
 
   // ── Context Menu actions ──────────────────────────────────────────────────
 
   const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>, item: SidebarObject) => {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     setContextMenu({ x: e.clientX, y: e.clientY, item })
   }
 
@@ -279,11 +252,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (!nextName || nextName === item.name) return
     const previousItems = items
     setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, name: nextName } : entry))
-    try {
-      await updateObject(item.id, { name: nextName })
-    } catch {
-      setItems(previousItems)
-    }
+    try { await updateObject(item.id, { name: nextName }) } catch { setItems(previousItems) }
   }
 
   const handleDelete = async (item: SidebarObject) => {
@@ -292,16 +261,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (confirmation !== "DELETE") return
     const previousItems = items
     setItems((prev) => prev.filter((entry) => entry.id !== item.id))
-    try {
-      await deleteObject(item.id)
-    } catch {
-      setItems(previousItems)
-    }
+    try { await deleteObject(item.id) } catch { setItems(previousItems) }
   }
 
   const handleSetRootFolder = async (item: SidebarObject) => {
-    const currentData: any = typeof item.data === "string"
-      ? JSON.parse(item.data ?? "{}") : (item.data ?? {})
+    const currentData: any = typeof item.data === "string" ? JSON.parse(item.data ?? "{}") : (item.data ?? {})
     const isCurrentlyNoNesting = currentData?.noNesting === true
     const newData = { ...currentData, noNesting: !isCurrentlyNoNesting }
     const newItems = !isCurrentlyNoNesting ? moveToRoot(items, item.id) : items
@@ -315,9 +279,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           position: newItems.find((i) => i.id === item.id)?.position ?? 0,
         } : {}),
       })
-    } catch {
-      setItems(previousItems)
-    }
+    } catch { setItems(previousItems) }
   }
 
   // ── Render helpers ────────────────────────────────────────────────────────
@@ -334,7 +296,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const isFolder = node.type === "folder"
     const isOpen = openGroups[node.id] ?? false
     const isDragging = activeDragId === node.id
-
     const isDropBefore = activeDropTarget?.id === node.id && activeDropTarget.position === "before"
     const isDropAfter  = activeDropTarget?.id === node.id && activeDropTarget.position === "after"
     const isDropInside = activeDropTarget?.id === node.id && activeDropTarget.position === "inside"
@@ -345,18 +306,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         <div
           ref={(el) => { if (el) itemRefs.current.set(node.id, el); else itemRefs.current.delete(node.id) }}
-          // Desktop drag
-          onDragStart={() => setDraggedId(node.id)}
-          onDragEnd={() => { setDraggedId(null); setDropTarget(null) }}
+          // Desktop drag — only active when grip was mousedown'd
+          draggable={draggableId === node.id}
+          onDragStart={(e) => { if (draggableId !== node.id) { e.preventDefault(); return } setDraggedId(node.id) }}
+          onDragEnd={() => { isDraggable.current = false; setDraggableId(null); setDraggedId(null); setDropTarget(null) }}
           onDragOver={(e) => handleDragOver(e, node)}
           onDrop={handleDrop}
-          // Desktop right-click context menu
           onContextMenu={(e) => handleContextMenu(e, node)}
-           // Mobile long-press context menu (on the row, not the grip)
-          onTouchStart={(e) => handleRowTouchStart(e, node)}
-            onTouchMove={handleRowTouchMove}
-          onTouchEnd={handleRowTouchEnd}
-        
           style={{ paddingLeft: level * 5 }}
           className={`flex w-full items-center gap-2 rounded-md pr-2 py-1.5 text-sm transition-all
             hover:bg-sidebar-accent select-none
@@ -364,21 +320,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             ${isDropInside ? "ring-1 ring-primary bg-sidebar-accent" : ""}
           `}
         >
-          {/* Grip — mobile touch-drag handle */}
-          <div 
-           draggable
+          {/* Grip — desktop mousedown gates drag; mobile touch starts drag */}
+          <div
+            onMouseDown={() => { isDraggable.current = true; setDraggableId(node.id) }}
+            onMouseUp={() => { isDraggable.current = false; setDraggableId(null) }}
             onTouchStart={(e) => handleGripTouchStart(e, node)}
             onTouchMove={handleGripTouchMove}
             onTouchEnd={handleGripTouchEnd}
-            
             className="cursor-grab active:cursor-grabbing touch-none shrink-0 p-1 -ml-1"
             aria-label="Drag to reorder"
           >
             <GripVertical className="size-3.5 text-muted-foreground/50" />
           </div>
 
-          <div className="min-w-0 flex-1 text-left" 
-         
+          {/* Text area — long-press here opens context menu on mobile */}
+          <div
+            className="min-w-0 flex-1 text-left"
+            onTouchStart={(e) => handleTextTouchStart(e, node)}
+            onTouchMove={handleTextTouchMove}
+            onTouchEnd={handleTextTouchEnd}
           >
             <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
             <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
@@ -436,9 +396,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <div
           className="space-y-0 px-2 py-2"
-          onDragLeave={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null)
-          }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null) }}
         >
           {loading ? (
             <div className="text-xs text-sidebar-foreground/70">Loading items…</div>
@@ -449,7 +407,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )}
         </div>
 
-        {/* Root drop zone */}
         {activeDragId && items.find((i) => i.id === activeDragId)?.parent_id && (
           <div
             ref={rootZoneRef}
@@ -477,7 +434,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
       )}
 
-      {/* Context menu */}
       {contextMenu ? (
         <div
           className="fixed z-50 rounded-md border border-border bg-popover p-1 shadow-lg"
@@ -492,7 +448,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             className="block w-full rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
             Delete
           </button>
-
           {contextMenu.item.type === "folder" && (
             <>
               <div className="my-1 border-t border-border" />
