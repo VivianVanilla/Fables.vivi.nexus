@@ -237,7 +237,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
     if (!touchDragId) return
 
-    e.preventDefault() // prevent page scroll while dragging
+    
     const touch = e.touches[0]
     setTouchGhost({ x: touch.clientX, y: touch.clientY, label: touchGhost?.label ?? "" })
 
@@ -346,18 +346,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div
           ref={(el) => { if (el) itemRefs.current.set(node.id, el); else itemRefs.current.delete(node.id) }}
           // Desktop drag
-          draggable
           onDragStart={() => setDraggedId(node.id)}
           onDragEnd={() => { setDraggedId(null); setDropTarget(null) }}
           onDragOver={(e) => handleDragOver(e, node)}
           onDrop={handleDrop}
           // Desktop right-click context menu
           onContextMenu={(e) => handleContextMenu(e, node)}
-          // Mobile long-press context menu (on the row, not the grip)
+           // Mobile long-press context menu (on the row, not the grip)
           onTouchStart={(e) => handleRowTouchStart(e, node)}
-          onTouchMove={handleRowTouchMove}
+            onTouchMove={handleRowTouchMove}
           onTouchEnd={handleRowTouchEnd}
-          style={{ paddingLeft: level * 10 }}
+        
+          style={{ paddingLeft: level * 5 }}
           className={`flex w-full items-center gap-2 rounded-md pr-2 py-1.5 text-sm transition-all
             hover:bg-sidebar-accent select-none
             ${isDragging ? "opacity-40" : "opacity-100"}
@@ -365,17 +365,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           `}
         >
           {/* Grip — mobile touch-drag handle */}
-          <div
+          <div 
+           draggable
             onTouchStart={(e) => handleGripTouchStart(e, node)}
             onTouchMove={handleGripTouchMove}
             onTouchEnd={handleGripTouchEnd}
+            
             className="cursor-grab active:cursor-grabbing touch-none shrink-0 p-1 -ml-1"
             aria-label="Drag to reorder"
           >
             <GripVertical className="size-3.5 text-muted-foreground/50" />
           </div>
 
-          <div className="min-w-0 flex-1 text-left">
+          <div className="min-w-0 flex-1 text-left" 
+         
+          >
             <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
             <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
               <span>{meta.label}</span>
