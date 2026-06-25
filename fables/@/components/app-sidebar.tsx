@@ -327,10 +327,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             onTouchStart={(e) => handleGripTouchStart(e, node)}
             onTouchMove={handleGripTouchMove}
             onTouchEnd={handleGripTouchEnd}
-            className="cursor-grab active:cursor-grabbing touch-none shrink-0 p-1 -ml-1"
+            className="cursor-grab active:cursor-grabbing touch-none size-8 p-1 -ml-1"
             aria-label="Drag to reorder"
           >
-            <GripVertical className="size-5 text-muted-foreground/50" />
+            <GripVertical className="size-7 m text-muted-foreground/50" />
           </div>
 
           {/* Text area — long-press here opens context menu on mobile */}
