@@ -330,7 +330,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             className="cursor-grab active:cursor-grabbing touch-none shrink-0 p-1 -ml-1"
             aria-label="Drag to reorder"
           >
-            <GripVertical className="size-3.5 text-muted-foreground/50" />
+            <GripVertical className="size-5 text-muted-foreground/50" />
           </div>
 
           {/* Text area — long-press here opens context menu on mobile */}
