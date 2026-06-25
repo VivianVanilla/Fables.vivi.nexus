@@ -321,17 +321,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           `}
         >
           {/* Grip — desktop mousedown gates drag; mobile touch starts drag */}
-          <div
-            onMouseDown={() => { isDraggable.current = true; setDraggableId(node.id) }}
-            onMouseUp={() => { isDraggable.current = false; setDraggableId(null) }}
-            onTouchStart={(e) => handleGripTouchStart(e, node)}
-            onTouchMove={handleGripTouchMove}
-            onTouchEnd={handleGripTouchEnd}
-            className="cursor-grab active:cursor-grabbing touch-none size-8 p-1 -ml-1"
-            aria-label="Drag to reorder"
-          >
-            <GripVertical className="size-7 m text-muted-foreground/50" />
-          </div>
+        
 
           {/* Text area — long-press here opens context menu on mobile */}
           <div
@@ -340,15 +330,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             onTouchMove={handleTextTouchMove}
             onTouchEnd={handleTextTouchEnd}
           >
+            
             <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
+            
             <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
               <span>{meta.label}</span>
+              
               {isFolder && isNoNesting(node) && (
                 <span className="rounded px-1 bg-sidebar-foreground/10 text-sidebar-foreground/50 tracking-normal normal-case">
                   no-nest
                 </span>
               )}
             </div>
+            
           </div>
 
           {isFolder && (
@@ -360,6 +354,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <ChevronDown className={`size-3.5 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
             </button>
           )}
+            <div
+            onMouseDown={() => { isDraggable.current = true; setDraggableId(node.id) }}
+            onMouseUp={() => { isDraggable.current = false; setDraggableId(null) }}
+            onTouchStart={(e) => handleGripTouchStart(e, node)}
+            onTouchMove={handleGripTouchMove}
+            onTouchEnd={handleGripTouchEnd}
+            className="cursor-grab active:cursor-grabbing touch-none size-8 p-1 -ml-1"
+            aria-label="Drag to reorder"
+          >
+            <GripVertical className="size-5 m text-muted-foreground/50" />
+          </div>
         </div>
 
         <DropIndicator active={isDropAfter} />
