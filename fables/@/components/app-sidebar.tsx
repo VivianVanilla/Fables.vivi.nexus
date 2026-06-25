@@ -354,6 +354,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <ChevronDown className={`size-3.5 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
             </button>
           )}
+
+         
+
             <div
             onMouseDown={() => { isDraggable.current = true; setDraggableId(node.id) }}
             onMouseUp={() => { isDraggable.current = false; setDraggableId(null) }}
@@ -361,7 +364,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             onTouchMove={handleGripTouchMove}
             onTouchEnd={handleGripTouchEnd}
             className="cursor-grab active:cursor-grabbing touch-none size-8 p-1 -ml-1"
-            aria-label="Drag to reorder"
+            aria-label="GRippie"
           >
             <GripVertical className="size-5 m text-muted-foreground/50" />
           </div>
