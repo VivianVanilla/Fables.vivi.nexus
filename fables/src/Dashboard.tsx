@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { AppSidebar } from "@/components/app-sidebar";
+import type { SidebarObject } from "@/components/sidebar-utils";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,6 +20,7 @@ import "./index.css";
 
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
+  const [selectedObject, setSelectedObject] = useState<SidebarObject | null>(null);
 
   useEffect(() => {
     async function loadUser() {
@@ -37,7 +39,7 @@ export default function Dashboard() {
 
   return (
     <SidebarProvider >
-      <AppSidebar />
+      <AppSidebar onSelectObject={setSelectedObject} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
@@ -80,12 +82,30 @@ export default function Dashboard() {
 
           {user ? (
             <>
-              <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-                <div className="aspect-video rounded-xl bg-muted/50" />
-                <div className="aspect-video rounded-xl bg-muted/50" />
-                <div className="aspect-video rounded-xl bg-muted/50" />
+              <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min overflow-auto">
+                {selectedObject ? (
+                  <div className="p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Raw JSON — {selectedObject.name}
+                      </span>
+                      <button
+                        onClick={() => setSelectedObject(null)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        ✕ clear
+                      </button>
+                    </div>
+                    <pre className="rounded-lg bg-slate-900 p-4 text-xs text-green-400 overflow-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(selectedObject, null, 2)}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground/40 select-none">
+                    Click a sidebar item to inspect its JSON
+                  </div>
+                )}
               </div>
-              <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
             </>
           ) : (
             <p>Loading...</p>

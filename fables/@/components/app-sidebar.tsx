@@ -1,6 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import {  GripVertical, ImageIcon, XIcon } from "lucide-react"
+import { GripVertical, ImageIcon, Pin, XIcon } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -8,7 +8,7 @@ import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
-import { buildObjectTree, applyDrop, moveToRoot, isNoNesting } from "@/components/sidebar-utils"
+import { buildObjectTree, applyDrop, moveToRoot, isNoNesting, isPinned } from "@/components/sidebar-utils"
 import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
 import { supabase } from "../../src/supabase"
 
@@ -33,7 +33,11 @@ interface BgImage {
   publicUrl: string
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  onSelectObject?: (obj: SidebarObject | null) => void
+}
+
+export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
   const { user, objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
 
@@ -333,6 +337,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     } catch { setItems(previousItems) }
   }
 
+  const handlePin = async (item: SidebarObject) => {
+    setContextMenu(null)
+    const currentData: any = typeof item.data === "string" ? JSON.parse(item.data ?? "{}") : (item.data ?? {})
+    const newData = { ...currentData, pinned: !currentData?.pinned }
+    const previousItems = items
+    setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, data: newData } : entry))
+    try { await updateObject(item.id, { data: newData }) } catch { setItems(previousItems) }
+  }
+
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const activeDragId = draggedId ?? touchDragId
@@ -390,22 +403,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   onTouchStart={(e) => handleTextTouchStart(e, node)}
   onTouchMove={handleTextTouchMove}
   onTouchEnd={handleTextTouchEnd}
-  onClick={isFolder ? () => toggleGroup(node.id) : undefined}
-
+  onClick={isFolder ? () => toggleGroup(node.id) : () => onSelectObject?.(node)}
 >
-            
-            <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
-            
+
+            <div className="flex items-center gap-1.5 truncate">
+              {isPinned(node) && <Pin className="size-2.5 shrink-0 text-primary/70" />}
+              <span className="truncate text-sm font-medium leading-tight">{node.name}</span>
+            </div>
+
             <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
               <span>{meta.label}</span>
-              
+
               {isFolder && isNoNesting(node) && (
                 <span className="rounded px-1 bg-sidebar-foreground/10 text-sidebar-foreground/50 tracking-normal normal-case">
                   no-nest
                 </span>
               )}
             </div>
-            
+
           </div>
 
          
@@ -521,6 +536,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </button>
             </>
           )}
+          <div className="my-1 border-t border-border" />
+          <button type="button"
+            onClick={() => handlePin(contextMenu.item)}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground">
+            <Pin className="size-3.5" />
+            {isPinned(contextMenu.item) ? "Unpin from Top" : "Pin to Top"}
+          </button>
           <div className="my-1 border-t border-border" />
           <button type="button"
             onClick={() => openBgPicker(contextMenu.item)}

@@ -15,6 +15,22 @@ export function sortByPosition(a: userInfo.Objects, b: userInfo.Objects) {
   return (a.position ?? 0) - (b.position ?? 0)
 }
 
+function getItemData(item: userInfo.Objects): any {
+  if (!item.data) return {}
+  try { return typeof item.data === "string" ? JSON.parse(item.data) : item.data } catch { return {} }
+}
+
+export function isPinned(item: userInfo.Objects): boolean {
+  return getItemData(item)?.pinned === true
+}
+
+function sortPinnedFirst(a: SidebarObject, b: SidebarObject) {
+  const aPinned = isPinned(a) ? 0 : 1
+  const bPinned = isPinned(b) ? 0 : 1
+  if (aPinned !== bPinned) return aPinned - bPinned
+  return sortByPosition(a, b)
+}
+
 export function buildObjectTree(items: userInfo.Objects[]) {
   const map = new Map<string, SidebarObject>()
   const nodes: SidebarObject[] = items.map((item) => ({ ...item, children: [] }))
@@ -33,7 +49,7 @@ export function buildObjectTree(items: userInfo.Objects[]) {
   })
 
   function sortRecursive(list: SidebarObject[]) {
-    list.sort((a, b) => sortByPosition(a, b))
+    list.sort(sortPinnedFirst)
     list.forEach((item) => sortRecursive(item.children))
   }
 
