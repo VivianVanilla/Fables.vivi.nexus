@@ -45,10 +45,10 @@ export const THEMES: Record<string, Theme> = {
   },
   red: {
     label: "Red",
-    body: "bg-rose-950",
-    box: "bg-rose-900",
+    body: "bg-red-950",
+    box: "bg-rose-950",
     ring: "ring-pink-700",
-    header: "bg-pink-950",
+    header: "bg-red-950",
     color: "text-white",
   },
   black: {
