@@ -1,6 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import { ChevronDown, GripVertical } from "lucide-react"
+import {  GripVertical, ImageIcon, XIcon } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -10,6 +10,9 @@ import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
 import { buildObjectTree, applyDrop, moveToRoot, isNoNesting } from "@/components/sidebar-utils"
 import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
+import { supabase } from "../../src/supabase"
+
+const BUCKET = "fableimages"
 
 // ----- Types & Metadata -----
 type ObjectType = "folder" | "note" | "character" | "monster" | "campaign"
@@ -25,9 +28,18 @@ const typeMeta: Record<ObjectType, { label: string }> = {
 const LONG_PRESS_MS = 500
 
 // ----- Component -----
+interface BgImage {
+  name: string
+  publicUrl: string
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
+  const { user, objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
+
+  // Background image picker state
+  const [bgPickerItem, setBgPickerItem] = React.useState<SidebarObject | null>(null)
+  const [bgImages, setBgImages] = React.useState<BgImage[]>([])
 
   // Desktop drag state
   const [draggedId, setDraggedId] = React.useState<string | null>(null)
@@ -67,6 +79,45 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const tree = React.useMemo(() => buildObjectTree(items), [items])
   const toggleGroup = (id: string) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
+
+  // ── Background image helpers ──────────────────────────────────────────────
+
+  async function loadBgImages() {
+    if (!user?.id) return
+    const { data } = await supabase.storage
+      .from(BUCKET)
+      .list(`${user.id}`, { limit: 100 })
+    if (!data) return
+    const loaded = data
+      .filter((f) => f.name !== ".emptyFolderPlaceholder")
+      .map((f) => ({
+        name: f.name,
+        publicUrl: supabase.storage
+          .from(BUCKET)
+          .getPublicUrl(`${user.id}/${f.name}`).data.publicUrl,
+      }))
+    setBgImages(loaded)
+  }
+
+  function openBgPicker(item: SidebarObject) {
+    setContextMenu(null)
+    setBgPickerItem(item)
+    loadBgImages()
+  }
+
+  async function applyBgImage(item: SidebarObject, url: string) {
+    const currentData: any = typeof item.data === "string" ? JSON.parse(item.data ?? "{}") : (item.data ?? {})
+    const newData = { ...currentData, backgroundImage: url }
+    setBgPickerItem(null)
+    await updateObject(item.id, { data: newData })
+  }
+
+  async function removeBgImage(item: SidebarObject) {
+    const currentData: any = typeof item.data === "string" ? JSON.parse(item.data ?? "{}") : (item.data ?? {})
+    const { backgroundImage: _removed, ...rest } = currentData
+    setContextMenu(null)
+    await updateObject(item.id, { data: rest })
+  }
 
   // ── Shared: commit a drop ─────────────────────────────────────────────────
 
@@ -299,6 +350,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const isDropBefore = activeDropTarget?.id === node.id && activeDropTarget.position === "before"
     const isDropAfter  = activeDropTarget?.id === node.id && activeDropTarget.position === "after"
     const isDropInside = activeDropTarget?.id === node.id && activeDropTarget.position === "inside"
+    const nodeData: any = typeof node.data === "string" ? JSON.parse((node.data as string) ?? "{}") : (node.data ?? {})
+    const bgImage: string | undefined = nodeData?.backgroundImage
 
     return (
       <div key={node.id} className="relative">
@@ -313,23 +366,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           onDragOver={(e) => handleDragOver(e, node)}
           onDrop={handleDrop}
           onContextMenu={(e) => handleContextMenu(e, node)}
-          style={{ paddingLeft: level * 5 }}
+          style={{
+            paddingLeft: level * 5,
+            backgroundImage: bgImage
+              ? `linear-gradient(rgba(11,18,32,0.72), rgba(11,18,32,0.72)), url(${bgImage})`
+              : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
           className={`flex w-full items-center gap-2 rounded-md pr-2 py-1.5 text-sm transition-all
             hover:bg-sidebar-accent select-none
             ${isDragging ? "opacity-40" : "opacity-100"}
             ${isDropInside ? "ring-1 ring-primary bg-sidebar-accent" : ""}
+             ${isFolder && isOpen && !bgImage ? "bg-slate-800 rounded-md" : ""}
           `}
         >
           {/* Grip — desktop mousedown gates drag; mobile touch starts drag */}
         
 
           {/* Text area — long-press here opens context menu on mobile */}
-          <div
-            className="min-w-0 flex-1 text-left"
-            onTouchStart={(e) => handleTextTouchStart(e, node)}
-            onTouchMove={handleTextTouchMove}
-            onTouchEnd={handleTextTouchEnd}
-          >
+        <div
+  className={`min-w-0 flex-1 text-left p-1`}
+  onTouchStart={(e) => handleTextTouchStart(e, node)}
+  onTouchMove={handleTextTouchMove}
+  onTouchEnd={handleTextTouchEnd}
+  onClick={isFolder ? () => toggleGroup(node.id) : undefined}
+
+>
             
             <div className="truncate text-sm font-medium leading-tight">{node.name}</div>
             
@@ -345,15 +408,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             
           </div>
 
-          {isFolder && (
-            <button
-              type="button"
-              onClick={() => toggleGroup(node.id)}
-              className="shrink-0 rounded p-0.5 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors"
-            >
-              <ChevronDown className={`size-3.5 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
-            </button>
-          )}
+         
 
          
 
@@ -466,8 +521,67 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </button>
             </>
           )}
+          <div className="my-1 border-t border-border" />
+          <button type="button"
+            onClick={() => openBgPicker(contextMenu.item)}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground">
+            <ImageIcon className="size-3.5" />
+            Set Background Image
+          </button>
+          {(() => {
+            const d: any = typeof contextMenu.item.data === "string"
+              ? JSON.parse((contextMenu.item.data as string) ?? "{}")
+              : (contextMenu.item.data ?? {})
+            return d?.backgroundImage ? (
+              <button type="button"
+                onClick={() => removeBgImage(contextMenu.item)}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
+                <XIcon className="size-3.5" />
+                Remove Background
+              </button>
+            ) : null
+          })()}
         </div>
       ) : null}
+
+      {/* Background image picker */}
+      {bgPickerItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setBgPickerItem(null)}
+        >
+          <div
+            className="rounded-xl border border-border bg-popover p-4 shadow-xl w-80 max-h-[70vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium">Choose Background</span>
+              <button type="button" onClick={() => setBgPickerItem(null)}
+                className="size-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground">
+                <XIcon className="size-4" />
+              </button>
+            </div>
+            {bgImages.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic text-center py-4">
+                No images yet — upload some in Profile Settings.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {bgImages.map((img) => (
+                  <button
+                    key={img.name}
+                    type="button"
+                    onClick={() => applyBgImage(bgPickerItem, img.publicUrl)}
+                    className="aspect-video rounded-md overflow-hidden border-2 border-transparent hover:border-primary transition-colors"
+                  >
+                    <img src={img.publicUrl} alt={img.name} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <SidebarRail />
     </Sidebar>
