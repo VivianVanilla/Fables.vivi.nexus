@@ -1,8 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { SidebarObject } from "@/components/sidebar-utils"
-import { useUserContext } from "../../src/contexts/UserContext"
 import { safeParseJson } from "./character-utils"
 import { CharacterSheet } from "./character"
+import { supabase } from "../../src/supabase"
 
 interface CampaignData {
   partyCode?: string
@@ -15,18 +15,24 @@ interface Props {
 }
 
 export function CampaignView({ campaign, onClose }: Props) {
-  const { objects } = useUserContext()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [partyMembers, setPartyMembers] = useState<SidebarObject[]>([])
 
   const campaignData = safeParseJson(campaign.data) as CampaignData
   const partyCode = campaignData.partyCode ?? ""
 
-  // Find all characters that have a matching party code
-  const partyMembers = objects.filter(obj => {
-    if (obj.type !== "character") return false
-    const charData = safeParseJson(obj.data) as { partyCode?: string }
-    return charData.partyCode && charData.partyCode === partyCode
-  }) as SidebarObject[]
+  useEffect(() => {
+    if (!partyCode) return
+    supabase
+      .from("objects")
+      .select("*")
+      .eq("type", "character")
+      .filter("data->>partyCode", "eq", partyCode)
+      .then(({ data, error }) => {
+        if (error) { console.error("party fetch error:", error); return }
+        setPartyMembers((data ?? []) as SidebarObject[])
+      })
+  }, [partyCode])
 
   function copyCode() {
     if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
