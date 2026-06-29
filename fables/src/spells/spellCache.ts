@@ -13,9 +13,10 @@ export async function getSpells(): Promise<Spell[]> {
     .select('spell_data')
     .then(({ data, error }) => {
       if (error) console.error('spellCache: failed to load spells', error)
-      cache = (data ?? []).map((row: any) => row.spell_data as Spell)
+      const result: Spell[] = (data ?? []).map((row: any) => row.spell_data as Spell)
+      cache = result
       pending = null
-      return cache
+      return result
     })
 
   return pending

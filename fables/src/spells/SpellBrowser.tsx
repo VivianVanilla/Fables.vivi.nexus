@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Shield, Sparkles, SlidersHorizontal, X } from 'lucide-react'
+import { supabase } from '../supabase'
 import { getSpells } from './spellCache'
 import type { Spell, SpellFilters } from './types'
 import { DEFAULT_FILTERS } from './types'
