@@ -57,6 +57,7 @@ export interface Feature {
   maxUses?: number
   usesUsed?: number
   resetsOn?: "short" | "long" | "dawn"
+  sliderColor?: string
 }
 
 export interface FavoriteRef {

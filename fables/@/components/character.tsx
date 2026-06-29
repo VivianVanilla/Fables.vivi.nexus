@@ -27,6 +27,7 @@ import { SpellEntry }       from "./character/entries/SpellEntry"
 import { EquipmentEntry }   from "./character/entries/EquipmentEntry"
 import { FavoritesPanel }   from "./character/panels/FavoritesPanel"
 import { InfoTab }          from "./character/tabs/InfoTab"
+import { TracingSlider }    from "./ui/tracing-slider"
 
 // ── CONDITION DATA ────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ type Tab = "main" | "details"
 // CharacterSheet
 // ════════════════════════════════════════════════════════════════════════════
 
-export function CharacterSheet({ character, onClose, readOnly = false }: Props) {
+export function CharacterSheet({ character, readOnly = false }: Props) {
   const { user, updateObject } = useUserContext()
 
   // ── STATE ─────────────────────────────────────────────────────────────────
@@ -238,9 +239,13 @@ export function CharacterSheet({ character, onClose, readOnly = false }: Props) 
 
   // Update a feature's usesUsed regardless of which list it belongs to
   function updateFeatureUses(id: string, usesUsed: number) {
+    patchFeature(id, { usesUsed })
+  }
+
+  function patchFeature(id: string, patch: Partial<Feature>) {
     for (const key of ["racialTraits", "feats", "classFeatures"] as const) {
       if (data[key]?.find(f => f.id === id)) {
-        update({ [key]: data[key]!.map(f => f.id === id ? { ...f, usesUsed } : f) })
+        update({ [key]: data[key]!.map(f => f.id === id ? { ...f, ...patch } : f) })
         return
       }
     }
@@ -473,15 +478,14 @@ export function CharacterSheet({ character, onClose, readOnly = false }: Props) 
                   return (
                     <div key={slot.level} className="flex items-center gap-2">
                       <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
-                      <button type="button" disabled={readOnly || rem <= 0}
-                        onClick={() => changeSlot(slot.level, { used: Math.min(slot.total, slot.used + 1) })}
-                        className="size-6 rounded-md bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">−</button>
-                      <input type="range" min={0} max={slot.total} value={rem} disabled={readOnly}
-                        onChange={e => changeSlot(slot.level, { used: slot.total - parseInt(e.target.value) })}
-                        className="flex-1 accent-primary h-2 cursor-pointer disabled:opacity-50 disabled:cursor-default" />
-                      <button type="button" disabled={readOnly || rem >= slot.total}
-                        onClick={() => changeSlot(slot.level, { used: Math.max(0, slot.used - 1) })}
-                        className="size-6 rounded-md bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">+</button>
+                      <TracingSlider
+                        value={rem}
+                        max={slot.total}
+                        disabled={readOnly}
+                        showButtons
+                        buttonSize="sm"
+                        onChange={val => changeSlot(slot.level, { used: slot.total - val })}
+                      />
                       <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
                       {!readOnly && (
                         <button type="button" onClick={() => removeSlot(slot.level)}
@@ -599,7 +603,7 @@ export function CharacterSheet({ character, onClose, readOnly = false }: Props) 
     if (!showAbilityModal) return null
     return (
       <Modal onClose={() => setShowAbilityModal(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
+        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl  flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-white/10">
             <p className="text-base font-bold text-white">Ability Scores</p>
           </div>
@@ -616,7 +620,7 @@ export function CharacterSheet({ character, onClose, readOnly = false }: Props) 
                     onChange={e => setAbilityInputs(prev => ({ ...prev, [key]: e.target.value }))}
                     onBlur={e => {
                       const v = e.target.value.trim()
-                      update({ [key]: v === "" ? 0 : Math.max(1, Math.min(30, parseInt(v) || 0)) })
+                      update({ [key]: v === "" ? 0 : Math.max(1, Math.min(1000, parseInt(v) || 0)) })
                       setAbilityInputs(prev => { const n = { ...prev }; delete n[key]; return n })
                     }}
                     className="flex-1 text-center bg-white/10 rounded-xl px-3 py-2.5 text-lg font-bold text-white outline-none focus:ring-2 focus:ring-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -1138,15 +1142,14 @@ export function CharacterSheet({ character, onClose, readOnly = false }: Props) 
               return (
                 <div key={slot.level} className="flex items-center gap-2">
                   <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
-                  <button type="button" disabled={readOnly || rem <= 0}
-                    onClick={() => changeSlot(slot.level, { used: Math.min(slot.total, slot.used + 1) })}
-                    className="size-6 rounded-md bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">−</button>
-                  <input type="range" min={0} max={slot.total} value={rem} disabled={readOnly}
-                    onChange={e => changeSlot(slot.level, { used: slot.total - parseInt(e.target.value) })}
-                    className="flex-1 accent-primary h-2 cursor-pointer disabled:opacity-50 disabled:cursor-default" />
-                  <button type="button" disabled={readOnly || rem >= slot.total}
-                    onClick={() => changeSlot(slot.level, { used: Math.max(0, slot.used - 1) })}
-                    className="size-6 rounded-md bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">+</button>
+                  <TracingSlider
+                    value={rem}
+                    max={slot.total}
+                    disabled={readOnly}
+                    showButtons
+                    buttonSize="sm"
+                    onChange={val => changeSlot(slot.level, { used: slot.total - val })}
+                  />
                   <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
                 </div>
               )
@@ -1332,10 +1335,7 @@ export function CharacterSheet({ character, onClose, readOnly = false }: Props) 
           </button>
         )}
 
-        <button type="button" onClick={onClose}
-          className="size-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white shrink-0 transition-colors text-base">
-          ✕
-        </button>
+      
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}

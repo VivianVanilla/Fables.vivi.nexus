@@ -8,6 +8,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import type { FavoriteRef, SpellItem, EquipmentItem, Feature } from "../../character-types"
+import { TracingSlider } from "../../ui/tracing-slider"
 import type { Theme } from "../../character-themes"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -125,15 +126,17 @@ function FeatureDetail({
         <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{feature.description}</p>
       )}
       {hasUses && (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-white/60">{usesRemaining}/{maxUses} uses</span>
-            <span className="text-white/35">{resetLabel(feature.resetsOn)}</span>
-          </div>
-          <input type="range" min={0} max={maxUses} value={usesRemaining} disabled={readOnly}
-            onChange={e => onUpdateUses(maxUses - parseInt(e.target.value))}
-            className="w-full accent-primary h-2 rounded-full cursor-pointer disabled:opacity-50" />
-        </div>
+        <TracingSlider
+          value={usesRemaining}
+          max={maxUses}
+          disabled={readOnly}
+          color={feature.sliderColor}
+          showButtons
+          showLabel
+          label={`${usesRemaining}/${maxUses} uses`}
+          labelRight={resetLabel(feature.resetsOn)}
+          onChange={val => onUpdateUses(maxUses - val)}
+        />
       )}
     </div>
   )
@@ -290,7 +293,11 @@ export function FavoritesPanel({
                   {fav.refType === "feature" && (() => {
                     const feat = resolveFeature(fav.refId)
                     return feat
-                      ? <FeatureDetail feature={feat} readOnly={readOnly} onUpdateUses={u => onUpdateUses(fav.refId, u)} />
+                      ? <FeatureDetail
+                          feature={feat}
+                          readOnly={readOnly}
+                          onUpdateUses={u => onUpdateUses(fav.refId, u)}
+                        />
                       : <p className="text-sm text-white/30 italic">Feature not found.</p>
                   })()}
                 </div>

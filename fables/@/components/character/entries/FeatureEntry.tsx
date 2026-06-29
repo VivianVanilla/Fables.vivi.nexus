@@ -11,6 +11,7 @@
 import { useState } from "react"
 import type { Feature } from "../../character-types"
 import type { Theme } from "../../character-themes"
+import { TracingSlider } from "../../ui/tracing-slider"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
             Track uses
           </label>
           {feature.trackable && (
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-3 text-xs flex-wrap">
               <label className="flex items-center gap-1.5 text-white/50">
                 Max
                 <input
@@ -113,7 +114,17 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
                   <option value="short">Short Rest</option>
                   <option value="long">Long Rest</option>
                   <option value="dawn">Dawn</option>
+                  <option value="manual">Manual</option>
                 </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-white/50 cursor-pointer">
+                Bar color
+                <input
+                  type="color"
+                  value={feature.sliderColor ?? "#6366f1"}
+                  onChange={e => onChange({ sliderColor: e.target.value })}
+                  className="size-4 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
               </label>
             </div>
           )}
@@ -186,23 +197,17 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
 
           {/* Tracking slider */}
           {hasUses && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-white/50">{usesRemaining} / {maxUses} uses remaining</span>
-                <span className="text-white/30">{resetLabel(feature.resetsOn)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" disabled={readOnly || usesUsed <= 0}
-                  onClick={() => onChange({ usesUsed: Math.max(0, usesUsed - 1) })}
-                  className="size-7 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">+</button>
-                <input type="range" min={0} max={maxUses} value={usesRemaining} disabled={readOnly}
-                  onChange={e => onChange({ usesUsed: maxUses - parseInt(e.target.value) })}
-                  className="flex-1 accent-primary h-2 rounded-full cursor-pointer disabled:opacity-50 disabled:cursor-default" />
-                <button type="button" disabled={readOnly || usesUsed >= maxUses}
-                  onClick={() => onChange({ usesUsed: Math.min(maxUses, usesUsed + 1) })}
-                  className="size-7 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">−</button>
-              </div>
-            </div>
+            <TracingSlider
+              value={usesRemaining}
+              max={maxUses}
+              disabled={readOnly}
+              color={feature.sliderColor}
+              showButtons
+              showLabel
+              label={`${usesRemaining} / ${maxUses} uses remaining`}
+              labelRight={resetLabel(feature.resetsOn)}
+              onChange={val => onChange({ usesUsed: maxUses - val })}
+            />
           )}
         </div>
       )}
