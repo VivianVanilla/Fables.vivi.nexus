@@ -114,11 +114,12 @@ function EquipDetail({ item }: { item: EquipmentItem }) {
 }
 
 function FeatureDetail({
-  feature, readOnly, onUpdateUses,
+  feature, readOnly, onUpdateUses, hideSlider = false,
 }: {
   feature: Feature
   readOnly: boolean
   onUpdateUses: (usesUsed: number) => void
+  hideSlider?: boolean
 }) {
   const maxUses       = feature.maxUses  ?? 0
   const usesUsed      = feature.usesUsed ?? 0
@@ -135,7 +136,7 @@ function FeatureDetail({
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{feature.description}</ReactMarkdown>
         </div>
       )}
-      {hasUses && (
+      {hasUses && !hideSlider && (
         <TracingSlider
           value={usesRemaining}
           max={maxUses}
@@ -163,7 +164,15 @@ export function FavoritesPanel({
   dragOver, onDragOver, onDragLeave, onDrop,
   isFloat, floatPos, onFloatToggle, onFloatPosChange,
 }: FavoritesPanelProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+
+  function toggleExpanded(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   // ── Float / drag state ───────────────────────────────────────────────────
 
@@ -251,7 +260,13 @@ export function FavoritesPanel({
 
         {favorites.map(fav => {
           const label      = resolveLabel(fav)
-          const isExpanded = expandedId === fav.refId
+          const isExpanded = expandedIds.has(fav.refId)
+
+          // For features with trackable uses, resolve them here so we can show the slider always
+          const featWithUses = fav.refType === "feature" ? (() => {
+            const f = resolveFeature(fav.refId)
+            return f?.trackable && f?.maxUses ? f : null
+          })() : null
 
           return (
             <div key={fav.refId}
@@ -260,21 +275,28 @@ export function FavoritesPanel({
               {/* Card header */}
               <div
                 className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors select-none min-h-11"
-                onClick={() => setExpandedId(isExpanded ? null : fav.refId)}>
+                onClick={() => toggleExpanded(fav.refId)}>
                 <span className="text-sm text-white/30 shrink-0">{TYPE_ICON[fav.refType] ?? "·"}</span>
-                <span className="text-sm font-semibold text-white flex-1 truncate min-w-0">{label}</span>
+                <span className="text-sm font-semibold text-white shrink-0">{label}</span>
 
-                {/* Use count badge */}
-                {fav.refType === "feature" && (() => {
-                  const f = resolveFeature(fav.refId)
-                  if (f?.trackable && f?.maxUses) {
-                    const rem = Math.max(0, (f.maxUses ?? 0) - (f.usesUsed ?? 0))
-                    return <span className="text-sm text-white/50 shrink-0 tabular-nums">{rem}/{f.maxUses}</span>
-                  }
-                  return null
-                })()}
-
-                {/* Star = unfavorite */}
+                {/* Inline uses slider — always visible in header */}
+                {featWithUses ? (() => {
+                  const rem = Math.max(0, (featWithUses.maxUses ?? 0) - (featWithUses.usesUsed ?? 0))
+                  return (
+                    <div className="flex-1 min-w-0 px-1" onClick={e => e.stopPropagation()}>
+                      <TracingSlider
+                        value={rem}
+                        max={featWithUses.maxUses!}
+                        disabled={readOnly}
+                        showButtons
+                        buttonSize="sm"
+                        color={featWithUses.sliderColor}
+                        onChange={val => onUpdateUses(fav.refId, featWithUses.maxUses! - val)}
+                      />
+                    </div>
+                  )
+                })() : <span className="flex-1" />}
+                <span className="text-white/20 text-xs shrink-0">{isExpanded ? "▲" : "▼"}</span>
                 {!readOnly && (
                   <button type="button"
                     onClick={e => { e.stopPropagation(); onRemove(fav.refId) }}
@@ -303,11 +325,7 @@ export function FavoritesPanel({
                   {fav.refType === "feature" && (() => {
                     const feat = resolveFeature(fav.refId)
                     return feat
-                      ? <FeatureDetail
-                          feature={feat}
-                          readOnly={readOnly}
-                          onUpdateUses={u => onUpdateUses(fav.refId, u)}
-                        />
+                      ? <FeatureDetail feature={feat} readOnly={readOnly} hideSlider onUpdateUses={u => onUpdateUses(fav.refId, u)} />
                       : <p className="text-sm text-white/30 italic">Feature not found.</p>
                   })()}
                 </div>

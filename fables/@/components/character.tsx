@@ -183,12 +183,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── HP COMPUTED ───────────────────────────────────────────────────────────
 
-  const hp        = data.hp    ?? 0
-  const maxHp     = data.maxHp ?? 0
-  const tempHp    = data.tempHp ?? 0
-  const hpPercent = maxHp > 0 ? Math.min(100, (hp / maxHp) * 100) : 0
-  const tempHpPct = maxHp > 0 ? Math.min(100, (tempHp / maxHp) * 100) : 0
-  const hpColor   = hpPercent > 50 ? "#22c55e" : hpPercent > 25 ? "#eab308" : "#ef4444"
+  const hp           = data.hp       ?? 0
+  const maxHp        = data.maxHp    ?? 0
+  const maxHpMod     = data.maxHpMod ?? 0
+  const effectiveMax = Math.max(0, maxHp + maxHpMod)
+  const tempHp       = data.tempHp   ?? 0
+  const hpPercent    = effectiveMax > 0 ? Math.min(100, (hp / effectiveMax) * 100) : 0
+  const tempHpPct    = effectiveMax > 0 ? Math.min(100, (tempHp / effectiveMax) * 100) : 0
+  const hpColor      = hpPercent > 50 ? "#22c55e" : hpPercent > 25 ? "#eab308" : "#ef4444"
   const RING_R    = 32
   const TEMP_R    = 43
   const ringC     = 2 * Math.PI * RING_R
@@ -198,7 +200,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const spellItems = data.spellItems     ?? []
   const equipItems = data.equipmentItems ?? []
-  const spellSlots = data.spellSlots     ?? []
+  // Normalize legacy slots that predate the `id` field
+  const spellSlots = (data.spellSlots ?? []).map((s, i) => s.id ? s : { ...s, id: `lv${s.level}-${i}` })
   const favorites  = data.favorites      ?? []
   const conditions = data.conditions     ?? []
 
@@ -218,24 +221,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── SPELL SLOT HELPERS ────────────────────────────────────────────────────
 
-  function changeSlot(level: number, p: Partial<SpellSlot>) {
-    update({ spellSlots: spellSlots.map(s => s.level === level ? { ...s, ...p } : s) })
+  function changeSlot(id: string, p: Partial<SpellSlot>) {
+    update({ spellSlots: spellSlots.map(s => s.id === id ? { ...s, ...p } : s) })
   }
   function addSlot(level: number) {
-    if (spellSlots.find(s => s.level === level)) return
-    const next = [
-      ...spellSlots,
-      { level, total: newSlotTotal, used: 0, resetsOn: newSlotRests },
-    ].sort((a, b) => a.level - b.level)
+    const id   = `s${Date.now().toString(36)}`
+    const next = [...spellSlots, { id, level, total: newSlotTotal, used: 0, resetsOn: newSlotRests }]
+                   .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
     update({ spellSlots: next })
-    // Prefer the next HIGHER available level (feels natural when adding in order), then wrap low
-    const taken = new Set(next.map(s => s.level))
-    const remaining = [1,2,3,4,5,6,7,8,9].filter(l => !taken.has(l))
-    const nextAvail = remaining.find(l => l > level) ?? remaining[0]
-    if (nextAvail !== undefined) setNewSlotLevel(nextAvail)
     setNewSlotTotal(2)
   }
-  function removeSlot(level: number) { update({ spellSlots: spellSlots.filter(s => s.level !== level) }) }
+  function removeSlot(id: string) { update({ spellSlots: spellSlots.filter(s => s.id !== id) }) }
 
   // ── FAVORITES HELPERS ─────────────────────────────────────────────────────
 
@@ -353,6 +349,23 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 />
               </label>
             ))}
+            <label className="flex flex-col gap-1.5">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-white/40 uppercase tracking-wider">Max HP Modifier</span>
+                {maxHpMod !== 0 && (
+                  <span className={`text-xs font-semibold ${maxHpMod > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    Effective: {effectiveMax}
+                  </span>
+                )}
+              </div>
+              <input type="number"
+                value={data.maxHpMod ?? ""}
+                placeholder="0"
+                onFocus={e => e.target.select()}
+                onChange={e => update({ maxHpMod: parseInt(e.target.value) || 0 })}
+                className={`text-center bg-white/10 rounded-xl px-3 py-3 text-xl font-bold outline-none focus:ring-2 focus:ring-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${maxHpMod < 0 ? "text-red-400" : maxHpMod > 0 ? "text-emerald-400" : "text-white"}`}
+              />
+            </label>
           </div>
           <div className="px-5 pb-5">
             <button type="button" onClick={() => setShowMaxMenu(false)}
@@ -422,11 +435,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   function renderSpellcastingModal() {
     if (!showSpellcastingModal) return null
-    const availLevels = [1,2,3,4,5,6,7,8,9].filter(l => !spellSlots.find(s => s.level === l))
-    const effectiveNewLevel = availLevels.includes(newSlotLevel) ? newSlotLevel : (availLevels[0] ?? 1)
     return (
       <Modal onClose={() => setShowSpellcastingModal(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-80 max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[500px] max-h-[85vh] flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
             <p className="text-base font-bold text-white">Spellcasting</p>
             <button type="button" onClick={() => setShowSpellcastingModal(false)}
@@ -487,8 +498,22 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 {spellSlots.map(slot => {
                   const rem = Math.max(0, slot.total - slot.used)
                   return (
-                    <div key={slot.level} className="flex items-center gap-2">
-                      <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
+                    <div key={slot.id} className="flex items-center gap-2">
+                      {/* Level label + pact toggle */}
+                      <div className="flex items-center gap-1 w-[72px] shrink-0">
+                        <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
+                        {!readOnly && (
+                          <button type="button"
+                            title={slot.pact ? "Pact Magic (click to unmark)" : "Mark as Pact Magic"}
+                            onClick={() => changeSlot(slot.id, { pact: slot.pact ? undefined : true, resetsOn: slot.pact ? "long" : "short" })}
+                            className={`text-[10px] px-1 py-0.5 rounded font-semibold transition-colors leading-none ${slot.pact ? "bg-violet-500/25 text-violet-300 hover:bg-violet-500/40" : "bg-white/5 text-white/20 hover:text-white/50"}`}>
+                            {slot.pact ? "Pact" : "P"}
+                          </button>
+                        )}
+                        {readOnly && slot.pact && (
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none">Pact</span>
+                        )}
+                      </div>
                       <TracingSlider
                         value={rem}
                         max={slot.total}
@@ -496,51 +521,51 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                         showButtons
                         buttonSize="sm"
                         color={slotLevelColor(slotAccent, slot.level)}
-                        onChange={val => changeSlot(slot.level, { used: Math.max(0, slot.total - val) })}
+                        onChange={val => changeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
                       />
-                      {/* Total slot count editor */}
                       {!readOnly && (
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button type="button"
                             disabled={slot.total <= 1}
-                            onClick={() => changeSlot(slot.level, { total: slot.total - 1, used: Math.min(slot.used, slot.total - 1) })}
+                            onClick={() => changeSlot(slot.id, { total: slot.total - 1, used: Math.min(slot.used, slot.total - 1) })}
                             className="size-5 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs font-bold flex items-center justify-center disabled:opacity-20">−</button>
                           <span className="text-xs text-white/40 w-5 text-center tabular-nums">{slot.total}</span>
                           <button type="button"
-                            onClick={() => changeSlot(slot.level, { total: slot.total + 1 })}
+                            onClick={() => changeSlot(slot.id, { total: slot.total + 1 })}
                             className="size-5 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs font-bold flex items-center justify-center">+</button>
                         </div>
                       )}
                       {!readOnly && (
-                        <button type="button" onClick={() => removeSlot(slot.level)}
+                        <button type="button" onClick={() => removeSlot(slot.id)}
                           className="text-white/20 hover:text-red-400 text-xs transition-colors shrink-0">✕</button>
                       )}
                     </div>
                   )
                 })}
-                {!readOnly && availLevels.length > 0 && (
+                {!readOnly && (
                   <div className="border-t border-white/10 pt-3 mt-1 flex flex-col gap-2">
-                    <p className="text-xs text-white/40">Add slot level</p>
+                    <p className="text-xs text-white/40">Add slot row</p>
                     <div className="flex items-center gap-2 flex-wrap text-xs">
                       <label className="flex items-center gap-1.5 text-white/50">Level
-                        <select value={effectiveNewLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
-                          className=" bg-gray rounded-lg px-2 py-1 text-white outline-none">
-                          {availLevels.map(l => <option key={l} value={l}>{l}</option>)}
+                        <select value={newSlotLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
+                          className="bg-black/50 rounded-lg px-2 py-1 text-white outline-none">
+                          {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </label>
                       <label className="flex items-center gap-1.5 text-white/50">Slots
                         <input type="number" value={newSlotTotal} min={1}
+                          onFocus={e => e.target.select()}
                           onChange={e => setNewSlotTotal(Math.max(1, parseInt(e.target.value) || 1))}
                           className="w-12 bg-white/10 rounded-lg px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                       </label>
                       <label className="flex items-center gap-1.5 text-white/50">Resets
                         <select value={newSlotRests} onChange={e => setNewSlotRests(e.target.value as "short" | "long")}
-                          className="bg-white/10 rounded-lg px-2 py-1 text-white outline-none">
+                          className="bg-black/50 rounded-lg px-2 py-1 text-white outline-none">
                           <option value="long">Long</option>
                           <option value="short">Short</option>
                         </select>
                       </label>
-                      <button type="button" onClick={() => addSlot(effectiveNewLevel)}
+                      <button type="button" onClick={() => addSlot(newSlotLevel)}
                         className="px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-colors">Add</button>
                     </div>
                   </div>
@@ -864,7 +889,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-bold text-white leading-none">{hp}</span>
             {tempHp > 0 && <span className="text-base font-bold text-blue-400 leading-none">+{tempHp}</span>}
-            <span className="text-sm text-white/40">/ {maxHp}</span>
+            <span className="text-sm text-white/40">/ {effectiveMax}{maxHpMod !== 0 && <span className={`ml-1 text-xs ${maxHpMod > 0 ? "text-emerald-400" : "text-red-400"}`}>({maxHpMod > 0 ? "+" : ""}{maxHpMod})</span>}</span>
           </div>
 
           {/* HP controls — hidden in readOnly */}
@@ -885,7 +910,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                   onChange={e => setHpStep(Math.max(1, parseInt(e.target.value) || 1))} min={1}
                   className={`w-12 text-center text-sm font-bold ${theme.box} border border-white/15 rounded-lg py-1.5 text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`} />
                 <button type="button"
-                  onClick={() => hpTarget === "hp" ? update({ hp: maxHp > 0 ? Math.min(maxHp, hp + hpStep) : hp + hpStep }) : update({ tempHp: tempHp + hpStep })}
+                  onClick={() => hpTarget === "hp" ? update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep }) : update({ tempHp: tempHp + hpStep })}
                   className="size-9 rounded-full bg-white/10 hover:bg-green-900 text-white hover:text-green-200 flex items-center justify-center text-xl font-bold transition-colors">+</button>
               </div>
             </div>
@@ -1239,8 +1264,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             {spellSlots.map(slot => {
               const rem = Math.max(0, slot.total - slot.used)
               return (
-                <div key={slot.level} className="flex items-center gap-2">
-                  <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
+                <div key={slot.id} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 w-[72px] shrink-0">
+                    <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
+                    {slot.pact && (
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none">Pact</span>
+                    )}
+                  </div>
                   <TracingSlider
                     value={rem}
                     max={slot.total}
@@ -1248,7 +1278,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                     showButtons
                     buttonSize="sm"
                     color={slotLevelColor(slotAccent, slot.level)}
-                    onChange={val => changeSlot(slot.level, { used: Math.max(0, slot.total - val) })}
+                    onChange={val => changeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
                   />
                   <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
                 </div>
@@ -1444,6 +1474,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <span className="text-white/20">·</span>
             <span>Lv</span>
             <input type="number" value={data.level ?? ""} min={1} max={20}
+              onFocus={e => e.target.select()}
               onChange={e => update({ level: Math.min(20, Math.max(1, parseInt(e.target.value) || 1)) })}
               placeholder="1" disabled={readOnly}
               className="bg-transparent outline-none w-6 placeholder:text-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />

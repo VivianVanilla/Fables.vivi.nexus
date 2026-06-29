@@ -99,21 +99,17 @@ function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
 }
 
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+function rgbToHue(r: number, g: number, b: number): number {
   r /= 255; g /= 255; b /= 255
-  const max = Math.max(r,g,b), min = Math.min(r,g,b)
-  let h = 0, s = 0
-  const l = (max + min) / 2
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-    switch (max) {
-      case r: h = ((g-b)/d + (g < b ? 6 : 0)) / 6; break
-      case g: h = ((b-r)/d + 2) / 6; break
-      case b: h = ((r-g)/d + 4) / 6; break
-    }
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min
+  if (d === 0) return 0
+  let h = 0
+  switch (max) {
+    case r: h = ((g-b)/d + (g < b ? 6 : 0)) / 6; break
+    case g: h = ((b-r)/d + 2) / 6; break
+    case b: h = ((r-g)/d + 4) / 6; break
   }
-  return [h * 360, s * 100, l * 100]
+  return h * 360
 }
 
 function hslToHex(h: number, s: number, l: number): string {
@@ -121,20 +117,22 @@ function hslToHex(h: number, s: number, l: number): string {
   const a = s * Math.min(l, 1 - l)
   const f = (n: number) => {
     const k = (n + h / 30) % 12
-    return Math.round(255 * (l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1))).toString(16).padStart(2,"0")
+    return Math.round(255 * (l - a * Math.max(Math.min(k-3, 9-k, 1), -1))).toString(16).padStart(2,"0")
   }
   return `#${f(0)}${f(8)}${f(4)}`
 }
 
 /**
  * Compute the slot bar color for a given spell level (1–9).
- * Level 1 → brightest shade of accent; Level 9 → darkest shade.
+ * Keeps the accent hue exact, fixes saturation at 85%, and sweeps lightness
+ * from 68% (level 1, bright & vivid) down to 15% (level 9, deep & rich).
+ * Each step is ~6.6 L points — very noticeable between adjacent levels.
  */
 export function slotLevelColor(accent: string, level: number): string {
   if (!accent || !accent.startsWith("#")) return accent ?? "#6B7280"
   const [r, g, b] = hexToRgb(accent)
-  const [h, s]    = rgbToHsl(r, g, b)
-  const l = 70 - (level - 1) * (30 / 8)   // level 1 → 70%, level 9 → 40%
-  const sat = Math.max(s, 55)
-  return hslToHex(h, Math.min(100, sat), Math.max(20, Math.min(80, l)))
+  const hue = rgbToHue(r, g, b)
+  const t   = (level - 1) / 8            // 0 at level 1 → 1 at level 9
+  const l   = 68 - t * 53               // 68% → 15%
+  return hslToHex(hue, 85, l)
 }

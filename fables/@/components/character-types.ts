@@ -42,10 +42,12 @@ export interface HitDicePool {
 }
 
 export interface SpellSlot {
+  id: string             // unique per row — allows multiple rows at the same level
   level: number          // 1-9
   total: number
   used: number
   resetsOn: "short" | "long"
+  pact?: boolean         // Pact Magic marker — visual label for multiclass identification
 }
 
 export interface Feature {
@@ -82,6 +84,7 @@ export interface CharacterData {
   ac?: number
   hp?: number
   maxHp?: number
+  maxHpMod?: number    // flat bonus or penalty to max HP (positive = bonus, negative = reduction)
   tempHp?: number
   speed?: number
   initiative?: number
