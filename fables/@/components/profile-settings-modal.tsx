@@ -109,7 +109,7 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
             {avatarUrl ? (
               <img src={avatarUrl} alt={fullName} className="size-12 object-cover" />
             ) : (
-              <div className="size-12 bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-lg font-bold">
+              <div className="size-12 from-blue-500 to-purple-500 flex items-center justify-center text-white text-lg font-bold">
                 {fullName.charAt(0).toUpperCase()}
               </div>
             )}

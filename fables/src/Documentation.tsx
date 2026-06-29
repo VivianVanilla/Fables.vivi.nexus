@@ -50,7 +50,7 @@ export default function Documentation() {
               <BreadcrumbItem className="hidden md:block">
                 <BreadcrumbLink href="#">Dashboard</BreadcrumbLink>
               </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block flex justif" />
+              <BreadcrumbSeparator className=" md:block flex justif" />
               <BreadcrumbItem>
                 <BreadcrumbPage>Welcome</BreadcrumbPage>
               </BreadcrumbItem>
@@ -85,7 +85,7 @@ export default function Documentation() {
                 <div className="aspect-video rounded-xl bg-muted/50" />
                 <div className="aspect-video rounded-xl bg-muted/50" />
               </div>
-              <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+              <div className=" flex-1 rounded-xl bg-muted/50 md:min-h-min" />
             </>
           ) : (
             <p>Loading...</p>

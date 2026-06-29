@@ -6,25 +6,68 @@ export interface EquipmentItem {
   toHit?: string
   damage?: string
   damageType?: string
-  type?: string   // "melee" | "ranged" | "armor" | "misc"
+  type?: string        // "melee" | "ranged" | "armor" | "misc"
   notes?: string
+  magicBonus?: string  // e.g. "+1", "+2"
+  properties?: string  // e.g. "Versatile, Finesse"
 }
 
 export interface SpellItem {
   id: string
   name: string
   level?: number
-  toHit?: string
-  saveType?: string
+  school?: string               // "Evocation", "Conjuration", etc.
+  toHit?: string                // attack bonus string
+  saveAttr?: string             // "Dex", "Con", etc.
+  saveType?: string             // legacy field (kept for compat)
   range?: string
-  notes?: string
+  castTime?: string             // "1 action", "Bonus Action", etc.
+  duration?: string             // "Instantaneous", "1 minute", etc.
+  components?: string           // "V, S, M"
+  materialComponents?: string
+  damage?: string               // "8d6"
+  damageType?: string           // "Thunder", "Fire", etc.
+  notes?: string                // description
+  prepared?: boolean
+  alwaysPrepared?: boolean
+  ritual?: boolean
 }
 
 export interface HitDicePool {
   id: string
-  dieType: string   // "d6" | "d8" | "d10" | "d12"
+  dieType: string  // "d6" | "d8" | "d10" | "d12"
   total: number
   used: number
+}
+
+export interface SpellSlot {
+  level: number          // 1-9
+  total: number
+  used: number
+  resetsOn: "short" | "long"
+}
+
+export interface Feature {
+  id: string
+  name: string
+  source?: string            // "Fighter 1", "Variant Human", etc.
+  description?: string
+  trackable?: boolean
+  maxUses?: number
+  usesUsed?: number
+  resetsOn?: "short" | "long" | "dawn"
+}
+
+export interface FavoriteRef {
+  refId: string
+  refType: "spell" | "equipment" | "feature"
+  label: string   // snapshot of the item name at time of favoriting
+}
+
+export interface ActiveCondition {
+  id: string
+  name: string
+  level?: number   // for Exhaustion (1–6)
 }
 
 export interface CharacterData {
@@ -47,14 +90,25 @@ export interface CharacterData {
   wisdom?: number
   charisma?: number
   savingThrowProfs?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", boolean>>
-  equipment?: string
-  spells?: string
   spellSaveDC?: number
   spellAttackBonus?: number
+  spellcastingAbility?: string
+  cantripsKnown?: number
+  spellsKnown?: number
   notes?: string
   backgroundImage?: string
   theme?: string
   equipmentItems?: EquipmentItem[]
   spellItems?: SpellItem[]
   hitDicePools?: HitDicePool[]
+  spellSlots?: SpellSlot[]
+  racialTraits?: Feature[]
+  feats?: Feature[]
+  classFeatures?: Feature[]
+  favorites?: FavoriteRef[]
+  conditions?: ActiveCondition[]
+  // Party / multiclass
+  partyCode?: string
+  multiclass?: boolean
+  classes?: Array<{ cls: string; level: number }>
 }

@@ -39,6 +39,10 @@ function clampLevel(n: number) {
   return Math.min(20, Math.max(1, Math.floor(n) || 1))
 }
 
+function generatePartyCode(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase()
+}
+
 interface ClassEntry { cls: string; level: number }
 
 // ── Sub-forms ─────────────────────────────────────────────────────────────────
@@ -73,7 +77,7 @@ function FolderForm({ onCreated }: { onCreated: () => void }) {
           <Label htmlFor="folder-name">Name</Label>
           <Input id="folder-name" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-      
+
       </FieldGroup>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <DialogFooter>
@@ -120,15 +124,20 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
     setSaving(true)
     setError(null)
     try {
+      // Build a display string for class (e.g. "Fighter 3 / Rogue 2" or just "Fighter")
+      const classDisplay = multiclass
+        ? classes.map(c => `${c.cls} ${c.level}`).join(" / ")
+        : classes[0]?.cls ?? ""
+
       await createObject({
         name,
         type: "character",
         data: {
-          characterName: name,
           race,
+          class: classDisplay,
+          level: totalLevel,
           multiclass,
           classes,
-          totalLevel,
         },
       })
       onCreated()
@@ -243,6 +252,76 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+function CampaignForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [name, setName] = useState("New Campaign")
+  const [partyCode, setPartyCode] = useState(() => generatePartyCode())
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      await createObject({
+        name,
+        type: "campaign",
+        data: { partyCode: partyCode.toUpperCase() },
+      })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create campaign")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>Create a Campaign</DialogTitle>
+        <DialogDescription>Share the party code with your players so they can link their characters.</DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <Label htmlFor="campaign-name">Campaign Name</Label>
+          <Input id="campaign-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field>
+          <Label htmlFor="party-code">Party Code</Label>
+          <div className="flex gap-2">
+            <Input
+              id="party-code"
+              value={partyCode}
+              onChange={(e) => setPartyCode(e.target.value.toUpperCase().slice(0, 8))}
+              className="font-mono tracking-widest"
+              placeholder="ABC123"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPartyCode(generatePartyCode())}
+              title="Generate new code"
+            >
+              ↺
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Players enter this code in the Info tab of their character sheet.</p>
+        </Field>
+      </FieldGroup>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim() || !partyCode.trim()}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 function SimpleForm({
   title,
   description,
@@ -319,11 +398,11 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
         <SidebarGroup className="py-0">
           <SidebarGroupContent className="relative">
 
-              <Link to="/documentation" className="flex items-center gap-2 w-full px-2 py-1 text-sm text-muted-foreground hover:bg-muted/50 rounded-md" > 
-            <BookOpenText className="" /> 
+              <Link to="/documentation" className="flex items-center gap-2 w-full px-2 py-1 text-sm text-muted-foreground hover:bg-muted/50 rounded-md" >
+            <BookOpenText className="" />
             <p>Documentation</p>
-           </Link> 
-            
+           </Link>
+
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -355,6 +434,13 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
                   <Button variant="ghost" size="sm" className="justify-start w-full"> Character</Button>
                 </DialogTrigger>
                 <CharacterForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Campaign</Button>
+                </DialogTrigger>
+                <CampaignForm onCreated={closeAll} />
               </Dialog>
 
               <Dialog>
