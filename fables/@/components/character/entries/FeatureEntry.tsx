@@ -1,11 +1,11 @@
 // ════════════════════════════════════════════════════════════════════════════
 // FeatureEntry.tsx — Adventurer's Codex-style collapsible feature card
 //
-// View:  ▶ Feature Name   [Source]  ●●○ LR  [✎]
-//        ▼ Feature Name   [Source]  ●●○ LR  [✎]
-//             Description text...
-//
-// Edit:  Name, Source, Description, Track uses (max + resets on)
+// Collapsed: ▶ Feature Name  [Source]  2/3 LR  [✎]
+// Expanded:  ▼ Feature Name  [Source]       [✎]
+//                Description text...
+//                [────────────────] slider  2/3 · LR
+// Edit mode: name, source, description, track uses, max, resets
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
@@ -36,12 +36,12 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
   const [expanded, setExpanded] = useState(false)
   const [editing,  setEditing]  = useState(false)
 
-  const maxUses      = feature.maxUses  ?? 0
-  const usesUsed     = feature.usesUsed ?? 0
+  const maxUses       = feature.maxUses  ?? 0
+  const usesUsed      = feature.usesUsed ?? 0
   const usesRemaining = Math.max(0, maxUses - usesUsed)
-  const hasUses      = !!(feature.trackable && maxUses > 0)
+  const hasUses       = !!(feature.trackable && maxUses > 0)
 
-  // ── Drag source (header only) ────────────────────────────────────────────
+  // ── Drag source ──────────────────────────────────────────────────────────
 
   const dragAttrs = readOnly ? {} : {
     draggable: true as const,
@@ -59,37 +59,32 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
 
   if (editing) {
     return (
-      <div className={`rounded-lg ${theme.box} border border-white/20 p-2.5 flex flex-col gap-1.5`}>
+      <div className={`rounded-xl ${theme.box} border border-white/20 p-3 flex flex-col gap-2`}>
 
-        {/* Name */}
         <input
           value={feature.name}
           onChange={e => onChange({ name: e.target.value })}
           autoFocus
           placeholder="Feature name"
-          className={`bg-transparent outline-none text-xs font-semibold ${theme.color} placeholder:text-white/30 border-b border-white/10 pb-1`}
+          className={`bg-transparent outline-none text-sm font-semibold ${theme.color} placeholder:text-white/30 border-b border-white/10 pb-1.5`}
         />
-
-        {/* Source */}
         <input
           value={feature.source ?? ""}
           onChange={e => onChange({ source: e.target.value })}
           placeholder="Source (e.g. Fighter 1, Variant Human…)"
-          className="bg-transparent outline-none text-[10px] text-white/50 placeholder:text-white/20"
+          className="bg-transparent outline-none text-xs text-white/60 placeholder:text-white/20"
         />
-
-        {/* Description */}
         <textarea
           value={feature.description ?? ""}
           onChange={e => onChange({ description: e.target.value })}
           placeholder="Description…"
-          rows={4}
-          className="bg-transparent outline-none text-[10px] text-white/60 placeholder:text-white/20 resize-none leading-relaxed border-t border-white/10 pt-1.5"
+          rows={5}
+          className="bg-transparent outline-none text-xs text-white/70 placeholder:text-white/20 resize-none leading-relaxed border-t border-white/10 pt-2"
         />
 
-        {/* Use tracking toggle */}
-        <div className="border-t border-white/10 pt-1.5 flex flex-col gap-1.5">
-          <label className="flex items-center gap-2 text-[10px] text-white/60 cursor-pointer select-none">
+        {/* Use tracking */}
+        <div className="border-t border-white/10 pt-2 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={feature.trackable ?? false}
@@ -97,24 +92,23 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
             />
             Track uses
           </label>
-
           {feature.trackable && (
-            <div className="flex items-center gap-3 text-[10px]">
-              <label className="flex items-center gap-1 text-white/50">
+            <div className="flex items-center gap-3 text-xs">
+              <label className="flex items-center gap-1.5 text-white/50">
                 Max
                 <input
                   type="number"
                   value={feature.maxUses ?? ""}
                   onChange={e => onChange({ maxUses: parseInt(e.target.value) || 0 })}
-                  className="w-10 bg-white/10 rounded px-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="w-12 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
               </label>
-              <label className="flex items-center gap-1 text-white/50">
+              <label className="flex items-center gap-1.5 text-white/50">
                 Resets on
                 <select
                   value={feature.resetsOn ?? "long"}
                   onChange={e => onChange({ resetsOn: e.target.value as Feature["resetsOn"] })}
-                  className="bg-white/10 rounded px-1 py-0.5 text-white outline-none text-[10px]"
+                  className="bg-white/10 rounded px-2 py-1 text-white outline-none text-xs"
                 >
                   <option value="short">Short Rest</option>
                   <option value="long">Long Rest</option>
@@ -126,13 +120,9 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between border-t border-white/10 pt-1.5">
-          <button type="button" onClick={onRemove} className="text-[9px] text-red-400/60 hover:text-red-400 px-1 transition-colors">
-            Delete
-          </button>
-          <button type="button" onClick={() => setEditing(false)} className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
-            Done
-          </button>
+        <div className="flex items-center justify-between border-t border-white/10 pt-2">
+          <button type="button" onClick={onRemove} className="text-xs text-red-400/60 hover:text-red-400 px-1 py-1 transition-colors">Delete</button>
+          <button type="button" onClick={() => setEditing(false)} className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">Done</button>
         </div>
       </div>
     )
@@ -141,55 +131,32 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
   // ── View mode ────────────────────────────────────────────────────────────
 
   return (
-    <div className={`rounded-lg ${theme.box} border border-white/10 overflow-hidden`}>
+    <div className={`rounded-xl ${theme.box} border border-white/10 overflow-hidden`}>
 
-      {/* Header row — drag handle + expand + pips + edit */}
+      {/* Header row */}
       <div
         {...dragAttrs}
-        className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white/5 transition-colors select-none"
+        className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors select-none min-h-11"
         onClick={() => setExpanded(v => !v)}
       >
-        {/* Expand caret */}
-        <span className="text-[8px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
+        <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
-        {/* Feature name */}
-        <span className="text-xs font-semibold text-white flex-1 truncate min-w-0">
+        <span className="text-sm font-semibold text-white flex-1 truncate min-w-0">
           {feature.name || <span className="text-white/30 italic">Unnamed</span>}
         </span>
 
         {/* Source badge */}
         {feature.source && (
-          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40 shrink-0 max-w-20 truncate">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0 max-w-24 truncate">
             {feature.source}
           </span>
         )}
 
-        {/* Use pips — filled = available, empty = spent */}
-        {hasUses && (
-          <div className="flex items-center gap-0.5 shrink-0">
-            {Array.from({ length: maxUses }).map((_, i) => {
-              const available = i < usesRemaining
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={readOnly}
-                  onClick={e => {
-                    e.stopPropagation()
-                    if (available) onChange({ usesUsed: usesUsed + 1 })
-                    else           onChange({ usesUsed: Math.max(0, usesUsed - 1) })
-                  }}
-                  title={available ? "Click to use" : "Click to recover"}
-                  className={`size-2.5 rounded-full border transition-colors disabled:pointer-events-none ${
-                    available
-                      ? "bg-primary/70 border-primary/60 hover:bg-red-500/60 hover:border-red-400/50"
-                      : "bg-transparent border-white/20 hover:bg-green-900/40 hover:border-green-400/30"
-                  }`}
-                />
-              )
-            })}
-            <span className="text-[8px] text-white/30 ml-1">{resetLabel(feature.resetsOn)}</span>
-          </div>
+        {/* Compact use count when collapsed */}
+        {hasUses && !expanded && (
+          <span className="text-xs text-white/50 shrink-0 tabular-nums">
+            {usesRemaining}/{maxUses} <span className="text-white/30">{resetLabel(feature.resetsOn)}</span>
+          </span>
         )}
 
         {/* Edit button */}
@@ -197,26 +164,46 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
           <button
             type="button"
             onClick={e => { e.stopPropagation(); setEditing(true) }}
-            className="size-5 flex items-center justify-center rounded hover:bg-white/10 text-white/20 hover:text-white/60 text-[10px] shrink-0 transition-colors"
+            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/25 hover:text-white/70 text-sm shrink-0 transition-colors"
           >
             ✎
           </button>
         )}
       </div>
 
-      {/* Expanded: description */}
-      {expanded && feature.description && (
-        <div className="px-7 pb-3 border-t border-white/5">
-          <p className="text-[10px] text-white/50 leading-relaxed mt-2 whitespace-pre-wrap">
-            {feature.description}
-          </p>
-        </div>
-      )}
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 pb-3 border-t border-white/5 flex flex-col gap-3">
 
-      {/* Expanded: empty state */}
-      {expanded && !feature.description && (
-        <div className="px-7 pb-2 border-t border-white/5">
-          <p className="text-[9px] text-white/20 italic mt-1.5">No description — click ✎ to add one.</p>
+          {/* Description */}
+          {feature.description ? (
+            <p className="text-sm text-white/60 leading-relaxed mt-2 whitespace-pre-wrap">
+              {feature.description}
+            </p>
+          ) : !readOnly ? (
+            <p className="text-xs text-white/20 italic mt-2">No description — click ✎ to add one.</p>
+          ) : null}
+
+          {/* Tracking slider */}
+          {hasUses && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white/50">{usesRemaining} / {maxUses} uses remaining</span>
+                <span className="text-white/30">{resetLabel(feature.resetsOn)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={readOnly || usesUsed <= 0}
+                  onClick={() => onChange({ usesUsed: Math.max(0, usesUsed - 1) })}
+                  className="size-7 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">+</button>
+                <input type="range" min={0} max={maxUses} value={usesRemaining} disabled={readOnly}
+                  onChange={e => onChange({ usesUsed: maxUses - parseInt(e.target.value) })}
+                  className="flex-1 accent-primary h-2 rounded-full cursor-pointer disabled:opacity-50 disabled:cursor-default" />
+                <button type="button" disabled={readOnly || usesUsed >= maxUses}
+                  onClick={() => onChange({ usesUsed: Math.min(maxUses, usesUsed + 1) })}
+                  className="size-7 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0">−</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

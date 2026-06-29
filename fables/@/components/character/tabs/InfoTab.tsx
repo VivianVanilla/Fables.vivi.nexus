@@ -182,17 +182,12 @@ export function InfoTab({ data, update, theme, card, readOnly }: InfoTabProps) {
             </div>
           )}
 
-          {/* Notes */}
-          <div className={`${card} p-3 flex flex-col gap-2 flex-1`}>
-            <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Notes</span>
-            <textarea
-              value={data.notes ?? ""}
-              onChange={e => update({ notes: e.target.value })}
-              placeholder="Character notes, backstory, traits…"
-              rows={7}
-              disabled={readOnly}
-              className="bg-transparent outline-none text-xs text-white placeholder:text-white/20 resize-none leading-relaxed disabled:opacity-60 flex-1"
-            />
+          {/* Notes hint */}
+          <div className={`${card} p-3`}>
+            <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold block mb-1">Notes</span>
+            <p className="text-xs text-white/35 leading-relaxed">
+              Create a <span className="text-white/60 font-semibold">Note</span> from the sidebar (+&nbsp;→ Note) to write character notes, backstory, or session logs with full markdown support.
+            </p>
           </div>
         </div>
       )}

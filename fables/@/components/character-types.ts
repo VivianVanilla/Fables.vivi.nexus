@@ -10,6 +10,7 @@ export interface EquipmentItem {
   notes?: string
   magicBonus?: string  // e.g. "+1", "+2"
   properties?: string  // e.g. "Versatile, Finesse"
+  proficient?: boolean
 }
 
 export interface SpellItem {
@@ -107,6 +108,10 @@ export interface CharacterData {
   classFeatures?: Feature[]
   favorites?: FavoriteRef[]
   conditions?: ActiveCondition[]
+  skillProfs?: Record<string, "half" | "prof" | "exp">
+  skillBonuses?: Record<string, number>
+  saveBonuses?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>
+  spellsPrepared?: number
   // Party / multiclass
   partyCode?: string
   multiclass?: boolean

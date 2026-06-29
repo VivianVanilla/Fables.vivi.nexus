@@ -34,6 +34,10 @@ useEffect(() => {
 
 
   return (
+    <>
+    <span className="fixed bottom-3 left-3 z-50 text-[10px] font-mono font-semibold tracking-widest text-white/25 select-none pointer-events-none">
+      THIS IS A BETA: VERSION 1.0
+    </span>
     <Routes>
       <Route path="/" element={
         <div className="min-h-screen bg-background overflow-hidden flex items-center justify-center">
@@ -51,6 +55,7 @@ useEffect(() => {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/documentation" element={<Documentation />} />
     </Routes>
+    </>
   )
 }
 

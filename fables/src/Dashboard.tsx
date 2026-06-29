@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sidebar";
 import { CharacterSheet } from "@/components/character";
 import { CampaignView } from "@/components/campaign-view";
+import { NoteView } from "@/components/NoteView";
 import { useUserContext } from "./contexts/UserContext";
 import "./index.css";
 
@@ -49,6 +50,12 @@ export default function Dashboard() {
                 <CampaignView
                   key={liveSelected.id}
                   campaign={liveSelected}
+                  onClose={() => setSelectedObject(null)}
+                />
+              ) : liveSelected?.type === "note" ? (
+                <NoteView
+                  key={liveSelected.id}
+                  note={liveSelected}
                   onClose={() => setSelectedObject(null)}
                 />
               ) : liveSelected ? (

@@ -145,7 +145,7 @@ export function CampaignView({ campaign, onClose }: Props) {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{char.name}</p>
-                  <p className="text-[10px] text-white/50 uppercase tracking-wider truncate">
+                  <p className="text-[10px] text-white uppercase tracking-wider truncate">
                     {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}
                   </p>
                   {/* HP bar */}
