@@ -8,7 +8,7 @@ export async function getSpells(): Promise<Spell[]> {
   if (cache) return cache
   if (pending) return pending
 
-  pending = supabase
+  pending = Promise.resolve(supabase
     .from('spells')
     .select('spell_data')
     .then(({ data, error }) => {
@@ -17,7 +17,7 @@ export async function getSpells(): Promise<Spell[]> {
       cache = result
       pending = null
       return result
-    })
+    }))
 
   return pending
 }
