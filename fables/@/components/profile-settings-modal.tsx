@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { supabase } from "../../src/supabase"
+import { useHomebrewFilter, setHomebrewFilterValue } from "../../src/hooks/useHomebrewFilter"
 
 const BUCKET = "fableimages"
 
@@ -27,6 +28,7 @@ export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
   const [images, setImages] = React.useState<StorageImage[]>([])
   const [uploading, setUploading] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const hideHomebrew = useHomebrewFilter()
 
   const userId = user?.id
 
@@ -164,6 +166,33 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Homebrew filter */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Hide Homebrew in Autofill</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Excludes Squain &amp; Twilight tagged spells from search suggestions
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={hideHomebrew}
+            onClick={() => setHomebrewFilterValue(!hideHomebrew)}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none ${
+              hideHomebrew ? "bg-purple-600" : "bg-slate-700"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block size-4 rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                hideHomebrew ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
         </div>
 
         <div className="border-t border-border" />

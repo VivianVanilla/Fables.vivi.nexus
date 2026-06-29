@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppSidebar } from "@/components/app-sidebar";
 import type { SidebarObject } from "@/components/sidebar-utils";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +17,18 @@ import "./index.css";
 export default function Dashboard() {
   const { user, loading, objects } = useUserContext();
   const [selectedObject, setSelectedObject] = useState<SidebarObject | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Auto-open object specified via ?open=<id> (e.g. navigated from Documentation)
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId || objects.length === 0) return;
+    const target = objects.find(o => o.id === openId) as SidebarObject | undefined;
+    if (target) {
+      setSelectedObject(target);
+      setSearchParams({}, { replace: true });
+    }
+  }, [objects, searchParams]);
 
   // Always use the live version from UserContext so stale snapshots don't stick
   const liveSelected = selectedObject

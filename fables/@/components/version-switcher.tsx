@@ -15,7 +15,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react"
+import { BookOpenIcon, ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react"
 import { ProfileSettingsModal } from "@/components/profile-settings-modal"
 
 export function VersionSwitcher() {
@@ -72,6 +72,10 @@ export function VersionSwitcher() {
             >
               <DropdownMenuItem disabled className="text-xs text-muted-foreground">
                 {user?.email}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/documentation")}>
+                <BookOpenIcon className="mr-2 size-4" />
+                Documentation
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setProfileOpen(true)}>
                 <SettingsIcon className="mr-2 size-4" />

@@ -1082,7 +1082,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   function renderSpellsEquipPanel() {
-    const preparedCount = spellItems.filter(s => s.prepared || s.alwaysPrepared).length
+    const preparedCount = spellItems.filter(s => s.prepared && !s.alwaysPrepared).length
     return (
       <div className={`${card} p-4 flex flex-col gap-3`}>
 

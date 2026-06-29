@@ -41,7 +41,7 @@ export function EquipmentEntry({ item, onChange, onRemove, theme, readOnly = fal
       {/* ── Modal edit form ─────────────────────────────────────────────── */}
       {editing && (
         <Modal onClose={() => setEditing(false)}>
-          <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-80 flex flex-col overflow-hidden">
+          <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(560px,calc(100vw-2rem))] flex flex-col overflow-hidden">
 
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
