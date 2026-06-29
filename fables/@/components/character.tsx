@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════════════════
 // character.tsx — CharacterSheet root component
 //
 // All menus are modal overlays (fixes "menu closes immediately" bug).
@@ -20,7 +20,7 @@ import type {
 } from "./character-types"
 import { ABILITY_KEYS, ABILITY_ABBR, SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET, SKILLS } from "./character-constants"
 import { abilityMod, profBonus, nanoid, safeParseJson } from "./character-utils"
-import { THEMES, DEFAULT_THEME } from "./character-themes"
+import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, slotLevelColor } from "./character-themes"
 
 import { Modal }            from "./character/ui/Modal"
 import { SpellEntry }       from "./character/entries/SpellEntry"
@@ -112,6 +112,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Quick search
   const [quickSearch, setQuickSearch] = useState("")
+
+  // Spell list controls
+  const [spellSort,       setSpellSort]       = useState<"level" | "alpha">("level")
+  const [hideUnprepared,  setHideUnprepared]  = useState(false)
 
   // Ability score local buffer (allows clearing "0")
   const [abilityInputs, setAbilityInputs] = useState<Record<string, string>>({})
@@ -217,15 +221,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function changeSlot(level: number, p: Partial<SpellSlot>) {
     update({ spellSlots: spellSlots.map(s => s.level === level ? { ...s, ...p } : s) })
   }
-  function addSlot() {
-    if (spellSlots.find(s => s.level === newSlotLevel)) return
-    update({
-      spellSlots: [
-        ...spellSlots,
-        { level: newSlotLevel, total: newSlotTotal, used: 0, resetsOn: newSlotRests },
-      ].sort((a, b) => a.level - b.level),
-    })
-    setNewSlotLevel(1); setNewSlotTotal(2)
+  function addSlot(level: number) {
+    if (spellSlots.find(s => s.level === level)) return
+    const next = [
+      ...spellSlots,
+      { level, total: newSlotTotal, used: 0, resetsOn: newSlotRests },
+    ].sort((a, b) => a.level - b.level)
+    update({ spellSlots: next })
+    // Prefer the next HIGHER available level (feels natural when adding in order), then wrap low
+    const taken = new Set(next.map(s => s.level))
+    const remaining = [1,2,3,4,5,6,7,8,9].filter(l => !taken.has(l))
+    const nextAvail = remaining.find(l => l > level) ?? remaining[0]
+    if (nextAvail !== undefined) setNewSlotLevel(nextAvail)
+    setNewSlotTotal(2)
   }
   function removeSlot(level: number) { update({ spellSlots: spellSlots.filter(s => s.level !== level) }) }
 
@@ -276,8 +284,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── COMPUTED THEME / CARD ─────────────────────────────────────────────────
 
-  const theme = THEMES[data.theme ?? DEFAULT_THEME] ?? THEMES[DEFAULT_THEME]
-  const card  = `rounded-xl ${theme.box} ring-1 ${theme.ring}`
+  const theme      = THEMES[data.theme ?? DEFAULT_THEME] ?? THEMES[DEFAULT_THEME]
+  const card       = `rounded-xl ${theme.box} ring-1 ${theme.ring}`
+  // Slot bars use slotTheme accent if set, otherwise fall back to the background theme accent
+  const slotAccent = (SLOT_THEMES[data.slotTheme ?? DEFAULT_SLOT_THEME] ?? SLOT_THEMES[DEFAULT_SLOT_THEME]).accent
 
   // ── SAVING THROW MODIFIER ─────────────────────────────────────────────────
 
@@ -413,6 +423,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function renderSpellcastingModal() {
     if (!showSpellcastingModal) return null
     const availLevels = [1,2,3,4,5,6,7,8,9].filter(l => !spellSlots.find(s => s.level === l))
+    const effectiveNewLevel = availLevels.includes(newSlotLevel) ? newSlotLevel : (availLevels[0] ?? 1)
     return (
       <Modal onClose={() => setShowSpellcastingModal(false)}>
         <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-80 max-h-[85vh] flex flex-col overflow-hidden">
@@ -474,7 +485,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slots</p>
               <div className="flex flex-col gap-2">
                 {spellSlots.map(slot => {
-                  const rem = slot.total - slot.used
+                  const rem = Math.max(0, slot.total - slot.used)
                   return (
                     <div key={slot.level} className="flex items-center gap-2">
                       <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
@@ -484,9 +495,22 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                         disabled={readOnly}
                         showButtons
                         buttonSize="sm"
-                        onChange={val => changeSlot(slot.level, { used: slot.total - val })}
+                        color={slotLevelColor(slotAccent, slot.level)}
+                        onChange={val => changeSlot(slot.level, { used: Math.max(0, slot.total - val) })}
                       />
-                      <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
+                      {/* Total slot count editor */}
+                      {!readOnly && (
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button type="button"
+                            disabled={slot.total <= 1}
+                            onClick={() => changeSlot(slot.level, { total: slot.total - 1, used: Math.min(slot.used, slot.total - 1) })}
+                            className="size-5 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs font-bold flex items-center justify-center disabled:opacity-20">−</button>
+                          <span className="text-xs text-white/40 w-5 text-center tabular-nums">{slot.total}</span>
+                          <button type="button"
+                            onClick={() => changeSlot(slot.level, { total: slot.total + 1 })}
+                            className="size-5 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs font-bold flex items-center justify-center">+</button>
+                        </div>
+                      )}
                       {!readOnly && (
                         <button type="button" onClick={() => removeSlot(slot.level)}
                           className="text-white/20 hover:text-red-400 text-xs transition-colors shrink-0">✕</button>
@@ -499,8 +523,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                     <p className="text-xs text-white/40">Add slot level</p>
                     <div className="flex items-center gap-2 flex-wrap text-xs">
                       <label className="flex items-center gap-1.5 text-white/50">Level
-                        <select value={newSlotLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
-                          className="bg-white/10 rounded-lg px-2 py-1 text-white outline-none">
+                        <select value={effectiveNewLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
+                          className=" bg-gray rounded-lg px-2 py-1 text-white outline-none">
                           {availLevels.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </label>
@@ -516,7 +540,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                           <option value="short">Short</option>
                         </select>
                       </label>
-                      <button type="button" onClick={addSlot}
+                      <button type="button" onClick={() => addSlot(effectiveNewLevel)}
                         className="px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-colors">Add</button>
                     </div>
                   </div>
@@ -672,20 +696,85 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   function renderThemeModal() {
     if (!showThemePicker) return null
+    const activeThemeKey    = data.theme     ?? DEFAULT_THEME
+    const activeSlotKey     = data.slotTheme ?? DEFAULT_SLOT_THEME
     return (
       <Modal onClose={() => setShowThemePicker(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-52 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10">
-            <p className="text-base font-bold text-white">Choose Theme</p>
+        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(560px,92vw)] max-h-[88vh] flex flex-col overflow-hidden">
+
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-white/10 shrink-0 flex items-center justify-between">
+            <p className="text-base font-bold text-white">Theme</p>
+            <button type="button" onClick={() => setShowThemePicker(false)}
+              className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
           </div>
-          <div className="p-2 flex flex-col gap-0.5">
-            {Object.entries(THEMES).map(([key, t]) => (
-              <button key={key} type="button"
-                onClick={() => { update({ theme: key }); setShowThemePicker(false) }}
-                className={`text-sm px-3 py-2.5 rounded-xl text-left font-semibold transition-colors ${(data.theme === key || (!data.theme && key === DEFAULT_THEME)) ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}>
-                {t.label}
-              </button>
-            ))}
+
+          <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-7">
+
+            {/* ── Section 1: Background theme ── */}
+            <div className="flex flex-col gap-3">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Background</p>
+              <div className="grid grid-cols-4 gap-2">
+                {Object.entries(THEMES).map(([key, t]) => {
+                  const isActive = key === activeThemeKey
+                  return (
+                    <button key={key} type="button"
+                      onClick={() => update({ theme: key })}
+                      className={`flex flex-col items-center gap-2 p-2.5 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10 ring-1 ring-white/20" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}
+                    >
+                      {/* Two-tone swatch: outer body, inner box */}
+                      <div className="size-8 rounded-full border-2 border-white/20 shrink-0 relative overflow-hidden">
+                        <div className={`absolute inset-0 ${t.body}`} />
+                        <div className={`absolute inset-1 rounded-full ${t.box}`} />
+                      </div>
+                      <span className={`text-[11px] font-semibold leading-tight ${isActive ? "text-white" : "text-white/55"}`}>{t.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Section 2: Spell slot bar color ── */}
+            <div className="flex flex-col gap-3">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slot Color</p>
+              <div className="grid grid-cols-4 gap-2">
+                {Object.entries(SLOT_THEMES).map(([key, st]) => {
+                  const isActive = key === activeSlotKey
+                  return (
+                    <button key={key} type="button"
+                      onClick={() => update({ slotTheme: key })}
+                      className={`flex flex-col items-center gap-2 p-2.5 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10 ring-1 ring-white/20" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}
+                    >
+                      <div className="size-8 rounded-full border-2 border-white/20 shrink-0"
+                        style={{ backgroundColor: st.accent }} />
+                      <span className={`text-[11px] font-semibold leading-tight ${isActive ? "text-white" : "text-white/55"}`}>{st.label}</span>
+                      {/* Mini gradient strip */}
+                      <div className="flex gap-px w-full">
+                        {[1,2,3,4,5,6,7,8,9].map(lvl => (
+                          <div key={lvl} className="flex-1 h-1 rounded-full"
+                            style={{ backgroundColor: slotLevelColor(st.accent, lvl) }} />
+                        ))}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Section 3: Live slot bar preview ── */}
+            <div className="flex flex-col gap-3">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Slot Bar Preview</p>
+              <div className="flex flex-col gap-1.5">
+                {[1,2,3,4,5,6,7,8,9].map(lvl => (
+                  <div key={lvl} className="flex items-center gap-3">
+                    <span className="text-xs text-white/35 w-8 shrink-0 tabular-nums">Lv {lvl}</span>
+                    <div className="flex-1 h-3 rounded-full"
+                      style={{ backgroundColor: slotLevelColor(slotAccent, lvl) }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       </Modal>
@@ -1083,6 +1172,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   function renderSpellsEquipPanel() {
     const preparedCount = spellItems.filter(s => s.prepared && !s.alwaysPrepared).length
+
+    // Apply hide + sort to spell list
+    const visibleSpells = spellItems
+      .filter(s => !hideUnprepared || s.prepared || s.alwaysPrepared)
+      .slice()
+      .sort((a, b) => {
+        if (spellSort === "alpha") return (a.name || "").localeCompare(b.name || "")
+        return (a.level ?? 0) - (b.level ?? 0)
+      })
+
     return (
       <div className={`${card} p-4 flex flex-col gap-3`}>
 
@@ -1128,7 +1227,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
               </div>
               <button type="button" onClick={() => setShowSpellcastingModal(true)}
-                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/30 hover:text-white transition-colors ml-auto shrink-0"
+                className="size-10 text-2xl flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
                 title="Configure spellcasting">⚙</button>
             </div>
           )}
@@ -1138,7 +1237,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {showSpells && spellSlots.length > 0 && (
           <div className="flex flex-col gap-2 border-b border-white/10 pb-3 shrink-0">
             {spellSlots.map(slot => {
-              const rem = slot.total - slot.used
+              const rem = Math.max(0, slot.total - slot.used)
               return (
                 <div key={slot.level} className="flex items-center gap-2">
                   <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
@@ -1148,7 +1247,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                     disabled={readOnly}
                     showButtons
                     buttonSize="sm"
-                    onChange={val => changeSlot(slot.level, { used: slot.total - val })}
+                    color={slotLevelColor(slotAccent, slot.level)}
+                    onChange={val => changeSlot(slot.level, { used: Math.max(0, slot.total - val) })}
                   />
                   <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
                 </div>
@@ -1165,11 +1265,36 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             className="text-xs text-white/30 hover:text-white/60 transition-colors text-left shrink-0">+ Add spell slots</button>
         )}
 
+        {/* Spell list controls */}
+        {showSpells && (
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Sort toggle */}
+            <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
+              <button type="button" onClick={() => setSpellSort("level")}
+                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${spellSort === "level" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Level
+              </button>
+              <button type="button" onClick={() => setSpellSort("alpha")}
+                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${spellSort === "alpha" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                A–Z
+              </button>
+            </div>
+            {/* Hide unprepared toggle */}
+            <button type="button" onClick={() => setHideUnprepared(h => !h)}
+              className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors border ${hideUnprepared ? "bg-primary/20 border-primary/50 text-white" : "border-white/15 text-white/40 hover:text-white/70 hover:border-white/30"}`}>
+              Prepared only
+            </button>
+            {hideUnprepared && visibleSpells.length === 0 && (
+              <span className="text-xs text-white/25 italic">No prepared spells</span>
+            )}
+          </div>
+        )}
+
         {/* Spell / martial list */}
         <div className="flex flex-col gap-1.5">
           {showSpells ? (
             <>
-              {spellItems.map(spell => (
+              {visibleSpells.map(spell => (
                 <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly}
                   onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
               ))}
@@ -1359,3 +1484,5 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     </div>
   )
 }
+
+

@@ -21,6 +21,31 @@ interface SpellEntryProps {
   readOnly?: boolean
 }
 
+// ── Parse spell description for combat data ───────────────────────────────────
+
+const SAVE_NAMES: Record<string, string> = {
+  strength: "STR", dexterity: "DEX", constitution: "CON",
+  intelligence: "INT", wisdom: "WIS", charisma: "CHA",
+}
+
+function parseSpellCombat(desc: string | string[]): { damage?: string; saveAttr?: string; attackRoll?: boolean } {
+  const text = (Array.isArray(desc) ? desc.join(" ") : desc).toLowerCase()
+
+  const attackRoll = /(?:ranged|melee)\s+spell\s+attack|spell\s+attack\s+roll/.test(text) || undefined
+
+  let saveAttr: string | undefined
+  const saveMatch = text.match(/\b(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving\s+throw/)
+  if (saveMatch) saveAttr = SAVE_NAMES[saveMatch[1]]
+
+  let damage: string | undefined
+  // Match patterns like "2d6", "10d10", "1d4 + 2d6", capturing the first dice expression near a damage type
+  const dmgPattern = /(\d+d\d+(?:\s*[+]\s*\d+d\d+)?(?:\s*[+]\s*\d+)?)\s+(?:acid|bludgeoning|cold|fire|force|lightning|necrotic|piercing|poison|psychic|radiant|slashing|thunder|sickness)/
+  const dmgMatch = (Array.isArray(desc) ? desc.join(" ") : desc).match(dmgPattern)
+  if (dmgMatch) damage = dmgMatch[1].replace(/\s+/g, "")
+
+  return { damage, saveAttr, attackRoll: attackRoll ?? undefined }
+}
+
 // ── Spell name input with autofill ────────────────────────────────────────────
 
 function SpellNameInput({
@@ -209,6 +234,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
 
   // Fill all spell fields from the database spell record (autofill only)
   function fillFromSpell(s: Spell) {
+    // Use pre-enriched DB fields if present, otherwise parse from description
+    const parsed = parseSpellCombat(s.desc ?? "")
     onChange({
       name: s.name,
       level: s.level,
@@ -219,7 +246,9 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
       components: s.components?.join(", ") ?? "",
       materialComponents: s.materialComponents ? (s.materials ?? "") : "",
       ritual: s.ritual ?? false,
+      damage: s.damage ?? parsed.damage ?? "",
       damageType: s.damageType !== "None" ? s.damageType : "",
+      saveAttr: s.saveAttr ?? parsed.saveAttr ?? "",
       notes: Array.isArray(s.desc) ? s.desc.join("\n\n") : (s.desc ?? ""),
     })
   }
@@ -282,11 +311,6 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">School</span>
                   <input value={spell.school ?? ""} onChange={e => onChange({ school: e.target.value })} placeholder="Evocation"
-                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-white/40 uppercase tracking-wider">Attack</span>
-                  <input value={spell.toHit ?? ""} onChange={e => onChange({ toHit: e.target.value })} placeholder="+5"
                     className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
                 </label>
                 <label className="flex flex-col gap-1">

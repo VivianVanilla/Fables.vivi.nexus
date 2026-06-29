@@ -36,7 +36,7 @@ useEffect(() => {
   return (
     <>
     <span className="fixed bottom-3 left-3 z-50 text-[10px] font-mono font-semibold tracking-widest text-white/25 select-none pointer-events-none">
-      THIS IS A BETA: VERSION 1.1
+      BETA VERSION 1.2
     </span>
     <Routes>
       <Route path="/" element={

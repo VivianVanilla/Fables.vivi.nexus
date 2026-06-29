@@ -100,6 +100,7 @@ export interface CharacterData {
   notes?: string
   backgroundImage?: string
   theme?: string
+  slotTheme?: string
   equipmentItems?: EquipmentItem[]
   spellItems?: SpellItem[]
   hitDicePools?: HitDicePool[]

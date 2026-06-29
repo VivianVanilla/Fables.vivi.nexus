@@ -7,9 +7,13 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useRef, useEffect } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import type { FavoriteRef, SpellItem, EquipmentItem, Feature } from "../../character-types"
 import { TracingSlider } from "../../ui/tracing-slider"
 import type { Theme } from "../../character-themes"
+
+const MD_PROSE = "prose prose-sm prose-invert max-w-none text-white/60 prose-p:leading-relaxed prose-p:my-1 prose-table:text-xs prose-th:text-white/50 prose-td:text-white/50"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,7 +76,9 @@ function SpellDetail({ spell }: { spell: SpellItem }) {
         )}
       </div>
       {spell.notes && (
-        <p className="text-sm text-white/50 leading-relaxed">{spell.notes}</p>
+        <div className={MD_PROSE}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{spell.notes}</ReactMarkdown>
+        </div>
       )}
     </div>
   )
@@ -99,7 +105,9 @@ function EquipDetail({ item }: { item: EquipmentItem }) {
         <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic">{item.properties}</span>
       )}
       {item.notes && (
-        <p className="text-sm text-white/50 mt-1 w-full">{item.notes}</p>
+        <div className={`${MD_PROSE} mt-1 w-full`}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.notes}</ReactMarkdown>
+        </div>
       )}
     </div>
   )
@@ -123,7 +131,9 @@ function FeatureDetail({
         <span className="text-sm text-white/40 italic">{feature.source}</span>
       )}
       {feature.description && (
-        <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{feature.description}</p>
+        <div className={MD_PROSE}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{feature.description}</ReactMarkdown>
+        </div>
       )}
       {hasUses && (
         <TracingSlider

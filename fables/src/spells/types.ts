@@ -17,6 +17,10 @@ export interface Spell {
   ctag: string
   ritual: boolean
   desc: string | string[]
+  // Combat fields (enriched from description)
+  damage?: string      // primary damage dice, e.g. "8d6"
+  saveAttr?: string    // save attribute abbreviation, e.g. "CON", "DEX"
+  attackRoll?: boolean // true if the spell requires a spell attack roll
 }
 
 export interface SpellFilters {

@@ -130,4 +130,8 @@
   html {
     @apply font-sans;
     }
+  /* Force all native select dropdowns to use dark OS theming so they don't flash white on Windows/Chrome */
+  select {
+    color-scheme: dark;
+  }
 }
