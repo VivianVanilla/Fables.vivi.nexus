@@ -2,8 +2,8 @@
 // FavoritesPanel.tsx — drag-drop favorites panel with expandable cards
 //
 // Can be docked (inline) or floated (fixed overlay, draggable by header).
-// Each favorite expands on click to show spell / item / feature detail.
-// ★ = currently favorited — click to remove.
+// Cards: click header to expand detail. Drag grip to reorder.
+// Tracked features: use count pill in header, full slider in expanded.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState, useRef, useEffect } from "react"
@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { FavoriteRef, SpellItem, EquipmentItem, Feature } from "../../character-types"
 import { TracingSlider } from "../../ui/tracing-slider"
+import { FeatureEntry } from "../entries/FeatureEntry"
 import type { Theme } from "../../character-themes"
 
 const MD_PROSE = "prose prose-sm prose-invert max-w-none text-white/60 prose-p:leading-relaxed prose-p:my-1 prose-table:text-xs prose-th:text-white/50 prose-td:text-white/50"
@@ -18,35 +19,30 @@ const MD_PROSE = "prose prose-sm prose-invert max-w-none text-white/60 prose-p:l
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface FavoritesPanelProps {
-  favorites:        FavoriteRef[]
-  spellItems:       SpellItem[]
-  equipItems:       EquipmentItem[]
-  features:         Feature[]
-  onRemove:         (refId: string) => void
-  onUpdateUses:     (featureId: string, usesUsed: number) => void
-  theme:            Theme
-  card:             string
-  readOnly:         boolean
-  dragOver:         boolean
-  onDragOver:       (e: React.DragEvent) => void
-  onDragLeave:      () => void
-  onDrop:           (e: React.DragEvent) => void
-  // Float / popout
-  isFloat:          boolean
-  floatPos:         { x: number; y: number }
-  onFloatToggle:    () => void
-  onFloatPosChange: (pos: { x: number; y: number }) => void
+  favorites:         FavoriteRef[]
+  spellItems:        SpellItem[]
+  equipItems:        EquipmentItem[]
+  features:          Feature[]
+  pb:                number
+  onRemove:          (refId: string) => void
+  onReorder:         (fromIdx: number, toIdx: number) => void
+  onUpdateUses:      (featureId: string, usesUsed: number) => void
+  onUpdateFeature:   (featureId: string, patch: Partial<Feature>) => void
+  onLinkToggle:      (featureId: string, otherId: string) => void
+  theme:             Theme
+  card:              string
+  readOnly:          boolean
+  dragOver:          boolean
+  onDragOver:        (e: React.DragEvent) => void
+  onDragLeave:       () => void
+  onDrop:            (e: React.DragEvent) => void
+  isFloat:           boolean
+  floatPos:          { x: number; y: number }
+  onFloatToggle:     () => void
+  onFloatPosChange:  (pos: { x: number; y: number }) => void
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function resetLabel(r?: Feature["resetsOn"]) {
-  if (r === "short") return "Short Rest"
-  if (r === "dawn")  return "Dawn"
-  return "Long Rest"
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Spell detail ──────────────────────────────────────────────────────────────
 
 function SpellDetail({ spell }: { spell: SpellItem }) {
   return (
@@ -84,6 +80,8 @@ function SpellDetail({ spell }: { spell: SpellItem }) {
   )
 }
 
+// ── Equipment detail ──────────────────────────────────────────────────────────
+
 function EquipDetail({ item }: { item: EquipmentItem }) {
   return (
     <div className="flex flex-wrap gap-1">
@@ -113,58 +111,20 @@ function EquipDetail({ item }: { item: EquipmentItem }) {
   )
 }
 
-function FeatureDetail({
-  feature, readOnly, onUpdateUses, hideSlider = false,
-}: {
-  feature: Feature
-  readOnly: boolean
-  onUpdateUses: (usesUsed: number) => void
-  hideSlider?: boolean
-}) {
-  const maxUses       = feature.maxUses  ?? 0
-  const usesUsed      = feature.usesUsed ?? 0
-  const usesRemaining = Math.max(0, maxUses - usesUsed)
-  const hasUses       = !!(feature.trackable && maxUses > 0)
-
-  return (
-    <div className="flex flex-col gap-2">
-      {feature.source && (
-        <span className="text-sm text-white/40 italic">{feature.source}</span>
-      )}
-      {feature.description && (
-        <div className={MD_PROSE}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{feature.description}</ReactMarkdown>
-        </div>
-      )}
-      {hasUses && !hideSlider && (
-        <TracingSlider
-          value={usesRemaining}
-          max={maxUses}
-          disabled={readOnly}
-          color={feature.sliderColor}
-          showButtons
-          showLabel
-          label={`${usesRemaining}/${maxUses} uses`}
-          labelRight={resetLabel(feature.resetsOn)}
-          onChange={val => onUpdateUses(maxUses - val)}
-        />
-      )}
-    </div>
-  )
-}
-
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 const TYPE_ICON: Record<string, string> = { spell: "✦", equipment: "⚔", feature: "◈" }
 
 export function FavoritesPanel({
-  favorites, spellItems, equipItems, features,
-  onRemove, onUpdateUses,
+  favorites, spellItems, equipItems, features, pb,
+  onRemove, onReorder, onUpdateUses, onUpdateFeature, onLinkToggle,
   theme, card, readOnly,
   dragOver, onDragOver, onDragLeave, onDrop,
   isFloat, floatPos, onFloatToggle, onFloatPosChange,
 }: FavoritesPanelProps) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [expandedIds,   setExpandedIds]   = useState<Set<string>>(new Set())
+  const [reorderDragIdx, setReorderDragIdx] = useState<number | null>(null)
+  const [reorderOverIdx, setReorderOverIdx] = useState<number | null>(null)
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -174,37 +134,29 @@ export function FavoritesPanel({
     })
   }
 
-  // ── Float / drag state ───────────────────────────────────────────────────
+  // ── Float window drag ────────────────────────────────────────────────────
 
-  const [isDragging, setIsDragging] = useState(false)
+  const [isDraggingWindow, setIsDraggingWindow] = useState(false)
   const dragOffsetRef = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
-    if (!isFloat || !isDragging) return
-
+    if (!isFloat || !isDraggingWindow) return
     const onMove = (e: MouseEvent) => {
       onFloatPosChange({
         x: Math.max(0, e.clientX - dragOffsetRef.current.x),
         y: Math.max(0, e.clientY - dragOffsetRef.current.y),
       })
     }
-    const onUp = () => setIsDragging(false)
-
+    const onUp = () => setIsDraggingWindow(false)
     window.addEventListener("mousemove", onMove)
-    window.addEventListener("mouseup", onUp)
-    return () => {
-      window.removeEventListener("mousemove", onMove)
-      window.removeEventListener("mouseup", onUp)
-    }
-  }, [isFloat, isDragging, onFloatPosChange])
+    window.addEventListener("mouseup",   onUp)
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp) }
+  }, [isFloat, isDraggingWindow, onFloatPosChange])
 
-  function startHeaderDrag(e: React.MouseEvent) {
+  function startWindowDrag(e: React.MouseEvent) {
     if (!isFloat) return
-    dragOffsetRef.current = {
-      x: e.clientX - floatPos.x,
-      y: e.clientY - floatPos.y,
-    }
-    setIsDragging(true)
+    dragOffsetRef.current = { x: e.clientX - floatPos.x, y: e.clientY - floatPos.y }
+    setIsDraggingWindow(true)
     e.preventDefault()
   }
 
@@ -220,25 +172,54 @@ export function FavoritesPanel({
     return resolveFeature(fav.refId)?.name || fav.label
   }
 
-  // ── Panel body ───────────────────────────────────────────────────────────
+  // ── Reorder drag handlers ────────────────────────────────────────────────
 
-  const floatWidth = 300
+  function handleReorderDragStart(e: React.DragEvent, idx: number) {
+    // Use a separate data key so it doesn't conflict with x-fable-ref drops
+    e.dataTransfer.setData("x-fable-reorder", String(idx))
+    e.dataTransfer.effectAllowed = "move"
+    setReorderDragIdx(idx)
+  }
+
+  function handleReorderDragOver(e: React.DragEvent, idx: number) {
+    if (!e.dataTransfer.types.includes("x-fable-reorder")) return
+    e.preventDefault()
+    e.stopPropagation()
+    setReorderOverIdx(idx)
+  }
+
+  function handleReorderDrop(e: React.DragEvent, toIdx: number) {
+    if (reorderDragIdx === null) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (reorderDragIdx !== toIdx) onReorder(reorderDragIdx, toIdx)
+    setReorderDragIdx(null)
+    setReorderOverIdx(null)
+  }
+
+  function handleReorderDragEnd() {
+    setReorderDragIdx(null)
+    setReorderOverIdx(null)
+  }
+
+  // ── Panel content ────────────────────────────────────────────────────────
 
   const panelContent = (
-    <div
-      className={`flex flex-col gap-2 ${isFloat ? "h-full" : "flex-1 min-h-0"}`}
-      onDragOver={onDragOver}
+    <div className={`flex flex-col gap-2 ${isFloat ? "h-full" : "flex-1 min-h-0"}`}
+      onDragOver={e => {
+        // Only handle x-fable-ref drops at the panel level
+        if (!e.dataTransfer.types.includes("x-fable-reorder")) onDragOver(e)
+      }}
       onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+      onDrop={e => {
+        if (!e.dataTransfer.types.includes("x-fable-reorder")) onDrop(e)
+      }}>
+
       {/* Header */}
       <div
         className={`flex items-center gap-2 shrink-0 px-3 pt-3 ${isFloat ? "cursor-grab active:cursor-grabbing select-none pb-1" : "pb-0"}`}
-        onMouseDown={startHeaderDrag}
-      >
-        {isFloat && (
-          <span className="text-white/20 text-sm mr-0.5" title="Drag to move">⠿</span>
-        )}
+        onMouseDown={startWindowDrag}>
+        {isFloat && <span className="text-white/20 text-sm mr-0.5" title="Drag to move">⠿</span>}
         <span className="text-xs uppercase tracking-widest text-white/50 font-semibold flex-1">Favorites</span>
         <button type="button" onClick={onFloatToggle}
           title={isFloat ? "Dock panel" : "Float panel"}
@@ -258,53 +239,54 @@ export function FavoritesPanel({
           </div>
         )}
 
-        {favorites.map(fav => {
+        {favorites.map((fav, idx) => {
           const label      = resolveLabel(fav)
           const isExpanded = expandedIds.has(fav.refId)
 
-          // For features with trackable uses, resolve them here so we can show the slider always
-          const featWithUses = fav.refType === "feature" ? (() => {
-            const f = resolveFeature(fav.refId)
-            return f?.trackable && f?.maxUses ? f : null
-          })() : null
+          // Feature use count for header pill
+          const featForHeader = fav.refType === "feature" ? resolveFeature(fav.refId) : null
+          const showUsesPill  = !!(featForHeader?.trackable && (
+            featForHeader.maxUsesFormula === "pb" ? pb : (featForHeader.maxUses ?? 0)
+          ) > 0)
+          const headerMax     = featForHeader?.maxUsesFormula === "pb" ? pb : (featForHeader?.maxUses ?? 0)
+          const headerRem     = showUsesPill ? Math.max(0, headerMax - (featForHeader?.usesUsed ?? 0)) : 0
+
+          const isReorderTarget = reorderOverIdx === idx && reorderDragIdx !== idx
 
           return (
             <div key={fav.refId}
-              className={`${theme.box} border rounded-xl overflow-hidden transition-all ${isExpanded ? "border-white/20" : "border-white/10"}`}>
+              className={`${theme.box} border rounded-xl overflow-hidden transition-all ${
+                isExpanded ? "border-white/20" : "border-white/10"
+              } ${isReorderTarget ? "ring-1 ring-primary/60" : ""} ${
+                reorderDragIdx === idx ? "opacity-40" : ""
+              }`}
+              onDragOver={e => handleReorderDragOver(e, idx)}
+              onDrop={e => handleReorderDrop(e, idx)}
+            >
 
-              {/* Card header */}
-              <div
-                className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors select-none min-h-11"
-                onClick={() => toggleExpanded(fav.refId)}>
-                <span className="text-sm text-white/30 shrink-0">{TYPE_ICON[fav.refType] ?? "·"}</span>
-                <span className="text-sm font-semibold text-white shrink-0">{label}</span>
+              {/* Card header row: grip | icon+name | X/Y count | ★ */}
+              <div className="flex items-center gap-2 px-2 py-2 min-h-11">
+                {!readOnly && (
+                  <span
+                    draggable
+                    onDragStart={e => handleReorderDragStart(e, idx)}
+                    onDragEnd={handleReorderDragEnd}
+                    className="text-white/15 hover:text-white/40 cursor-grab active:cursor-grabbing text-sm shrink-0 px-0.5 select-none"
+                    title="Drag to reorder">⠿</span>
+                )}
 
-                {/* Inline uses slider — always visible in header */}
-                {featWithUses ? (() => {
-                  const rem = Math.max(0, (featWithUses.maxUses ?? 0) - (featWithUses.usesUsed ?? 0))
-                  return (
-                    <div className="flex-1 min-w-0 px-1" onClick={e => e.stopPropagation()}>
-                      <TracingSlider
-                        value={rem}
-                        max={featWithUses.maxUses!}
-                        disabled={readOnly}
-                        showButtons
-                        buttonSize="sm"
-                        color={featWithUses.sliderColor}
-                        onChange={val => onUpdateUses(fav.refId, featWithUses.maxUses! - val)}
-                      />
-                    </div>
-                  )
-                })() : <span className="flex-1" />}
+                {/* Icon + name — click to toggle expanded detail */}
+                <div className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity select-none"
+                  onClick={() => toggleExpanded(fav.refId)}>
+                  <span className="text-sm text-white/30 shrink-0">{TYPE_ICON[fav.refType] ?? "·"}</span>
+                  <span className="text-sm font-semibold text-white truncate">{label}</span>
+                </div>
 
-                {featWithUses && (() => {
-                  const rem = Math.max(0, (featWithUses.maxUses ?? 0) - (featWithUses.usesUsed ?? 0))
-                  return (
-                    <span className="text-xs tabular-nums text-white/40 shrink-0 min-w-[2rem] text-right">
-                      {rem}/{featWithUses.maxUses}
-                    </span>
-                  )
-                })()}
+                {/* Compact X/Y count right next to ★ */}
+                {showUsesPill && (
+                  <span className="text-xs tabular-nums text-white/50 shrink-0">{headerRem}/{headerMax}</span>
+                )}
+
                 {!readOnly && (
                   <button type="button"
                     onClick={e => { e.stopPropagation(); onRemove(fav.refId) }}
@@ -315,9 +297,26 @@ export function FavoritesPanel({
                 )}
               </div>
 
-              {/* Expanded detail */}
+              {/* Always-visible slider row for tracked features */}
+              {showUsesPill && (() => {
+                const feat = resolveFeature(fav.refId)!
+                return (
+                  <div className="px-3 pb-2.5">
+                    <TracingSlider
+                      value={headerRem}
+                      max={headerMax}
+                      disabled={readOnly}
+                      color={feat.sliderColor}
+                      showButtons
+                      onChange={val => onUpdateUses(fav.refId, headerMax - val)}
+                    />
+                  </div>
+                )
+              })()}
+
+              {/* Expanded detail: description + edit (click name to toggle) */}
               {isExpanded && (
-                <div className="px-4 pb-3 border-t border-white/5 pt-2">
+                <div className="px-3 pb-3 border-t border-white/5 pt-2.5">
                   {fav.refType === "spell" && (() => {
                     const spell = resolveSpell(fav.refId)
                     return spell
@@ -333,7 +332,16 @@ export function FavoritesPanel({
                   {fav.refType === "feature" && (() => {
                     const feat = resolveFeature(fav.refId)
                     return feat
-                      ? <FeatureDetail feature={feat} readOnly={readOnly} hideSlider onUpdateUses={u => onUpdateUses(fav.refId, u)} />
+                      ? <FeatureEntry
+                          feature={feat}
+                          allFeatures={features.filter(f => f.id !== feat.id && f.trackable)}
+                          theme={theme}
+                          readOnly={readOnly}
+                          pb={pb}
+                          onChange={patch => onUpdateFeature(fav.refId, patch)}
+                          onRemove={() => {}}
+                          onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}
+                        />
                       : <p className="text-sm text-white/30 italic">Feature not found.</p>
                   })()}
                 </div>
@@ -350,9 +358,8 @@ export function FavoritesPanel({
   if (isFloat) {
     return (
       <div
-        style={{ position: "fixed", left: floatPos.x, top: floatPos.y, width: floatWidth, zIndex: 40, maxHeight: "70vh" }}
-        className={`${card} shadow-2xl rounded-2xl flex flex-col overflow-hidden border border-white/20 ${isDragging ? "cursor-grabbing" : ""}`}
-      >
+        style={{ position: "fixed", left: floatPos.x, top: floatPos.y, width: 320, zIndex: 40, maxHeight: "70vh" }}
+        className={`${card} shadow-2xl rounded-2xl flex flex-col overflow-hidden border border-white/20 ${isDraggingWindow ? "cursor-grabbing" : ""}`}>
         {panelContent}
       </div>
     )

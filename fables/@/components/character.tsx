@@ -1,11 +1,6 @@
-﻿// ════════════════════════════════════════════════════════════════════════════
-// character.tsx — CharacterSheet root component
-//
-// All menus are modal overlays (fixes "menu closes immediately" bug).
-// Sub-components live in character/entries/ and character/tabs/
 // ════════════════════════════════════════════════════════════════════════════
-
-// ── IMPORTS ───────────────────────────────────────────────────────────────────
+// character.tsx — CharacterSheet root component
+// ════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useEffect } from "react"
 import { Shield } from "lucide-react"
@@ -16,54 +11,40 @@ import { supabase } from "../../src/supabase"
 
 import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
-  SpellSlot, FavoriteRef, ActiveCondition, Feature,
+  SpellSlot, FavoriteRef, Feature,
 } from "./character-types"
-import { ABILITY_KEYS, ABILITY_ABBR, SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET, SKILLS } from "./character-constants"
-import { abilityMod, profBonus, nanoid, safeParseJson } from "./character-utils"
-import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS, slotLevelColor } from "./character-themes"
+import { SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET } from "./character-constants"
+import { profBonus, nanoid, safeParseJson } from "./character-utils"
+import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "./character-themes"
 
-import { Modal }            from "./character/ui/Modal"
-import { SpellEntry }       from "./character/entries/SpellEntry"
-import { EquipmentEntry }   from "./character/entries/EquipmentEntry"
-import { FavoritesPanel }   from "./character/panels/FavoritesPanel"
-import { InfoTab }          from "./character/tabs/InfoTab"
-import { TracingSlider }    from "./ui/tracing-slider"
-import { PartyChat }        from "./PartyChat"
+// UI primitives
+import { NumInput }              from "./character/ui/NumInput"
 
-// ── ABILITY COLORS (skills, initiative, saves) ────────────────────────────────
+// Panels
+import { DiceRoller }            from "./character/panels/DiceRoller"
+import { HitDice }               from "./character/panels/HitDice"
+import { DeathSavingThrows }     from "./character/panels/DeathSavingThrows"
+import { ConditionsCard }        from "./character/panels/ConditionsCard"
+import { AbilitiesCard }         from "./character/panels/AbilitiesCard"
+import { SavesCard }             from "./character/panels/SavesCard"
+import { SkillsCard }            from "./character/panels/SkillsCard"
+import { SpellsEquipPanel }      from "./character/panels/SpellsEquipPanel"
+import { FavoritesPanel }        from "./character/panels/FavoritesPanel"
 
-const ABILITY_COLORS: Record<string, { text: string; subtle: string }> = {
-  str: { text: "text-red-400",    subtle: "bg-red-500/8"    },
-  dex: { text: "text-green-400",  subtle: "bg-green-500/8"  },
-  con: { text: "text-orange-400", subtle: "bg-orange-500/8" },
-  int: { text: "text-blue-400",   subtle: "bg-blue-500/8"   },
-  wis: { text: "text-cyan-400",   subtle: "bg-cyan-500/8"   },
-  cha: { text: "text-purple-400", subtle: "bg-purple-500/8" },
-}
+// Modals
+import { MaxStatsModal }         from "./character/modals/MaxStatsModal"
+import { SavesModal }            from "./character/modals/SavesModal"
+import { AbilityModal }          from "./character/modals/AbilityModal"
+import { SpellcastingModal }     from "./character/modals/SpellcastingModal"
+import { SkillModal }            from "./character/modals/SkillModal"
+import { InitiativeModal }       from "./character/modals/InitiativeModal"
+import { ConditionPickerModal }  from "./character/modals/ConditionPickerModal"
+import { ThemeModal }            from "./character/modals/ThemeModal"
+import { PortraitModal }         from "./character/modals/PortraitModal"
 
-// ── CONDITION DATA ────────────────────────────────────────────────────────────
-
-const ALL_CONDITIONS = [
-  "Blinded", "Charmed", "Concentrating", "Deafened", "Exhaustion",
-  "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed",
-  "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious",
-]
-
-const CONDITION_COLOR: Record<string, string> = {
-  Concentrating: "bg-blue-500/25 text-blue-200 border-blue-500/40",
-  Exhaustion:    "bg-orange-500/25 text-orange-200 border-orange-500/40",
-  Poisoned:      "bg-green-700/25 text-green-200 border-green-700/40",
-  Charmed:       "bg-pink-500/25 text-pink-200 border-pink-500/40",
-  Frightened:    "bg-pink-700/25 text-pink-200 border-pink-700/40",
-  Stunned:       "bg-red-500/25 text-red-200 border-red-500/40",
-  Paralyzed:     "bg-red-700/25 text-red-200 border-red-700/40",
-  Unconscious:   "bg-zinc-700/40 text-zinc-300 border-zinc-600/60",
-}
-
-const SAVE_FULL: Record<string, string> = {
-  str: "Strength", dex: "Dexterity", con: "Constitution",
-  int: "Intelligence", wis: "Wisdom", cha: "Charisma",
-}
+// Tabs / other
+import { InfoTab }               from "./character/tabs/InfoTab"
+import { PartyChat }             from "./PartyChat"
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 
@@ -75,120 +56,6 @@ interface Props {
 
 type Tab = "main" | "details" | "chat"
 
-// ── Dice Roller ───────────────────────────────────────────────────────────────
-
-const DICE = [4, 6, 8, 10, 12, 20, 100] as const
-
-type DiceEntry = { die: number; count: number }
-
-function DiceRoller({ card }: { card: string }) {
-  const [pool,   setPool]   = useState<DiceEntry[]>([])
-  const [result, setResult] = useState<{ die: number; rolls: number[] }[] | null>(null)
-
-  function addDie(die: number) {
-    setPool(prev => {
-      const hit = prev.find(e => e.die === die)
-      return hit
-        ? prev.map(e => e.die === die ? { ...e, count: e.count + 1 } : e)
-        : [...prev, { die, count: 1 }]
-    })
-    setResult(null)
-  }
-
-  function adjustDie(die: number, delta: number) {
-    setPool(prev => {
-      const hit = prev.find(e => e.die === die)
-      if (!hit) return prev
-      const next = hit.count + delta
-      return next <= 0
-        ? prev.filter(e => e.die !== die)
-        : prev.map(e => e.die === die ? { ...e, count: next } : e)
-    })
-    setResult(null)
-  }
-
-  function rollAll() {
-    if (!pool.length) return
-    setResult(
-      pool.map(({ die, count }) => ({
-        die,
-        rolls: Array.from({ length: count }, () => Math.floor(Math.random() * die) + 1),
-      }))
-    )
-  }
-
-  const grandTotal = result?.reduce((s, g) => s + g.rolls.reduce((a, r) => a + r, 0), 0) ?? null
-
-  return (
-    <div className={`${card} p-3 flex flex-col gap-2`}>
-      <span className="text-[10px] uppercase tracking-widest text-white/45 font-semibold">Dice Roller</span>
-
-      {/* Die buttons */}
-      <div className="flex flex-wrap gap-1">
-        {DICE.map(d => (
-          <button key={d} type="button" onClick={() => addDie(d)}
-            className={`px-2 py-1 text-xs rounded-lg font-mono transition-colors ${
-              pool.find(e => e.die === d)
-                ? "bg-white/20 text-white"
-                : "bg-white/8 hover:bg-white/15 text-white/55 hover:text-white"
-            }`}>
-            d{d}
-          </button>
-        ))}
-      </div>
-
-      {/* Pool */}
-      {pool.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 border border-white/10">
-          {pool.map(({ die, count }) => (
-            <div key={die} className="flex items-center gap-0.5">
-              <button type="button" onClick={() => adjustDie(die, -1)}
-                className="size-4 flex items-center justify-center text-white/30 hover:text-white/70 text-sm leading-none">−</button>
-              <span className="text-xs font-mono text-white/80 min-w-[2rem] text-center">{count}d{die}</span>
-              <button type="button" onClick={() => adjustDie(die, 1)}
-                className="size-4 flex items-center justify-center text-white/30 hover:text-white/70 text-sm leading-none">+</button>
-            </div>
-          ))}
-          <button type="button" onClick={() => { setPool([]); setResult(null) }}
-            className="ml-auto text-[9px] text-white/25 hover:text-white/50 transition-colors">
-            clear
-          </button>
-        </div>
-      )}
-
-      {/* Roll button */}
-      <button type="button" onClick={rollAll} disabled={!pool.length}
-        className="w-full py-1.5 rounded-lg bg-white/12 hover:bg-white/20 text-white text-xs font-semibold disabled:opacity-25 transition-colors">
-        Roll!
-      </button>
-
-      {/* Results */}
-      {result && (
-        <div className="flex flex-col gap-1 px-2.5 py-2 rounded-lg bg-white/5 border border-white/10">
-          {result.map(({ die, rolls }) => (
-            <div key={die} className="flex items-baseline gap-1.5 text-[10px]">
-              <span className="text-white/40 font-mono shrink-0">{rolls.length}d{die}</span>
-              <span className="text-white/50 font-mono flex-1 min-w-0 truncate">[{rolls.join(", ")}]</span>
-              <span className="text-white/60 shrink-0">= {rolls.reduce((s, r) => s + r, 0)}</span>
-            </div>
-          ))}
-          {result.length > 1 && (
-            <div className="flex items-center justify-between border-t border-white/10 pt-1 mt-0.5">
-              <span className="text-[10px] text-white/40">Total</span>
-              <span className="text-base font-bold text-white tabular-nums">{grandTotal}</span>
-            </div>
-          )}
-          {result.length === 1 && (
-            <div className="flex justify-end">
-              <span className="text-base font-bold text-white tabular-nums">{grandTotal}</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // CharacterSheet
 // ════════════════════════════════════════════════════════════════════════════
@@ -198,38 +65,28 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── STATE ─────────────────────────────────────────────────────────────────
 
-  const [saving,             setSaving]             = useState(false)
-  const [uploading,          setUploading]           = useState(false)
-  const [activeTab,          setActiveTab]           = useState<Tab>("main")
-  const [showSpells,         setShowSpells]          = useState(true)
+  const [saving,               setSaving]               = useState(false)
+  const [uploading,            setUploading]             = useState(false)
+  const [activeTab,            setActiveTab]             = useState<Tab>("main")
 
-  // Modal states — all menus are modal overlays
-  const [showMaxMenu,         setShowMaxMenu]         = useState(false)
-  const [showThemePicker,     setShowThemePicker]     = useState(false)
-  const [showConditionPicker, setShowConditionPicker] = useState(false)
-  const [showPortraitPicker,  setShowPortraitPicker]  = useState(false)
+  // Modal visibility
+  const [showMaxMenu,           setShowMaxMenu]           = useState(false)
+  const [showThemePicker,       setShowThemePicker]       = useState(false)
+  const [showConditionPicker,   setShowConditionPicker]   = useState(false)
+  const [showPortraitPicker,    setShowPortraitPicker]    = useState(false)
   const [showSavesModal,        setShowSavesModal]        = useState(false)
   const [showAbilityModal,      setShowAbilityModal]      = useState(false)
   const [showSpellcastingModal, setShowSpellcastingModal] = useState(false)
   const [showSkillModal,        setShowSkillModal]        = useState<string | null>(null)
+  const [showInitiativeModal,   setShowInitiativeModal]   = useState(false)
 
+  // Portrait gallery
   const [galleryImages,  setGalleryImages]  = useState<{ name: string; publicUrl: string }[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
 
   // HP controls
   const [hpStep,   setHpStep]   = useState(1)
   const [hpTarget, setHpTarget] = useState<"hp" | "temp">("hp")
-
-  // Hit dice edit state
-  const [editingPools, setEditingPools] = useState(false)
-  const [showAddPool,  setShowAddPool]  = useState(false)
-  const [newPoolDie,   setNewPoolDie]   = useState("d8")
-  const [newPoolCount, setNewPoolCount] = useState(1)
-
-  // Spell slot add form (values used in spellcasting modal)
-  const [newSlotLevel, setNewSlotLevel] = useState(1)
-  const [newSlotTotal, setNewSlotTotal] = useState(2)
-  const [newSlotRests, setNewSlotRests] = useState<"short" | "long">("long")
 
   // Favorites
   const [favDragOver, setFavDragOver] = useState(false)
@@ -239,31 +96,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // Quick search
   const [quickSearch, setQuickSearch] = useState("")
 
-  // Spell list controls
-  const [spellSort,          setSpellSort]          = useState<"level" | "alpha">("level")
-  const [collapsedLevels,    setCollapsedLevels]    = useState<Set<number>>(() => {
-    try {
-      const raw = localStorage.getItem(`fables-spell-collapsed-${character.id}`)
-      return raw ? new Set(JSON.parse(raw) as number[]) : new Set()
-    } catch { return new Set() }
-  })
-  const [skillGroupBy,       setSkillGroupBy]       = useState<"default" | "stat">(() => {
-    try { return localStorage.getItem(`fables-skill-group-${character.id}`) === "stat" ? "stat" : "default" } catch { return "default" }
-  })
-  const [showInitiativeModal,setShowInitiativeModal] = useState(false)
-  const [hideUnprepared,   setHideUnprepared]   = useState(() => {
-    try { return localStorage.getItem(`fables-prep-filter-${character.id}`) === "1" } catch { return false }
-  })
-  const [dmUserId,   setDmUserId]   = useState<string | null>(null)
-
-  // Ability score local buffer (allows clearing "0")
-  const [abilityInputs, setAbilityInputs] = useState<Record<string, string>>({})
+  const [dmUserId, setDmUserId] = useState<string | null>(null)
 
   const portraitRef = useRef<HTMLInputElement>(null)
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [data, setData] = useState<CharacterData>(() => safeParseJson(character.data) as CharacterData)
-
 
   // Fetch the DM's userId so players can initiate DMs
   useEffect(() => {
@@ -352,7 +190,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const spellItems = data.spellItems     ?? []
   const equipItems = data.equipmentItems ?? []
-  // Normalize legacy slots that predate the `id` field
   const spellSlots = (data.spellSlots ?? []).map((s, i) => s.id ? s : { ...s, id: `lv${s.level}-${i}` })
   const favorites  = data.favorites      ?? []
   const conditions = data.conditions     ?? []
@@ -363,25 +200,24 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.classFeatures ?? []),
   ]
 
-  function addSpell()                                            { update({ spellItems: [...spellItems, { id: nanoid(), name: "", level: 0 }] }) }
-  function changeSpell(id: string, p: Partial<SpellItem>)       { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
-  function removeSpell(id: string)                              { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
+  function addSpell()                                          { update({ spellItems: [...spellItems, { id: nanoid(), name: "", level: 0 }] }) }
+  function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
+  function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
-  function addEquip()                                            { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
-  function changeEquip(id: string, p: Partial<EquipmentItem>)   { update({ equipmentItems: equipItems.map(i => i.id === id ? { ...i, ...p } : i) }) }
-  function removeEquip(id: string)                              { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
+  function addEquip()                                          { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
+  function changeEquip(id: string, p: Partial<EquipmentItem>) { update({ equipmentItems: equipItems.map(i => i.id === id ? { ...i, ...p } : i) }) }
+  function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
 
   // ── SPELL SLOT HELPERS ────────────────────────────────────────────────────
 
   function changeSlot(id: string, p: Partial<SpellSlot>) {
     update({ spellSlots: spellSlots.map(s => s.id === id ? { ...s, ...p } : s) })
   }
-  function addSlot(level: number) {
+  function addSlot(level: number, total: number, resetsOn: "short" | "long") {
     const id   = `s${Date.now().toString(36)}`
-    const next = [...spellSlots, { id, level, total: newSlotTotal, used: 0, resetsOn: newSlotRests }]
+    const next = [...spellSlots, { id, level, total, used: 0, resetsOn }]
                    .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
     update({ spellSlots: next })
-    setNewSlotTotal(2)
   }
   function removeSlot(id: string) { update({ spellSlots: spellSlots.filter(s => s.id !== id) }) }
 
@@ -391,21 +227,71 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     if (favorites.find(f => f.refId === ref.refId)) return
     update({ favorites: [...favorites, ref] })
   }
-  function removeFavorite(refId: string) { update({ favorites: favorites.filter(f => f.refId !== refId) }) }
+  function removeFavorite(refId: string) { update({ favorites: favorites.filter(f => f.refId !== refId) })
+  }
 
-  // Update a feature's usesUsed regardless of which list it belongs to
-  function updateFeatureUses(id: string, usesUsed: number) {
-    patchFeature(id, { usesUsed })
+  function reorderFavorites(fromIdx: number, toIdx: number) {
+    const next = [...favorites]
+    const [moved] = next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, moved)
+    update({ favorites: next })
+  }
+
+  function toggleFeatureLink(featureId: string, otherId: string) {
+    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    let featureKey: typeof KEYS[number] | null = null
+    let otherKey:   typeof KEYS[number] | null = null
+    for (const k of KEYS) {
+      if (data[k]?.find(f => f.id === featureId)) featureKey = k
+      if (data[k]?.find(f => f.id === otherId))   otherKey   = k
+    }
+    if (!featureKey || !otherKey) return
+    const feature = data[featureKey]!.find(f => f.id === featureId)!
+    const other   = data[otherKey]!.find(f => f.id === otherId)!
+    const linked  = feature.linkedTo?.includes(otherId) ?? false
+    const newFL = linked ? (feature.linkedTo ?? []).filter(id => id !== otherId) : [...(feature.linkedTo ?? []), otherId]
+    const newOL = linked ? (other.linkedTo   ?? []).filter(id => id !== featureId) : [...(other.linkedTo ?? []), featureId]
+    if (featureKey === otherKey) {
+      update({ [featureKey]: data[featureKey]!.map(f => {
+        if (f.id === featureId) return { ...f, linkedTo: newFL }
+        if (f.id === otherId)   return { ...f, linkedTo: newOL }
+        return f
+      }) })
+    } else {
+      update({
+        [featureKey]: data[featureKey]!.map(f => f.id === featureId ? { ...f, linkedTo: newFL } : f),
+        [otherKey]:   data[otherKey]!.map(f => f.id === otherId     ? { ...f, linkedTo: newOL } : f),
+      })
+    }
   }
 
   function patchFeature(id: string, patch: Partial<Feature>) {
-    for (const key of ["racialTraits", "feats", "classFeatures"] as const) {
-      if (data[key]?.find(f => f.id === id)) {
-        update({ [key]: data[key]!.map(f => f.id === id ? { ...f, ...patch } : f) })
-        return
+    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const combinedPatch: Partial<CharacterData> = {}
+    let linkedIds: string[] = []
+
+    for (const key of KEYS) {
+      const list = data[key]
+      const target = list?.find(f => f.id === id)
+      if (!target) continue
+      combinedPatch[key] = list!.map(f => f.id === id ? { ...f, ...patch } : f)
+      linkedIds = target.linkedTo ?? []
+      break
+    }
+
+    // Propagate usesUsed changes to all linked features
+    if ("usesUsed" in patch && linkedIds.length > 0) {
+      for (const key of KEYS) {
+        const list = (combinedPatch[key] as Feature[] | undefined) ?? data[key]
+        if (!list?.some(f => linkedIds.includes(f.id))) continue
+        combinedPatch[key] = list.map(f => linkedIds.includes(f.id) ? { ...f, usesUsed: patch.usesUsed } : f)
       }
     }
+
+    if (Object.keys(combinedPatch).length > 0) update(combinedPatch)
   }
+
+  function updateFeatureUses(id: string, usesUsed: number) { patchFeature(id, { usesUsed }) }
 
   // ── CONDITION HELPERS ─────────────────────────────────────────────────────
 
@@ -414,9 +300,21 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     update({ conditions: [...conditions, { id: nanoid(), name }] })
     setShowConditionPicker(false)
   }
-  function removeCondition(id: string)                          { update({ conditions: conditions.filter(c => c.id !== id) }) }
-  function updateCondition(id: string, p: Partial<ActiveCondition>) {
-    update({ conditions: conditions.map(c => c.id === id ? { ...c, ...p } : c) })
+  function removeCondition(id: string)        { update({ conditions: conditions.filter(c => c.id !== id) }) }
+  function updateConditionLevel(id: string, level: number) {
+    update({ conditions: conditions.map(c => c.id === id ? { ...c, level } : c) })
+  }
+
+  // ── HIT DICE HELPERS ──────────────────────────────────────────────────────
+
+  const hitDicePools = data.hitDicePools ?? []
+
+  function updatePool(id: string, patch: Partial<HitDicePool>) {
+    update({ hitDicePools: hitDicePools.map(p => p.id === id ? { ...p, ...patch } : p) })
+  }
+  function removePool(id: string) { update({ hitDicePools: hitDicePools.filter(p => p.id !== id) }) }
+  function addPool(pool: Omit<HitDicePool, "id">) {
+    update({ hitDicePools: [...hitDicePools, { ...pool, id: nanoid() }] })
   }
 
   // ── QUICK SEARCH ──────────────────────────────────────────────────────────
@@ -425,9 +323,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const searchResults: { id: string; label: string; category: string; refType: FavoriteRef["refType"] }[] = q ? [
     ...spellItems.filter(s => s.name.toLowerCase().includes(q)).map(s => ({ id: s.id, label: s.name, category: "Spell",   refType: "spell"     as const })),
     ...equipItems.filter(i => i.name.toLowerCase().includes(q)).map(i => ({ id: i.id, label: i.name, category: "Item",    refType: "equipment" as const })),
-    ...(data.racialTraits   ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Trait",   refType: "feature" as const })),
-    ...(data.feats          ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feat",    refType: "feature" as const })),
-    ...(data.classFeatures  ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feature", refType: "feature" as const })),
+    ...(data.racialTraits  ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Trait",   refType: "feature" as const })),
+    ...(data.feats         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feat",    refType: "feature" as const })),
+    ...(data.classFeatures ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feature", refType: "feature" as const })),
   ] : []
 
   // ── COMPUTED THEME / CARD ─────────────────────────────────────────────────
@@ -442,8 +340,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     return isLight ? theme.lightBody : theme.body
   })()
   const card       = `rounded-xl ${effectiveBox} ring-1 ${theme.ring}`
-  // Slot bars use slotTheme accent if set, otherwise fall back to the background theme accent
   const slotAccent = (SLOT_THEMES[data.slotTheme ?? DEFAULT_SLOT_THEME] ?? SLOT_THEMES[DEFAULT_SLOT_THEME]).accent
+
+  // ── PROFICIENCY BONUS ─────────────────────────────────────────────────────
+
+  const pb = profBonus(data.level ?? 1)
 
   // ── SAVING THROW MODIFIER ─────────────────────────────────────────────────
 
@@ -452,14 +353,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     const base       = Math.floor((score - 10) / 2)
     const proficient = data.savingThrowProfs?.[save] ?? false
     const bonus      = data.saveBonuses?.[save] ?? 0
-    return base + (proficient ? profBonus(data.level ?? 1) : 0) + bonus
+    return base + (proficient ? pb : 0) + bonus
   }
 
   function getSkillMod(skillName: string, abilityKey: string): number {
     const score = (data[SAVE_TO_ABILITY[abilityKey] as keyof CharacterData] as number | undefined) ?? 10
     const base  = Math.floor((score - 10) / 2)
     const prof  = data.skillProfs?.[skillName]
-    const pb    = profBonus(data.level ?? 1)
     const bonus = data.skillBonuses?.[skillName] ?? 0
     const profMod = prof === "exp" ? pb * 2 : prof === "prof" ? pb : prof === "half" ? Math.floor(pb / 2) : 0
     return base + profMod + bonus
@@ -468,8 +368,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ── FAVORITES PROPS ───────────────────────────────────────────────────────
 
   const favPanelProps = {
-    favorites, spellItems, equipItems, features: allFeatures,
-    onRemove: removeFavorite, onUpdateUses: updateFeatureUses,
+    favorites, spellItems, equipItems, features: allFeatures, pb,
+    onRemove: removeFavorite,
+    onReorder: reorderFavorites,
+    onUpdateUses: updateFeatureUses,
+    onUpdateFeature: patchFeature,
+    onLinkToggle: toggleFeatureLink,
     theme: { ...theme, box: effectiveBox }, card, readOnly,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
@@ -484,616 +388,20 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Edit Max Stats (HP / AC / Temp HP)
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderMaxStatsModal() {
-    if (!showMaxMenu) return null
-    return (
-      <Modal onClose={() => setShowMaxMenu(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10">
-            <p className="text-base font-bold text-white">Edit Stats</p>
-          </div>
-          <div className="px-5 py-4 flex flex-col gap-4">
-            {(["maxHp", "ac", "tempHp"] as const).map(k => (
-              <label key={k} className="flex flex-col gap-1.5">
-                <span className="text-xs text-white/40 uppercase tracking-wider">
-                  {k === "maxHp" ? "Max HP" : k === "ac" ? "Armour Class" : "Temp HP"}
-                </span>
-                <input type="number"
-                  value={(data[k] as number | undefined) ?? ""}
-                  onFocus={e => e.target.select()}
-                  onChange={e => update({ [k]: parseInt(e.target.value) || 0 })}
-                  className="text-center bg-white/10 rounded-xl px-3 py-3 text-xl font-bold text-white outline-none focus:ring-2 focus:ring-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-              </label>
-            ))}
-            <label className="flex flex-col gap-1.5">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-white/40 uppercase tracking-wider">Max HP Modifier</span>
-                {maxHpMod !== 0 && (
-                  <span className={`text-xs font-semibold ${maxHpMod > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    Effective: {effectiveMax}
-                  </span>
-                )}
-              </div>
-              <input type="number"
-                value={data.maxHpMod ?? ""}
-                placeholder="0"
-                onFocus={e => e.target.select()}
-                onChange={e => update({ maxHpMod: parseInt(e.target.value) || 0 })}
-                className={`text-center bg-white/10 rounded-xl px-3 py-3 text-xl font-bold outline-none focus:ring-2 focus:ring-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${maxHpMod < 0 ? "text-red-400" : maxHpMod > 0 ? "text-emerald-400" : "text-white"}`}
-              />
-            </label>
-          </div>
-          <div className="px-5 pb-5">
-            <button type="button" onClick={() => setShowMaxMenu(false)}
-              className="w-full py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-sm text-white font-semibold transition-colors">
-              Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Saving Throws
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderSavesModal() {
-    if (!showSavesModal) return null
-    return (
-      <Modal onClose={() => setShowSavesModal(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-            <p className="text-base font-bold text-white">Saving Throws</p>
-            <span className="text-sm text-white/40">Prof +{profBonus(data.level ?? 1)}</span>
-          </div>
-          <div className="px-2 py-3 flex flex-col gap-0.5">
-            {SAVE_KEYS.map(save => {
-              const prof  = data.savingThrowProfs?.[save] ?? false
-              const bonus = data.saveBonuses?.[save] ?? 0
-              const mod   = getSaveMod(save)
-              return (
-                <div key={save} className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors">
-                  <button type="button" disabled={readOnly}
-                    onClick={() => update({ savingThrowProfs: { ...data.savingThrowProfs, [save]: !prof } })}
-                    className={`size-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors disabled:cursor-default ${prof ? "bg-primary border-primary" : "border-white/30"}`}>
-                    {prof && <span className="text-white text-[10px] font-bold">✓</span>}
-                  </button>
-                  <span className="text-sm text-white/70 flex-1">{SAVE_FULL[save]}</span>
-                  {!readOnly && (
-                    <input type="number" value={bonus || ""} placeholder="+0"
-                      onFocus={e => e.target.select()}
-                      onChange={e => update({ saveBonuses: { ...data.saveBonuses, [save]: parseInt(e.target.value) || 0 } })}
-                      className="w-12 text-center bg-white/10 rounded-lg px-1 py-1 text-xs text-white/60 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      title="Additional flat bonus" />
-                  )}
-                  <span className={`text-base font-mono font-bold w-8 text-right ${mod >= 0 ? "text-green-400" : "text-red-400"}`}>
-                    {mod >= 0 ? `+${mod}` : mod}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <div className="px-5 pb-5">
-            <button type="button" onClick={() => setShowSavesModal(false)}
-              className="w-full py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-sm text-white font-semibold transition-colors">
-              Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Spellcasting Config (DC / Atk / Ability / Known / Prepared / Slots)
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderSpellcastingModal() {
-    if (!showSpellcastingModal) return null
-    return (
-      <Modal onClose={() => setShowSpellcastingModal(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[500px] max-h-[85vh] flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
-            <p className="text-base font-bold text-white">Spellcasting</p>
-            <button type="button" onClick={() => setShowSpellcastingModal(false)}
-              className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
-          </div>
-          <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-5">
-
-            {/* Spell stats */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Stats</p>
-              <div className="grid grid-cols-3 gap-3">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-white/40">Ability</span>
-                  <select value={data.spellcastingAbility ?? ""} disabled={readOnly}
-                    onChange={e => update({ spellcastingAbility: e.target.value })}
-                    className="bg-white/10 rounded-lg px-2 py-2 text-white outline-none text-sm disabled:opacity-50">
-                    <option value="">—</option>
-                    {["STR","DEX","CON","INT","WIS","CHA"].map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-white/40">Save DC</span>
-                  <input type="number" value={data.spellSaveDC ?? ""} disabled={readOnly}
-                    onFocus={e => e.target.select()} placeholder="0"
-                    onChange={e => update({ spellSaveDC: parseInt(e.target.value) || 0 })}
-                    className="bg-white/10 rounded-lg px-2 py-2 text-center text-white outline-none text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-50" />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-white/40">Atk Bonus</span>
-                  <input type="number" value={data.spellAttackBonus ?? ""} disabled={readOnly}
-                    onFocus={e => e.target.select()} placeholder="0"
-                    onChange={e => update({ spellAttackBonus: parseInt(e.target.value) || 0 })}
-                    className="bg-white/10 rounded-lg px-2 py-2 text-center text-white outline-none text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-50" />
-                </label>
-              </div>
-            </div>
-
-            {/* Counts */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Known / Prepared</p>
-              <div className="grid grid-cols-3 gap-3">
-                {([["Cantrips", "cantripsKnown"], ["Known", "spellsKnown"], ["Prepared", "spellsPrepared"]] as const).map(([label, key]) => (
-                  <label key={key} className="flex flex-col gap-1">
-                    <span className="text-xs text-white/40">{label}</span>
-                    <input type="number" value={(data[key] as number | undefined) ?? ""} disabled={readOnly}
-                      onFocus={e => e.target.select()} placeholder="0" min={0}
-                      onChange={e => update({ [key]: parseInt(e.target.value) || 0 })}
-                      className="bg-white/10 rounded-lg px-2 py-2 text-center text-white outline-none text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-50" />
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Spell slots */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slots</p>
-              <div className="flex flex-col gap-2">
-                {spellSlots.map(slot => {
-                  const rem = Math.max(0, slot.total - slot.used)
-                  return (
-                    <div key={slot.id} className="flex items-center gap-2">
-                      {/* Level label + pact toggle */}
-                      <div className="flex items-center gap-1 w-[72px] shrink-0">
-                        <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
-                        {!readOnly && (
-                          <button type="button"
-                            title={slot.pact ? "Pact Magic (click to unmark)" : "Mark as Pact Magic"}
-                            onClick={() => changeSlot(slot.id, { pact: slot.pact ? undefined : true, resetsOn: slot.pact ? "long" : "short" })}
-                            className={`text-[10px] px-1 py-0.5 rounded font-semibold transition-colors leading-none ${slot.pact ? "bg-violet-500/25 text-violet-300 hover:bg-violet-500/40" : "bg-white/5 text-white/20 hover:text-white/50"}`}>
-                            {slot.pact ? "Pact" : "P"}
-                          </button>
-                        )}
-                        {readOnly && slot.pact && (
-                          <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none">Pact</span>
-                        )}
-                      </div>
-                      <TracingSlider
-                        value={rem}
-                        max={slot.total}
-                        disabled={readOnly}
-                        showButtons
-                        buttonSize="sm"
-                        color={slotLevelColor(slotAccent, slot.level)}
-                        onChange={val => changeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
-                      />
-                      {!readOnly && (
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button type="button"
-                            disabled={slot.total <= 1}
-                            onClick={() => changeSlot(slot.id, { total: slot.total - 1, used: Math.min(slot.used, slot.total - 1) })}
-                            className="size-5 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs font-bold flex items-center justify-center disabled:opacity-20">−</button>
-                          <span className="text-xs text-white/40 w-5 text-center tabular-nums">{slot.total}</span>
-                          <button type="button"
-                            onClick={() => changeSlot(slot.id, { total: slot.total + 1 })}
-                            className="size-5 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs font-bold flex items-center justify-center">+</button>
-                        </div>
-                      )}
-                      {!readOnly && (
-                        <button type="button" onClick={() => removeSlot(slot.id)}
-                          className="text-white/20 hover:text-red-400 text-xs transition-colors shrink-0">✕</button>
-                      )}
-                    </div>
-                  )
-                })}
-                {!readOnly && (
-                  <div className="border-t border-white/10 pt-3 mt-1 flex flex-col gap-2">
-                    <p className="text-xs text-white/40">Add slot row</p>
-                    <div className="flex items-center gap-2 flex-wrap text-xs">
-                      <label className="flex items-center gap-1.5 text-white/50">Level
-                        <select value={newSlotLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
-                          className="bg-black/50 rounded-lg px-2 py-1 text-white outline-none">
-                          {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l}>{l}</option>)}
-                        </select>
-                      </label>
-                      <label className="flex items-center gap-1.5 text-white/50">Slots
-                        <input type="number" value={newSlotTotal} min={1}
-                          onFocus={e => e.target.select()}
-                          onChange={e => setNewSlotTotal(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-12 bg-white/10 rounded-lg px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-                      </label>
-                      <label className="flex items-center gap-1.5 text-white/50">Resets
-                        <select value={newSlotRests} onChange={e => setNewSlotRests(e.target.value as "short" | "long")}
-                          className="bg-black/50 rounded-lg px-2 py-1 text-white outline-none">
-                          <option value="long">Long</option>
-                          <option value="short">Short</option>
-                        </select>
-                      </label>
-                      <button type="button" onClick={() => addSlot(newSlotLevel)}
-                        className="px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-colors">Add</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Skill Proficiency
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderSkillModal() {
-    const skillName = showSkillModal
-    if (!skillName) return null
-    const skill     = SKILLS.find(s => s.name === skillName)
-    if (!skill) return null
-    const profLevel = data.skillProfs?.[skillName] ?? "none"
-    const bonus     = data.skillBonuses?.[skillName] ?? 0
-    const mod       = getSkillMod(skillName, skill.ability)
-    const pb        = profBonus(data.level ?? 1)
-    return (
-      <Modal onClose={() => setShowSkillModal(null)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-            <p className="text-base font-bold text-white">{skillName}</p>
-            <span className={`text-xl font-mono font-bold ${mod >= 0 ? "text-green-400" : "text-red-400"}`}>
-              {mod >= 0 ? `+${mod}` : mod}
-            </span>
-          </div>
-          <div className="px-5 py-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Proficiency</p>
-              <div className="grid grid-cols-2 gap-2">
-                {(["none", "half", "prof", "exp"] as const).map(level => {
-                  const labels = { none: "None", half: `Half (+${Math.floor(pb/2)})`, prof: `Proficient (+${pb})`, exp: `Expertise (+${pb*2})` }
-                  const active = profLevel === level || (level === "none" && profLevel === "none")
-                  return (
-                    <button key={level} type="button" disabled={readOnly}
-                      onClick={() => {
-                        const next = level === "none" ? undefined : level
-                        const updated = { ...data.skillProfs }
-                        if (next) updated[skillName] = next
-                        else delete updated[skillName]
-                        update({ skillProfs: updated as CharacterData["skillProfs"] })
-                      }}
-                      className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors border disabled:cursor-default ${active ? "bg-primary/20 border-primary/50 text-white" : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"}`}>
-                      {labels[level]}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            {!readOnly && (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Extra Bonus</p>
-                <input type="number" value={bonus || ""} placeholder="0"
-                  onFocus={e => e.target.select()}
-                  onChange={e => update({ skillBonuses: { ...data.skillBonuses, [skillName]: parseInt(e.target.value) || 0 } })}
-                  className="w-full text-center bg-white/10 rounded-xl px-3 py-2 text-white outline-none text-lg font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-              </div>
-            )}
-          </div>
-          <div className="px-5 pb-5">
-            <button type="button" onClick={() => setShowSkillModal(null)}
-              className="w-full py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-sm text-white font-semibold transition-colors">
-              Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Initiative
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderInitiativeModal() {
-    if (!showInitiativeModal) return null
-    const initStat  = data.initiativeStat ?? "dex"
-    const bonus     = data.initiativeBonus ?? 0
-    const fullKey   = SAVE_TO_ABILITY[initStat] ?? "dexterity"
-    const score     = (data[fullKey as keyof CharacterData] as number | undefined) ?? 10
-    const mod       = Math.floor((score - 10) / 2)
-    const total     = mod + bonus
-    const totalStr  = total >= 0 ? `+${total}` : `${total}`
-    return (
-      <Modal onClose={() => setShowInitiativeModal(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-            <p className="text-base font-bold text-white">Initiative</p>
-            <span className="text-xl font-mono font-bold" style={{ color: theme.accent }}>{totalStr}</span>
-          </div>
-          <div className="px-5 py-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Ability Score</p>
-              <div className="grid grid-cols-3 gap-2">
-                {(["str","dex","con","int","wis","cha"] as const).map(s => {
-                  const ac = ABILITY_COLORS[s]
-                  const isActive = initStat === s
-                  return (
-                    <button key={s} type="button" disabled={readOnly}
-                      onClick={() => update({ initiativeStat: s })}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors border disabled:cursor-default ${isActive ? "border-white/40 text-white" : `bg-white/5 border-white/10 hover:bg-white/10 ${ac.text}`}`}
-                      style={isActive ? { backgroundColor: theme.accent + "25", borderColor: theme.accent + "80" } : {}}>
-                      {s.toUpperCase()}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            {!readOnly && (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Extra Bonus</p>
-                <input type="number" value={bonus || ""} placeholder="0"
-                  onFocus={e => e.target.select()}
-                  onChange={e => update({ initiativeBonus: parseInt(e.target.value) || 0 })}
-                  className="w-full text-center bg-white/10 rounded-xl px-3 py-2 text-white outline-none text-lg font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-              </div>
-            )}
-          </div>
-          <div className="px-5 pb-5">
-            <button type="button" onClick={() => setShowInitiativeModal(false)}
-              className="w-full py-2.5 rounded-xl text-sm text-white font-semibold transition-colors"
-              style={{ backgroundColor: theme.accent + "30" }}>
-              Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Ability Scores
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderAbilityModal() {
-    if (!showAbilityModal) return null
-    return (
-      <Modal onClose={() => setShowAbilityModal(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl  flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10">
-            <p className="text-base font-bold text-white">Ability Scores</p>
-          </div>
-          <div className="px-5 py-4 flex flex-col gap-3">
-            {ABILITY_KEYS.map(key => {
-              const stored  = (data[key as keyof CharacterData] as number | undefined) ?? 10
-              const display = abilityInputs[key] !== undefined ? abilityInputs[key] : String(stored)
-              const mod     = abilityMod(stored)
-              return (
-                <div key={key} className="flex items-center gap-3">
-                  <span className="text-sm text-white/60 uppercase tracking-wider w-10 shrink-0">{ABILITY_ABBR[key]}</span>
-                  <input type="number" value={display}
-                    onFocus={e => e.target.select()}
-                    onChange={e => setAbilityInputs(prev => ({ ...prev, [key]: e.target.value }))}
-                    onBlur={e => {
-                      const v = e.target.value.trim()
-                      update({ [key]: v === "" ? 0 : Math.max(1, Math.min(1000, parseInt(v) || 0)) })
-                      setAbilityInputs(prev => { const n = { ...prev }; delete n[key]; return n })
-                    }}
-                    className="flex-1 text-center bg-white/10 rounded-xl px-3 py-2.5 text-lg font-bold text-white outline-none focus:ring-2 focus:ring-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <span className={`text-sm font-mono font-bold w-10 text-right ${mod.startsWith("-") ? "text-red-400" : "text-green-400"}`}>{mod}</span>
-                </div>
-              )
-            })}
-          </div>
-          <div className="px-5 pb-5">
-            <button type="button" onClick={() => setShowAbilityModal(false)}
-              className="w-full py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-sm text-white font-semibold transition-colors">
-              Done
-            </button>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Condition Picker
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderConditionModal() {
-    if (!showConditionPicker) return null
-    return (
-      <Modal onClose={() => setShowConditionPicker(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10">
-            <p className="text-base font-bold text-white">Add Condition</p>
-          </div>
-          <div className="p-3 grid grid-cols-2 gap-1">
-            {ALL_CONDITIONS.map(name => (
-              <button key={name} type="button" onClick={() => addCondition(name)}
-                className={`text-sm px-3 py-2.5 rounded-xl text-left font-medium transition-colors ${conditions.find(c => c.name === name) ? "text-white/25 cursor-default" : "text-white/80 hover:bg-white/10 hover:text-white"}`}>
-                {name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Theme Picker
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderThemeModal() {
-    if (!showThemePicker) return null
-    const activeThemeKey = data.theme     ?? DEFAULT_THEME
-    const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
-    const activeBgKey    = data.themeBg   ?? "default"
-    const mode           = data.themeMode ?? "dark"
-
-    return (
-      <Modal onClose={() => setShowThemePicker(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(520px,92vw)] max-h-[88vh] flex flex-col overflow-hidden">
-
-          {/* Header */}
-          <div className="px-5 py-3 border-b border-white/10 shrink-0 flex items-center justify-between gap-3">
-            <p className="text-base font-bold text-white">Theme</p>
-
-            {/* Light / Dark toggle */}
-            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-              <button type="button" onClick={() => update({ themeMode: "dark" })}
-                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "dark" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-                🌙 Dark
-              </button>
-              <button type="button" onClick={() => update({ themeMode: "light" })}
-                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "light" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-                ☀ Bright
-              </button>
-            </div>
-
-            <button type="button" onClick={() => setShowThemePicker(false)}
-              className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">✕</button>
-          </div>
-
-          <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-5">
-
-            {/* ── Card style ── */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Card Style</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {Object.entries(THEMES).map(([key, t]) => {
-                  const isActive = key === activeThemeKey
-                  const bodyClass = mode === "light" ? t.lightBody : t.body
-                  const boxClass  = mode === "light" ? t.lightBox  : t.box
-                  return (
-                    <button key={key} type="button" onClick={() => update({ theme: key })}
-                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
-                      <div className="size-6 rounded-full border border-white/20 shrink-0 relative overflow-hidden">
-                        <div className={`absolute inset-0 ${bodyClass}`} />
-                        <div className={`absolute inset-0.5 rounded-full ${boxClass}`} />
-                      </div>
-                      <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{t.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* ── Background override ── */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Background</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {Object.entries(BG_OPTIONS).map(([key, bg]) => {
-                  const isActive = key === activeBgKey
-                  const swatchClass = bg.body || (mode === "light" ? THEMES[activeThemeKey]?.lightBody : THEMES[activeThemeKey]?.body) || "bg-zinc-950"
-                  return (
-                    <button key={key} type="button" onClick={() => update({ themeBg: key })}
-                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
-                      <div className={`size-6 rounded-full border border-white/20 shrink-0 ${swatchClass}`} />
-                      <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{bg.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* ── Spell slot color ── */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slot Color</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {Object.entries(SLOT_THEMES).map(([key, st]) => {
-                  const isActive = key === activeSlotKey
-                  return (
-                    <button key={key} type="button" onClick={() => update({ slotTheme: key })}
-                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
-                      <div className="size-6 rounded-full border border-white/20 shrink-0"
-                        style={{ backgroundColor: st.accent }} />
-                      <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{st.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* ── Settings ── */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Settings</p>
-              <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-                <input type="checkbox" checked={!(data.plainSkills ?? false)}
-                  onChange={e => update({ plainSkills: !e.target.checked })}
-                  className="accent-primary size-4 rounded" />
-                <span className="text-sm text-white/70">Color-code skills by ability</span>
-              </label>
-            </div>
-
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // MODAL: Portrait Picker
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderPortraitModal() {
-    if (!showPortraitPicker) return null
-    return (
-      <Modal onClose={() => setShowPortraitPicker(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 max-h-[80vh] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-            <span className="text-base font-bold text-white">Choose Portrait</span>
-            <button type="button" onClick={() => setShowPortraitPicker(false)}
-              className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white">✕</button>
-          </div>
-          <div className="p-4 flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
-            <button type="button" onClick={() => portraitRef.current?.click()}
-              className="text-sm border border-dashed border-white/20 hover:border-white/40 rounded-xl py-3 text-white/50 hover:text-white transition-colors shrink-0">
-              + Upload new image
-            </button>
-            <div className="overflow-y-auto flex-1 min-h-0">
-              {galleryLoading
-                ? <p className="text-sm text-white/40 text-center py-6">Loading…</p>
-                : galleryImages.length === 0
-                ? <p className="text-sm text-white/40 italic text-center py-6">No images yet.</p>
-                : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {galleryImages.map(img => (
-                      <button key={img.name} type="button"
-                        onClick={() => { update({ portrait: img.publicUrl }); setShowPortraitPicker(false) }}
-                        className={`aspect-square rounded-xl overflow-hidden border-2 transition-colors ${data.portrait === img.publicUrl ? "border-primary" : "border-transparent hover:border-white/40"}`}>
-                        <img src={img.publicUrl} alt={img.name} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-            </div>
-          </div>
-        </div>
-      </Modal>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
   // RENDER: HP PANEL
   // ══════════════════════════════════════════════════════════════════════════
 
   function renderHpPanel() {
+    const isAtZero   = hp <= 0
+    const deathSaves = data.deathSaves ?? { successes: 0, failures: 0 }
+
+    // Initiative derived values
+    const initStat  = data.initiativeStat ?? "dex"
+    const initKey   = SAVE_TO_ABILITY[initStat] ?? "dexterity"
+    const initScore = (data[initKey as keyof CharacterData] as number | undefined) ?? 10
+    const initMod   = Math.floor((initScore - 10) / 2) + (data.initiativeBonus ?? 0)
+    const initStr   = initMod >= 0 ? `+${initMod}` : `${initMod}`
+
     return (
       <div className="flex flex-col gap-3">
 
@@ -1133,8 +441,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <span className="text-sm text-white/40">/ {effectiveMax}{maxHpMod !== 0 && <span className={`ml-1 text-xs ${maxHpMod > 0 ? "text-emerald-400" : "text-red-400"}`}>({maxHpMod > 0 ? "+" : ""}{maxHpMod})</span>}</span>
           </div>
 
-          {/* HP controls — hidden in readOnly */}
-          {!readOnly && (
+          {/* Normal HP controls — only when hp > 0 */}
+          {!isAtZero && !readOnly && (
             <div className="flex flex-col items-center gap-2 w-full">
               <div className={`flex rounded-full text-xs font-semibold uppercase tracking-wide overflow-hidden ring-1 ${theme.ring}`}>
                 <button type="button" onClick={() => setHpTarget("hp")}
@@ -1143,174 +451,86 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                   className={`px-3 py-1.5 transition-colors ${hpTarget === "temp" ? "bg-blue-500/40 text-blue-200" : "text-white/40 hover:text-white/70"}`}>Temp</button>
               </div>
               <div className="flex items-center gap-2">
+                {/* Minus: damage always drains temp first when in HP mode */}
                 <button type="button"
-                  onClick={() => hpTarget === "hp" ? update({ hp: Math.max(0, hp - hpStep) }) : update({ tempHp: Math.max(0, tempHp - hpStep) })}
+                  onClick={() => {
+                    if (hpTarget === "hp") {
+                      const tempDrained = Math.min(tempHp, hpStep)
+                      const remainder   = hpStep - tempDrained
+                      update({ tempHp: tempHp - tempDrained, hp: Math.max(0, hp - remainder) })
+                    } else {
+                      update({ tempHp: Math.max(0, tempHp - hpStep) })
+                    }
+                  }}
                   className="size-9 rounded-full bg-white/10 hover:bg-red-900 text-white hover:text-red-200 flex items-center justify-center text-xl font-bold transition-colors">−</button>
-                <input type="number" value={hpStep}
+                <NumInput value={hpStep}
                   onFocus={e => e.target.select()}
                   onChange={e => setHpStep(Math.max(1, parseInt(e.target.value) || 1))} min={1}
-                  className={`w-12 text-center text-sm font-bold ${theme.box} border border-white/15 rounded-lg py-1.5 text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`} />
+                  className={`w-12 text-center text-sm font-bold ${theme.box} border border-white/15 rounded-lg py-1.5 text-white outline-none`} />
                 <button type="button"
-                  onClick={() => hpTarget === "hp" ? update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep }) : update({ tempHp: tempHp + hpStep })}
+                  onClick={() => hpTarget === "hp"
+                    ? update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep })
+                    : update({ tempHp: tempHp + hpStep })}
                   className="size-9 rounded-full bg-white/10 hover:bg-green-900 text-white hover:text-green-200 flex items-center justify-center text-xl font-bold transition-colors">+</button>
               </div>
             </div>
           )}
         </div>
 
+        {/* Death Saving Throws — shown when hp <= 0 */}
+        {isAtZero && (
+          <DeathSavingThrows
+            characterName={character.name}
+            saves={deathSaves}
+            readOnly={readOnly}
+            onUpdate={ds => update({ deathSaves: ds })}
+            onStabilize={() => update({ hp: 1, deathSaves: undefined })}
+            onHeal={amount => {
+              const newHp = effectiveMax > 0 ? Math.min(effectiveMax, amount) : amount
+              update({ hp: newHp, deathSaves: undefined })
+            }}
+            card={card}
+          />
+        )}
+
         {/* Speed / Initiative */}
-        {(() => {
-          const initStat  = data.initiativeStat ?? "dex"
-          const initKey   = SAVE_TO_ABILITY[initStat] ?? "dexterity"
-          const initScore = (data[initKey as keyof CharacterData] as number | undefined) ?? 10
-          const initMod   = Math.floor((initScore - 10) / 2) + (data.initiativeBonus ?? 0)
-          const initStr   = initMod >= 0 ? `+${initMod}` : `${initMod}`
-          return (
-            <div className="grid grid-cols-2 gap-2">
-              {/* Speed */}
-              <div className={`${card} p-3 flex flex-col items-center gap-1`}>
-                {readOnly
-                  ? <span className="text-xl font-bold text-white">{data.speed ?? 0}</span>
-                  : <input type="number" value={data.speed ?? ""}
-                      onFocus={e => e.target.select()}
-                      onChange={e => update({ speed: parseInt(e.target.value) || 0 })} placeholder="0"
-                      className="w-full text-center text-xl font-bold bg-transparent outline-none text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-                }
-                <span className="text-xs uppercase tracking-widest text-white/50">Speed</span>
-              </div>
-              {/* Initiative — computed, clickable */}
-              <button type="button" onClick={() => setShowInitiativeModal(true)}
-                className={`${card} p-3 flex flex-col items-center gap-0.5 hover:brightness-110 transition-all`}
-                style={{ boxShadow: `0 0 0 1px ${theme.accent}40` }}>
-                <span className="text-xl font-bold text-white">{initStr}</span>
-                <span className="text-xs uppercase tracking-widest" style={{ color: theme.accent + "cc" }}>Initiative</span>
-                <span className="text-[9px] uppercase tracking-wider" style={{ color: theme.accent + "77" }}>{initStat.toUpperCase()}{data.initiativeBonus ? ` +${data.initiativeBonus}` : ""}</span>
-              </button>
-            </div>
-          )
-        })()}
-
-        {/* Hit Dice */}
-        {renderHitDice()}
-      </div>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: HIT DICE
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderHitDice() {
-    const pools: HitDicePool[] = data.hitDicePools ?? []
-
-    function updatePool(id: string, p: Partial<HitDicePool>) {
-      update({ hitDicePools: pools.map(pl => pl.id === id ? { ...pl, ...p } : pl) })
-    }
-    function removePool(id: string) { update({ hitDicePools: pools.filter(pl => pl.id !== id) }) }
-    function commitAddPool() {
-      update({ hitDicePools: [...pools, { id: nanoid(), dieType: newPoolDie, total: newPoolCount, used: 0 }] })
-      setShowAddPool(false); setNewPoolDie("d8"); setNewPoolCount(1)
-    }
-
-    return (
-      <div className={`${card} p-3 flex flex-col gap-2`}>
-        <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Hit Dice</span>
-          {!readOnly && (
-            <button type="button"
-              onClick={() => { setEditingPools(v => !v); setShowAddPool(false); setNewPoolDie("d8"); setNewPoolCount(1) }}
-              className={`text-xs px-2.5 py-1 rounded-full transition-colors ${editingPools ? "bg-yellow-500/20 text-yellow-300" : "bg-white/10 hover:bg-white/20 text-white/50 hover:text-white"}`}>
-              {editingPools ? "Done" : "✎ Edit"}
-            </button>
-          )}
+        <div className="grid grid-cols-2 gap-2">
+          <div className={`${card} p-3 flex flex-col items-center gap-1`}>
+            {readOnly
+              ? <span className="text-xl font-bold text-white">{data.speed ?? 0}</span>
+              : <NumInput value={data.speed ?? ""}
+                  onFocus={e => e.target.select()}
+                  onChange={e => update({ speed: parseInt(e.target.value) || 0 })} placeholder="0"
+                  className="w-full text-center text-xl font-bold bg-transparent outline-none text-white" />
+            }
+            <span className="text-xs uppercase tracking-widest text-white/50">Speed</span>
+          </div>
+          <button type="button" onClick={() => setShowInitiativeModal(true)}
+            className={`${card} p-3 flex flex-col items-center gap-0.5 hover:brightness-110 transition-all`}
+            style={{ boxShadow: `0 0 0 1px ${theme.accent}40` }}>
+            <span className="text-xl font-bold text-white">{initStr}</span>
+            <span className="text-xs uppercase tracking-widest" style={{ color: theme.accent + "cc" }}>Initiative</span>
+            <span className="text-[9px] uppercase tracking-wider" style={{ color: theme.accent + "77" }}>
+              {initStat.toUpperCase()}{data.initiativeBonus ? ` +${data.initiativeBonus}` : ""}
+            </span>
+          </button>
         </div>
 
-        {/* View mode */}
-        {!editingPools && (
-          <>
-            {pools.length === 0 && (
-              <p className="text-xs text-white/30 italic text-center py-2">
-                {readOnly ? "None" : "No hit dice — click ✎ Edit to add"}
-              </p>
-            )}
-            {pools.map(pool => {
-              const rem = Math.max(0, pool.total - pool.used)
-              return (
-                <div key={pool.id} className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white/70 w-8">{pool.dieType}</span>
-                  <div className="flex flex-wrap gap-1 flex-1">
-                    {Array.from({ length: pool.total }).map((_, i) => {
-                      const avail = i < rem
-                      return (
-                        <button key={i} type="button" disabled={readOnly}
-                          title={avail ? "Click to use" : "Click to recover"}
-                          onClick={() => updatePool(pool.id, { used: avail ? pool.used + 1 : Math.max(0, pool.used - 1) })}
-                          className={`size-5 rounded text-xs font-bold border transition-colors disabled:cursor-default disabled:hover:bg-transparent ${
-                            avail ? "bg-white/15 border-white/20 text-white hover:bg-red-900/60 hover:border-red-400/40"
-                                  : "bg-transparent border-white/10 text-white/20 hover:bg-green-900/40 hover:border-green-400/30"
-                          }`}>◆</button>
-                      )
-                    })}
-                  </div>
-                  <span className="text-xs text-white/30">{rem}/{pool.total}</span>
-                </div>
-              )
-            })}
-          </>
-        )}
-
-        {/* Edit mode */}
-        {editingPools && !readOnly && (
-          <div className="flex flex-col gap-2">
-            {pools.map(pool => (
-              <div key={pool.id} className="flex items-center gap-2">
-                <select value={pool.dieType} onChange={e => updatePool(pool.id, { dieType: e.target.value })}
-                  className="bg-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
-                  {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <div className="flex items-center gap-1.5 flex-1">
-                  <button type="button" onClick={() => updatePool(pool.id, { total: Math.max(1, pool.total - 1), used: Math.min(pool.used, pool.total - 1) })}
-                    className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">−</button>
-                  <span className="text-sm text-white w-6 text-center">{pool.total}</span>
-                  <button type="button" onClick={() => updatePool(pool.id, { total: pool.total + 1 })}
-                    className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">+</button>
-                </div>
-                <button type="button" onClick={() => removePool(pool.id)}
-                  className="size-7 flex items-center justify-center rounded-lg text-white/30 hover:text-red-400 hover:bg-red-900/30 text-sm transition-colors">✕</button>
-              </div>
-            ))}
-            {!showAddPool ? (
-              <button type="button" onClick={() => setShowAddPool(true)}
-                className="text-sm border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 text-white/40 hover:text-white transition-colors">
-                + Add pool
-              </button>
-            ) : (
-              <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2">
-                <select value={newPoolDie} onChange={e => setNewPoolDie(e.target.value)}
-                  className="bg-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
-                  {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <div className="flex items-center gap-1.5 flex-1">
-                  <button type="button" onClick={() => setNewPoolCount(c => Math.max(1, c - 1))}
-                    className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">−</button>
-                  <span className="text-sm text-white w-6 text-center">{newPoolCount}</span>
-                  <button type="button" onClick={() => setNewPoolCount(c => c + 1)}
-                    className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">+</button>
-                </div>
-                <button type="button" onClick={commitAddPool}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors">Add</button>
-                <button type="button" onClick={() => setShowAddPool(false)}
-                  className="size-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white text-sm transition-colors">✕</button>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Hit Dice */}
+        <HitDice
+          card={card}
+          pools={hitDicePools}
+          readOnly={readOnly}
+          onUpdate={updatePool}
+          onRemove={removePool}
+          onAdd={addPool}
+        />
       </div>
     )
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: QUICK SEARCH
+  // RENDER: QUICK SEARCH (inline — tightly coupled to tab bar)
   // ══════════════════════════════════════════════════════════════════════════
 
   function renderQuickSearch() {
@@ -1328,7 +548,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <button type="button" onClick={() => setQuickSearch("")} className="absolute right-3 text-white/40 hover:text-white text-sm">✕</button>
           )}
         </div>
-
         {searchResults.length > 0 && (
           <div className={`absolute top-full left-0 right-0 z-40 mt-1 ${theme.box} border border-white/15 rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto`}>
             {searchResults.map(r => (
@@ -1348,397 +567,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: SAVING THROWS CARD
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderSavesCard() {
-    return (
-      <div className={`${card} p-3 flex flex-col gap-2`}>
-        <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Saving Throws</span>
-          {!readOnly && (
-            <button type="button" onClick={() => setShowSavesModal(true)}
-              className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-xs transition-colors">✎</button>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-          {SAVE_KEYS.map(save => {
-            const mod  = getSaveMod(save)
-            const prof = data.savingThrowProfs?.[save] ?? false
-            return (
-              <div key={save} className="flex items-center gap-2">
-                <span className={`size-2 rounded-full shrink-0 ${prof ? "bg-primary" : "bg-white/15"}`} />
-                <span className="text-xs text-white/50 uppercase tracking-wider w-8">{ABILITY_ABBR[SAVE_TO_ABILITY[save]]}</span>
-                <span className={`text-sm font-mono font-bold ${mod >= 0 ? "text-green-400" : "text-red-400"}`}>
-                  {mod >= 0 ? `+${mod}` : `${mod}`}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: ABILITY SCORES CARD
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderAbilitiesCard() {
-    return (
-      <div className={`${card} p-3 flex flex-col gap-2`}>
-        <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Abilities</span>
-          {!readOnly && (
-            <button type="button" onClick={() => setShowAbilityModal(true)}
-              className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-xs transition-colors">✎</button>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-          {ABILITY_KEYS.map(key => {
-            const score = (data[key as keyof CharacterData] as number | undefined) ?? 10
-            const mod   = abilityMod(score)
-            return (
-              <div key={key} className="flex items-center gap-2">
-                <span className="text-xs text-white/50 uppercase tracking-wider w-8">{ABILITY_ABBR[key]}</span>
-                <span className="text-base font-bold text-white w-7 tabular-nums">{score}</span>
-                <span className={`text-xs font-mono ${mod.startsWith("-") ? "text-red-400" : "text-green-400"}`}>{mod}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: DICE ROLLER
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderDiceRoller() {
-    return <DiceRoller card={card} />
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: CONDITIONS CARD
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderConditionsCard() {
-    return (
-      <div className={`${card} p-3 flex flex-col gap-2`}>
-        <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Conditions</span>
-          {!readOnly && (
-            <button type="button" onClick={() => setShowConditionPicker(true)}
-              className="text-xs px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">+ Add</button>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {conditions.length === 0 && <span className="text-xs text-white/25 italic">None</span>}
-          {conditions.map(cond => (
-            <span key={cond.id}
-              className={`flex items-center gap-1 text-xs border rounded-full px-2.5 py-0.5 ${CONDITION_COLOR[cond.name] ?? "bg-white/10 text-white/70 border-white/20"}`}>
-              {cond.name}
-              {cond.name === "Exhaustion" && (
-                <span className="flex items-center gap-0.5 ml-1">
-                  {!readOnly && <button type="button" onClick={() => updateCondition(cond.id, { level: Math.max(1, (cond.level ?? 1) - 1) })} className="opacity-60 hover:opacity-100">−</button>}
-                  <span className="font-bold">{cond.level ?? 1}</span>
-                  {!readOnly && <button type="button" onClick={() => updateCondition(cond.id, { level: Math.min(6, (cond.level ?? 1) + 1) })} className="opacity-60 hover:opacity-100">+</button>}
-                </span>
-              )}
-              {!readOnly && (
-                <button type="button" onClick={() => removeCondition(cond.id)} className="opacity-50 hover:opacity-100 ml-0.5 text-xs">✕</button>
-              )}
-            </span>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: SPELLS / EQUIPMENT PANEL (tab toggle)
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderSpellsEquipPanel() {
-    const preparedCount = spellItems.filter(s => s.prepared && !s.alwaysPrepared).length
-
-    // Apply hide + sort to spell list
-    const visibleSpells = spellItems
-      .filter(s => !hideUnprepared || s.prepared || s.alwaysPrepared)
-      .slice()
-      .sort((a, b) => {
-        if (spellSort === "alpha") return (a.name || "").localeCompare(b.name || "")
-        return (a.level ?? 0) - (b.level ?? 0)
-      })
-
-    return (
-      <div className={`${card} p-4 flex flex-col gap-3`}>
-
-        {/* Header */}
-        <div className="flex items-center gap-3 flex-wrap shrink-0">
-          {/* Tab toggle */}
-          <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0">
-            <button type="button" onClick={() => setShowSpells(true)}
-              className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Spells
-            </button>
-            <button type="button" onClick={() => setShowSpells(false)}
-              className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${!showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Martial
-            </button>
-          </div>
-
-          {/* Spell stats — all four as uniform stat columns */}
-          {showSpells && (
-            <div className="flex items-center gap-5 flex-1 flex-wrap">
-              {data.spellcastingAbility && (
-                <div className="flex flex-col items-center leading-none gap-0.5">
-                  <span className="text-base font-bold text-white/70 uppercase tracking-wider">{data.spellcastingAbility}</span>
-                  <span className="text-[10px] text-white/35 uppercase tracking-wider">Ability</span>
-                </div>
-              )}
-              <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className="text-lg font-bold text-white tabular-nums">{data.spellSaveDC ?? "—"}</span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Save DC</span>
-              </div>
-              <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className="text-lg font-bold text-white tabular-nums">{data.spellAttackBonus != null ? `+${data.spellAttackBonus}` : "—"}</span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Spell Atk</span>
-              </div>
-              <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className={`text-lg font-bold tabular-nums ${preparedCount > (data.spellsPrepared ?? data.spellsKnown ?? Infinity) ? "text-red-400" : "text-white"}`}>
-                  {preparedCount}<span className="text-white/30 text-sm">/{data.spellsPrepared ?? data.spellsKnown ?? "—"}</span>
-                </span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Prepared</span>
-              </div>
-              <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className="text-lg font-bold text-white tabular-nums">{data.cantripsKnown ?? "—"}</span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
-              </div>
-              <button type="button" onClick={() => setShowSpellcastingModal(true)}
-                className="size-10 text-2xl flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
-                title="Configure spellcasting">⚙</button>
-            </div>
-          )}
-        </div>
-
-        {/* Spell slots (compact, no add form — use ⚙ modal) */}
-        {showSpells && spellSlots.length > 0 && (
-          <div className="flex flex-col gap-2 border-b border-white/10 pb-3 shrink-0">
-            {spellSlots.map(slot => {
-              const rem = Math.max(0, slot.total - slot.used)
-              return (
-                <div key={slot.id} className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 w-[72px] shrink-0">
-                    <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
-                    {slot.pact && (
-                      <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none">Pact</span>
-                    )}
-                  </div>
-                  <TracingSlider
-                    value={rem}
-                    max={slot.total}
-                    disabled={readOnly}
-                    showButtons
-                    buttonSize="sm"
-                    color={slotLevelColor(slotAccent, slot.level)}
-                    onChange={val => changeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
-                  />
-                  <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        {showSpells && spellSlots.length === 0 && !readOnly && (
-          <button type="button" onClick={() => setShowSpellcastingModal(true)}
-            className="text-xs text-white/30 hover:text-white/60 transition-colors text-left shrink-0">+ Add spell slots</button>
-        )}
-
-        {/* Spell list controls */}
-        {showSpells && (
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {/* Sort toggle */}
-            <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
-              <button type="button" onClick={() => setSpellSort("level")}
-                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${spellSort === "level" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-                Level
-              </button>
-              <button type="button" onClick={() => setSpellSort("alpha")}
-                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${spellSort === "alpha" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-                A–Z
-              </button>
-            </div>
-            {/* Hide unprepared toggle */}
-            <button type="button" onClick={() => setHideUnprepared(h => {
-              const next = !h
-              try { localStorage.setItem(`fables-prep-filter-${character.id}`, next ? "1" : "0") } catch {}
-              return next
-            })}
-              className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors border ${hideUnprepared ? "bg-primary/20 border-primary/50 text-white" : "border-white/15 text-white/40 hover:text-white/70 hover:border-white/30"}`}>
-              Prepared only
-            </button>
-            {hideUnprepared && visibleSpells.length === 0 && (
-              <span className="text-xs text-white/25 italic">No prepared spells</span>
-            )}
-          </div>
-        )}
-
-        {/* Spell / martial list */}
-        <div className="flex flex-col gap-1.5">
-          {showSpells ? (
-            <>
-              {spellSort === "level" ? (() => {
-                // Group by level
-                const grouped = new Map<number, typeof visibleSpells>()
-                for (const s of visibleSpells) {
-                  const lvl = s.level ?? 0
-                  if (!grouped.has(lvl)) grouped.set(lvl, [])
-                  grouped.get(lvl)!.push(s)
-                }
-                const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
-                return levels.map(lvl => {
-                  const spells    = grouped.get(lvl)!
-                  const isOpen    = !collapsedLevels.has(lvl)
-                  const groupLabel = lvl === 0 ? "Cantrips" : `Level ${lvl}`
-                  return (
-                    <div key={lvl} className="flex flex-col gap-1">
-                      <button type="button"
-                        onClick={() => setCollapsedLevels(prev => {
-                          const next = new Set(prev)
-                          next.has(lvl) ? next.delete(lvl) : next.add(lvl)
-                          try { localStorage.setItem(`fables-spell-collapsed-${character.id}`, JSON.stringify([...next])) } catch {}
-                          return next
-                        })}
-                        className="flex items-center gap-2 px-1 py-0.5 rounded-lg hover:bg-white/5 transition-colors select-none">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">{groupLabel}</span>
-                        <span className="text-[10px] text-white/20">({spells.length})</span>
-                      </button>
-                      {isOpen && spells.map(spell => (
-                        <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly}
-                          onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
-                      ))}
-                    </div>
-                  )
-                })
-              })() : visibleSpells.map(spell => (
-                <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly}
-                  onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
-              ))}
-              {!readOnly && (
-                <button type="button" onClick={addSpell}
-                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors shrink-0">
-                  + Add Spell
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              {equipItems.map(item => (
-                <EquipmentEntry key={item.id} item={item} theme={theme} readOnly={readOnly}
-                  onChange={p => changeEquip(item.id, p)} onRemove={() => removeEquip(item.id)}
-                  statMods={{
-                    str: Math.floor(((data.strength      ?? 10) - 10) / 2),
-                    dex: Math.floor(((data.dexterity     ?? 10) - 10) / 2),
-                    con: Math.floor(((data.constitution  ?? 10) - 10) / 2),
-                    int: Math.floor(((data.intelligence  ?? 10) - 10) / 2),
-                    wis: Math.floor(((data.wisdom        ?? 10) - 10) / 2),
-                    cha: Math.floor(((data.charisma      ?? 10) - 10) / 2),
-                  }}
-                  pb={profBonus(data.level ?? 1)}
-                />
-              ))}
-              {!readOnly && (
-                <button type="button" onClick={addEquip}
-                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors shrink-0">
-                  + Add Item
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER: SKILLS CARD
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function renderSkillsCard() {
-    const plain = data.plainSkills ?? false
-
-    function skillRow(skill: typeof SKILLS[number]) {
-      const profLevel = data.skillProfs?.[skill.name]
-      const mod       = getSkillMod(skill.name, skill.ability)
-      const ac        = ABILITY_COLORS[skill.ability] ?? { text: "text-white/40", subtle: "" }
-      const dotClass  =
-        profLevel === "exp"  ? "bg-yellow-400 border-yellow-400" :
-        profLevel === "prof" ? "bg-primary border-primary" :
-        profLevel === "half" ? "bg-primary/40 border-primary/60" :
-                               "border-white/25 bg-transparent"
-      return (
-        <button key={skill.name} type="button"
-          onClick={() => setShowSkillModal(skill.name)}
-          className={`flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-white/5 transition-colors w-full text-left ${plain ? "" : ac.subtle}`}>
-          <span className={`size-3 rounded-full border-2 shrink-0 transition-colors ${dotClass}`} />
-          <span className="text-xs text-white/70 flex-1 truncate leading-tight">{skill.name}</span>
-          <span className={`text-[10px] w-6 text-right uppercase shrink-0 font-semibold ${plain ? "text-white/30" : ac.text}`}>{skill.ability}</span>
-          <span className={`text-xs font-mono font-semibold w-7 text-right shrink-0 ${mod >= 0 ? "text-green-400" : "text-red-400"}`}>
-            {mod >= 0 ? `+${mod}` : `${mod}`}
-          </span>
-        </button>
-      )
-    }
-
-    const STAT_ORDER = ["str","dex","con","int","wis","cha"] as const
-
-    return (
-      <div className={`${card} p-3 flex flex-col gap-2`}>
-        {/* Header + sort toggle */}
-        <div className="flex items-center justify-between shrink-0">
-          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Skills</span>
-          <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
-            <button type="button" onClick={() => { setSkillGroupBy("default"); try { localStorage.setItem(`fables-skill-group-${character.id}`, "default") } catch {} }}
-              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${skillGroupBy === "default" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              A–Z
-            </button>
-            <button type="button" onClick={() => { setSkillGroupBy("stat"); try { localStorage.setItem(`fables-skill-group-${character.id}`, "stat") } catch {} }}
-              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${skillGroupBy === "stat" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Stat
-            </button>
-          </div>
-        </div>
-
-        {skillGroupBy === "stat" ? (
-          <div className="flex flex-col gap-2">
-            {STAT_ORDER.map(stat => {
-              const ac      = ABILITY_COLORS[stat] ?? { text: "text-white/40", subtle: "" }
-              const group   = SKILLS.filter(s => s.ability === stat)
-              if (group.length === 0) return null
-              return (
-                <div key={stat}>
-                  <div className={`flex items-center gap-1 px-1 py-0.5 mb-0.5`}>
-                    <span className={`text-[9px] font-bold uppercase tracking-widest ${plain ? "text-white/30" : ac.text}`}>{stat.toUpperCase()}</span>
-                    <div className={`flex-1 h-px ${plain ? "bg-white/10" : "bg-white/10"}`} />
-                  </div>
-                  {group.map(skillRow)}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            {[...SKILLS].sort((a,b) => a.name.localeCompare(b.name)).map(skillRow)}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-
-  // ══════════════════════════════════════════════════════════════════════════
   // RENDER: COMBAT TAB
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -1750,15 +578,22 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           {/* Col 1: HP / speed / hit dice / conditions / dice */}
           <div className="lg:w-52 shrink-0 flex flex-col gap-3">
             {renderHpPanel()}
-            {renderConditionsCard()}
-            {renderDiceRoller()}
+            <ConditionsCard
+              card={card}
+              conditions={conditions}
+              readOnly={readOnly}
+              onShowPicker={() => setShowConditionPicker(true)}
+              onRemove={removeCondition}
+              onUpdateLevel={updateConditionLevel}
+            />
+            <DiceRoller card={card} />
           </div>
 
           {/* Col 2: Abilities → Saves → Skills */}
           <div className="lg:w-56 shrink-0 flex flex-col gap-3 overflow-y-auto">
-            {renderAbilitiesCard()}
-            {renderSavesCard()}
-            {renderSkillsCard()}
+            <AbilitiesCard card={card} data={data} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} />
+            <SavesCard card={card} data={data} readOnly={readOnly} getSaveMod={getSaveMod} onShowModal={() => setShowSavesModal(true)} />
+            <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} />
           </div>
 
           {/* Col 3: Favorites */}
@@ -1767,8 +602,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           </div>
         </div>
 
-        {/* Full-width spells / martial panel at the bottom */}
-        {renderSpellsEquipPanel()}
+        {/* Full-width spells / martial panel */}
+        <SpellsEquipPanel
+          card={card} theme={theme} data={data} readOnly={readOnly}
+          spellItems={spellItems} equipItems={equipItems} spellSlots={spellSlots}
+          slotAccent={slotAccent} characterId={character.id}
+          onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
+          onChangeSlot={changeSlot}
+          onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
+          onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
+        />
       </div>
     )
   }
@@ -1780,16 +623,65 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   return (
     <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-hidden ${effectiveBody}`}>
 
-      {/* Modals */}
-      {renderMaxStatsModal()}
-      {renderSavesModal()}
-      {renderAbilityModal()}
-      {renderSpellcastingModal()}
-      {renderSkillModal()}
-      {renderInitiativeModal()}
-      {renderConditionModal()}
-      {renderThemeModal()}
-      {renderPortraitModal()}
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      {showMaxMenu && (
+        <MaxStatsModal
+          data={data} effectiveMax={effectiveMax}
+          onUpdate={update} onClose={() => setShowMaxMenu(false)}
+        />
+      )}
+      {showSavesModal && (
+        <SavesModal
+          data={data} readOnly={readOnly}
+          getSaveMod={getSaveMod} onUpdate={update} onClose={() => setShowSavesModal(false)}
+        />
+      )}
+      {showAbilityModal && (
+        <AbilityModal
+          data={data} readOnly={readOnly}
+          onUpdate={update} onClose={() => setShowAbilityModal(false)}
+        />
+      )}
+      {showSpellcastingModal && (
+        <SpellcastingModal
+          data={data} spellSlots={spellSlots} readOnly={readOnly} slotAccent={slotAccent}
+          onUpdate={update} onChangeSlot={changeSlot}
+          onAddSlot={addSlot} onRemoveSlot={removeSlot}
+          onClose={() => setShowSpellcastingModal(false)}
+        />
+      )}
+      {showSkillModal && (
+        <SkillModal
+          skillName={showSkillModal} data={data} readOnly={readOnly}
+          getSkillMod={getSkillMod} onUpdate={update} onClose={() => setShowSkillModal(null)}
+        />
+      )}
+      {showInitiativeModal && (
+        <InitiativeModal
+          data={data} readOnly={readOnly}
+          onUpdate={update} onClose={() => setShowInitiativeModal(false)}
+          accentColor={theme.accent}
+        />
+      )}
+      {showConditionPicker && (
+        <ConditionPickerModal
+          conditions={conditions} onAdd={addCondition} onClose={() => setShowConditionPicker(false)}
+        />
+      )}
+      {showThemePicker && (
+        <ThemeModal data={data} onUpdate={update} onClose={() => setShowThemePicker(false)} />
+      )}
+      {showPortraitPicker && (
+        <PortraitModal
+          currentPortrait={data.portrait}
+          galleryImages={galleryImages}
+          galleryLoading={galleryLoading}
+          onChoose={url => { update({ portrait: url }); setShowPortraitPicker(false) }}
+          onUploadClick={() => portraitRef.current?.click()}
+          onClose={() => setShowPortraitPicker(false)}
+        />
+      )}
+
       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={uploadPortrait} />
 
       {/* Floating favorites panel */}
@@ -1823,11 +715,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               className="bg-transparent outline-none min-w-0 flex-1 placeholder:text-white/20" disabled={readOnly} />
             <span className="text-white/20">·</span>
             <span>Lv</span>
-            <input type="number" value={data.level ?? ""} min={1} max={20}
+            <NumInput value={data.level ?? ""} min={1} max={20}
               onFocus={e => e.target.select()}
               onChange={e => update({ level: Math.min(20, Math.max(1, parseInt(e.target.value) || 1)) })}
               placeholder="1" disabled={readOnly}
-              className="bg-transparent outline-none w-6 placeholder:text-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              className="bg-transparent outline-none w-6 placeholder:text-white/20" />
           </div>
         </div>
 
@@ -1840,8 +732,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             Theme
           </button>
         )}
-
-      
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
@@ -1857,7 +747,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
       <div className={`flex flex-col flex-1 min-h-0 ${activeTab === "chat" ? "overflow-hidden" : "overflow-auto p-4"} ${effectiveBody}`}>
-        {activeTab === "main" && renderCombatTab()}
+        {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly} />
         )}
@@ -1874,5 +764,3 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     </div>
   )
 }
-
-

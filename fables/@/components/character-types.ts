@@ -60,9 +60,11 @@ export interface Feature {
   description?: string
   trackable?: boolean
   maxUses?: number
+  maxUsesFormula?: "pb"      // when set, max uses = proficiency bonus
   usesUsed?: number
-  resetsOn?: "short" | "long" | "dawn"
+  resetsOn?: "short" | "long" | "dawn" | "manual"
   sliderColor?: string
+  linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
 }
 
 export interface FavoriteRef {
@@ -125,6 +127,13 @@ export interface CharacterData {
   themeMode?: "dark" | "light"
   themeBg?: string         // background override key from BG_OPTIONS
   plainSkills?: boolean    // when true, disable ability-color-coding on skills
+  // Proficiencies (free-text per category)
+  weaponProfs?: string
+  armorProfs?: string
+  toolProfs?: string
+  languageProfs?: string
+  // Death saving throws
+  deathSaves?: { successes: number; failures: number; dead?: boolean }
   // Party / multiclass
   partyCode?: string
   multiclass?: boolean
