@@ -33,6 +33,8 @@ function TracingSlider({
   const btnBase =
     "rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default shrink-0"
   const btnSz = buttonSize === "sm" ? "size-6 rounded-md" : "size-7"
+  const pct   = max > 0 ? (value / max) * 100 : 0
+  const fill  = color ?? "hsl(var(--primary))"
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
@@ -44,7 +46,7 @@ function TracingSlider({
       )}
       <div className="flex items-center gap-2">
         {showButtons && (
-         <button
+          <button
             type="button"
             disabled={disabled || value <= 0}
             onClick={() => onChange(Math.max(0, value - 1))}
@@ -59,16 +61,26 @@ function TracingSlider({
           max={max}
           value={value}
           disabled={disabled}
-          onChange={e => onChange(parseInt(e.target.value))}
-          style={color ? { accentColor: color } : undefined}
-          className={cn(
-            "flex-1 h-2 rounded-full cursor-pointer disabled:opacity-50 disabled:cursor-default",
-            !color && "accent-primary"
-          )}
+          onChange={e => onChange(Number(e.target.value))}
+          className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer disabled:cursor-default
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:size-3
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:bg-white
+            [&::-webkit-slider-thumb]:shadow
+            [&::-webkit-slider-thumb]:transition-transform
+            [&::-webkit-slider-thumb]:hover:scale-125
+            [&::-webkit-slider-thumb]:active:scale-110
+            [&::-moz-range-thumb]:size-3
+            [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:bg-white
+            [&::-moz-range-thumb]:border-0"
+          style={{
+            background: `linear-gradient(to right, ${fill} ${pct}%, rgba(255,255,255,0.1) ${pct}%)`,
+          }}
         />
         {showButtons && (
-         
-            <button
+          <button
             type="button"
             disabled={disabled || value >= max}
             onClick={() => onChange(Math.min(max, value + 1))}

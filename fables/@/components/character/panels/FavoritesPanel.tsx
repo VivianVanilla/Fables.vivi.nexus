@@ -296,7 +296,15 @@ export function FavoritesPanel({
                     </div>
                   )
                 })() : <span className="flex-1" />}
-                <span className="text-white/20 text-xs shrink-0">{isExpanded ? "▲" : "▼"}</span>
+
+                {featWithUses && (() => {
+                  const rem = Math.max(0, (featWithUses.maxUses ?? 0) - (featWithUses.usesUsed ?? 0))
+                  return (
+                    <span className="text-xs tabular-nums text-white/40 shrink-0 min-w-[2rem] text-right">
+                      {rem}/{featWithUses.maxUses}
+                    </span>
+                  )
+                })()}
                 {!readOnly && (
                   <button type="button"
                     onClick={e => { e.stopPropagation(); onRemove(fav.refId) }}

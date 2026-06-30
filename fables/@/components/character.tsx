@@ -7,7 +7,7 @@
 
 // ── IMPORTS ───────────────────────────────────────────────────────────────────
 
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { Shield } from "lucide-react"
 
 import type { SidebarObject } from "@/components/sidebar-utils"
@@ -20,7 +20,7 @@ import type {
 } from "./character-types"
 import { ABILITY_KEYS, ABILITY_ABBR, SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET, SKILLS } from "./character-constants"
 import { abilityMod, profBonus, nanoid, safeParseJson } from "./character-utils"
-import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, slotLevelColor } from "./character-themes"
+import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS, slotLevelColor } from "./character-themes"
 
 import { Modal }            from "./character/ui/Modal"
 import { SpellEntry }       from "./character/entries/SpellEntry"
@@ -28,6 +28,18 @@ import { EquipmentEntry }   from "./character/entries/EquipmentEntry"
 import { FavoritesPanel }   from "./character/panels/FavoritesPanel"
 import { InfoTab }          from "./character/tabs/InfoTab"
 import { TracingSlider }    from "./ui/tracing-slider"
+import { PartyChat }        from "./PartyChat"
+
+// ── ABILITY COLORS (skills, initiative, saves) ────────────────────────────────
+
+const ABILITY_COLORS: Record<string, { text: string; subtle: string }> = {
+  str: { text: "text-red-400",    subtle: "bg-red-500/8"    },
+  dex: { text: "text-green-400",  subtle: "bg-green-500/8"  },
+  con: { text: "text-orange-400", subtle: "bg-orange-500/8" },
+  int: { text: "text-blue-400",   subtle: "bg-blue-500/8"   },
+  wis: { text: "text-cyan-400",   subtle: "bg-cyan-500/8"   },
+  cha: { text: "text-purple-400", subtle: "bg-purple-500/8" },
+}
 
 // ── CONDITION DATA ────────────────────────────────────────────────────────────
 
@@ -61,7 +73,121 @@ interface Props {
   readOnly?: boolean
 }
 
-type Tab = "main" | "details"
+type Tab = "main" | "details" | "chat"
+
+// ── Dice Roller ───────────────────────────────────────────────────────────────
+
+const DICE = [4, 6, 8, 10, 12, 20, 100] as const
+
+type DiceEntry = { die: number; count: number }
+
+function DiceRoller({ card }: { card: string }) {
+  const [pool,   setPool]   = useState<DiceEntry[]>([])
+  const [result, setResult] = useState<{ die: number; rolls: number[] }[] | null>(null)
+
+  function addDie(die: number) {
+    setPool(prev => {
+      const hit = prev.find(e => e.die === die)
+      return hit
+        ? prev.map(e => e.die === die ? { ...e, count: e.count + 1 } : e)
+        : [...prev, { die, count: 1 }]
+    })
+    setResult(null)
+  }
+
+  function adjustDie(die: number, delta: number) {
+    setPool(prev => {
+      const hit = prev.find(e => e.die === die)
+      if (!hit) return prev
+      const next = hit.count + delta
+      return next <= 0
+        ? prev.filter(e => e.die !== die)
+        : prev.map(e => e.die === die ? { ...e, count: next } : e)
+    })
+    setResult(null)
+  }
+
+  function rollAll() {
+    if (!pool.length) return
+    setResult(
+      pool.map(({ die, count }) => ({
+        die,
+        rolls: Array.from({ length: count }, () => Math.floor(Math.random() * die) + 1),
+      }))
+    )
+  }
+
+  const grandTotal = result?.reduce((s, g) => s + g.rolls.reduce((a, r) => a + r, 0), 0) ?? null
+
+  return (
+    <div className={`${card} p-3 flex flex-col gap-2`}>
+      <span className="text-[10px] uppercase tracking-widest text-white/45 font-semibold">Dice Roller</span>
+
+      {/* Die buttons */}
+      <div className="flex flex-wrap gap-1">
+        {DICE.map(d => (
+          <button key={d} type="button" onClick={() => addDie(d)}
+            className={`px-2 py-1 text-xs rounded-lg font-mono transition-colors ${
+              pool.find(e => e.die === d)
+                ? "bg-white/20 text-white"
+                : "bg-white/8 hover:bg-white/15 text-white/55 hover:text-white"
+            }`}>
+            d{d}
+          </button>
+        ))}
+      </div>
+
+      {/* Pool */}
+      {pool.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 border border-white/10">
+          {pool.map(({ die, count }) => (
+            <div key={die} className="flex items-center gap-0.5">
+              <button type="button" onClick={() => adjustDie(die, -1)}
+                className="size-4 flex items-center justify-center text-white/30 hover:text-white/70 text-sm leading-none">−</button>
+              <span className="text-xs font-mono text-white/80 min-w-[2rem] text-center">{count}d{die}</span>
+              <button type="button" onClick={() => adjustDie(die, 1)}
+                className="size-4 flex items-center justify-center text-white/30 hover:text-white/70 text-sm leading-none">+</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => { setPool([]); setResult(null) }}
+            className="ml-auto text-[9px] text-white/25 hover:text-white/50 transition-colors">
+            clear
+          </button>
+        </div>
+      )}
+
+      {/* Roll button */}
+      <button type="button" onClick={rollAll} disabled={!pool.length}
+        className="w-full py-1.5 rounded-lg bg-white/12 hover:bg-white/20 text-white text-xs font-semibold disabled:opacity-25 transition-colors">
+        Roll!
+      </button>
+
+      {/* Results */}
+      {result && (
+        <div className="flex flex-col gap-1 px-2.5 py-2 rounded-lg bg-white/5 border border-white/10">
+          {result.map(({ die, rolls }) => (
+            <div key={die} className="flex items-baseline gap-1.5 text-[10px]">
+              <span className="text-white/40 font-mono shrink-0">{rolls.length}d{die}</span>
+              <span className="text-white/50 font-mono flex-1 min-w-0 truncate">[{rolls.join(", ")}]</span>
+              <span className="text-white/60 shrink-0">= {rolls.reduce((s, r) => s + r, 0)}</span>
+            </div>
+          ))}
+          {result.length > 1 && (
+            <div className="flex items-center justify-between border-t border-white/10 pt-1 mt-0.5">
+              <span className="text-[10px] text-white/40">Total</span>
+              <span className="text-base font-bold text-white tabular-nums">{grandTotal}</span>
+            </div>
+          )}
+          {result.length === 1 && (
+            <div className="flex justify-end">
+              <span className="text-base font-bold text-white tabular-nums">{grandTotal}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // CharacterSheet
@@ -114,8 +240,22 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [quickSearch, setQuickSearch] = useState("")
 
   // Spell list controls
-  const [spellSort,       setSpellSort]       = useState<"level" | "alpha">("level")
-  const [hideUnprepared,  setHideUnprepared]  = useState(false)
+  const [spellSort,          setSpellSort]          = useState<"level" | "alpha">("level")
+  const [collapsedLevels,    setCollapsedLevels]    = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(`fables-spell-collapsed-${character.id}`)
+      return raw ? new Set(JSON.parse(raw) as number[]) : new Set()
+    } catch { return new Set() }
+  })
+  const [skillGroupBy,       setSkillGroupBy]       = useState<"default" | "stat">(() => {
+    try { return localStorage.getItem(`fables-skill-group-${character.id}`) === "stat" ? "stat" : "default" } catch { return "default" }
+  })
+  const [showInitiativeModal,setShowInitiativeModal] = useState(false)
+  const [hideUnprepared,   setHideUnprepared]   = useState(() => {
+    try { return localStorage.getItem(`fables-prep-filter-${character.id}`) === "1" } catch { return false }
+  })
+  const [notifPopup, setNotifPopup] = useState<{ body: string; sender: string } | null>(null)
+  const [dmUserId,   setDmUserId]   = useState<string | null>(null)
 
   // Ability score local buffer (allows clearing "0")
   const [abilityInputs, setAbilityInputs] = useState<Record<string, string>>({})
@@ -124,6 +264,47 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [data, setData] = useState<CharacterData>(() => safeParseJson(character.data) as CharacterData)
+
+  // ── NOTIFICATION SUBSCRIPTION ─────────────────────────────────────────────
+  // Fires regardless of which tab is active so popups always reach the player.
+
+  useEffect(() => {
+    const partyCode = data.partyCode
+    const uid       = user?.id
+    if (!partyCode || !uid) return
+    const ch = supabase
+      .channel(`notif:${character.id}`)
+      .on("postgres_changes", {
+        event:  "INSERT",
+        schema: "public",
+        table:  "messages",
+        filter: `party_code=eq.${partyCode}`,
+      }, payload => {
+        const m = payload.new as {
+          type: string; body: string | null; sender_name: string | null
+          recipient_id: string | null; sender_id: string
+        }
+        if (m.type === "notification" && m.sender_id !== uid) {
+          if (!m.recipient_id || m.recipient_id === uid) {
+            setNotifPopup({ body: m.body ?? "", sender: m.sender_name ?? "DM" })
+          }
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [data.partyCode, user?.id, character.id])
+
+  // Fetch the DM's userId so players can initiate DMs
+  useEffect(() => {
+    if (!data.partyCode) return
+    supabase
+      .from("objects")
+      .select("owner_id")
+      .eq("type", "campaign")
+      .filter("data->>partyCode", "eq", data.partyCode)
+      .maybeSingle()
+      .then(({ data: row }) => { if (row?.owner_id) setDmUserId(row.owner_id) })
+  }, [data.partyCode])
 
   // ── SAVE ──────────────────────────────────────────────────────────────────
 
@@ -281,7 +462,15 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ── COMPUTED THEME / CARD ─────────────────────────────────────────────────
 
   const theme      = THEMES[data.theme ?? DEFAULT_THEME] ?? THEMES[DEFAULT_THEME]
-  const card       = `rounded-xl ${theme.box} ring-1 ${theme.ring}`
+  const isLight    = data.themeMode === "light"
+  const effectiveBox  = isLight ? theme.lightBox  : theme.box
+  const effectiveBody = (() => {
+    const bgKey = data.themeBg ?? "default"
+    const bgOverride = bgKey !== "default" ? (BG_OPTIONS[bgKey]?.body ?? "") : ""
+    if (bgOverride) return bgOverride
+    return isLight ? theme.lightBody : theme.body
+  })()
+  const card       = `rounded-xl ${effectiveBox} ring-1 ${theme.ring}`
   // Slot bars use slotTheme accent if set, otherwise fall back to the background theme accent
   const slotAccent = (SLOT_THEMES[data.slotTheme ?? DEFAULT_SLOT_THEME] ?? SLOT_THEMES[DEFAULT_SLOT_THEME]).accent
 
@@ -310,7 +499,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const favPanelProps = {
     favorites, spellItems, equipItems, features: allFeatures,
     onRemove: removeFavorite, onUpdateUses: updateFeatureUses,
-    theme, card, readOnly,
+    theme: { ...theme, box: effectiveBox }, card, readOnly,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),
@@ -645,6 +834,66 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // MODAL: Initiative
+  // ══════════════════════════════════════════════════════════════════════════
+
+  function renderInitiativeModal() {
+    if (!showInitiativeModal) return null
+    const initStat  = data.initiativeStat ?? "dex"
+    const bonus     = data.initiativeBonus ?? 0
+    const fullKey   = SAVE_TO_ABILITY[initStat] ?? "dexterity"
+    const score     = (data[fullKey as keyof CharacterData] as number | undefined) ?? 10
+    const mod       = Math.floor((score - 10) / 2)
+    const total     = mod + bonus
+    const totalStr  = total >= 0 ? `+${total}` : `${total}`
+    return (
+      <Modal onClose={() => setShowInitiativeModal(false)}>
+        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
+          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+            <p className="text-base font-bold text-white">Initiative</p>
+            <span className="text-xl font-mono font-bold" style={{ color: theme.accent }}>{totalStr}</span>
+          </div>
+          <div className="px-5 py-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Ability Score</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(["str","dex","con","int","wis","cha"] as const).map(s => {
+                  const ac = ABILITY_COLORS[s]
+                  const isActive = initStat === s
+                  return (
+                    <button key={s} type="button" disabled={readOnly}
+                      onClick={() => update({ initiativeStat: s })}
+                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors border disabled:cursor-default ${isActive ? "border-white/40 text-white" : `bg-white/5 border-white/10 hover:bg-white/10 ${ac.text}`}`}
+                      style={isActive ? { backgroundColor: theme.accent + "25", borderColor: theme.accent + "80" } : {}}>
+                      {s.toUpperCase()}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {!readOnly && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Extra Bonus</p>
+                <input type="number" value={bonus || ""} placeholder="0"
+                  onFocus={e => e.target.select()}
+                  onChange={e => update({ initiativeBonus: parseInt(e.target.value) || 0 })}
+                  className="w-full text-center bg-white/10 rounded-xl px-3 py-2 text-white outline-none text-lg font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              </div>
+            )}
+          </div>
+          <div className="px-5 pb-5">
+            <button type="button" onClick={() => setShowInitiativeModal(false)}
+              className="w-full py-2.5 rounded-xl text-sm text-white font-semibold transition-colors"
+              style={{ backgroundColor: theme.accent + "30" }}>
+              Done
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // MODAL: Ability Scores
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -721,83 +970,104 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   function renderThemeModal() {
     if (!showThemePicker) return null
-    const activeThemeKey    = data.theme     ?? DEFAULT_THEME
-    const activeSlotKey     = data.slotTheme ?? DEFAULT_SLOT_THEME
+    const activeThemeKey = data.theme     ?? DEFAULT_THEME
+    const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
+    const activeBgKey    = data.themeBg   ?? "default"
+    const mode           = data.themeMode ?? "dark"
+
     return (
       <Modal onClose={() => setShowThemePicker(false)}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(560px,92vw)] max-h-[88vh] flex flex-col overflow-hidden">
+        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(520px,92vw)] max-h-[88vh] flex flex-col overflow-hidden">
 
           {/* Header */}
-          <div className="px-5 py-4 border-b border-white/10 shrink-0 flex items-center justify-between">
+          <div className="px-5 py-3 border-b border-white/10 shrink-0 flex items-center justify-between gap-3">
             <p className="text-base font-bold text-white">Theme</p>
+
+            {/* Light / Dark toggle */}
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
+              <button type="button" onClick={() => update({ themeMode: "dark" })}
+                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "dark" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                🌙 Dark
+              </button>
+              <button type="button" onClick={() => update({ themeMode: "light" })}
+                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "light" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                ☀ Bright
+              </button>
+            </div>
+
             <button type="button" onClick={() => setShowThemePicker(false)}
-              className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
+              className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">✕</button>
           </div>
 
-          <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-7">
+          <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-5">
 
-            {/* ── Section 1: Background theme ── */}
-            <div className="flex flex-col gap-3">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Background</p>
-              <div className="grid grid-cols-4 gap-2">
+            {/* ── Card style ── */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Card Style</p>
+              <div className="grid grid-cols-5 gap-1.5">
                 {Object.entries(THEMES).map(([key, t]) => {
                   const isActive = key === activeThemeKey
+                  const bodyClass = mode === "light" ? t.lightBody : t.body
+                  const boxClass  = mode === "light" ? t.lightBox  : t.box
                   return (
-                    <button key={key} type="button"
-                      onClick={() => update({ theme: key })}
-                      className={`flex flex-col items-center gap-2 p-2.5 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10 ring-1 ring-white/20" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}
-                    >
-                      {/* Two-tone swatch: outer body, inner box */}
-                      <div className="size-8 rounded-full border-2 border-white/20 shrink-0 relative overflow-hidden">
-                        <div className={`absolute inset-0 ${t.body}`} />
-                        <div className={`absolute inset-1 rounded-full ${t.box}`} />
+                    <button key={key} type="button" onClick={() => update({ theme: key })}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                      <div className="size-6 rounded-full border border-white/20 shrink-0 relative overflow-hidden">
+                        <div className={`absolute inset-0 ${bodyClass}`} />
+                        <div className={`absolute inset-0.5 rounded-full ${boxClass}`} />
                       </div>
-                      <span className={`text-[11px] font-semibold leading-tight ${isActive ? "text-white" : "text-white/55"}`}>{t.label}</span>
+                      <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{t.label}</span>
                     </button>
                   )
                 })}
               </div>
             </div>
 
-            {/* ── Section 2: Spell slot bar color ── */}
-            <div className="flex flex-col gap-3">
+            {/* ── Background override ── */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Background</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {Object.entries(BG_OPTIONS).map(([key, bg]) => {
+                  const isActive = key === activeBgKey
+                  const swatchClass = bg.body || (mode === "light" ? THEMES[activeThemeKey]?.lightBody : THEMES[activeThemeKey]?.body) || "bg-zinc-950"
+                  return (
+                    <button key={key} type="button" onClick={() => update({ themeBg: key })}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                      <div className={`size-6 rounded-full border border-white/20 shrink-0 ${swatchClass}`} />
+                      <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{bg.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Spell slot color ── */}
+            <div className="flex flex-col gap-2">
               <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slot Color</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-1.5">
                 {Object.entries(SLOT_THEMES).map(([key, st]) => {
                   const isActive = key === activeSlotKey
                   return (
-                    <button key={key} type="button"
-                      onClick={() => update({ slotTheme: key })}
-                      className={`flex flex-col items-center gap-2 p-2.5 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10 ring-1 ring-white/20" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}
-                    >
-                      <div className="size-8 rounded-full border-2 border-white/20 shrink-0"
+                    <button key={key} type="button" onClick={() => update({ slotTheme: key })}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                      <div className="size-6 rounded-full border border-white/20 shrink-0"
                         style={{ backgroundColor: st.accent }} />
-                      <span className={`text-[11px] font-semibold leading-tight ${isActive ? "text-white" : "text-white/55"}`}>{st.label}</span>
-                      {/* Mini gradient strip */}
-                      <div className="flex gap-px w-full">
-                        {[1,2,3,4,5,6,7,8,9].map(lvl => (
-                          <div key={lvl} className="flex-1 h-1 rounded-full"
-                            style={{ backgroundColor: slotLevelColor(st.accent, lvl) }} />
-                        ))}
-                      </div>
+                      <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{st.label}</span>
                     </button>
                   )
                 })}
               </div>
             </div>
 
-            {/* ── Section 3: Live slot bar preview ── */}
-            <div className="flex flex-col gap-3">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Slot Bar Preview</p>
-              <div className="flex flex-col gap-1.5">
-                {[1,2,3,4,5,6,7,8,9].map(lvl => (
-                  <div key={lvl} className="flex items-center gap-3">
-                    <span className="text-xs text-white/35 w-8 shrink-0 tabular-nums">Lv {lvl}</span>
-                    <div className="flex-1 h-3 rounded-full"
-                      style={{ backgroundColor: slotLevelColor(slotAccent, lvl) }} />
-                  </div>
-                ))}
-              </div>
+            {/* ── Settings ── */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Settings</p>
+              <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+                <input type="checkbox" checked={!(data.plainSkills ?? false)}
+                  onChange={e => update({ plainSkills: !e.target.checked })}
+                  className="accent-primary size-4 rounded" />
+                <span className="text-sm text-white/70">Color-code skills by ability</span>
+              </label>
             </div>
 
           </div>
@@ -918,20 +1188,36 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         </div>
 
         {/* Speed / Initiative */}
-        <div className="grid grid-cols-2 gap-2">
-          {(["speed", "initiative"] as const).map(k => (
-            <div key={k} className={`${card} p-3 flex flex-col items-center gap-1`}>
-              {readOnly
-                ? <span className="text-xl font-bold text-white">{(data[k] as number | undefined) ?? 0}</span>
-                : <input type="number" value={(data[k] as number | undefined) ?? ""}
-                    onFocus={e => e.target.select()}
-                    onChange={e => update({ [k]: parseInt(e.target.value) || 0 })} placeholder="0"
-                    className="w-full text-center text-xl font-bold bg-transparent outline-none text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-              }
-              <span className="text-xs uppercase tracking-widest text-white/50">{k === "speed" ? "Speed" : "Initiative"}</span>
+        {(() => {
+          const initStat  = data.initiativeStat ?? "dex"
+          const initKey   = SAVE_TO_ABILITY[initStat] ?? "dexterity"
+          const initScore = (data[initKey as keyof CharacterData] as number | undefined) ?? 10
+          const initMod   = Math.floor((initScore - 10) / 2) + (data.initiativeBonus ?? 0)
+          const initStr   = initMod >= 0 ? `+${initMod}` : `${initMod}`
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              {/* Speed */}
+              <div className={`${card} p-3 flex flex-col items-center gap-1`}>
+                {readOnly
+                  ? <span className="text-xl font-bold text-white">{data.speed ?? 0}</span>
+                  : <input type="number" value={data.speed ?? ""}
+                      onFocus={e => e.target.select()}
+                      onChange={e => update({ speed: parseInt(e.target.value) || 0 })} placeholder="0"
+                      className="w-full text-center text-xl font-bold bg-transparent outline-none text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                }
+                <span className="text-xs uppercase tracking-widest text-white/50">Speed</span>
+              </div>
+              {/* Initiative — computed, clickable */}
+              <button type="button" onClick={() => setShowInitiativeModal(true)}
+                className={`${card} p-3 flex flex-col items-center gap-0.5 hover:brightness-110 transition-all`}
+                style={{ boxShadow: `0 0 0 1px ${theme.accent}40` }}>
+                <span className="text-xl font-bold text-white">{initStr}</span>
+                <span className="text-xs uppercase tracking-widest" style={{ color: theme.accent + "cc" }}>Initiative</span>
+                <span className="text-[9px] uppercase tracking-wider" style={{ color: theme.accent + "77" }}>{initStat.toUpperCase()}{data.initiativeBonus ? ` +${data.initiativeBonus}` : ""}</span>
+              </button>
             </div>
-          ))}
-        </div>
+          )
+        })()}
 
         {/* Hit Dice */}
         {renderHitDice()}
@@ -1101,7 +1387,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Saving Throws</span>
           {!readOnly && (
             <button type="button" onClick={() => setShowSavesModal(true)}
-              className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/30 hover:text-white text-xs transition-colors">✎</button>
+              className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-xs transition-colors">✎</button>
           )}
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -1134,7 +1420,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Abilities</span>
           {!readOnly && (
             <button type="button" onClick={() => setShowAbilityModal(true)}
-              className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/30 hover:text-white text-xs transition-colors">✎</button>
+              className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-xs transition-colors">✎</button>
           )}
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -1152,6 +1438,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         </div>
       </div>
     )
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: DICE ROLLER
+  // ══════════════════════════════════════════════════════════════════════════
+
+  function renderDiceRoller() {
+    return <DiceRoller card={card} />
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1284,10 +1578,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 </div>
               )
             })}
-            {!readOnly && (
-              <button type="button" onClick={() => setShowSpellcastingModal(true)}
-                className="text-xs text-white/30 hover:text-white/60 transition-colors text-left">+ Add slot</button>
-            )}
           </div>
         )}
         {showSpells && spellSlots.length === 0 && !readOnly && (
@@ -1310,7 +1600,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               </button>
             </div>
             {/* Hide unprepared toggle */}
-            <button type="button" onClick={() => setHideUnprepared(h => !h)}
+            <button type="button" onClick={() => setHideUnprepared(h => {
+              const next = !h
+              try { localStorage.setItem(`fables-prep-filter-${character.id}`, next ? "1" : "0") } catch {}
+              return next
+            })}
               className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors border ${hideUnprepared ? "bg-primary/20 border-primary/50 text-white" : "border-white/15 text-white/40 hover:text-white/70 hover:border-white/30"}`}>
               Prepared only
             </button>
@@ -1324,7 +1618,40 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <div className="flex flex-col gap-1.5">
           {showSpells ? (
             <>
-              {visibleSpells.map(spell => (
+              {spellSort === "level" ? (() => {
+                // Group by level
+                const grouped = new Map<number, typeof visibleSpells>()
+                for (const s of visibleSpells) {
+                  const lvl = s.level ?? 0
+                  if (!grouped.has(lvl)) grouped.set(lvl, [])
+                  grouped.get(lvl)!.push(s)
+                }
+                const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
+                return levels.map(lvl => {
+                  const spells    = grouped.get(lvl)!
+                  const isOpen    = !collapsedLevels.has(lvl)
+                  const groupLabel = lvl === 0 ? "Cantrips" : `Level ${lvl}`
+                  return (
+                    <div key={lvl} className="flex flex-col gap-1">
+                      <button type="button"
+                        onClick={() => setCollapsedLevels(prev => {
+                          const next = new Set(prev)
+                          next.has(lvl) ? next.delete(lvl) : next.add(lvl)
+                          try { localStorage.setItem(`fables-spell-collapsed-${character.id}`, JSON.stringify([...next])) } catch {}
+                          return next
+                        })}
+                        className="flex items-center gap-2 px-1 py-0.5 rounded-lg hover:bg-white/5 transition-colors select-none">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">{groupLabel}</span>
+                        <span className="text-[10px] text-white/20">({spells.length})</span>
+                      </button>
+                      {isOpen && spells.map(spell => (
+                        <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly}
+                          onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
+                      ))}
+                    </div>
+                  )
+                })
+              })() : visibleSpells.map(spell => (
                 <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly}
                   onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
               ))}
@@ -1339,7 +1666,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <>
               {equipItems.map(item => (
                 <EquipmentEntry key={item.id} item={item} theme={theme} readOnly={readOnly}
-                  onChange={p => changeEquip(item.id, p)} onRemove={() => removeEquip(item.id)} />
+                  onChange={p => changeEquip(item.id, p)} onRemove={() => removeEquip(item.id)}
+                  statMods={{
+                    str: Math.floor(((data.strength      ?? 10) - 10) / 2),
+                    dex: Math.floor(((data.dexterity     ?? 10) - 10) / 2),
+                    con: Math.floor(((data.constitution  ?? 10) - 10) / 2),
+                    int: Math.floor(((data.intelligence  ?? 10) - 10) / 2),
+                    wis: Math.floor(((data.wisdom        ?? 10) - 10) / 2),
+                    cha: Math.floor(((data.charisma      ?? 10) - 10) / 2),
+                  }}
+                  pb={profBonus(data.level ?? 1)}
+                />
               ))}
               {!readOnly && (
                 <button type="button" onClick={addEquip}
@@ -1359,32 +1696,72 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   function renderSkillsCard() {
+    const plain = data.plainSkills ?? false
+
+    function skillRow(skill: typeof SKILLS[number]) {
+      const profLevel = data.skillProfs?.[skill.name]
+      const mod       = getSkillMod(skill.name, skill.ability)
+      const ac        = ABILITY_COLORS[skill.ability] ?? { text: "text-white/40", subtle: "" }
+      const dotClass  =
+        profLevel === "exp"  ? "bg-yellow-400 border-yellow-400" :
+        profLevel === "prof" ? "bg-primary border-primary" :
+        profLevel === "half" ? "bg-primary/40 border-primary/60" :
+                               "border-white/25 bg-transparent"
+      return (
+        <button key={skill.name} type="button"
+          onClick={() => setShowSkillModal(skill.name)}
+          className={`flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-white/5 transition-colors w-full text-left ${plain ? "" : ac.subtle}`}>
+          <span className={`size-3 rounded-full border-2 shrink-0 transition-colors ${dotClass}`} />
+          <span className="text-xs text-white/70 flex-1 truncate leading-tight">{skill.name}</span>
+          <span className={`text-[10px] w-6 text-right uppercase shrink-0 font-semibold ${plain ? "text-white/30" : ac.text}`}>{skill.ability}</span>
+          <span className={`text-xs font-mono font-semibold w-7 text-right shrink-0 ${mod >= 0 ? "text-green-400" : "text-red-400"}`}>
+            {mod >= 0 ? `+${mod}` : `${mod}`}
+          </span>
+        </button>
+      )
+    }
+
+    const STAT_ORDER = ["str","dex","con","int","wis","cha"] as const
+
     return (
       <div className={`${card} p-3 flex flex-col gap-2`}>
-        <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Skills</span>
-        <div className="flex flex-col gap-0.5">
-          {SKILLS.map(skill => {
-            const profLevel = data.skillProfs?.[skill.name]
-            const mod       = getSkillMod(skill.name, skill.ability)
-            const dotClass  =
-              profLevel === "exp"  ? "bg-yellow-400 border-yellow-400" :
-              profLevel === "prof" ? "bg-primary border-primary" :
-              profLevel === "half" ? "bg-primary/40 border-primary/60" :
-                                     "border-white/25 bg-transparent"
-            return (
-              <button key={skill.name} type="button"
-                onClick={() => setShowSkillModal(skill.name)}
-                className="flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-white/5 transition-colors w-full text-left">
-                <span className={`size-3 rounded-full border-2 shrink-0 transition-colors ${dotClass}`} />
-                <span className="text-xs text-white/60 flex-1 truncate leading-tight">{skill.name}</span>
-                <span className="text-[10px] text-white/30 w-6 text-right uppercase shrink-0">{skill.ability}</span>
-                <span className={`text-xs font-mono font-semibold w-7 text-right shrink-0 ${mod >= 0 ? "text-green-400" : "text-red-400"}`}>
-                  {mod >= 0 ? `+${mod}` : `${mod}`}
-                </span>
-              </button>
-            )
-          })}
+        {/* Header + sort toggle */}
+        <div className="flex items-center justify-between shrink-0">
+          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Skills</span>
+          <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
+            <button type="button" onClick={() => { setSkillGroupBy("default"); try { localStorage.setItem(`fables-skill-group-${character.id}`, "default") } catch {} }}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${skillGroupBy === "default" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+              A–Z
+            </button>
+            <button type="button" onClick={() => { setSkillGroupBy("stat"); try { localStorage.setItem(`fables-skill-group-${character.id}`, "stat") } catch {} }}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${skillGroupBy === "stat" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+              Stat
+            </button>
+          </div>
         </div>
+
+        {skillGroupBy === "stat" ? (
+          <div className="flex flex-col gap-2">
+            {STAT_ORDER.map(stat => {
+              const ac      = ABILITY_COLORS[stat] ?? { text: "text-white/40", subtle: "" }
+              const group   = SKILLS.filter(s => s.ability === stat)
+              if (group.length === 0) return null
+              return (
+                <div key={stat}>
+                  <div className={`flex items-center gap-1 px-1 py-0.5 mb-0.5`}>
+                    <span className={`text-[9px] font-bold uppercase tracking-widest ${plain ? "text-white/30" : ac.text}`}>{stat.toUpperCase()}</span>
+                    <div className={`flex-1 h-px ${plain ? "bg-white/10" : "bg-white/10"}`} />
+                  </div>
+                  {group.map(skillRow)}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {[...SKILLS].sort((a,b) => a.name.localeCompare(b.name)).map(skillRow)}
+          </div>
+        )}
       </div>
     )
   }
@@ -1399,10 +1776,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       <div className="flex flex-col gap-4 flex-1 min-h-0">
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
 
-          {/* Col 1: HP / speed / hit dice / conditions */}
+          {/* Col 1: HP / speed / hit dice / conditions / dice */}
           <div className="lg:w-52 shrink-0 flex flex-col gap-3">
             {renderHpPanel()}
             {renderConditionsCard()}
+            {renderDiceRoller()}
           </div>
 
           {/* Col 2: Abilities → Saves → Skills */}
@@ -1429,7 +1807,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="flex flex-col h-full min-h-0 text-white rounded-xl overflow-hidden">
+    <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-hidden ${effectiveBody}`}>
 
       {/* Modals */}
       {renderMaxStatsModal()}
@@ -1437,6 +1815,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {renderAbilityModal()}
       {renderSpellcastingModal()}
       {renderSkillModal()}
+      {renderInitiativeModal()}
       {renderConditionModal()}
       {renderThemeModal()}
       {renderPortraitModal()}
@@ -1446,7 +1825,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {favFloat && <FavoritesPanel {...{ ...favPanelProps, isFloat: true }} />}
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${theme.header}`}>
+      <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
 
         <button type="button"
           onClick={readOnly ? undefined : openPortraitPicker}
@@ -1457,7 +1836,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         </button>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-base font-bold tracking-wide truncate">{character.name}</p>
             {readOnly && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 uppercase tracking-widest shrink-0">
@@ -1495,23 +1874,32 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-1 px-4 py-2 border-b border-white/10 shrink-0 ${theme.header}`}>
-        {(["main", "details"] as Tab[]).map(tab => (
+      <div className={`flex items-center gap-1 px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+        {(["main", "details", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "main" ? "Main" : "Details"}
+            {tab === "main" ? "Main" : tab === "details" ? "Details" : "Chat"}
           </button>
         ))}
-        <div className="ml-auto">{renderQuickSearch()}</div>
+        <div className="ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
       </div>
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div className={`flex flex-col flex-1 min-h-0 overflow-auto p-4 ${theme.body}`}>
+      <div className={`flex flex-col flex-1 min-h-0 ${activeTab === "chat" ? "overflow-hidden" : "overflow-auto p-4"} ${effectiveBody}`}>
         {activeTab === "main" && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly} />
         )}
+        {activeTab === "chat" && data.partyCode && (
+          <PartyChat
+            partyCode={data.partyCode}
+            currentUserId={user?.id ?? ""}
+            currentUserName={character.name || "Adventurer"}
+            dmUserId={dmUserId ?? undefined}
+          />
+        )}
       </div>
+
     </div>
   )
 }

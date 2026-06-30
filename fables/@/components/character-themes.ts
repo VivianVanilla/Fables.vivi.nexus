@@ -1,76 +1,98 @@
 // Class-based visual themes for the character sheet.
-// Backgrounds are kept near-neutral dark so the sheet is easy on the eyes;
-// the accent hex color provides class identity through spell slot bars and borders.
 
 export interface Theme {
   label: string
-  body: string     // outer body background
-  box: string      // individual card/box background
-  ring: string     // card border ring color
-  header: string   // header strip background
-  color: string    // text color
-  accent: string   // hex color for spell slot bars and UI accents
+  body: string       // dark mode outer background
+  box: string        // dark mode card background
+  lightBody: string  // light mode outer background
+  lightBox: string   // light mode card background
+  ring: string
+  header: string
+  color: string
+  accent: string     // hex for spell slot bars and UI accents
 }
 
 export const THEMES: Record<string, Theme> = {
   dark: {
     label: "Dark",
-    body: "bg-zinc-950", box: "bg-zinc-900", ring: "ring-zinc-700",
-    header: "bg-zinc-950", color: "text-white", accent: "#64748B",
+    body: "bg-zinc-950",     box: "bg-zinc-900",     lightBody: "bg-zinc-800",     lightBox: "bg-zinc-700",
+    ring: "ring-zinc-700",   header: "bg-zinc-950",  color: "text-white",          accent: "#64748B",
+  },
+  midnight: {
+    label: "Midnight",
+    body: "bg-slate-900",    box: "bg-slate-800",    lightBody: "bg-slate-700",    lightBox: "bg-slate-600",
+    ring: "ring-slate-700",  header: "bg-slate-900", color: "text-white",          accent: "#94A3B8",
+  },
+  ash: {
+    label: "Ash",
+    body: "bg-zinc-800",     box: "bg-zinc-700",     lightBody: "bg-zinc-600",     lightBox: "bg-zinc-500",
+    ring: "ring-zinc-600",   header: "bg-zinc-800",  color: "text-white",          accent: "#A1A1AA",
   },
   wizard: {
     label: "Wizard",
-    body: "bg-zinc-950", box: "bg-blue-950", ring: "ring-blue-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#3B82F6",
+    body: "bg-slate-950",    box: "bg-blue-950",     lightBody: "bg-blue-900",     lightBox: "bg-blue-800",
+    ring: "ring-blue-900",   header: "bg-slate-950", color: "text-white",          accent: "#3B82F6",
   },
   warlock: {
     label: "Warlock",
-    body: "bg-zinc-950", box: "bg-violet-950", ring: "ring-violet-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#8B5CF6",
+    body: "bg-violet-950",   box: "bg-violet-900",   lightBody: "bg-violet-800",   lightBox: "bg-violet-700",
+    ring: "ring-violet-800", header: "bg-violet-950",color: "text-white",          accent: "#8B5CF6",
   },
   sorcerer: {
     label: "Sorcerer",
-    body: "bg-zinc-950", box: "bg-red-950", ring: "ring-red-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#EF4444",
+    body: "bg-red-950",      box: "bg-red-900",      lightBody: "bg-red-800",      lightBox: "bg-red-700",
+    ring: "ring-red-800",    header: "bg-red-950",   color: "text-white",          accent: "#EF4444",
   },
   druid: {
     label: "Druid",
-    body: "bg-zinc-950", box: "bg-emerald-950", ring: "ring-emerald-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#4ADE80",
+    body: "bg-emerald-950",  box: "bg-emerald-900",  lightBody: "bg-emerald-800",  lightBox: "bg-emerald-700",
+    ring: "ring-emerald-800",header: "bg-emerald-950",color: "text-white",         accent: "#4ADE80",
   },
   cleric: {
     label: "Cleric",
-    body: "bg-zinc-950", box: "bg-neutral-900", ring: "ring-neutral-700",
-    header: "bg-zinc-950", color: "text-white", accent: "#D4AF37",
+    body: "bg-stone-900",    box: "bg-stone-800",    lightBody: "bg-stone-700",    lightBox: "bg-stone-600",
+    ring: "ring-stone-700",  header: "bg-stone-900", color: "text-white",          accent: "#D4AF37",
   },
   bard: {
     label: "Bard",
-    body: "bg-zinc-950", box: "bg-fuchsia-950", ring: "ring-fuchsia-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#E879F9",
+    body: "bg-fuchsia-950",  box: "bg-fuchsia-900",  lightBody: "bg-fuchsia-800",  lightBox: "bg-fuchsia-700",
+    ring: "ring-fuchsia-800",header: "bg-fuchsia-950",color: "text-white",         accent: "#E879F9",
   },
   ranger: {
     label: "Ranger",
-    body: "bg-zinc-950", box: "bg-green-950", ring: "ring-green-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#22C55E",
+    body: "bg-green-950",    box: "bg-green-900",    lightBody: "bg-green-800",    lightBox: "bg-green-700",
+    ring: "ring-green-800",  header: "bg-green-950", color: "text-white",          accent: "#22C55E",
   },
   artificer: {
     label: "Artificer",
-    body: "bg-zinc-950", box: "bg-stone-900", ring: "ring-stone-700",
-    header: "bg-zinc-950", color: "text-white", accent: "#F59E0B",
+    body: "bg-amber-950",    box: "bg-stone-900",    lightBody: "bg-amber-800",    lightBox: "bg-stone-700",
+    ring: "ring-stone-700",  header: "bg-amber-950", color: "text-white",          accent: "#F59E0B",
   },
   paladin: {
     label: "Paladin",
-    body: "bg-zinc-950", box: "bg-amber-950", ring: "ring-amber-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#EAB308",
+    body: "bg-amber-950",    box: "bg-amber-900",    lightBody: "bg-amber-800",    lightBox: "bg-amber-700",
+    ring: "ring-amber-800",  header: "bg-amber-950", color: "text-white",          accent: "#EAB308",
   },
   witch: {
     label: "Witch",
-    body: "bg-zinc-950", box: "bg-teal-950", ring: "ring-teal-900",
-    header: "bg-zinc-950", color: "text-white", accent: "#14B8A6",
+    body: "bg-teal-950",     box: "bg-teal-900",     lightBody: "bg-teal-800",     lightBox: "bg-teal-700",
+    ring: "ring-teal-800",   header: "bg-teal-950",  color: "text-white",          accent: "#14B8A6",
   },
 }
 
 export const DEFAULT_THEME = "dark"
+
+// ── Background overrides (body only, independent of card style) ───────────────
+
+export const BG_OPTIONS: Record<string, { label: string; body: string }> = {
+  default:  { label: "Theme",   body: "" },
+  black:    { label: "Black",   body: "bg-black" },
+  zinc950:  { label: "Steel",   body: "bg-zinc-950" },
+  zinc900:  { label: "Ash",     body: "bg-zinc-900" },
+  slate950: { label: "Night",   body: "bg-slate-950" },
+  stone950: { label: "Stone",   body: "bg-stone-950" },
+  neutral:  { label: "Warm",    body: "bg-neutral-900" },
+}
 
 // ── Slot bar color palette (independent of background theme) ──────────────────
 
@@ -126,13 +148,12 @@ function hslToHex(h: number, s: number, l: number): string {
  * Compute the slot bar color for a given spell level (1–9).
  * Keeps the accent hue exact, fixes saturation at 85%, and sweeps lightness
  * from 68% (level 1, bright & vivid) down to 15% (level 9, deep & rich).
- * Each step is ~6.6 L points — very noticeable between adjacent levels.
  */
 export function slotLevelColor(accent: string, level: number): string {
   if (!accent || !accent.startsWith("#")) return accent ?? "#6B7280"
   const [r, g, b] = hexToRgb(accent)
   const hue = rgbToHue(r, g, b)
-  const t   = (level - 1) / 8            // 0 at level 1 → 1 at level 9
-  const l   = 68 - t * 53               // 68% → 15%
+  const t   = (level - 1) / 8
+  const l   = 68 - t * 53
   return hslToHex(hue, 85, l)
 }

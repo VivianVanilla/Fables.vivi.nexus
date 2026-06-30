@@ -3,7 +3,7 @@
 export interface EquipmentItem {
   id: string
   name: string
-  toHit?: string
+  toHit?: string       // manual override when attackStat is not set
   damage?: string
   damageType?: string
   type?: string        // "melee" | "ranged" | "armor" | "misc"
@@ -11,6 +11,9 @@ export interface EquipmentItem {
   magicBonus?: string  // e.g. "+1", "+2"
   properties?: string  // e.g. "Versatile, Finesse"
   proficient?: boolean
+  attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
+  extraToHit?: number  // flat bonus added to computed to-hit
+  extraDamage?: number // flat bonus added to computed damage
 }
 
 export interface SpellItem {
@@ -117,6 +120,11 @@ export interface CharacterData {
   skillBonuses?: Record<string, number>
   saveBonuses?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>
   spellsPrepared?: number
+  initiativeStat?: string  // ability key e.g. "dex"; default "dex"
+  initiativeBonus?: number // flat bonus added to the mod
+  themeMode?: "dark" | "light"
+  themeBg?: string         // background override key from BG_OPTIONS
+  plainSkills?: boolean    // when true, disable ability-color-coding on skills
   // Party / multiclass
   partyCode?: string
   multiclass?: boolean

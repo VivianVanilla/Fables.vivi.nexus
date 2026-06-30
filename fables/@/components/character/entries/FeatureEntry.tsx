@@ -175,7 +175,7 @@ export function FeatureEntry({ feature, onChange, onRemove, theme, readOnly = fa
           <button
             type="button"
             onClick={e => { e.stopPropagation(); setEditing(true) }}
-            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/25 hover:text-white/70 text-sm shrink-0 transition-colors"
+            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors"
           >
             ✎
           </button>
