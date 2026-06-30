@@ -254,7 +254,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [hideUnprepared,   setHideUnprepared]   = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${character.id}`) === "1" } catch { return false }
   })
-  const [notifPopup, setNotifPopup] = useState<{ body: string; sender: string } | null>(null)
   const [dmUserId,   setDmUserId]   = useState<string | null>(null)
 
   // Ability score local buffer (allows clearing "0")
@@ -265,34 +264,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const [data, setData] = useState<CharacterData>(() => safeParseJson(character.data) as CharacterData)
 
-  // ── NOTIFICATION SUBSCRIPTION ─────────────────────────────────────────────
-  // Fires regardless of which tab is active so popups always reach the player.
-
-  useEffect(() => {
-    const partyCode = data.partyCode
-    const uid       = user?.id
-    if (!partyCode || !uid) return
-    const ch = supabase
-      .channel(`notif:${character.id}`)
-      .on("postgres_changes", {
-        event:  "INSERT",
-        schema: "public",
-        table:  "messages",
-        filter: `party_code=eq.${partyCode}`,
-      }, payload => {
-        const m = payload.new as {
-          type: string; body: string | null; sender_name: string | null
-          recipient_id: string | null; sender_id: string
-        }
-        if (m.type === "notification" && m.sender_id !== uid) {
-          if (!m.recipient_id || m.recipient_id === uid) {
-            setNotifPopup({ body: m.body ?? "", sender: m.sender_name ?? "DM" })
-          }
-        }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [data.partyCode, user?.id, character.id])
 
   // Fetch the DM's userId so players can initiate DMs
   useEffect(() => {
