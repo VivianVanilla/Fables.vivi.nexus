@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import { useState } from "react"
 import type { CharacterData } from "../../character-types"
 import { SKILLS } from "../../character-constants"
 
@@ -22,7 +22,7 @@ interface Props {
   onShowSkillModal: (name: string) => void
 }
 
-export function SkillsCard({ card, data, characterId, readOnly, getSkillMod, onShowSkillModal }: Props) {
+export function SkillsCard({ card, data, characterId, getSkillMod, onShowSkillModal }: Props) {
   const [groupBy, setGroupBy] = useState<"default" | "stat">(() => {
     try { return localStorage.getItem(`fables-skill-group-${characterId}`) === "stat" ? "stat" : "default" } catch { return "default" }
   })

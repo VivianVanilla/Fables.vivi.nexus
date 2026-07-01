@@ -1,4 +1,3 @@
-import React from "react"
 import type { ActiveCondition } from "../../character-types"
 
 const CONDITION_COLOR: Record<string, string> = {

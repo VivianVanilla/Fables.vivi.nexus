@@ -1,4 +1,3 @@
-import React from "react"
 import { Modal } from "../ui/Modal"
 import { NumInput } from "../ui/NumInput"
 import type { CharacterData } from "../../character-types"

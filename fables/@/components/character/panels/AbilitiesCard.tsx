@@ -1,4 +1,3 @@
-import React from "react"
 import type { CharacterData } from "../../character-types"
 import { ABILITY_KEYS, ABILITY_ABBR } from "../../character-constants"
 import { abilityMod } from "../../character-utils"

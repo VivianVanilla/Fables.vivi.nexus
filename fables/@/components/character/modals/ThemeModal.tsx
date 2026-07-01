@@ -1,4 +1,3 @@
-import React from "react"
 import { Modal } from "../ui/Modal"
 import type { CharacterData } from "../../character-types"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "../../character-themes"

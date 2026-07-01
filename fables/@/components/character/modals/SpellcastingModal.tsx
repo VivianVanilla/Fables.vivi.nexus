@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import { useState } from "react"
 import { Modal } from "../ui/Modal"
 import { NumInput } from "../ui/NumInput"
 import type { CharacterData, SpellSlot } from "../../character-types"
@@ -35,7 +35,7 @@ export function SpellcastingModal({
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[500px] max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-125 max-h-[85vh] flex flex-col overflow-hidden">
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
           <p className="text-base font-bold text-white">Spellcasting</p>
           <button type="button" onClick={onClose}
@@ -105,7 +105,7 @@ export function SpellcastingModal({
                 const rem = Math.max(0, slot.total - slot.used)
                 return (
                   <div key={slot.id} className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 w-[72px] shrink-0">
+                    <div className="flex items-center gap-1  shrink-0">
                       <span className="text-xs text-white/50 w-8 shrink-0">Lv {slot.level}</span>
                       {!readOnly && (
                         <button type="button"
