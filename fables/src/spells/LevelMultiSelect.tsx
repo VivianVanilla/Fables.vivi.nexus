@@ -34,7 +34,7 @@ export function LevelMultiSelect({ selectedLevels, setSelectedLevels }: Props) {
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-2xl min-w-56">
+        <div className="absolute z-50 top-full mt-1 left-0 bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-2xl w-screen max-w-xs sm:w-auto sm:min-w-56">
           <div className="flex flex-wrap gap-1.5 mb-3">
             {LEVELS.map((lvl) => {
               const active = selectedLevels.includes(lvl)

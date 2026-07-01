@@ -22,6 +22,7 @@ import { NumInput }              from "./character/ui/NumInput"
 
 // Panels
 import { DiceRoller }            from "./character/panels/DiceRoller"
+import { CurrencyTracker }       from "./character/panels/CurrencyTracker"
 import { HitDice }               from "./character/panels/HitDice"
 import { DeathSavingThrows }     from "./character/panels/DeathSavingThrows"
 import { ConditionsCard }        from "./character/panels/ConditionsCard"
@@ -641,6 +642,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               onUpdateLevel={updateConditionLevel}
             />
             <DiceRoller card={card} />
+            <CurrencyTracker card={card} data={data} readOnly={readOnly} update={update} />
           </div>
 
           {/* Col 2: Abilities → Saves → Skills */}
@@ -747,6 +749,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {showClassPicker && (
         <ClassPickerModal
           initial={data.classes ?? (data.class ? [{ cls: data.class, level: data.level ?? 1 }] : [])}
+          userId={user?.id ?? null}
           onConfirm={classes => {
             const total = classes.reduce((s, c) => s + c.level, 0)
             update({
@@ -756,13 +759,21 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               class: classes.map(c => c.cls).join(" / "),
             })
           }}
+          onImport={({ classFeatures: cf, spellItems: si }) => {
+            if (cf?.length) update({ classFeatures: [...(data.classFeatures ?? []), ...cf] })
+            if (si?.length) update({ spellItems: [...(data.spellItems ?? []), ...si] })
+          }}
           onClose={() => setShowClassPicker(false)}
         />
       )}
       {showRacePicker && (
         <RacePickerModal
           current={data.race ?? ""}
+          userId={user?.id ?? null}
           onConfirm={race => update({ race })}
+          onImport={({ racialTraits: rt }) => {
+            if (rt?.length) update({ racialTraits: [...(data.racialTraits ?? []), ...rt] })
+          }}
           onClose={() => setShowRacePicker(false)}
         />
       )}
@@ -787,27 +798,33 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-white/50 uppercase tracking-wide">
+          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
             <button
               type="button"
               onClick={() => { if (!readOnly) setShowRacePicker(true) }}
-              className={`shrink-0 text-left truncate max-w-[72px] ${!readOnly ? "hover:text-white/80 cursor-pointer" : "cursor-default"} ${data.race ? "text-white/70" : "text-white/20"}`}
+              className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors ${
+                readOnly ? "cursor-default" : "cursor-pointer hover:border-white/20 hover:bg-white/15"
+              } ${data.race
+                ? "bg-white/10 border-white/10 text-white/70"
+                : "bg-white/5 border-white/5 text-white/25"}`}
             >
               {data.race || "Race"}
             </button>
-            <span className="text-white/20 shrink-0">/</span>
             <button
               type="button"
               onClick={() => { if (!readOnly) setShowClassPicker(true) }}
-              className={`min-w-0 flex-1 text-left truncate ${!readOnly ? "hover:text-white/80 cursor-pointer" : "cursor-default"} ${(data.classes && data.classes.length > 0) || data.class ? "text-white/70" : "text-white/20"}`}
+              className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors truncate max-w-[140px] ${
+                readOnly ? "cursor-default" : "cursor-pointer hover:border-white/20 hover:bg-white/15"
+              } ${(data.classes && data.classes.length > 0) || data.class
+                ? "bg-white/10 border-white/10 text-white/70"
+                : "bg-white/5 border-white/5 text-white/25"}`}
             >
               {data.classes && data.classes.length > 0
                 ? data.classes.map(c => c.cls).join(" / ")
                 : data.class || "Class"}
             </button>
-            <span className="text-white/20">·</span>
-            <span>Lv</span>
-            <span className="text-white/70 font-semibold w-6 text-center">
+            <span className="text-white/25 text-xs">Lv</span>
+            <span className="text-white/70 font-semibold text-xs">
               {data.classes && data.classes.length > 0
                 ? data.classes.reduce((s, c) => s + c.level, 0)
                 : (data.level ?? "—")}
@@ -862,6 +879,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
+            userId={user?.id ?? null}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink} />
         )}
         {activeTab === "chat" && data.partyCode && (

@@ -13,6 +13,7 @@ import React, { useState, useRef } from "react"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import { useUserContext } from "../../src/contexts/UserContext"
 import { safeParseJson } from "./character-utils"
+import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -144,12 +145,14 @@ export function NoteView({ note, onClose }: NoteViewProps) {
 
         {/* Edit mode */}
         {editing && (
-          <textarea
+          <MarkdownTextarea
             value={content}
-            onChange={e => handleChange(e.target.value)}
+            onChange={handleChange}
             autoFocus
             placeholder={`# Note title\n\nStart writing… Supports **bold**, *italic*, \`code\`, and - lists.`}
-            className="w-full h-full min-h-96 bg-transparent outline-none text-sm text-white/80 placeholder:text-white/20 resize-none leading-relaxed font-mono"
+            className="flex-1 min-h-96 w-full bg-transparent outline-none text-sm text-white/80 placeholder:text-white/20 resize-none leading-relaxed font-mono"
+            wrapperClassName="flex flex-col h-full gap-1"
+            variant="light"
           />
         )}
 

@@ -35,6 +35,7 @@ export interface SpellItem {
   prepared?: boolean
   alwaysPrepared?: boolean
   ritual?: boolean
+  concentration?: boolean
   sourceClass?: string           // which class this spell is known/prepared from (multiclass)
 }
 
@@ -143,4 +144,8 @@ export interface CharacterData {
   partyCode?: string
   multiclass?: boolean
   classes?: Array<{ cls: string; level: number }>
+  // Wallet
+  currency?: { cp?: number; sp?: number; ep?: number; gp?: number; pp?: number }
+  currencyMode?: "classic" | "simple" | "custom"
+  currencyNames?: string[]  // 5 custom names: [cp, sp, ep, gp, pp]
 }

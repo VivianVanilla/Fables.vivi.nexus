@@ -173,9 +173,9 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
         {/* Homebrew filter */}
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-medium">Hide Homebrew in Autofill</div>
+            <div className="text-sm font-medium">Hide Homebrew Spells</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Excludes Squain &amp; Twilight tagged spells from search suggestions
+              Excludes Custom campaign content  from my personal dnd group. Turn off if you want to see all content.
             </div>
           </div>
           <button

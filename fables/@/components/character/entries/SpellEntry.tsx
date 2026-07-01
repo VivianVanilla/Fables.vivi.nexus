@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm"
 import type { SpellItem } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
+import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 
@@ -214,18 +215,19 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
 
   // Fill all spell fields from the database spell record (autofill only)
   function fillFromSpell(s: Spell) {
-    // Use pre-enriched DB fields if present, otherwise parse from description
     const parsed = parseSpellCombat(s.desc ?? "")
+    const dur = s.duration ?? ""
     onChange({
       name: s.name,
       level: s.level,
       school: s.school?.name ?? "",
       castTime: s.casting_time ?? "",
       range: s.range ?? "",
-      duration: s.duration ?? "",
+      duration: dur,
       components: s.components?.join(", ") ?? "",
       materialComponents: s.materialComponents ? (s.materials ?? "") : "",
       ritual: s.ritual ?? false,
+      concentration: dur.toLowerCase().includes("concentration"),
       damage: s.damage ?? parsed.damage ?? "",
       damageType: s.damageType !== "None" ? s.damageType : "",
       saveAttr: s.saveAttr ?? parsed.saveAttr ?? "",
@@ -334,7 +336,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                   className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 text-sm" />
               </label>
 
-              <div className="flex items-center gap-4 text-sm text-white/60">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/60">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={spell.prepared ?? false} onChange={e => onChange({ prepared: e.target.checked })} className="accent-primary" />
                   Prepared
@@ -347,6 +349,11 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                   <input type="checkbox" checked={spell.ritual ?? false} onChange={e => onChange({ ritual: e.target.checked })} className="accent-primary" />
                   Ritual
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={spell.concentration ?? false} onChange={e => onChange({ concentration: e.target.checked })} className="accent-primary" />
+                  Concentration
+                </label>
+        
               </div>
 
               {classes.length > 1 && (
@@ -360,11 +367,17 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                 </label>
               )}
 
-              <label className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1">
                 <span className="text-xs text-white/40 uppercase tracking-wider">Description / Notes</span>
-                <textarea value={spell.notes ?? ""} onChange={e => onChange({ notes: e.target.value })} placeholder="Spell description…" rows={4}
-                  className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white/70 outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 resize-none" />
-              </label>
+                <MarkdownTextarea
+                  value={spell.notes ?? ""}
+                  onChange={v => onChange({ notes: v })}
+                  placeholder="Spell description…"
+                  rows={4}
+                  className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white/70 outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 resize-none"
+                  variant="light"
+                />
+              </div>
             </div>
 
             <div className="flex items-center justify-between px-5 py-3 border-t border-white/10 shrink-0">
@@ -411,6 +424,10 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             {spell.ritual && (
               <span className="text-[9px] border border-amber-400/40 text-amber-400/80 rounded px-0.5 leading-tight shrink-0">R</span>
             )}
+            {spell.concentration && (
+              <span className="text-[9px] border border-sky-400/40 text-sky-400/80 rounded px-1 leading-tight shrink-0">Conc.</span>
+            )}
+            
           </div>
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {spell.level !== undefined && (

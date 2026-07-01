@@ -81,7 +81,10 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
     return () => window.removeEventListener("click", handler)
   }, [contextMenu])
 
-  const tree = React.useMemo(() => buildObjectTree(items), [items])
+  const tree = React.useMemo(
+    () => buildObjectTree(items.filter(o => !o.type?.startsWith("doc_"))),
+    [items]
+  )
   const toggleGroup = (id: string) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
 
   // ── Background image helpers ──────────────────────────────────────────────

@@ -7,22 +7,101 @@
 // Edit mode: name, source, description, track uses, max (or = PB), resets, links
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { Feature } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { TracingSlider } from "../../ui/tracing-slider"
+import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
+import { supabase } from "../../../../src/supabase"
+
+// ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
+
+export type SuggestionSource = "race" | "class" | "feat"
+
+interface Suggestion { name: string; description: string }
+
+const cacheMap   = new Map<string, Suggestion[]>()
+const promiseMap = new Map<string, Promise<Suggestion[]>>()
+
+async function getSuggestions(docType: SuggestionSource, userId?: string | null): Promise<Suggestion[]> {
+  const key = `${docType}:${userId ?? "anon"}`
+  if (cacheMap.has(key)) return cacheMap.get(key)!
+  if (promiseMap.has(key)) return promiseMap.get(key)!
+
+  const p = (async () => {
+    // Core (non-homebrew)
+    const { data: coreRows } = await supabase
+      .from("documentation").select("data")
+      .eq("type", docType).eq("is_homebrew", false)
+
+    let homebrew: any[] = []
+    if (userId) {
+      // Personal homebrew
+      const { data: ownRows } = await supabase
+        .from("documentation").select("data")
+        .eq("type", docType).eq("is_homebrew", true).eq("owner_id", userId)
+
+      // Library homebrew
+      const objType = docType === "race" ? "doc_race" : docType === "class" ? "doc_class" : "doc_feat"
+      const { data: libObjs } = await supabase
+        .from("objects").select("data").eq("type", objType).eq("owner_id", userId)
+      const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
+
+      let libRows: any[] = []
+      if (libIds.length) {
+        const { data: lr } = await supabase.from("documentation").select("data").in("id", libIds)
+        libRows = lr ?? []
+      }
+
+      homebrew = [...(ownRows ?? []), ...libRows]
+    }
+
+    const all = [...(coreRows ?? []), ...homebrew]
+    const results: Suggestion[] = []
+
+    for (const row of all) {
+      const features: any[] = row.data?.features ?? []
+      const traits:   any[] = row.data?.traits   ?? []
+
+      features.forEach(f => {
+        if (f?.name) results.push({ name: f.name, description: f.description ?? "" })
+      })
+      traits.forEach(t => {
+        if (typeof t === "string") results.push({ name: t, description: "" })
+        else if (t?.name) results.push({ name: t.name, description: t.description ?? "" })
+      })
+    }
+
+    // Deduplicate by name
+    const seen = new Set<string>()
+    const deduped = results.filter(s => {
+      const k = s.name.toLowerCase()
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
+
+    cacheMap.set(key, deduped)
+    return deduped
+  })()
+
+  promiseMap.set(key, p)
+  return p
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface FeatureEntryProps {
-  feature:       Feature
-  allFeatures:   Feature[]         // other trackable features available to link
-  onChange:      (patch: Partial<Feature>) => void
-  onRemove:      () => void
-  onLinkToggle:  (otherId: string) => void
-  theme:         Theme
-  readOnly?:     boolean
-  pb:            number            // current proficiency bonus
+  feature:          Feature
+  allFeatures:      Feature[]         // other trackable features available to link
+  onChange:         (patch: Partial<Feature>) => void
+  onRemove:         () => void
+  onLinkToggle:     (otherId: string) => void
+  theme:            Theme
+  readOnly?:        boolean
+  pb:               number            // current proficiency bonus
+  suggestionSource?: SuggestionSource  // which doc type to autocomplete from
+  userId?:          string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -36,9 +115,17 @@ function resetLabel(r?: Feature["resetsOn"]): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb }: FeatureEntryProps) {
-  const [expanded, setExpanded] = useState(false)
-  const [editing,  setEditing]  = useState(false)
+export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId }: FeatureEntryProps) {
+  const [expanded,    setExpanded]    = useState(false)
+  const [editing,     setEditing]     = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [showSuggest, setShowSuggest] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+
+  // Preload cache when entering edit mode
+  useEffect(() => {
+    if (editing && suggestionSource) getSuggestions(suggestionSource, userId)
+  }, [editing, suggestionSource, userId])
 
   // Compute effective max uses: PB formula overrides manual value
   const effectiveMax  = feature.maxUsesFormula === "pb" ? pb : (feature.maxUses ?? 0)
@@ -68,17 +155,62 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
     return (
       <div className={`rounded-xl ${theme.box} border border-white/20 p-3 flex flex-col gap-2`}>
 
-        <input value={feature.name} autoFocus placeholder="Feature name"
-          onChange={e => onChange({ name: e.target.value })}
-          className={`bg-transparent outline-none text-sm font-semibold ${theme.color} placeholder:text-white/30 border-b border-white/10 pb-1.5`}
-        />
+        {/* Name with autocomplete */}
+        <div className="relative">
+          <input
+            ref={nameInputRef}
+            value={feature.name}
+            autoFocus
+            placeholder="Feature name"
+            onChange={async e => {
+              const q = e.target.value
+              onChange({ name: q })
+              if (q.length >= 2 && suggestionSource) {
+                const all = await getSuggestions(suggestionSource, userId)
+                const ql = q.toLowerCase()
+                const matches = all.filter(s => s.name.toLowerCase().includes(ql)).slice(0, 8)
+                setSuggestions(matches)
+                setShowSuggest(matches.length > 0)
+              } else {
+                setShowSuggest(false)
+              }
+            }}
+            onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+            className={`w-full bg-transparent outline-none text-sm font-semibold ${theme.color} placeholder:text-white/30 border-b border-white/10 pb-1.5`}
+          />
+          {showSuggest && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden">
+              {suggestions.map(s => (
+                <button
+                  key={s.name}
+                  type="button"
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    onChange({ name: s.name, description: s.description || feature.description })
+                    setShowSuggest(false)
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
+                >
+                  <span className="text-white font-medium">{s.name}</span>
+                  {s.description && (
+                    <span className="text-white/35 ml-2 truncate block">{s.description.slice(0, 60)}{s.description.length > 60 ? "…" : ""}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <input value={feature.source ?? ""} placeholder="Source (e.g. Fighter 1, Variant Human…)"
           onChange={e => onChange({ source: e.target.value })}
           className="bg-transparent outline-none text-xs text-white/60 placeholder:text-white/20"
         />
-        <textarea value={feature.description ?? ""} placeholder="Description…" rows={5}
-          onChange={e => onChange({ description: e.target.value })}
-          className="bg-transparent outline-none text-xs text-white/70 placeholder:text-white/20 resize-none leading-relaxed border-t border-white/10 pt-2"
+        <MarkdownTextarea
+          value={feature.description ?? ""}
+          onChange={v => onChange({ description: v })}
+          placeholder="Description…"
+          rows={5}
+          className="bg-transparent outline-none text-xs text-white/70 placeholder:text-white/20 resize-none leading-relaxed border-t border-white/10 pt-2 w-full"
+          variant="light"
         />
 
         {/* Use tracking */}

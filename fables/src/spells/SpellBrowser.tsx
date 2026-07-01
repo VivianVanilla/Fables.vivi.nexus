@@ -13,6 +13,7 @@ import { ClassMultiSelect } from './ClassMultiSelect'
 import { LevelMultiSelect } from './LevelMultiSelect'
 import { AddSpellForm, DEFAULT_DRAFT, spellDraftToPayload } from './AddSpellForm'
 import type { SpellDraft } from './AddSpellForm'
+import { useHomebrewFilter } from '../hooks/useHomebrewFilter'
 
 const ADMIN_PASSWORD = 'archmage'
 
@@ -34,6 +35,7 @@ export function SpellBrowser({
   const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  const hideHomebrew = useHomebrewFilter()
   const [adminMode, setAdminMode] = useState(adminEnabled)
   const [passwordInput, setPasswordInput] = useState('')
   const [editingIndex, setEditingIndex] = useState<string | null>(null)
@@ -59,10 +61,17 @@ export function SpellBrowser({
       .finally(() => setLoading(false))
   }, [])
 
-  const filtered = useMemo(
-    () => filterSpells(spells, filters, selectedClasses, search, selectedLevels),
-    [spells, filters, selectedClasses, search, selectedLevels]
+  const baseCount = useMemo(
+    () => hideHomebrew ? spells.filter(s => !s.ctag).length : spells.length,
+    [spells, hideHomebrew]
   )
+
+  const filtered = useMemo(() => {
+    let list = filterSpells(spells, filters, selectedClasses, search, selectedLevels)
+    // When "Hide Homebrew" is on, strip any spells that have a campaign tag
+    if (hideHomebrew) list = list.filter(s => !s.ctag)
+    return list
+  }, [spells, filters, selectedClasses, search, selectedLevels, hideHomebrew])
 
   const grouped = useMemo(() => {
     const g: Record<number, Spell[]> = {}
@@ -154,9 +163,9 @@ export function SpellBrowser({
         <div className="flex items-center gap-2 text-slate-300">
           <Sparkles className="size-4 text-purple-400" />
           <span className="font-semibold text-sm tracking-wide">
-            {loading ? 'Loading…' : `${spells.length} Spells`}
+            {loading ? 'Loading…' : `${baseCount} Spells`}
           </span>
-          {!loading && filtered.length !== spells.length && (
+          {!loading && filtered.length !== baseCount && (
             <span className="text-slate-500 text-xs">({filtered.length} shown)</span>
           )}
         </div>
@@ -236,12 +245,14 @@ export function SpellBrowser({
             <option value="false">No ritual</option>
           </select>
 
-          <select value={filters.campaignTag} onChange={(e) => setFilters((f) => ({ ...f, campaignTag: e.target.value }))} className={selectCls}>
-            <option value="All">Campaign</option>
-            <option value="Twilight">Twilight</option>
-            <option value="Squain">Squain</option>
-            <option value="Special-Banned">Special/Banned</option>
-          </select>
+          {!hideHomebrew && (
+            <select value={filters.campaignTag} onChange={(e) => setFilters((f) => ({ ...f, campaignTag: e.target.value }))} className={selectCls}>
+              <option value="All">Campaign</option>
+              <option value="Twilight">Twilight</option>
+              <option value="Squain">Squain</option>
+              <option value="Special-Banned">Special/Banned</option>
+            </select>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react'
 import { CLASS_OPTIONS, CLASS_COLORS, DAMAGE_TYPES, SCHOOLS, CASTING } from './constants'
 import type { Spell } from './types'
+import { MarkdownTextarea } from '@/components/ui/MarkdownTextarea'
 
 export interface SpellDraft {
   name: string
@@ -163,12 +164,13 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
           />
         )}
 
-        <textarea
+        <MarkdownTextarea
           placeholder="Description (supports Markdown)"
           value={Array.isArray(draft.desc) ? (draft.desc as string[]).join('\n') : draft.desc}
-          onChange={(e) => set('desc', e.target.value)}
+          onChange={(v) => set('desc', v)}
           rows={6}
-          className={`${inputCls} resize-y sm:col-span-2`}
+          className={`${inputCls} resize-y`}
+          wrapperClassName="flex flex-col gap-1.5 sm:col-span-2"
         />
 
         <div className="sm:col-span-2">

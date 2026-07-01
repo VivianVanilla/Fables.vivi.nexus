@@ -7,6 +7,7 @@ import { supabase } from "../../../src/supabase"
 import { ArrowLeft, Save, Plus, Trash2, GripVertical, AlertTriangle } from "lucide-react"
 import type { DocType, DocEntry } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
+import { MarkdownTextarea } from "../ui/MarkdownTextarea"
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ function defaultData(type: DocType): Record<string, any> {
       ability_bonuses: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
       languages: [], traits: [],
     }
-    case "feats": return { prerequisite: "", asi: null, description: "" }
+    case "feats": return { prerequisite: "", description: "" }
     case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "" }
   }
 }
@@ -336,9 +337,9 @@ function ClassFields({
 
         {d.spellcasting_ability && !isSubclass && (
           <Field label="Spellcasting Description" hint="flavour text shown before ability">
-            <textarea
+            <MarkdownTextarea
               value={d.spellcasting_description ?? ""}
-              onChange={e => set("spellcasting_description", e.target.value)}
+              onChange={v => set("spellcasting_description", v)}
               placeholder="You have learned to untangle and reshape the fabric of reality…"
               rows={3}
               className={`${inp} resize-none`}
@@ -386,9 +387,13 @@ function ClassFields({
                       className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full" />
                   </div>
                 </div>
-                <textarea value={f.description} onChange={e => updateFeature(f.id, { description: e.target.value })}
-                  placeholder="Describe what this feature does…" rows={2}
-                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-slate-600 placeholder:text-slate-700 resize-none w-full" />
+                <MarkdownTextarea
+                  value={f.description}
+                  onChange={v => updateFeature(f.id, { description: v })}
+                  placeholder="Describe what this feature does…"
+                  rows={2}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-slate-600 placeholder:text-slate-700 resize-none w-full"
+                />
               </div>
               <button onClick={() => removeFeature(f.id)} className="size-7 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 mt-1">
                 <Trash2 className="size-3.5" />
@@ -462,25 +467,12 @@ function FeatFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
         <Field label="Prerequisite" hint="leave blank if none">
           <input value={d.prerequisite ?? ""} onChange={e => set("prerequisite", e.target.value)} placeholder="Proficiency with a musical instrument, CHA 13+…" className={inp} />
         </Field>
-        <Field label="Ability Score Increase" hint="optional">
-          <div className="grid grid-cols-2 gap-3">
-            <select value={d.asi?.ability ?? ""} onChange={e => set("asi", e.target.value ? { ...(d.asi??{}), ability: e.target.value } : null)} className={sel}>
-              <option value="">No ASI</option>
-              {["str","dex","con","int","wis","cha","choose"].map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
-            </select>
-            <select value={d.asi?.amount ?? 1} onChange={e => set("asi", { ...(d.asi??{}), amount: parseInt(e.target.value) })} className={sel} disabled={!d.asi?.ability}>
-              <option value={1}>+1</option>
-              <option value={2}>+2</option>
-            </select>
-          </div>
-        </Field>
       </Section>
 
       <Section title="Description">
-        <p className="text-xs text-slate-600 -mt-1 mb-2">Supports markdown. Describe the feat's effects freely.</p>
-        <textarea
+        <MarkdownTextarea
           value={d.description ?? ""}
-          onChange={e => set("description", e.target.value)}
+          onChange={v => set("description", v)}
           placeholder="You gain the ability to…&#10;&#10;**Bonus Action.** You can use a bonus action to…"
           rows={8}
           className={`${inp} resize-y`}
@@ -517,7 +509,13 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
       </Section>
 
       <Section title="Description">
-        <textarea value={d.description ?? ""} onChange={e => set("description", e.target.value)} placeholder="Describe the item's magical properties…" rows={5} className={`${inp} resize-none`} />
+        <MarkdownTextarea
+          value={d.description ?? ""}
+          onChange={v => set("description", v)}
+          placeholder="Describe the item's magical properties…"
+          rows={5}
+          className={`${inp} resize-none`}
+        />
       </Section>
     </>
   )
@@ -612,8 +610,8 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
         <Field label="Name *">
           <input value={name} onChange={e => setName(e.target.value)} placeholder={`${entryLabel} name…`} className={inp} />
         </Field>
-        <Field label="Short Description" hint="shown on card">
-          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. 'd10 · Strength or Dex'…" className={inp} />
+        <Field label="Source" hint="shown on card — e.g. Player's Handbook p.51">
+          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Player's Handbook p.51, Xanathar's Guide…" className={inp} />
         </Field>
       </Section>
 

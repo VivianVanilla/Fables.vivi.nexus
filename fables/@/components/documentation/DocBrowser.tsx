@@ -169,7 +169,7 @@ function DocCard({
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex flex-col gap-1.5 rounded-lg border border-slate-800 bg-slate-900/50 p-3 hover:border-amber-900/60 hover:bg-slate-900 transition-all min-h-[80px] text-left w-full"
+      className="group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/50 p-3 hover:border-amber-900/60 hover:bg-slate-900 transition-all min-h-[80px] text-center w-full"
     >
       {isAdminMode && (
         <span
@@ -180,8 +180,10 @@ function DocCard({
           <Pencil className="size-3" />
         </span>
       )}
-      <p className="text-sm font-semibold text-slate-200 leading-tight pr-6">{entry.name}</p>
-      {entry.description && <p className="text-[11px] text-slate-600 leading-tight">{entry.description}</p>}
+      <p className="text-sm font-semibold text-slate-200 leading-tight px-5">{entry.name}</p>
+      {entry.description && (
+        <p className="text-[10px] text-slate-600 leading-tight">{entry.description}</p>
+      )}
     </button>
   )
 }
@@ -469,13 +471,9 @@ function DetailView({
         {/* ── FEATS ───────────────────────────────────────────────────── */}
         {type === "feats" && (
           <>
-            {(d.prerequisite || d.asi?.ability) && (
+            {d.prerequisite && (
               <RefSection title="Requirements">
-                {d.prerequisite && <Prop label="Prerequisite" value={d.prerequisite} />}
-                {d.asi?.ability && (
-                  <Prop label="Ability Score Increase"
-                    value={<span>+{d.asi.amount ?? 1} <span className="font-bold">{(d.asi.ability as string).toUpperCase()}</span></span>} />
-                )}
+                <Prop label="Prerequisite" value={d.prerequisite} />
               </RefSection>
             )}
             {d.description && (

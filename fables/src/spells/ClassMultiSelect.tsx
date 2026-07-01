@@ -32,7 +32,7 @@ export function ClassMultiSelect({ selectedClasses, setSelectedClasses }: Props)
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-2xl min-w-64">
+        <div className="absolute z-50 top-full mt-1 left-0 bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-2xl w-screen max-w-xs sm:w-auto sm:min-w-64">
           <div className="flex flex-wrap gap-1.5 mb-3">
             {CLASS_OPTIONS.map((cls) => {
               const active = selectedClasses.includes(cls)

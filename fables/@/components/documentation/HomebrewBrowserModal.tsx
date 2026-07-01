@@ -317,8 +317,8 @@ export function HomebrewBrowserModal({
         </div>
 
         <div className="flex flex-1 min-h-0">
-          {/* List panel */}
-          <div className="w-72 shrink-0 border-r border-slate-800 flex flex-col">
+          {/* List panel — hidden on mobile when something is selected */}
+          <div className={`${selected ? "hidden sm:flex" : "flex"} flex-col w-full sm:w-72 sm:shrink-0 border-r border-slate-800`}>
             <div className="p-3 border-b border-slate-800">
               <input
                 value={search}
@@ -362,26 +362,38 @@ export function HomebrewBrowserModal({
             </div>
           </div>
 
-          {/* Detail panel */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {selected ? (
-              <EntryDetail
-                entry={selected}
-                type={type}
-                userId={userId}
-                libraryState={libraryState}
-                onAdd={addToLibrary}
-                onRemove={removeFromLibrary}
-                onEdit={onEditEntry}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center gap-2">
-                <p className="text-slate-600 text-sm">Select a {TYPE_LABEL[type]} from the list to view details</p>
-                {!userId && (
-                  <p className="text-xs text-slate-700">Sign in to add entries to your library</p>
-                )}
-              </div>
+          {/* Detail panel — full-width on mobile (replaces list), right column on sm+ */}
+          <div className={`${selected ? "flex" : "hidden sm:flex"} flex-1 flex-col overflow-y-auto`}>
+            {/* Back button — mobile only */}
+            {selected && (
+              <button
+                onClick={() => setSelected(null)}
+                className="sm:hidden flex items-center gap-1.5 px-4 py-3 text-sm text-slate-400 hover:text-slate-200 border-b border-slate-800 shrink-0 transition-colors"
+              >
+                <ChevronRight className="size-4 rotate-180" />
+                Back to list
+              </button>
             )}
+            <div className="flex-1 overflow-y-auto p-6">
+              {selected ? (
+                <EntryDetail
+                  entry={selected}
+                  type={type}
+                  userId={userId}
+                  libraryState={libraryState}
+                  onAdd={addToLibrary}
+                  onRemove={removeFromLibrary}
+                  onEdit={onEditEntry}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+                  <p className="text-slate-600 text-sm">Select a {TYPE_LABEL[type]} from the list to view details</p>
+                  {!userId && (
+                    <p className="text-xs text-slate-700">Sign in to add entries to your library</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -6,7 +6,7 @@ import { useState } from "react"
 import type { CharacterData, Feature } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { nanoid, profBonus } from "../../character-utils"
-import { FeatureEntry } from "../entries/FeatureEntry"
+import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,7 @@ interface InfoTabProps {
   theme: Theme
   card: string
   readOnly: boolean
+  userId?: string | null
 }
 
 // ── Sub-component: FeatureList ────────────────────────────────────────────────
@@ -37,9 +38,11 @@ interface FeatureListProps {
   card: string
   readOnly: boolean
   pb: number
+  suggestionSource?: SuggestionSource
+  userId?: string | null
 }
 
-function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb }: FeatureListProps) {
+function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId }: FeatureListProps) {
   return (
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
       <div className="flex items-center justify-between shrink-0">
@@ -65,6 +68,8 @@ function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onL
             theme={theme}
             readOnly={readOnly}
             pb={pb}
+            suggestionSource={suggestionSource}
+            userId={userId}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -109,7 +114,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",     "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId }: InfoTabProps) {
   const [subTab, setSubTab] = useState<InfoSubTab>("overview")
 
   const pb = profBonus(data.level ?? 1)
@@ -205,6 +210,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           onRemove={onRemoveFeature}
           onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
+          suggestionSource="race" userId={userId}
         />
       )}
 
@@ -218,6 +224,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           onRemove={onRemoveFeature}
           onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
+          suggestionSource="feat" userId={userId}
         />
       )}
 
@@ -231,6 +238,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           onRemove={onRemoveFeature}
           onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
+          suggestionSource="class" userId={userId}
         />
       )}
 
