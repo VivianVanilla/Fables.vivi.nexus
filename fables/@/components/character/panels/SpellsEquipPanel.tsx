@@ -36,7 +36,6 @@ export function SpellsEquipPanel({
   onAddEquip, onChangeEquip, onRemoveEquip,
 }: Props) {
   const [showSpells, setShowSpells] = useState(true)
-  const [spellSort, setSpellSort]   = useState<"level" | "alpha">("level")
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
@@ -47,12 +46,13 @@ export function SpellsEquipPanel({
     } catch { return new Set() }
   })
 
+  const slotDisplay    = data.spellSlotDisplay ?? "integrated"
   const preparedCount  = spellItems.filter(s => s.prepared && !s.alwaysPrepared).length
   const knownCount     = spellItems.filter(s => s.alwaysPrepared).length
   const visibleSpells  = spellItems
     .filter(s => !hideUnprepared || s.prepared || s.alwaysPrepared)
     .slice()
-    .sort((a, b) => spellSort === "alpha" ? (a.name || "").localeCompare(b.name || "") : (a.level ?? 0) - (b.level ?? 0))
+    .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
 
   const statMods = {
     str: Math.floor(((data.strength     ?? 10) - 10) / 2),
@@ -109,12 +109,14 @@ export function SpellsEquipPanel({
               <span className="text-lg font-bold text-white tabular-nums">{computedAtkBonus != null ? `+${computedAtkBonus}` : "—"}</span>
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Spell Atk</span>
             </div>
-            <div className="flex flex-col items-center leading-none gap-0.5">
-              <span className={`text-lg font-bold tabular-nums ${preparedCount > (data.spellsPrepared ?? Infinity) ? "text-red-400" : "text-white"}`}>
-                {preparedCount}<span className="text-white/30 text-sm">/{data.spellsPrepared ?? "—"}</span>
-              </span>
-              <span className="text-[10px] text-white/40 uppercase tracking-wider">Prepared</span>
-            </div>
+            {!!data.spellsPrepared && (
+              <div className="flex flex-col items-center leading-none gap-0.5">
+                <span className={`text-lg font-bold tabular-nums ${preparedCount > data.spellsPrepared ? "text-red-400" : "text-white"}`}>
+                  {preparedCount}<span className="text-white/30 text-sm">/{data.spellsPrepared}</span>
+                </span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">Prepared</span>
+              </div>
+            )}
             <div className="flex flex-col items-center leading-none gap-0.5">
               <span className={`text-lg font-bold tabular-nums ${knownCount > (data.spellsKnown ?? Infinity) ? "text-red-400" : "text-white"}`}>
                 {knownCount}<span className="text-white/30 text-sm">/{data.spellsKnown ?? "—"}</span>
@@ -125,6 +127,12 @@ export function SpellsEquipPanel({
               <span className="text-lg font-bold text-white tabular-nums">{data.cantripsKnown ?? "—"}</span>
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
             </div>
+            {!!data.invocationsKnown && (
+              <div className="flex flex-col items-center leading-none gap-0.5">
+                <span className="text-lg font-bold text-white tabular-nums">{data.invocationsKnown}</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">Invocations</span>
+              </div>
+            )}
             <button type="button" onClick={onShowSpellcastingModal}
               className="size-10 text-2xl flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
               title="Configure spellcasting">⚙</button>
@@ -132,8 +140,8 @@ export function SpellsEquipPanel({
         )}
       </div>
 
-      {/* Spell slots — only shown standalone in A-Z mode; in Level mode they're merged into the level headers below */}
-      {showSpells && spellSort === "alpha" && spellSlots.length > 0 && (
+      {/* Spell slots — standalone block in Classic mode; Integrated mode merges them into the level headers below */}
+      {showSpells && slotDisplay === "classic" && spellSlots.length > 0 && (
         <div className="flex flex-col gap-2 border-b border-white/10 pb-3 shrink-0">
           {spellSlots.map(slot => {
             const rem = Math.max(0, slot.total - slot.used)
@@ -164,19 +172,9 @@ export function SpellsEquipPanel({
         </button>
       )}
 
-      {/* Sort / filter controls */}
+      {/* Filter controls */}
       {showSpells && (
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
-            <button type="button" onClick={() => setSpellSort("level")}
-              className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${spellSort === "level" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Level
-            </button>
-            <button type="button" onClick={() => setSpellSort("alpha")}
-              className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${spellSort === "alpha" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              A–Z
-            </button>
-          </div>
           <button type="button"
             onClick={() => setHideUnprepared(h => {
               const next = !h
@@ -196,7 +194,7 @@ export function SpellsEquipPanel({
       <div className="flex flex-col gap-1.5">
         {showSpells ? (
           <>
-            {spellSort === "level" ? (() => {
+            {(() => {
               const grouped = new Map<number, typeof visibleSpells>()
               for (const s of visibleSpells) {
                 const lvl = s.level ?? 0
@@ -204,15 +202,17 @@ export function SpellsEquipPanel({
                 grouped.get(lvl)!.push(s)
               }
               // Levels that only have slots (no visible spells yet) still get a header, so their slider stays reachable
-              for (const slot of spellSlots) {
-                if (!grouped.has(slot.level)) grouped.set(slot.level, [])
+              if (slotDisplay === "integrated") {
+                for (const slot of spellSlots) {
+                  if (!grouped.has(slot.level)) grouped.set(slot.level, [])
+                }
               }
               const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
               return levels.map(lvl => {
                 const spells       = grouped.get(lvl)!
                 const isOpen       = !collapsedLevels.has(lvl)
                 const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
-                const matchingSlots = spellSlots.filter(s => s.level === lvl)
+                const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
                 return (
                   <div key={lvl} className="flex flex-col gap-1">
                     <div className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
@@ -251,16 +251,13 @@ export function SpellsEquipPanel({
                       )}
                     </div>
                     {isOpen && spells.map(spell => (
-                      <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly}
+                      <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
                         onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
                     ))}
                   </div>
                 )
               })
-            })() : visibleSpells.map(spell => (
-              <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
-                onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
-            ))}
+            })()}
             {!readOnly && (
               <button type="button" onClick={onAddSpell}
                 className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors shrink-0">

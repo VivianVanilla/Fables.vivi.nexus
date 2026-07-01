@@ -351,7 +351,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
 
               {classes.length > 1 && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-white/40 uppercase tracking-wider">Known/Prepared From</span>
+                  <span className="text-xs text-white/40 uppercase tracking-wider">Class</span>
                   <select value={spell.sourceClass ?? ""} onChange={e => onChange({ sourceClass: e.target.value || undefined })}
                     className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
                     <option value="">—</option>
@@ -405,6 +405,9 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             <p className="text-sm font-semibold text-white truncate">
               {spell.name || <span className="text-white/30 italic">Unnamed</span>}
             </p>
+            {spell.sourceClass && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 leading-tight shrink-0">{spell.sourceClass}</span>
+            )}
             {spell.ritual && (
               <span className="text-[9px] border border-amber-400/40 text-amber-400/80 rounded px-0.5 leading-tight shrink-0">R</span>
             )}
@@ -415,9 +418,6 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             )}
             {spell.school && (
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
-            )}
-            {spell.sourceClass && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300">{spell.sourceClass}</span>
             )}
             {(spell.saveAttr || spell.saveType) && (
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">

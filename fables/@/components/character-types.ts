@@ -108,6 +108,8 @@ export interface CharacterData {
   spellcastingAbility?: string
   cantripsKnown?: number
   spellsKnown?: number
+  invocationsKnown?: number   // Eldritch Invocations known (Warlock)
+  spellSlotDisplay?: "integrated" | "classic"   // integrated = slot sliders next to level headers; classic = standalone block at the top
   notes?: string
   backgroundImage?: string
   theme?: string

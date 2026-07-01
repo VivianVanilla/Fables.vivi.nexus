@@ -84,8 +84,8 @@ export function SpellcastingModal({
           {/* Known / Prepared */}
           <div className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Known / Prepared</p>
-            <div className="grid grid-cols-3 gap-3">
-              {([["Cantrips", "cantripsKnown"], ["Known", "spellsKnown"], ["Prepared", "spellsPrepared"]] as const).map(([label, key]) => (
+            <div className="grid grid-cols-4 gap-3">
+              {([["Cantrips", "cantripsKnown"], ["Known", "spellsKnown"], ["Prepared", "spellsPrepared"], ["Invocations", "invocationsKnown"]] as const).map(([label, key]) => (
                 <label key={key} className="flex flex-col gap-1">
                   <span className="text-xs text-white/40">{label}</span>
                   <NumInput value={(data[key] as number | undefined) ?? ""} disabled={readOnly}
@@ -95,6 +95,26 @@ export function SpellcastingModal({
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Display */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slot Display</p>
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 self-start">
+              <button type="button" disabled={readOnly} onClick={() => onUpdate({ spellSlotDisplay: "integrated" })}
+                className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-colors disabled:cursor-default ${(data.spellSlotDisplay ?? "integrated") === "integrated" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Integrated
+              </button>
+              <button type="button" disabled={readOnly} onClick={() => onUpdate({ spellSlotDisplay: "classic" })}
+                className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-colors disabled:cursor-default ${data.spellSlotDisplay === "classic" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Classic
+              </button>
+            </div>
+            <p className="text-[11px] text-white/30">
+              {(data.spellSlotDisplay ?? "integrated") === "integrated"
+                ? "Slot sliders sit next to each spell level's header."
+                : "Slot sliders sit together at the top of the panel."}
+            </p>
           </div>
 
           {/* Spell slots */}

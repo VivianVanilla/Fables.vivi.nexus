@@ -13,7 +13,7 @@ import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
   SpellSlot, FavoriteRef, Feature,
 } from "./character-types"
-import { SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET } from "./character-constants"
+import { SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
 import { profBonus, nanoid, safeParseJson } from "./character-utils"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "./character-themes"
 
@@ -38,6 +38,7 @@ import { AbilityModal }          from "./character/modals/AbilityModal"
 import { SpellcastingModal }     from "./character/modals/SpellcastingModal"
 import { SkillModal }            from "./character/modals/SkillModal"
 import { InitiativeModal }       from "./character/modals/InitiativeModal"
+import { SpeedModal }            from "./character/modals/SpeedModal"
 import { ConditionPickerModal }  from "./character/modals/ConditionPickerModal"
 import { ThemeModal }            from "./character/modals/ThemeModal"
 import { PortraitModal }         from "./character/modals/PortraitModal"
@@ -79,6 +80,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [showSpellcastingModal, setShowSpellcastingModal] = useState(false)
   const [showSkillModal,        setShowSkillModal]        = useState<string | null>(null)
   const [showInitiativeModal,   setShowInitiativeModal]   = useState(false)
+  const [showSpeedModal,        setShowSpeedModal]        = useState(false)
+
+  // Concentration check prompts (dismissible) — triggered by HP loss while "Concentrating" is active
+  const [concentrationPrompts, setConcentrationPrompts] = useState<{ id: string; damage: number; dc: number }[]>([])
+  const prevHpRef = useRef<number | undefined>(undefined)
 
   // Portrait gallery
   const [galleryImages,  setGalleryImages]  = useState<{ name: string; publicUrl: string }[]>([])
@@ -191,6 +197,24 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const spellSlots = (data.spellSlots ?? []).map((s, i) => s.id ? s : { ...s, id: `lv${s.level}-${i}` })
   const favorites  = data.favorites      ?? []
   const conditions = data.conditions     ?? []
+
+  // ── CONDITION EFFECTS ─────────────────────────────────────────────────────
+
+  const activeConditionNames = new Set(conditions.map(c => c.name))
+  const speedOverrideReason  = SPEED_ZERO_CONDITIONS.find(name => activeConditionNames.has(name))
+  const effectiveSpeed       = speedOverrideReason ? 0 : (data.speed ?? 0)
+
+  // Concentration check: any HP loss while "Concentrating" is active prompts a save
+  useEffect(() => {
+    const prevHp = prevHpRef.current
+    if (prevHp !== undefined && hp < prevHp && activeConditionNames.has("Concentrating")) {
+      const damage = prevHp - hp
+      const dc     = Math.max(10, Math.floor(damage / 2))
+      setConcentrationPrompts(prev => [...prev, { id: nanoid(), damage, dc }])
+    }
+    prevHpRef.current = hp
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hp])
 
   const allFeatures: Feature[] = [
     ...(data.racialTraits  ?? []),
@@ -526,16 +550,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
         {/* Speed / Initiative */}
         <div className="grid grid-cols-2 gap-2">
-          <div className={`${card} p-3 flex flex-col items-center gap-1`}>
-            {readOnly
-              ? <span className="text-xl font-bold text-white">{data.speed ?? 0}</span>
-              : <NumInput value={data.speed ?? ""}
-                  onFocus={e => e.target.select()}
-                  onChange={e => update({ speed: parseInt(e.target.value) || 0 })} placeholder="0"
-                  className="w-full text-center text-xl font-bold bg-transparent outline-none text-white" />
-            }
-            <span className="text-xs uppercase tracking-widest text-white/50">Speed</span>
-          </div>
+          <button type="button" onClick={() => setShowSpeedModal(true)}
+            className={`${card} p-3 flex flex-col items-center gap-1 hover:brightness-110 transition-all`}>
+            <span className={`text-xl font-bold ${speedOverrideReason ? "text-red-400" : "text-white"}`}>{effectiveSpeed}</span>
+            <span className="text-xs uppercase tracking-widest text-white/50">Speed{speedOverrideReason ? ` (${speedOverrideReason})` : ""}</span>
+          </button>
           <button type="button" onClick={() => setShowInitiativeModal(true)}
             className={`${card} p-3 flex flex-col items-center gap-0.5 hover:brightness-110 transition-all`}
             style={{ boxShadow: `0 0 0 1px ${theme.accent}40` }}>
@@ -694,6 +713,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           accentColor={theme.accent}
         />
       )}
+      {showSpeedModal && (
+        <SpeedModal
+          data={data} readOnly={readOnly} overrideReason={speedOverrideReason}
+          onUpdate={update} onClose={() => setShowSpeedModal(false)}
+        />
+      )}
       {showConditionPicker && (
         <ConditionPickerModal
           conditions={conditions} onAdd={addCondition} onClose={() => setShowConditionPicker(false)}
@@ -749,6 +774,26 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               placeholder="1" disabled={readOnly}
               className="bg-transparent outline-none w-6 placeholder:text-white/20" />
           </div>
+
+          {(concentrationPrompts.length > 0 || conditions.some(c => CONDITION_EFFECTS[c.name])) && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {concentrationPrompts.map(p => (
+                <span key={p.id}
+                  className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200">
+                  You took {p.damage} damage roll {p.dc}+ to concentrate.
+                  <button type="button"
+                    onClick={() => setConcentrationPrompts(prev => prev.filter(x => x.id !== p.id))}
+                    className="opacity-60 hover:opacity-100 shrink-0">✕</button>
+                </span>
+              ))}
+              {conditions.map(c => CONDITION_EFFECTS[c.name] && (
+                <span key={c.id} title={CONDITION_EFFECTS[c.name]}
+                  className="text-xs px-2 py-1 rounded-full bg-red-500/15 border border-red-400/30 text-red-200">
+                  {c.name}: {CONDITION_EFFECTS[c.name]}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {saving && <span className="text-xs text-white/40 shrink-0">saving…</span>}
