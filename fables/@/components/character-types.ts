@@ -144,6 +144,7 @@ export interface CharacterData {
   partyCode?: string
   multiclass?: boolean
   classes?: Array<{ cls: string; level: number }>
+  subrace?: string
   // Wallet
   currency?: { cp?: number; sp?: number; ep?: number; gp?: number; pp?: number }
   currencyMode?: "classic" | "simple" | "custom"

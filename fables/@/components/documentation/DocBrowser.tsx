@@ -438,31 +438,39 @@ function DetailView({
         {/* ── RACES ───────────────────────────────────────────────────── */}
         {type === "races" && (
           <>
-            {(d.speed || d.size) && (
-              <RefSection title="Traits">
-                {d.speed    && <Prop label="Speed"       value={`${d.speed} ft`} />}
-                {d.size     && <Prop label="Size"        value={d.size} />}
-                {d.darkvision > 0 && <Prop label="Darkvision" value={`${d.darkvision} ft`} />}
-                {d.languages?.length > 0 && <Prop label="Languages" value={d.languages.join(", ")} />}
-              </RefSection>
-            )}
-
-            {d.ability_bonuses && Object.values(d.ability_bonuses).some((v: any) => v !== 0) && (
-              <RefSection title="Ability Score Increase">
-                {Object.entries(d.ability_bonuses).filter(([,v]) => (v as number) !== 0).map(([k,v]) => (
-                  <Prop key={k} label={k.toUpperCase()}
-                    value={<span className="text-amber-400 font-bold">+{v as number}</span>} />
-                ))}
-              </RefSection>
-            )}
-
             {d.traits?.length > 0 && (
               <RefSection title="Racial Traits">
-                {d.traits.map((t: string) => (
-                  <div key={t} className="mb-3 last:mb-0">
-                    <p className="text-sm font-bold text-slate-200">{t}</p>
-                  </div>
-                ))}
+                {d.traits.map((t: any, i: number) => {
+                  const name = typeof t === "string" ? t : (t?.name ?? "")
+                  const desc = typeof t === "string" ? "" : (t?.description ?? "")
+                  return (
+                    <div key={i} className="mb-3 last:mb-0">
+                      <p className="text-sm font-bold text-slate-200">{name}</p>
+                      {desc && <p className="text-xs text-slate-400 leading-relaxed mt-0.5 whitespace-pre-wrap">{desc}</p>}
+                    </div>
+                  )
+                })}
+              </RefSection>
+            )}
+            {d.subraces?.length > 0 && (
+              <RefSection title="Subraces">
+                <div className="flex flex-col gap-4">
+                  {d.subraces.map((s: any, si: number) => (
+                    <div key={si}>
+                      <p className="text-sm font-bold text-slate-200 mb-1.5">{s.name}</p>
+                      {(s.traits ?? []).map((t: any, ti: number) => {
+                        const name = typeof t === "string" ? t : (t?.name ?? "")
+                        const desc = typeof t === "string" ? "" : (t?.description ?? "")
+                        return (
+                          <div key={ti} className="mb-2 pl-3 border-l border-slate-700">
+                            <p className="text-xs font-semibold text-slate-300">{name}</p>
+                            {desc && <p className="text-xs text-slate-500 leading-relaxed mt-0.5 whitespace-pre-wrap">{desc}</p>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
               </RefSection>
             )}
           </>

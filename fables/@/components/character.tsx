@@ -769,8 +769,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {showRacePicker && (
         <RacePickerModal
           current={data.race ?? ""}
+          currentSubrace={data.subrace}
           userId={user?.id ?? null}
-          onConfirm={race => update({ race })}
+          onConfirm={(race, subrace) => update({ race, subrace: subrace ?? undefined })}
           onImport={({ racialTraits: rt }) => {
             if (rt?.length) update({ racialTraits: [...(data.racialTraits ?? []), ...rt] })
           }}
@@ -808,7 +809,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 ? "bg-white/10 border-white/10 text-white/70"
                 : "bg-white/5 border-white/5 text-white/25"}`}
             >
-              {data.race || "Race"}
+              {data.subrace
+                ? `${data.subrace}`
+                : data.race || "Race"}
             </button>
             <button
               type="button"

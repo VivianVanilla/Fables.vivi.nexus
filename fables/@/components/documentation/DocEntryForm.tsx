@@ -67,11 +67,7 @@ function defaultData(type: DocType): Record<string, any> {
       equipment: [],
       features: [], domain_spells: [],
     }
-    case "races": return {
-      speed: 30, size: "Medium", darkvision: 0,
-      ability_bonuses: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
-      languages: [], traits: [],
-    }
+    case "races": return { traits: [] }
     case "feats": return { prerequisite: "", description: "" }
     case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "" }
   }
@@ -412,47 +408,135 @@ function ClassFields({
 
 // ── RaceFields ─────────────────────────────────────────────────────────────────
 
+type Trait    = { id: string; name: string; description: string }
+type Subrace  = { id: string; name: string; traits: Trait[] }
+
+function normTraits(raw: any[]): Trait[] {
+  return raw.map((t: any) => typeof t === "string" ? { id: uid(), name: t, description: "" } : t)
+}
+
+function TraitList({ traits, onChange }: { traits: Trait[]; onChange: (next: Trait[]) => void }) {
+  function add()                { onChange([...traits, { id: uid(), name: "", description: "" }]) }
+  function remove(id: string)   { onChange(traits.filter(t => t.id !== id)) }
+  function update(id: string, patch: Partial<Trait>) {
+    onChange(traits.map(t => t.id === id ? { ...t, ...patch } : t))
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {traits.length === 0 && <p className="text-xs text-slate-700 italic">No traits yet.</p>}
+      {traits.map(t => (
+        <div key={t.id} className="flex gap-2 items-start bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <div className="flex-1 flex flex-col gap-2 min-w-0">
+            <input
+              value={t.name}
+              onChange={e => update(t.id, { name: e.target.value })}
+              placeholder="Trait name (e.g. Darkvision, Fey Ancestry…)"
+              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full"
+            />
+            <MarkdownTextarea
+              value={t.description}
+              onChange={v => update(t.id, { description: v })}
+              placeholder="Describe what this trait does…"
+              rows={2}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-slate-600 placeholder:text-slate-700 resize-none w-full"
+            />
+          </div>
+          <button onClick={() => remove(t.id)} className="size-7 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 mt-1">
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+        <Plus className="size-4" /> Add Trait
+      </button>
+    </div>
+  )
+}
+
 function RaceFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any) => void }) {
-  const bonuses = d.ability_bonuses ?? { str:0, dex:0, con:0, int:0, wis:0, cha:0 }
+  const traits:   Trait[]   = normTraits(d.traits   ?? [])
+  const subraces: Subrace[] = (d.subraces ?? []).map((s: any) => ({
+    ...s, traits: normTraits(s.traits ?? [])
+  }))
+  const [openSubrace, setOpenSubrace] = useState<string | null>(null)
+
+  function addSubrace() {
+    const next: Subrace = { id: uid(), name: "", traits: [] }
+    set("subraces", [...subraces, next])
+    setOpenSubrace(next.id)
+  }
+
+  function updateSubrace(id: string, patch: Partial<Subrace>) {
+    set("subraces", subraces.map(s => s.id === id ? { ...s, ...patch } : s))
+  }
+
+  function removeSubrace(id: string) {
+    set("subraces", subraces.filter(s => s.id !== id))
+    if (openSubrace === id) setOpenSubrace(null)
+  }
+
   return (
     <>
-      <Section title="Movement & Size">
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Speed (ft)">
-            <input type="number" value={d.speed ?? 30} onChange={e => set("speed", parseInt(e.target.value)||30)} className={inp} />
-          </Field>
-          <Field label="Size">
-            <select value={d.size ?? "Medium"} onChange={e => set("size", e.target.value)} className={sel}>
-              {["Tiny","Small","Medium","Large"].map(s => <option key={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Darkvision (ft)">
-            <input type="number" value={d.darkvision ?? 0} onChange={e => set("darkvision", parseInt(e.target.value)||0)} className={inp} placeholder="0 = none" />
-          </Field>
-        </div>
+      <Section title="Racial Traits">
+        <p className="text-xs text-slate-600 -mt-2">Traits shared by all members of this race.</p>
+        <TraitList traits={traits} onChange={next => set("traits", next)} />
       </Section>
 
-      <Section title="Ability Score Bonuses">
-        <div className="grid grid-cols-6 gap-2">
-          {["str","dex","con","int","wis","cha"].map(a => (
-            <div key={a} className="flex flex-col items-center gap-1.5">
-              <span className="text-[9px] uppercase text-slate-600 font-semibold">{a}</span>
-              <input type="number" value={bonuses[a] ?? 0}
-                onChange={e => set("ability_bonuses", { ...bonuses, [a]: parseInt(e.target.value)||0 })}
-                className="w-full text-center bg-slate-900 border border-slate-800 rounded-lg px-1 py-2 text-sm text-slate-100 outline-none focus:border-slate-600"
-              />
+      <Section title="Subraces">
+        <p className="text-xs text-slate-600 -mt-2">Optional. Each subrace inherits the traits above and adds its own.</p>
+        <div className="flex flex-col gap-2">
+          {subraces.length === 0 && (
+            <p className="text-xs text-slate-700 italic">No subraces yet.</p>
+          )}
+          {subraces.map(s => (
+            <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+              {/* Subrace header */}
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => setOpenSubrace(prev => prev === s.id ? null : s.id)}
+                  className="flex-1 flex items-center gap-2 text-left"
+                >
+                  <span className="text-[10px] text-slate-500 select-none">{openSubrace === s.id ? "▼" : "▶"}</span>
+                  <span className="text-sm text-slate-200 font-medium">{s.name || <span className="text-slate-600 italic">Unnamed subrace</span>}</span>
+                  {s.traits.length > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500">{s.traits.length} trait{s.traits.length !== 1 ? "s" : ""}</span>
+                  )}
+                </button>
+                <button onClick={() => removeSubrace(s.id)} className="size-6 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0">
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+
+              {/* Expanded subrace editor */}
+              {openSubrace === s.id && (
+                <div className="border-t border-slate-800 px-3 pb-3 flex flex-col gap-3">
+                  <div className="mt-2">
+                    <span className="text-[9px] uppercase text-slate-600 font-semibold">Subrace Name</span>
+                    <input
+                      value={s.name}
+                      onChange={e => updateSubrace(s.id, { name: e.target.value })}
+                      placeholder="High Elf, Wood Elf, Dark Elf…"
+                      className="mt-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase text-slate-600 font-semibold block mb-2">Subrace Traits</span>
+                    <TraitList
+                      traits={s.traits}
+                      onChange={next => updateSubrace(s.id, { traits: next })}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
+          <button type="button" onClick={addSubrace}
+            className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+            <Plus className="size-4" /> Add Subrace
+          </button>
         </div>
-      </Section>
-
-      <Section title="Languages & Traits">
-        <Field label="Languages" hint="comma-separated">
-          <input value={(d.languages ?? []).join(", ")} onChange={e => set("languages", e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean))} placeholder="Common, Elvish…" className={inp} />
-        </Field>
-        <Field label="Racial Traits" hint="comma-separated names">
-          <input value={(d.traits ?? []).join(", ")} onChange={e => set("traits", e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean))} placeholder="Darkvision, Fey Ancestry, Trance…" className={inp} />
-        </Field>
       </Section>
     </>
   )
