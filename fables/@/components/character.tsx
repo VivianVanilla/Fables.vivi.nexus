@@ -46,6 +46,8 @@ import { PortraitModal }         from "./character/modals/PortraitModal"
 // Tabs / other
 import { InfoTab }               from "./character/tabs/InfoTab"
 import { PartyChat }             from "./PartyChat"
+import { ClassPickerModal }      from "./character/modals/ClassPickerModal"
+import { RacePickerModal }       from "./character/modals/RacePickerModal"
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [showSkillModal,        setShowSkillModal]        = useState<string | null>(null)
   const [showInitiativeModal,   setShowInitiativeModal]   = useState(false)
   const [showSpeedModal,        setShowSpeedModal]        = useState(false)
+  const [showClassPicker,       setShowClassPicker]       = useState(false)
+  const [showRacePicker,        setShowRacePicker]        = useState(false)
 
   // Concentration check prompts (dismissible) — triggered by HP loss while "Concentrating" is active
   const [concentrationPrompts, setConcentrationPrompts] = useState<{ id: string; damage: number; dc: number }[]>([])
@@ -740,6 +744,29 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={uploadPortrait} />
 
+      {showClassPicker && (
+        <ClassPickerModal
+          initial={data.classes ?? (data.class ? [{ cls: data.class, level: data.level ?? 1 }] : [])}
+          onConfirm={classes => {
+            const total = classes.reduce((s, c) => s + c.level, 0)
+            update({
+              classes,
+              level: total,
+              multiclass: classes.length > 1,
+              class: classes.map(c => c.cls).join(" / "),
+            })
+          }}
+          onClose={() => setShowClassPicker(false)}
+        />
+      )}
+      {showRacePicker && (
+        <RacePickerModal
+          current={data.race ?? ""}
+          onConfirm={race => update({ race })}
+          onClose={() => setShowRacePicker(false)}
+        />
+      )}
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
 
@@ -761,18 +788,30 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             )}
           </div>
           <div className="flex items-center gap-1 text-xs text-white/50 uppercase tracking-wide">
-            <input value={data.race ?? ""} onChange={e => update({ race: e.target.value })} placeholder="Race"
-              className="bg-transparent outline-none w-16 placeholder:text-white/20 shrink-0" disabled={readOnly} />
+            <button
+              type="button"
+              onClick={() => { if (!readOnly) setShowRacePicker(true) }}
+              className={`shrink-0 text-left truncate max-w-[72px] ${!readOnly ? "hover:text-white/80 cursor-pointer" : "cursor-default"} ${data.race ? "text-white/70" : "text-white/20"}`}
+            >
+              {data.race || "Race"}
+            </button>
             <span className="text-white/20 shrink-0">/</span>
-            <input value={data.class ?? ""} onChange={e => update({ class: e.target.value })} placeholder="Class / Multiclass"
-              className="bg-transparent outline-none min-w-0 flex-1 placeholder:text-white/20" disabled={readOnly} />
+            <button
+              type="button"
+              onClick={() => { if (!readOnly) setShowClassPicker(true) }}
+              className={`min-w-0 flex-1 text-left truncate ${!readOnly ? "hover:text-white/80 cursor-pointer" : "cursor-default"} ${(data.classes && data.classes.length > 0) || data.class ? "text-white/70" : "text-white/20"}`}
+            >
+              {data.classes && data.classes.length > 0
+                ? data.classes.map(c => c.cls).join(" / ")
+                : data.class || "Class"}
+            </button>
             <span className="text-white/20">·</span>
             <span>Lv</span>
-            <NumInput value={data.level ?? ""} min={1} max={20}
-              onFocus={e => e.target.select()}
-              onChange={e => update({ level: Math.min(20, Math.max(1, parseInt(e.target.value) || 1)) })}
-              placeholder="1" disabled={readOnly}
-              className="bg-transparent outline-none w-6 placeholder:text-white/20" />
+            <span className="text-white/70 font-semibold w-6 text-center">
+              {data.classes && data.classes.length > 0
+                ? data.classes.reduce((s, c) => s + c.level, 0)
+                : (data.level ?? "—")}
+            </span>
           </div>
 
           {(concentrationPrompts.length > 0 || conditions.some(c => CONDITION_EFFECTS[c.name])) && (

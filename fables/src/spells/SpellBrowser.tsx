@@ -16,21 +16,40 @@ import type { SpellDraft } from './AddSpellForm'
 
 const ADMIN_PASSWORD = 'archmage'
 
-export function SpellBrowser() {
+export function SpellBrowser({
+  isAdmin = false,
+  adminEnabled = false,
+  initialClasses = [],
+}: {
+  isAdmin?: boolean
+  adminEnabled?: boolean
+  initialClasses?: string[]
+}) {
   const [spells, setSpells] = useState<Spell[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<SpellFilters>(DEFAULT_FILTERS)
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([])
+  const [selectedClasses, setSelectedClasses] = useState<string[]>(initialClasses)
   const [selectedLevels, setSelectedLevels] = useState<number[]>([])
   const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
-  const [adminMode, setAdminMode] = useState(false)
+  const [adminMode, setAdminMode] = useState(adminEnabled)
   const [passwordInput, setPasswordInput] = useState('')
   const [editingIndex, setEditingIndex] = useState<string | null>(null)
   const [draft, setDraft] = useState<SpellDraft>(DEFAULT_DRAFT)
   const [showForm, setShowForm] = useState(false)
+
+  // Sync edit controls with the external admin toggle
+  useEffect(() => {
+    setAdminMode(adminEnabled)
+    if (!adminEnabled) setShowForm(false)
+  }, [adminEnabled])
+
+  // Sync class filter when navigated here from a class page
+  useEffect(() => {
+    if (initialClasses.length > 0) setSelectedClasses(initialClasses)
+  }, [initialClasses.join(",")])
 
   useEffect(() => {
     setLoading(true)
@@ -236,8 +255,8 @@ export function SpellBrowser() {
         />
       )}
 
-      {/* Admin login (collapsed, bottom of sidebar-ish) */}
-      {!adminMode && (
+      {/* Admin login — only shown to non-admin users who aren't already in admin mode */}
+      {!adminMode && !isAdmin && (
         <details className="mb-4 group">
           <summary className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 cursor-pointer select-none list-none">
             <Shield className="size-3" /> Admin
@@ -261,7 +280,7 @@ export function SpellBrowser() {
         </details>
       )}
 
-      {adminMode && (
+      {adminMode && !isAdmin && (
         <div className="mb-4 flex items-center justify-between text-xs bg-green-950/40 border border-green-800/40 text-green-400 px-3 py-2 rounded-lg">
           <span className="flex items-center gap-1.5"><Shield className="size-3" /> Admin enabled</span>
           <button onClick={() => { setAdminMode(false); setShowForm(false) }} className="text-red-400 hover:text-red-300 transition-colors">
