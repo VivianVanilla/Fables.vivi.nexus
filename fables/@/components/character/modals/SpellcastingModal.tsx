@@ -4,6 +4,8 @@ import { NumInput } from "../ui/NumInput"
 import type { CharacterData, SpellSlot } from "../../character-types"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { slotLevelColor } from "../../character-themes"
+import { profBonus } from "../../character-utils"
+import { SAVE_TO_ABILITY } from "../../character-constants"
 
 interface Props {
   data: CharacterData
@@ -25,6 +27,12 @@ export function SpellcastingModal({
   const [newSlotTotal, setNewSlotTotal] = useState(2)
   const [newSlotRests, setNewSlotRests] = useState<"short" | "long">("long")
 
+  const pb = profBonus(data.level ?? 1)
+  const spellAbilityKey = data.spellcastingAbility ? SAVE_TO_ABILITY[data.spellcastingAbility.toLowerCase()] : undefined
+  const spellAbilityMod = spellAbilityKey ? Math.floor(((data[spellAbilityKey as keyof CharacterData] as number ?? 10) - 10) / 2) : 0
+  const saveDC    = data.spellcastingAbility ? 8 + pb + spellAbilityMod + (data.spellSaveDCBonus ?? 0) : undefined
+  const atkBonus  = data.spellcastingAbility ? pb + spellAbilityMod + (data.spellAttackBonusBonus ?? 0) : undefined
+
   return (
     <Modal onClose={onClose}>
       <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[500px] max-h-[85vh] flex flex-col overflow-hidden">
@@ -38,30 +46,38 @@ export function SpellcastingModal({
           {/* Spell stats */}
           <div className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Stats</p>
-            <div className="grid grid-cols-3 gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-white/40">Ability</span>
-                <select value={data.spellcastingAbility ?? ""} disabled={readOnly}
-                  onChange={e => onUpdate({ spellcastingAbility: e.target.value })}
-                  className="bg-white/10 rounded-lg px-2 py-2 text-white outline-none text-sm disabled:opacity-50">
-                  <option value="">—</option>
-                  {["STR","DEX","CON","INT","WIS","CHA"].map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-white/40">Save DC</span>
-                <NumInput value={data.spellSaveDC ?? ""} disabled={readOnly}
-                  onFocus={e => e.target.select()} placeholder="0"
-                  onChange={e => onUpdate({ spellSaveDC: parseInt(e.target.value) || 0 })}
-                  className="bg-white/10 rounded-lg px-2 py-2 text-center text-white outline-none text-sm disabled:opacity-50" />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-white/40">Atk Bonus</span>
-                <NumInput value={data.spellAttackBonus ?? ""} disabled={readOnly}
-                  onFocus={e => e.target.select()} placeholder="0"
-                  onChange={e => onUpdate({ spellAttackBonus: parseInt(e.target.value) || 0 })}
-                  className="bg-white/10 rounded-lg px-2 py-2 text-center text-white outline-none text-sm disabled:opacity-50" />
-              </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-white/40">Ability</span>
+              <select value={data.spellcastingAbility ?? ""} disabled={readOnly}
+                onChange={e => onUpdate({ spellcastingAbility: e.target.value })}
+                className="bg-black/30 rounded-lg px-2 py-2 text-white outline-none text-sm disabled:opacity-50">
+                <option value="">—</option>
+                {["STR","DEX","CON","INT","WIS","CHA"].map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5 bg-black/20 rounded-lg p-2.5">
+                <span className="text-xs text-white/40">Save DC <span className="text-white/25">(8 + PB + mod)</span></span>
+                <span className="text-2xl font-bold text-white tabular-nums">{saveDC ?? "—"}</span>
+                <label className="flex items-center gap-1.5 text-[11px] text-white/40">
+                  Extra bonus
+                  <NumInput value={data.spellSaveDCBonus ?? ""} disabled={readOnly}
+                    onFocus={e => e.target.select()} placeholder="0"
+                    onChange={e => onUpdate({ spellSaveDCBonus: parseInt(e.target.value) || 0 })}
+                    className="w-14 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none text-xs disabled:opacity-50" />
+                </label>
+              </div>
+              <div className="flex flex-col gap-1.5 bg-black/20 rounded-lg p-2.5">
+                <span className="text-xs text-white/40">Attack Bonus <span className="text-white/25">(PB + mod)</span></span>
+                <span className="text-2xl font-bold text-white tabular-nums">{atkBonus != null ? (atkBonus >= 0 ? `+${atkBonus}` : atkBonus) : "—"}</span>
+                <label className="flex items-center gap-1.5 text-[11px] text-white/40">
+                  Extra bonus
+                  <NumInput value={data.spellAttackBonusBonus ?? ""} disabled={readOnly}
+                    onFocus={e => e.target.select()} placeholder="0"
+                    onChange={e => onUpdate({ spellAttackBonusBonus: parseInt(e.target.value) || 0 })}
+                    className="w-14 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none text-xs disabled:opacity-50" />
+                </label>
+              </div>
             </div>
           </div>
 
@@ -134,7 +150,7 @@ export function SpellcastingModal({
                   <div className="flex items-center gap-2 flex-wrap text-xs">
                     <label className="flex items-center gap-1.5 text-white/50">Level
                       <select value={newSlotLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
-                        className="bg-black/50 rounded-lg px-2 py-1 text-white outline-none">
+                        className="bg-black/30 rounded-lg px-2 py-1 text-white outline-none">
                         {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l}>{l}</option>)}
                       </select>
                     </label>
@@ -146,7 +162,7 @@ export function SpellcastingModal({
                     </label>
                     <label className="flex items-center gap-1.5 text-white/50">Resets
                       <select value={newSlotRests} onChange={e => setNewSlotRests(e.target.value as "short" | "long")}
-                        className="bg-black/50 rounded-lg px-2 py-1 text-white outline-none">
+                        className="bg-black/30 rounded-lg px-2 py-1 text-white outline-none">
                         <option value="long">Long</option>
                         <option value="short">Short</option>
                       </select>

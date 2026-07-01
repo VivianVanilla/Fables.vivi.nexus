@@ -90,8 +90,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Favorites
   const [favDragOver, setFavDragOver] = useState(false)
-  const [favFloat,    setFavFloat]    = useState(false)
-  const [favPos,      setFavPos]      = useState({ x: 32, y: 120 })
 
   // Quick search
   const [quickSearch, setQuickSearch] = useState("")
@@ -291,7 +289,26 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     if (Object.keys(combinedPatch).length > 0) update(combinedPatch)
   }
 
-  function updateFeatureUses(id: string, usesUsed: number) { patchFeature(id, { usesUsed }) }
+  function removeFeatureGlobal(id: string) {
+    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const patch: Partial<CharacterData> = {}
+
+    for (const key of KEYS) {
+      const list = data[key]
+      if (list?.some(f => f.id === id)) patch[key] = list.filter(f => f.id !== id)
+    }
+    if (data.favorites?.find(f => f.refId === id)) {
+      patch.favorites = (data.favorites ?? []).filter(f => f.refId !== id)
+    }
+    // Remove this id from any other feature's linkedTo
+    for (const key of KEYS) {
+      const list = (patch[key] as Feature[] | undefined) ?? data[key]
+      if (list?.some(f => f.linkedTo?.includes(id))) {
+        patch[key] = list.map(f => f.linkedTo?.includes(id) ? { ...f, linkedTo: f.linkedTo.filter(lid => lid !== id) } : f)
+      }
+    }
+    update(patch)
+  }
 
   // ── CONDITION HELPERS ─────────────────────────────────────────────────────
 
@@ -367,12 +384,29 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── FAVORITES PROPS ───────────────────────────────────────────────────────
 
+  const statMods = {
+    str: Math.floor(((data.strength     ?? 10) - 10) / 2),
+    dex: Math.floor(((data.dexterity    ?? 10) - 10) / 2),
+    con: Math.floor(((data.constitution ?? 10) - 10) / 2),
+    int: Math.floor(((data.intelligence ?? 10) - 10) / 2),
+    wis: Math.floor(((data.wisdom       ?? 10) - 10) / 2),
+    cha: Math.floor(((data.charisma     ?? 10) - 10) / 2),
+  }
+
+  const availableClasses = data.multiclass && data.classes?.length
+    ? data.classes.map(c => c.cls).filter(Boolean)
+    : (data.class ? [data.class] : [])
+
   const favPanelProps = {
-    favorites, spellItems, equipItems, features: allFeatures, pb,
+    favorites, spellItems, equipItems, features: allFeatures, pb, statMods, classes: availableClasses,
     onRemove: removeFavorite,
     onReorder: reorderFavorites,
-    onUpdateUses: updateFeatureUses,
+    onChangeSpell: changeSpell,
+    onRemoveSpell: removeSpell,
+    onChangeEquip: changeEquip,
+    onRemoveEquip: removeEquip,
     onUpdateFeature: patchFeature,
+    onRemoveFeature: removeFeatureGlobal,
     onLinkToggle: toggleFeatureLink,
     theme: { ...theme, box: effectiveBox }, card, readOnly,
     dragOver: favDragOver,
@@ -382,9 +416,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       e.preventDefault(); setFavDragOver(false)
       try { addFavorite(JSON.parse(e.dataTransfer.getData("x-fable-ref")) as FavoriteRef) } catch {}
     },
-    isFloat: favFloat, floatPos: favPos,
-    onFloatToggle: () => setFavFloat(v => !v),
-    onFloatPosChange: setFavPos,
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -551,7 +582,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {searchResults.length > 0 && (
           <div className={`absolute top-full left-0 right-0 z-40 mt-1 ${theme.box} border border-white/15 rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto`}>
             {searchResults.map(r => (
-              <div key={r.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/10 border-b border-white/5 last:border-0">
+              <div key={r.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-black/30 border-b border-white/5 last:border-0">
                 <span className="text-xs text-white/40 uppercase tracking-wider w-12 shrink-0">{r.category}</span>
                 <span className="text-sm text-white flex-1 truncate">{r.label}</span>
                 <button type="button"
@@ -598,7 +629,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
           {/* Col 3: Favorites */}
           <div className="flex-1 flex flex-col gap-3 min-h-0 min-w-0">
-            {!favFloat && <FavoritesPanel {...favPanelProps} />}
+            <FavoritesPanel {...favPanelProps} />
           </div>
         </div>
 
@@ -684,9 +715,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={uploadPortrait} />
 
-      {/* Floating favorites panel */}
-      {favFloat && <FavoritesPanel {...{ ...favPanelProps, isFloat: true }} />}
-
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
 
@@ -749,7 +777,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       <div className={`flex flex-col flex-1 min-h-0 ${activeTab === "chat" ? "overflow-hidden" : "overflow-auto p-4"} ${effectiveBody}`}>
         {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
-          <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly} />
+          <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
+            onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink} />
         )}
         {activeTab === "chat" && data.partyCode && (
           <PartyChat

@@ -35,6 +35,7 @@ export interface SpellItem {
   prepared?: boolean
   alwaysPrepared?: boolean
   ritual?: boolean
+  sourceClass?: string           // which class this spell is known/prepared from (multiclass)
 }
 
 export interface HitDicePool {
@@ -100,8 +101,10 @@ export interface CharacterData {
   wisdom?: number
   charisma?: number
   savingThrowProfs?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", boolean>>
-  spellSaveDC?: number
-  spellAttackBonus?: number
+  spellSaveDC?: number         // legacy manual value, superseded by computed 8 + PB + mod + spellSaveDCBonus
+  spellAttackBonus?: number    // legacy manual value, superseded by computed PB + mod + spellAttackBonusBonus
+  spellSaveDCBonus?: number       // extra flat bonus (magic items, feats, etc.) added on top of the computed save DC
+  spellAttackBonusBonus?: number  // extra flat bonus added on top of the computed spell attack bonus
   spellcastingAbility?: string
   cantripsKnown?: number
   spellsKnown?: number

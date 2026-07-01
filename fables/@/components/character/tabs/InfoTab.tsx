@@ -15,6 +15,9 @@ type InfoSubTab = "overview" | "traits" | "feats" | "features" | "profs"
 interface InfoTabProps {
   data: CharacterData
   update: (patch: Partial<CharacterData>) => void
+  onChangeFeature: (id: string, patch: Partial<Feature>) => void
+  onRemoveFeature: (id: string) => void
+  onLinkToggle: (featureId: string, otherId: string) => void
   theme: Theme
   card: string
   readOnly: boolean
@@ -106,7 +109,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",     "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, theme, card, readOnly }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly }: InfoTabProps) {
   const [subTab, setSubTab] = useState<InfoSubTab>("overview")
 
   const pb = profBonus(data.level ?? 1)
@@ -121,74 +124,9 @@ export function InfoTab({ data, update, theme, card, readOnly }: InfoTabProps) {
   // ── Feature list helpers ─────────────────────────────────────────────────
 
   type FeatureKey = "racialTraits" | "feats" | "classFeatures"
-  const ALL_KEYS: FeatureKey[] = ["racialTraits", "feats", "classFeatures"]
 
   function addFeature(key: FeatureKey) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "" }] })
-  }
-
-  function changeFeature(key: FeatureKey, id: string, patch: Partial<Feature>) {
-    update({ [key]: (data[key] ?? []).map(f => f.id === id ? { ...f, ...patch } : f) })
-  }
-
-  function removeFeature(key: FeatureKey, id: string) {
-    // Remove from the feature list
-    const patch: Partial<CharacterData> = {
-      [key]: (data[key] ?? []).filter(f => f.id !== id),
-    }
-    // Auto-remove from favorites
-    if (data.favorites?.find(f => f.refId === id)) {
-      patch.favorites = (data.favorites ?? []).filter(f => f.refId !== id)
-    }
-    // Remove this id from any other feature's linkedTo
-    for (const k of ALL_KEYS) {
-      const list = data[k] ?? []
-      if (list.some(f => f.linkedTo?.includes(id))) {
-        patch[k] = (patch[k] as Feature[] | undefined ?? list).map(f =>
-          f.linkedTo?.includes(id) ? { ...f, linkedTo: f.linkedTo.filter(lid => lid !== id) } : f
-        )
-      }
-    }
-    update(patch)
-  }
-
-  // Bidirectional link toggle — called by FeatureEntry
-  function toggleFeatureLink(featureId: string, otherId: string) {
-    // Locate both features across all lists
-    let featureKey: FeatureKey | null = null
-    let otherKey:   FeatureKey | null = null
-    for (const k of ALL_KEYS) {
-      if (data[k]?.find(f => f.id === featureId)) featureKey = k
-      if (data[k]?.find(f => f.id === otherId))   otherKey   = k
-    }
-    if (!featureKey || !otherKey) return
-
-    const feature = (data[featureKey] ?? []).find(f => f.id === featureId)!
-    const other   = (data[otherKey]   ?? []).find(f => f.id === otherId)!
-    const linked  = feature.linkedTo?.includes(otherId) ?? false
-
-    const newFeatureLinked = linked
-      ? (feature.linkedTo ?? []).filter(id => id !== otherId)
-      : [...(feature.linkedTo ?? []), otherId]
-    const newOtherLinked = linked
-      ? (other.linkedTo ?? []).filter(id => id !== featureId)
-      : [...(other.linkedTo ?? []), featureId]
-
-    if (featureKey === otherKey) {
-      // Both in the same list — update in one shot
-      update({
-        [featureKey]: (data[featureKey] ?? []).map(f => {
-          if (f.id === featureId) return { ...f, linkedTo: newFeatureLinked }
-          if (f.id === otherId)   return { ...f, linkedTo: newOtherLinked }
-          return f
-        }),
-      })
-    } else {
-      update({
-        [featureKey]: (data[featureKey] ?? []).map(f => f.id === featureId ? { ...f, linkedTo: newFeatureLinked } : f),
-        [otherKey]:   (data[otherKey]   ?? []).map(f => f.id === otherId   ? { ...f, linkedTo: newOtherLinked }   : f),
-      })
-    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -263,9 +201,9 @@ export function InfoTab({ data, update, theme, card, readOnly }: InfoTabProps) {
         <FeatureList
           items={data.racialTraits ?? []} allFeatures={allFeatures} label="Racial Traits"
           onAdd={() => addFeature("racialTraits")}
-          onChange={(id, p) => changeFeature("racialTraits", id, p)}
-          onRemove={id => removeFeature("racialTraits", id)}
-          onLinkToggle={(fid, oid) => toggleFeatureLink(fid, oid)}
+          onChange={onChangeFeature}
+          onRemove={onRemoveFeature}
+          onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
         />
       )}
@@ -276,9 +214,9 @@ export function InfoTab({ data, update, theme, card, readOnly }: InfoTabProps) {
         <FeatureList
           items={data.feats ?? []} allFeatures={allFeatures} label="Feats"
           onAdd={() => addFeature("feats")}
-          onChange={(id, p) => changeFeature("feats", id, p)}
-          onRemove={id => removeFeature("feats", id)}
-          onLinkToggle={(fid, oid) => toggleFeatureLink(fid, oid)}
+          onChange={onChangeFeature}
+          onRemove={onRemoveFeature}
+          onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
         />
       )}
@@ -289,9 +227,9 @@ export function InfoTab({ data, update, theme, card, readOnly }: InfoTabProps) {
         <FeatureList
           items={data.classFeatures ?? []} allFeatures={allFeatures} label="Class Features"
           onAdd={() => addFeature("classFeatures")}
-          onChange={(id, p) => changeFeature("classFeatures", id, p)}
-          onRemove={id => removeFeature("classFeatures", id)}
-          onLinkToggle={(fid, oid) => toggleFeatureLink(fid, oid)}
+          onChange={onChangeFeature}
+          onRemove={onRemoveFeature}
+          onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
         />
       )}

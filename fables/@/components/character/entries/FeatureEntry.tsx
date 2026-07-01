@@ -1,10 +1,9 @@
 // ════════════════════════════════════════════════════════════════════════════
 // FeatureEntry.tsx — collapsible feature card
 //
-// Collapsed: ▶ Feature Name  [Source]  2/3 LR  [✎]
-// Expanded:  ▼ Feature Name  [Source]       [✎]
-//                Description text...
-//                [────────────────] slider  2/3 · LR
+// Untracked: ▶ Feature Name  [Source]                    [✎]
+// Trackable: ▶ Feature Name  [──────slider──────] 2/3 LR  [✎]
+// Expanded adds description text below the header row.
 // Edit mode: name, source, description, track uses, max (or = PB), resets, links
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -116,7 +115,7 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
                   Resets on
                   <select value={feature.resetsOn ?? "long"}
                     onChange={e => onChange({ resetsOn: e.target.value as Feature["resetsOn"] })}
-                    className="bg-white/10 rounded px-2 py-1 text-white outline-none text-xs">
+                    className="bg-black/30 rounded px-2 py-1 text-white outline-none text-xs">
                     <option value="short">Short Rest</option>
                     <option value="long">Long Rest</option>
                     <option value="dawn">Dawn</option>
@@ -132,30 +131,44 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
                 </label>
               </div>
 
-              {/* Linked features */}
-              {allFeatures.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] text-white/40 uppercase tracking-widest">Sync uses with</span>
-                  <div className="flex flex-wrap gap-1">
-                    {allFeatures.map(other => {
-                      const linked = feature.linkedTo?.includes(other.id) ?? false
-                      return (
-                        <button key={other.id} type="button" onClick={() => onLinkToggle(other.id)}
-                          className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                            linked
-                              ? "bg-primary/20 border-primary/50 text-white"
-                              : "border-white/15 text-white/40 hover:border-white/30 hover:text-white/70"
-                          }`}>
-                          {linked ? "✓ " : ""}{other.name || "Unnamed"}
-                        </button>
-                      )
-                    })}
+              {/* Linked features — only features with matching max uses are eligible to sync,
+                  except already-linked ones (kept visible so a stale link can be undone). */}
+              {effectiveMax > 0 && (() => {
+                const linkCandidates = allFeatures.filter(other => {
+                  const linked   = feature.linkedTo?.includes(other.id) ?? false
+                  const otherMax = other.maxUsesFormula === "pb" ? pb : (other.maxUses ?? 0)
+                  return linked || otherMax === effectiveMax
+                })
+                if (linkCandidates.length === 0) return null
+                return (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/40 uppercase tracking-widest">Sync uses with</span>
+                    <div className="flex flex-wrap gap-1">
+                      {linkCandidates.map(other => {
+                        const linked   = feature.linkedTo?.includes(other.id) ?? false
+                        const otherMax = other.maxUsesFormula === "pb" ? pb : (other.maxUses ?? 0)
+                        const stale    = linked && otherMax !== effectiveMax
+                        return (
+                          <button key={other.id} type="button" onClick={() => onLinkToggle(other.id)}
+                            title={stale ? `Max uses no longer match (${otherMax} vs ${effectiveMax}) — click to unlink` : undefined}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                              stale
+                                ? "bg-red-500/10 border-red-400/40 text-red-300"
+                                : linked
+                                ? "bg-primary/20 border-primary/50 text-white"
+                                : "border-white/15 text-white/40 hover:border-white/30 hover:text-white/70"
+                            }`}>
+                            {linked ? "✓ " : ""}{other.name || "Unnamed"}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {(feature.linkedTo?.length ?? 0) > 0 && (
+                      <p className="text-[9px] text-white/30 italic">Use changes on this feature will mirror to linked features.</p>
+                    )}
                   </div>
-                  {(feature.linkedTo?.length ?? 0) > 0 && (
-                    <p className="text-[9px] text-white/30 italic">Use changes on this feature will mirror to linked features.</p>
-                  )}
-                </div>
-              )}
+                )
+              })()}
             </>
           )}
         </div>
@@ -180,58 +193,62 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
         onClick={() => setExpanded(v => !v)}>
         <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
-        <span className="text-sm font-semibold text-white flex-1 truncate min-w-0">
+        <span className={`text-sm font-semibold text-white truncate min-w-0 ${hasUses ? "shrink-0 max-w-[45%]" : "flex-1"}`}>
           {feature.name || <span className="text-white/30 italic">Unnamed</span>}
         </span>
 
-        {feature.source && (
+        {feature.source && !hasUses && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0 max-w-24 truncate">
             {feature.source}
           </span>
         )}
 
-        {/* Compact use count pill when collapsed */}
-        {hasUses && !expanded && (
-          <span className="text-xs text-white/50 shrink-0 tabular-nums">
-            {usesRemaining}/{effectiveMax} <span className="text-white/30">{resetLabel(feature.resetsOn)}</span>
-          </span>
-        )}
-
-        {/* Linked indicator */}
-        {(feature.linkedTo?.length ?? 0) > 0 && (
-          <span className="text-[9px] text-primary/60 shrink-0" title="Synced with other feature(s)">⟳</span>
-        )}
-
-        {!readOnly && (
-          <button type="button" onClick={e => { e.stopPropagation(); setEditing(true) }}
-            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors">
-            ✎
-          </button>
-        )}
-      </div>
-
-      {/* Expanded content */}
-      {expanded && (
-        <div className="px-4 pb-3 border-t border-white/5 flex flex-col gap-3">
-          {feature.description ? (
-            <p className="text-sm text-white/60 leading-relaxed mt-2 whitespace-pre-wrap">{feature.description}</p>
-          ) : !readOnly ? (
-            <p className="text-xs text-white/20 italic mt-2">No description — click ✎ to add one.</p>
-          ) : null}
-
-          {hasUses && (
+        {/* Always-visible tracking bar + uses remaining */}
+        {hasUses && (
+          <div className="flex items-center gap-2 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
             <TracingSlider
               value={usesRemaining}
               max={effectiveMax}
               disabled={readOnly}
               color={feature.sliderColor}
               showButtons
-              showLabel
-              label={`${usesRemaining} / ${effectiveMax} uses remaining`}
-              labelRight={resetLabel(feature.resetsOn)}
+              buttonSize="sm"
+              className="flex-1 min-w-0"
               onChange={val => onChange({ usesUsed: effectiveMax - val })}
             />
-          )}
+            <span className="text-xs text-white/50 shrink-0 tabular-nums">
+              {usesRemaining}/{effectiveMax} <span className="text-white/30">{resetLabel(feature.resetsOn)}</span>
+            </span>
+          </div>
+        )}
+
+        {/* Linked indicator */}
+        {(feature.linkedTo?.length ?? 0) > 0 && (
+          <span className="text-[9px] text-primary/60 shrink-0" title="Synced with other feature(s)">⟳</span>
+        )}
+      </div>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 pb-3 border-t border-white/5 flex flex-col gap-3">
+          <div className="flex items-center gap-2 mt-2">
+            {feature.source && hasUses && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 truncate">
+                {feature.source}
+              </span>
+            )}
+            {!readOnly && (
+              <button type="button" onClick={() => setEditing(true)}
+                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors ml-auto">
+                ✎
+              </button>
+            )}
+          </div>
+          {feature.description ? (
+            <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{feature.description}</p>
+          ) : !readOnly ? (
+            <p className="text-xs text-white/20 italic">No description — click ✎ to add one.</p>
+          ) : null}
         </div>
       )}
     </div>

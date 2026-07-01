@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import  { useState } from "react"
 
 const DICE = [4, 6, 8, 10, 12, 20, 100] as const
 
@@ -69,7 +69,7 @@ export function DiceRoller({ card }: Props) {
             <div key={die} className="flex items-center gap-0.5">
               <button type="button" onClick={() => adjustDie(die, -1)}
                 className="size-4 flex items-center justify-center text-white/30 hover:text-white/70 text-sm leading-none">−</button>
-              <span className="text-xs font-mono text-white/80 min-w-[2rem] text-center">{count}d{die}</span>
+              <span className="text-xs font-mono text-white/80  text-center">{count}d{die}</span>
               <button type="button" onClick={() => adjustDie(die, 1)}
                 className="size-4 flex items-center justify-center text-white/30 hover:text-white/70 text-sm leading-none">+</button>
             </div>

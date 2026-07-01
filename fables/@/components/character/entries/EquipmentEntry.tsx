@@ -130,7 +130,7 @@ export function EquipmentEntry({
                 className="flex-1 bg-transparent outline-none text-base font-bold text-white placeholder:text-white/30 mr-3"
               />
               <button type="button" onClick={() => setEditing(false)}
-                className="size-7 flex items-center justify-center rounded-lg hover:bg-black/10 text-white/40 hover:text-white shrink-0">✕</button>
+                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">✕</button>
             </div>
 
             {/* Modal body */}
@@ -141,7 +141,7 @@ export function EquipmentEntry({
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Type</span>
                   <select value={item.type ?? "melee"} onChange={e => onChange({ type: e.target.value })}
-                    className="bg-black/50 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
+                    className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
                     <option value="melee">Melee</option>
                     <option value="ranged">Ranged</option>
                     <option value="misc">Misc</option>
@@ -154,7 +154,7 @@ export function EquipmentEntry({
                     <select
                       value={item.attackStat ?? ""}
                       onChange={e => onChange({ attackStat: (e.target.value as EquipmentItem["attackStat"]) || undefined })}
-                      className="bg-black/50 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm"
+                      className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm"
                     >
                       {STAT_OPTIONS.map(o => (
                         <option key={o.value} value={o.value}>{o.label}</option>
@@ -276,10 +276,6 @@ export function EquipmentEntry({
           className="px-3 py-2.5 flex items-center gap-2 min-h-11 cursor-pointer hover:bg-white/5 transition-colors select-none"
           onClick={() => setIsExpanded(e => !e)}
         >
-          {/* Proficiency dot */}
-          <span className={`size-2 rounded-full shrink-0 ${item.proficient ? "bg-primary" : "bg-white/15"}`}
-            title={item.proficient ? "Proficient" : "Not proficient"} />
-
           {/* Name + tags */}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">
@@ -303,23 +299,22 @@ export function EquipmentEntry({
               )}
             </div>
           </div>
-
-          {/* Edit button */}
-          {!readOnly && (
-            <button type="button" onClick={e => { e.stopPropagation(); setEditing(true) }}
-              className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors">
-              ✎
-            </button>
-          )}
         </div>
 
         {/* Expanded detail */}
         {isExpanded && (
           <div className="px-4 pb-3 pt-2 border-t border-white/5 flex flex-col gap-2">
-            {/* To-hit breakdown */}
-            {item.attackStat && toHit && (
-              <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
-            )}
+            <div className="flex items-center gap-2">
+              {item.attackStat && toHit && (
+                <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
+              )}
+              {!readOnly && (
+                <button type="button" onClick={() => setEditing(true)}
+                  className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors ml-auto">
+                  ✎
+                </button>
+              )}
+            </div>
             {/* Notes */}
             {item.notes
               ? (

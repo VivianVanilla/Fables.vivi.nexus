@@ -19,6 +19,8 @@ interface SpellEntryProps {
   onRemove: () => void
   theme: Theme
   readOnly?: boolean
+  showPrepToggle?: boolean
+  classes?: string[]   // character's class(es) — lets a spell be tagged as known/prepared from a specific one
 }
 
 // ── Parse spell description for combat data ───────────────────────────────────
@@ -105,7 +107,7 @@ function SpellNameInput({
               key={s.index}
               type="button"
               onMouseDown={() => { onFill(s); setOpen(false) }}
-              className="w-full text-left px-3 py-2.5 hover:bg-white/10 transition-colors flex items-center justify-between gap-3"
+              className="w-full text-left px-3 py-2.5 hover:bg-black/30 transition-colors flex items-center justify-between gap-3"
             >
               <span className="text-sm text-white truncate">{s.name}</span>
               <span className="text-[10px] text-white/40 shrink-0">
@@ -132,9 +134,7 @@ function Pill({ label, value, color = "bg-white/10 text-white/60" }: { label: st
 
 // ── Spell detail modal (shows SpellItem's own stored data) ────────────────────
 
-function SpellDetailModal({ spell, onClose }: { spell: SpellItem; onClose: () => void }) {
-  const prepState = getPrepState(spell)
-
+function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellItem; onClose: () => void; onEdit: () => void; readOnly: boolean }) {
   return (
     <Modal onClose={onClose}>
       <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(560px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
@@ -149,14 +149,16 @@ function SpellDetailModal({ spell, onClose }: { spell: SpellItem; onClose: () =>
                   ? `${spell.school ?? "Cantrip"} cantrip`
                   : `Level ${spell.level}${spell.school ? ` ${spell.school}` : ""}`}
                 {spell.ritual ? " · Ritual" : ""}
+                {spell.sourceClass ? ` · ${spell.sourceClass}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0 mt-0.5">
-              {prepState === "always" && (
-                <span className="text-[10px] border border-amber-400/50 text-amber-400 rounded-full px-2 py-0.5 font-semibold tracking-wide">Always Known</span>
-              )}
-              {prepState === "prepared" && (
+              {!spell.alwaysPrepared && spell.prepared && (
                 <span className="text-[10px] border border-primary/50 text-primary rounded-full px-2 py-0.5 font-semibold tracking-wide">Prepared</span>
+              )}
+              {!readOnly && (
+                <button type="button" onClick={onEdit}
+                  className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm transition-colors">✎</button>
               )}
               <button type="button" onClick={onClose}
                 className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
@@ -204,31 +206,9 @@ function SpellDetailModal({ spell, onClose }: { spell: SpellItem; onClose: () =>
   )
 }
 
-// ── Prep state helpers ────────────────────────────────────────────────────────
-
-type PrepState = "none" | "prepared" | "always"
-
-function getPrepState(spell: SpellItem): PrepState {
-  if (spell.alwaysPrepared) return "always"
-  if (spell.prepared)       return "prepared"
-  return "none"
-}
-
-function nextPrepState(current: PrepState): PrepState {
-  if (current === "none")     return "prepared"
-  if (current === "prepared") return "always"
-  return "none"
-}
-
-function prepStateToFields(state: PrepState): Partial<SpellItem> {
-  if (state === "prepared") return { prepared: true,  alwaysPrepared: false }
-  if (state === "always")   return { prepared: false, alwaysPrepared: true  }
-  return                           { prepared: false, alwaysPrepared: false }
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [] }: SpellEntryProps) {
   const [editing, setEditing] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -253,15 +233,12 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
     })
   }
 
-  // Cycle prep state
-  function cyclePrep(e: React.MouseEvent) {
+  // Toggle prepared — a simple on/off; "known" (alwaysPrepared) spells have no toggle at all
+  function togglePrepared(e: React.MouseEvent) {
     e.stopPropagation()
     if (readOnly) return
-    const next = nextPrepState(getPrepState(spell))
-    onChange(prepStateToFields(next))
+    onChange({ prepared: !spell.prepared })
   }
-
-  const prepState = getPrepState(spell)
 
   // ── Drag source ─────────────────────────────────────────────────────────
 
@@ -281,7 +258,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
     <>
       {/* ── Detail modal (shows this spell's own stored data) ──────────── */}
       {showDetail && (
-        <SpellDetailModal spell={spell} onClose={() => setShowDetail(false)} />
+        <SpellDetailModal spell={spell} readOnly={readOnly} onClose={() => setShowDetail(false)}
+          onEdit={() => { setShowDetail(false); setEditing(true) }} />
       )}
 
       {/* ── Edit form modal ─────────────────────────────────────────────── */}
@@ -371,6 +349,17 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
                 </label>
               </div>
 
+              {classes.length > 1 && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-white/40 uppercase tracking-wider">Known/Prepared From</span>
+                  <select value={spell.sourceClass ?? ""} onChange={e => onChange({ sourceClass: e.target.value || undefined })}
+                    className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
+                    <option value="">—</option>
+                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              )}
+
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-white/40 uppercase tracking-wider">Description / Notes</span>
                 <textarea value={spell.notes ?? ""} onChange={e => onChange({ notes: e.target.value })} placeholder="Spell description…" rows={4}
@@ -393,26 +382,22 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
         onClick={() => setShowDetail(true)}
         className={`rounded-lg ${theme.box} border border-white/10 px-3 py-2.5 flex items-center gap-2 min-h-11 cursor-pointer hover:border-white/20 transition-colors`}
       >
-        {/* Prep indicator — 3 states */}
-        <button
-          type="button"
-          disabled={readOnly}
-          onClick={cyclePrep}
-          title={
-            prepState === "always"   ? "Always/Known — click to clear" :
-            prepState === "prepared" ? "Prepared — click for Always/Known" :
-                                       "Unprepared — click to prepare"
-          }
-          className={`size-5 rounded shrink-0 transition-all text-[9px] font-bold flex items-center justify-center border ${
-            prepState === "always"
-              ? "bg-amber-500/30 border-amber-400/70 text-amber-300 text-[11px]"
-              : prepState === "prepared"
-              ? "bg-primary border-primary text-white"
-              : "border-white/20 bg-transparent text-white/20 hover:border-white/40 hover:text-white/40"
-          }`}
-        >
-          {prepState === "always" ? "∞" : "P"}
-        </button>
+        {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells have no mark at all */}
+        {showPrepToggle && !spell.alwaysPrepared && (
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={togglePrepared}
+            title={spell.prepared ? "Prepared — click to unprepare" : "Unprepared — click to prepare"}
+            className={`size-5 rounded shrink-0 transition-all text-[9px] font-bold flex items-center justify-center border ${
+              spell.prepared
+                ? "bg-primary border-primary text-white"
+                : "border-white/20 bg-transparent text-white/20 hover:border-white/40 hover:text-white/40"
+            }`}
+          >
+            P
+          </button>
+        )}
 
         {/* Name + tags */}
         <div className="flex-1 min-w-0">
@@ -423,9 +408,6 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
             {spell.ritual && (
               <span className="text-[9px] border border-amber-400/40 text-amber-400/80 rounded px-0.5 leading-tight shrink-0">R</span>
             )}
-            {prepState === "always" && (
-              <span className="text-[9px] border border-amber-400/40 text-amber-400/70 rounded px-0.5 leading-tight shrink-0">Known</span>
-            )}
           </div>
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {spell.level !== undefined && (
@@ -433,6 +415,9 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
             )}
             {spell.school && (
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
+            )}
+            {spell.sourceClass && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300">{spell.sourceClass}</span>
             )}
             {(spell.saveAttr || spell.saveType) && (
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">
@@ -452,17 +437,6 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false 
             )}
           </div>
         </div>
-
-        {/* Edit button */}
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setEditing(true) }}
-            className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors"
-          >
-            ✎
-          </button>
-        )}
       </div>
     </>
   )

@@ -146,14 +146,16 @@ function hslToHex(h: number, s: number, l: number): string {
 
 /**
  * Compute the slot bar color for a given spell level (1–9).
- * Keeps the accent hue exact, fixes saturation at 85%, and sweeps lightness
- * from 68% (level 1, bright & vivid) down to 15% (level 9, deep & rich).
+ * Level 1 starts at the theme's exact accent hue, then each higher level
+ * sweeps further around the color wheel (~260° total) so levels read as
+ * genuinely different colors rather than just lighter/darker shades of one hue.
+ * Lightness only tapers slightly (62% → 50%) to keep every level readable.
  */
 export function slotLevelColor(accent: string, level: number): string {
   if (!accent || !accent.startsWith("#")) return accent ?? "#6B7280"
   const [r, g, b] = hexToRgb(accent)
   const hue = rgbToHue(r, g, b)
   const t   = (level - 1) / 8
-  const l   = 68 - t * 53
-  return hslToHex(hue, 85, l)
+  const l   = 62 - t * 12
+  return hslToHex((hue + t * 260) % 360, 80, l)
 }

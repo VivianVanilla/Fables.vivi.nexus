@@ -36,7 +36,7 @@ export function SpellModal({ spell, onClose }: Props) {
             )}
 
             {spell.ritual && (
-              <span className="inline-block mb-3 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-white border border-white/20">
+              <span className="inline-block mb-3 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-black/30 text-white border border-white/20">
                 Ritual
               </span>
             )}

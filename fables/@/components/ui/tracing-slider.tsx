@@ -37,14 +37,14 @@ function TracingSlider({
   const fill  = color ?? "hsl(var(--primary))"
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div className={cn("flex flex-col gap-1.5 w-full min-w-0", className)}>
       {(showLabel || label || labelRight) && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-white/50">{label}</span>
           {labelRight && <span className="text-white/30">{labelRight}</span>}
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         {showButtons && (
           <button
             type="button"
@@ -62,7 +62,7 @@ function TracingSlider({
           value={value}
           disabled={disabled}
           onChange={e => onChange(Number(e.target.value))}
-          className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer disabled:cursor-default
+          className="flex-1 min-w-0 w-full h-1.5 rounded-full appearance-none cursor-pointer disabled:cursor-default
             [&::-webkit-slider-thumb]:appearance-none
             [&::-webkit-slider-thumb]:size-3
             [&::-webkit-slider-thumb]:rounded-full
