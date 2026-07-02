@@ -57,17 +57,17 @@ function renderMarkdown(md: string): React.ReactNode {
 
     if (line.startsWith("# ")) {
       flushList()
-      nodes.push(<h1 key={key} className="text-xl font-bold text-white mt-4 mb-1 first:mt-0">{parseInline(line.slice(2), key)}</h1>)
+      nodes.push(<h1 key={key} className="text-xl font-bold text-white mt-4 mb-1 first:mt-0 whitespace-pre-wrap">{parseInline(line.slice(2), key)}</h1>)
     } else if (line.startsWith("## ")) {
       flushList()
-      nodes.push(<h2 key={key} className="text-lg font-bold text-white mt-4 mb-1">{parseInline(line.slice(3), key)}</h2>)
+      nodes.push(<h2 key={key} className="text-lg font-bold text-white mt-4 mb-1 whitespace-pre-wrap">{parseInline(line.slice(3), key)}</h2>)
     } else if (line.startsWith("### ")) {
       flushList()
-      nodes.push(<h3 key={key} className="text-base font-semibold text-white/90 mt-3 mb-0.5">{parseInline(line.slice(4), key)}</h3>)
+      nodes.push(<h3 key={key} className="text-base font-semibold text-white/90 mt-3 mb-0.5 whitespace-pre-wrap">{parseInline(line.slice(4), key)}</h3>)
     } else if (line.startsWith("- ") || line.startsWith("* ")) {
       inList = true
       nodes.push(
-        <li key={key} className="ml-5 list-disc text-sm text-white/75 leading-relaxed">
+        <li key={key} className="ml-5 list-disc text-sm text-white/75 leading-relaxed whitespace-pre-wrap">
           {parseInline(line.slice(2), key)}
         </li>
       )
@@ -77,7 +77,7 @@ function renderMarkdown(md: string): React.ReactNode {
     } else {
       if (inList) flushList()
       nodes.push(
-        <p key={key} className="text-sm text-white/75 leading-relaxed">
+        <p key={key} className="text-sm text-white/75 leading-relaxed whitespace-pre-wrap">
           {parseInline(line, key)}
         </p>
       )

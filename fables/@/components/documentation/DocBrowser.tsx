@@ -9,6 +9,7 @@ import type { DocType, DocEntry } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { DocEntryForm } from "./DocEntryForm"
 import { HomebrewBrowserModal } from "./HomebrewBrowserModal"
+import { Markdown } from "../ui/Markdown"
 
 export interface LibraryObject {
   id: string
@@ -136,9 +137,7 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
                   {(feats as any[]).map((f: any) => (
                     <div key={f.id} className="mb-3 last:mb-0">
                       <p className="text-sm font-bold text-slate-200 mb-0.5">{f.name}</p>
-                      {f.description && (
-                        <p className="text-sm text-slate-400 leading-relaxed">{f.description}</p>
-                      )}
+                      {f.description && <Markdown text={f.description} tone="slate" />}
                     </div>
                   ))}
                 </div>
@@ -350,7 +349,7 @@ function DetailView({
             {d.spellcasting_ability && d.spellcasting_type && (
               <RefSection title="Spellcasting">
                 {d.spellcasting_description && (
-                  <p className="text-sm text-slate-400 leading-relaxed mb-3">{d.spellcasting_description}</p>
+                  <Markdown text={d.spellcasting_description} tone="slate" className="mb-3" />
                 )}
                 <Prop label="Spellcasting Ability" value={(d.spellcasting_ability as string).toUpperCase()} />
                 {d.spellcasting_type && (
@@ -375,9 +374,7 @@ function DetailView({
                     {(feats as any[]).map((f: any) => (
                       <div key={f.id} className="mb-3 last:mb-0">
                         <p className="text-sm font-bold text-slate-200 mb-0.5">{f.name}</p>
-                        {f.description && (
-                          <p className="text-sm text-slate-400 leading-relaxed">{f.description}</p>
-                        )}
+                        {f.description && <Markdown text={f.description} tone="slate" />}
                       </div>
                     ))}
                   </div>
@@ -446,7 +443,7 @@ function DetailView({
                   return (
                     <div key={i} className="mb-3 last:mb-0">
                       <p className="text-sm font-bold text-slate-200">{name}</p>
-                      {desc && <p className="text-xs text-slate-400 leading-relaxed mt-0.5 whitespace-pre-wrap">{desc}</p>}
+                      {desc && <Markdown text={desc} tone="slate" size="xs" className="mt-0.5" />}
                     </div>
                   )
                 })}
@@ -464,7 +461,7 @@ function DetailView({
                         return (
                           <div key={ti} className="mb-2 pl-3 border-l border-slate-700">
                             <p className="text-xs font-semibold text-slate-300">{name}</p>
-                            {desc && <p className="text-xs text-slate-500 leading-relaxed mt-0.5 whitespace-pre-wrap">{desc}</p>}
+                            {desc && <Markdown text={desc} tone="slate" size="xs" className="mt-0.5" />}
                           </div>
                         )
                       })}
@@ -486,12 +483,7 @@ function DetailView({
             )}
             {d.description && (
               <RefSection title="Description">
-                <div className="flex flex-col gap-2">
-                  {(d.description as string).split("\n").map((line: string, i: number) =>
-                    line.trim() === "" ? <div key={i} className="h-1" /> :
-                    <p key={i} className="text-sm text-slate-400 leading-relaxed">{line}</p>
-                  )}
-                </div>
+                <Markdown text={d.description} tone="slate" />
               </RefSection>
             )}
           </>
@@ -507,7 +499,7 @@ function DetailView({
             </RefSection>
             {d.description && (
               <RefSection title="Description">
-                <p className="text-sm text-slate-400 leading-relaxed">{d.description}</p>
+                <Markdown text={d.description} tone="slate" />
               </RefSection>
             )}
           </>

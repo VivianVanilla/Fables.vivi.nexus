@@ -3,12 +3,11 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 import type { SpellItem } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
+import { Markdown } from "../../ui/Markdown"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 
@@ -194,11 +193,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
         {/* Description */}
         <div className="px-6 py-4 overflow-y-auto flex-1">
           {spell.notes
-            ? (
-              <div className="prose prose-sm prose-invert max-w-none text-white/70 prose-p:leading-relaxed prose-table:text-xs prose-th:text-white/50 prose-td:text-white/60">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{spell.notes}</ReactMarkdown>
-              </div>
-            )
+            ? <Markdown text={spell.notes} tone="dark" />
             : <p className="text-sm text-white/25 italic">No description saved.</p>
           }
         </div>

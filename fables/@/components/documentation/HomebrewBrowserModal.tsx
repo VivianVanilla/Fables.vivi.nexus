@@ -7,6 +7,7 @@ import { supabase } from "../../../src/supabase"
 import { X, ChevronRight, Check, Loader2, Plus, Pencil, Trash2 } from "lucide-react"
 import type { DocType, DocEntry } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
+import { Markdown } from "../ui/Markdown"
 
 interface Props {
   type: DocType
@@ -36,6 +37,7 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
 
 // ── Entry detail panel ────────────────────────────────────────────────────────
 
@@ -160,20 +162,7 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
       {type === "feats" && (
         <div className="flex flex-col gap-2 text-sm">
           {d.prerequisite && <Row label="Prerequisite" value={d.prerequisite} />}
-          {d.asi?.ability && <Row label="ASI" value={`+${d.asi.amount ?? 1} ${d.asi.ability.toUpperCase()}`} />}
-          {d.benefits?.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-slate-500 font-medium">Benefits</span>
-              <ul className="flex flex-col gap-1.5 list-none">
-                {d.benefits.map((b: string, i: number) => (
-                  <li key={i} className="flex gap-2 text-slate-300">
-                    <span className="text-slate-600 shrink-0">•</span>
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {d.description && <Markdown text={d.description} tone="slate" />}
         </div>
       )}
 
@@ -187,7 +176,7 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
             <span className="text-slate-400">{(d.item_type ?? "Wondrous").replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
             {d.requires_attunement && <span className="text-xs text-amber-400">(requires attunement)</span>}
           </div>
-          {d.description && <p className="text-slate-300 leading-relaxed">{d.description}</p>}
+          {d.description && <Markdown text={d.description} tone="slate" />}
           {d.ac_bonus    && <Row label="AC Bonus"    value={`+${d.ac_bonus}`} />}
           {d.save_bonus  && <Row label="Save Bonus"  value={`+${d.save_bonus}`} />}
           {d.set_stat    && <Row label="Sets"        value={`${d.set_stat.ability.toUpperCase()} = ${d.set_stat.value}`} />}
@@ -251,10 +240,13 @@ export function HomebrewBrowserModal({
   async function addToLibrary(entry: DocEntry) {
     if (!userId) return
     const added_at = new Date().toISOString()
-    const { data } = await supabase.from("objects").insert({
+    const { data, error } = await supabase.from("objects").insert({
       name: entry.name,
       type: `doc_${singular}`,
       owner_id: userId,
+      parent_id: null,
+      position: 0,
+      created_date: added_at.split("T")[0],
       data: {
         doc_id: entry.id,
         doc_type: singular,
@@ -266,6 +258,11 @@ export function HomebrewBrowserModal({
         ...entry.data,
       },
     }).select("id").single()
+
+    if (error) {
+      console.error("Failed to add to library:", error)
+      return
+    }
 
     if (data) {
       setLibraryState(prev => new Map(prev).set(entry.id, { objectId: (data as any).id, added_at }))

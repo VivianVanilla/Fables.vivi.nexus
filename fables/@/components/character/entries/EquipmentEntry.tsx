@@ -3,11 +3,10 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 import type { EquipmentItem } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
+import { Markdown } from "../../ui/Markdown"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,8 +29,6 @@ const STAT_OPTIONS = [
   { value: "wis", label: "WIS" },
   { value: "cha", label: "CHA" },
 ] as const
-
-const MD_PROSE = "prose prose-sm prose-invert max-w-none text-white/60 prose-p:leading-relaxed prose-p:my-1"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -317,11 +314,7 @@ export function EquipmentEntry({
             </div>
             {/* Notes */}
             {item.notes
-              ? (
-                <div className={MD_PROSE}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.notes}</ReactMarkdown>
-                </div>
-              )
+              ? <Markdown text={item.notes} tone="dark" size="xs" />
               : <p className="text-xs text-white/25 italic">No description.</p>
             }
           </div>

@@ -12,6 +12,7 @@ import type { Feature } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
+import { Markdown } from "../../ui/Markdown"
 import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
@@ -31,14 +32,14 @@ async function getSuggestions(docType: SuggestionSource, userId?: string | null)
   const p = (async () => {
     // Core (non-homebrew)
     const { data: coreRows } = await supabase
-      .from("documentation").select("data")
+      .from("documentation").select("name, description, data")
       .eq("type", docType).eq("is_homebrew", false)
 
     let homebrew: any[] = []
     if (userId) {
       // Personal homebrew
       const { data: ownRows } = await supabase
-        .from("documentation").select("data")
+        .from("documentation").select("name, description, data")
         .eq("type", docType).eq("is_homebrew", true).eq("owner_id", userId)
 
       // Library homebrew
@@ -49,7 +50,7 @@ async function getSuggestions(docType: SuggestionSource, userId?: string | null)
 
       let libRows: any[] = []
       if (libIds.length) {
-        const { data: lr } = await supabase.from("documentation").select("data").in("id", libIds)
+        const { data: lr } = await supabase.from("documentation").select("name, description, data").in("id", libIds)
         libRows = lr ?? []
       }
 
@@ -60,6 +61,14 @@ async function getSuggestions(docType: SuggestionSource, userId?: string | null)
     const results: Suggestion[] = []
 
     for (const row of all) {
+      // Feats are stored as one document per feat, unlike races/classes which
+      // nest traits/features arrays. The real feat text lives in data.description —
+      // the top-level `description` column is actually the "Source" field (e.g. "PHB p.51").
+      if (docType === "feat") {
+        if (row.name) results.push({ name: row.name, description: row.data?.description ?? "" })
+        continue
+      }
+
       const features: any[] = row.data?.features ?? []
       const traits:   any[] = row.data?.traits   ?? []
 
@@ -377,7 +386,7 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
             )}
           </div>
           {feature.description ? (
-            <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{feature.description}</p>
+            <Markdown text={feature.description} tone="dark" />
           ) : !readOnly ? (
             <p className="text-xs text-white/20 italic">No description — click ✎ to add one.</p>
           ) : null}

@@ -3,6 +3,7 @@ import { CLASS_COLORS } from './constants'
 import type { Spell } from './types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 
 interface Props {
   spell: Spell | null
@@ -43,9 +44,9 @@ export function SpellModal({ spell, onClose }: Props) {
 
             <div className="text-sm leading-relaxed border-t border-slate-800 pt-4">
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkBreaks]}
                 components={{
-                  p: ({ children }) => <p className="text-slate-300 mb-2.5">{children}</p>,
+                  p: ({ children }) => <p className="text-slate-300 mb-2.5 whitespace-pre-wrap">{children}</p>,
                   ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-300">{children}</ul>,
                   ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-slate-300">{children}</ol>,
                   li: ({ children }) => <li>{children}</li>,
