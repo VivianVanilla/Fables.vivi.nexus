@@ -49,7 +49,7 @@ function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onL
         <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">{label}</span>
         {!readOnly && (
           <button type="button" onClick={onAdd}
-            className="text-[9px] px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
+            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
             + Add
           </button>
         )}

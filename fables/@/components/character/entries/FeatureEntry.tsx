@@ -115,13 +115,6 @@ interface FeatureEntryProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resetLabel(r?: Feature["resetsOn"]): string {
-  if (r === "short")  return "SR"
-  if (r === "dawn")   return "Dawn"
-  if (r === "manual") return "Manual"
-  return "LR"
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId }: FeatureEntryProps) {
@@ -330,42 +323,50 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
 
       {/* Header row */}
       <div {...dragAttrs}
-        className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors select-none min-h-11"
+        className="flex flex-col px-3 py-2 cursor-pointer hover:bg-white/5 transition-colors select-none"
         onClick={() => setExpanded(v => !v)}>
-        <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
-        <span className={`text-sm font-semibold text-white truncate min-w-0 ${hasUses ? "shrink-0 max-w-[45%]" : "flex-1"}`}>
-          {feature.name || <span className="text-white/30 italic">Unnamed</span>}
-        </span>
+        {/* Top row: expand chevron + name + desktop bar */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
-        {feature.source && !hasUses && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0 max-w-24 truncate">
-            {feature.source}
+          <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
+            {feature.name || <span className="text-white/30 italic">Unnamed</span>}
           </span>
-        )}
 
-        {/* Always-visible tracking bar + uses remaining */}
+          {/* Desktop bar (sm and up) */}
+          {hasUses && (
+            <div className="hidden sm:flex shrink-0 items-center gap-1.5 w-[50%]" onClick={e => e.stopPropagation()}>
+              <TracingSlider
+                value={usesRemaining} max={effectiveMax}
+                disabled={readOnly} color={feature.sliderColor}
+                showButtons buttonSize="sm" className="flex-1 min-w-0"
+                onChange={val => onChange({ usesUsed: effectiveMax - val })}
+              />
+              <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
+                {usesRemaining}/{effectiveMax}
+              </span>
+            </div>
+          )}
+
+          {(feature.linkedTo?.length ?? 0) > 0 && (
+            <span className="text-[9px] text-primary/60 shrink-0" title="Synced with other feature(s)">⟳</span>
+          )}
+        </div>
+
+        {/* Mobile bar — full width below name */}
         {hasUses && (
-          <div className="flex items-center gap-2 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+          <div className="sm:hidden flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
             <TracingSlider
-              value={usesRemaining}
-              max={effectiveMax}
-              disabled={readOnly}
-              color={feature.sliderColor}
-              showButtons
-              buttonSize="sm"
-              className="flex-1 min-w-0"
+              value={usesRemaining} max={effectiveMax}
+              disabled={readOnly} color={feature.sliderColor}
+              showButtons buttonSize="sm" className="flex-1 min-w-0"
               onChange={val => onChange({ usesUsed: effectiveMax - val })}
             />
-            <span className="text-xs text-white/50 shrink-0 tabular-nums">
-              {usesRemaining}/{effectiveMax} <span className="text-white/30">{resetLabel(feature.resetsOn)}</span>
+            <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
+              {usesRemaining}/{effectiveMax}
             </span>
           </div>
-        )}
-
-        {/* Linked indicator */}
-        {(feature.linkedTo?.length ?? 0) > 0 && (
-          <span className="text-[9px] text-primary/60 shrink-0" title="Synced with other feature(s)">⟳</span>
         )}
       </div>
 

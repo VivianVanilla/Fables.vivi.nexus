@@ -81,7 +81,7 @@ export function SpellsEquipPanel({
     <div className={`${card} p-4 flex flex-col gap-3`}>
 
       {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap shrink-0">
+      <div className="flex items-center gap-3 flex-wrap shrink-0 ">
         <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0">
           <button type="button" onClick={() => setShowSpells(true)}
             className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
@@ -94,47 +94,49 @@ export function SpellsEquipPanel({
         </div>
 
         {showSpells && (
-          <div className="flex items-center gap-5 flex-1 flex-wrap">
-            {data.spellcastingAbility && (
+          <div className="flex items-center gap-3 flex-1 flex-wrap min-w-0">
+            <div className="flex items-center gap-4 flex-wrap min-w-0">
+              {data.spellcastingAbility && (
+                <div className="flex flex-col items-center leading-none gap-0.5">
+                  <span className="text-base font-bold text-white/70 uppercase tracking-wider">{data.spellcastingAbility}</span>
+                  <span className="text-[10px] text-white/35 uppercase tracking-wider">Ability</span>
+                </div>
+              )}
               <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className="text-base font-bold text-white/70 uppercase tracking-wider">{data.spellcastingAbility}</span>
-                <span className="text-[10px] text-white/35 uppercase tracking-wider">Ability</span>
+                <span className="text-lg font-bold text-white tabular-nums">{computedSaveDC ?? "—"}</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">Save DC</span>
               </div>
-            )}
-            <div className="flex flex-col items-center leading-none gap-0.5">
-              <span className="text-lg font-bold text-white tabular-nums">{computedSaveDC ?? "—"}</span>
-              <span className="text-[10px] text-white/40 uppercase tracking-wider">Save DC</span>
-            </div>
-            <div className="flex flex-col items-center leading-none gap-0.5">
-              <span className="text-lg font-bold text-white tabular-nums">{computedAtkBonus != null ? `+${computedAtkBonus}` : "—"}</span>
-              <span className="text-[10px] text-white/40 uppercase tracking-wider">Spell Atk</span>
-            </div>
-            {!!data.spellsPrepared && (
               <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className={`text-lg font-bold tabular-nums ${preparedCount > data.spellsPrepared ? "text-red-400" : "text-white"}`}>
-                  {preparedCount}<span className="text-white/30 text-sm">/{data.spellsPrepared}</span>
+                <span className="text-lg font-bold text-white tabular-nums">{computedAtkBonus != null ? `+${computedAtkBonus}` : "—"}</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">Spell Atk</span>
+              </div>
+              {!!data.spellsPrepared && (
+                <div className="flex flex-col items-center leading-none gap-0.5">
+                  <span className={`text-lg font-bold tabular-nums ${preparedCount > data.spellsPrepared ? "text-red-400" : "text-white"}`}>
+                    {preparedCount}<span className="text-white/30 text-sm">/{data.spellsPrepared}</span>
+                  </span>
+                  <span className="text-[10px] text-white/40 uppercase tracking-wider">Prepared</span>
+                </div>
+              )}
+              <div className="flex flex-col items-center leading-none gap-0.5">
+                <span className={`text-lg font-bold tabular-nums ${knownCount > (data.spellsKnown ?? Infinity) ? "text-red-400" : "text-white"}`}>
+                  {knownCount}<span className="text-white/30 text-sm">/{data.spellsKnown ?? "—"}</span>
                 </span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Prepared</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">Known</span>
               </div>
-            )}
-            <div className="flex flex-col items-center leading-none gap-0.5">
-              <span className={`text-lg font-bold tabular-nums ${knownCount > (data.spellsKnown ?? Infinity) ? "text-red-400" : "text-white"}`}>
-                {knownCount}<span className="text-white/30 text-sm">/{data.spellsKnown ?? "—"}</span>
-              </span>
-              <span className="text-[10px] text-white/40 uppercase tracking-wider">Known</span>
-            </div>
-            <div className="flex flex-col items-center leading-none gap-0.5">
-              <span className="text-lg font-bold text-white tabular-nums">{data.cantripsKnown ?? "—"}</span>
-              <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
-            </div>
-            {!!data.invocationsKnown && (
               <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className="text-lg font-bold text-white tabular-nums">{data.invocationsKnown}</span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Invocations</span>
+                <span className="text-lg font-bold text-white tabular-nums">{data.cantripsKnown ?? "—"}</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
               </div>
-            )}
+              {!!data.invocationsKnown && (
+                <div className="flex flex-col items-center leading-none gap-0.5">
+                  <span className="text-lg font-bold text-white tabular-nums">{data.invocationsKnown}</span>
+                  <span className="text-[10px] text-white/40 uppercase tracking-wider">Invocations</span>
+                </div>
+              )}
+            </div>
             <button type="button" onClick={onShowSpellcastingModal}
-              className="size-10 text-2xl flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
+              className="size-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
               title="Configure spellcasting">⚙</button>
           </div>
         )}
@@ -156,6 +158,7 @@ export function SpellsEquipPanel({
                 <TracingSlider
                   value={rem} max={slot.total} disabled={readOnly}
                   showButtons buttonSize="sm"
+                  className=""
                   color={slotLevelColor(slotAccent, slot.level)}
                   onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
                 />

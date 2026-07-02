@@ -49,6 +49,7 @@ import { InfoTab }               from "./character/tabs/InfoTab"
 import { PartyChat }             from "./PartyChat"
 import { ClassPickerModal }      from "./character/modals/ClassPickerModal"
 import { RacePickerModal }       from "./character/modals/RacePickerModal"
+import { Modal }                 from "./character/ui/Modal"
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // Modal visibility
   const [showMaxMenu,           setShowMaxMenu]           = useState(false)
   const [showThemePicker,       setShowThemePicker]       = useState(false)
+  const [showRestModal,         setShowRestModal]          = useState(false)
   const [showConditionPicker,   setShowConditionPicker]   = useState(false)
   const [showPortraitPicker,    setShowPortraitPicker]    = useState(false)
   const [showSavesModal,        setShowSavesModal]        = useState(false)
@@ -290,6 +292,25 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         [otherKey]:   data[otherKey]!.map(f => f.id === otherId     ? { ...f, linkedTo: newOL } : f),
       })
     }
+  }
+
+  function handleRest(type: "long" | "short" | "dawn") {
+    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const patch: Partial<CharacterData> = {}
+    for (const key of KEYS) {
+      const features = data[key] ?? []
+      const updated = features.map(f => {
+        if (!f.trackable) return f
+        const resets = f.resetsOn ?? "long"
+        const should =
+          type === "long"  ? resets === "long" || resets === "short" :
+          type === "short" ? resets === "short" :
+          resets === "dawn"
+        return should ? { ...f, usesUsed: 0 } : f
+      })
+      if (updated.some((f, i) => f !== features[i])) patch[key] = updated
+    }
+    if (Object.keys(patch).length) update(patch)
   }
 
   function patchFeature(id: string, patch: Partial<Feature>) {
@@ -733,6 +754,38 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {showThemePicker && (
         <ThemeModal data={data} onUpdate={update} onClose={() => setShowThemePicker(false)} />
       )}
+
+      {showRestModal && (
+        <Modal onClose={() => setShowRestModal(false)}>
+          <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(320px,calc(100vw-2rem))] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+              <h3 className="text-sm font-bold text-white">Take a Rest</h3>
+              <button onClick={() => setShowRestModal(false)}
+                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-2">
+              {([
+                { type: "short" as const, label: "Short Rest",  desc: "Restores features that refresh on a short rest.", color: "sky"    },
+                { type: "long"  as const, label: "Long Rest",   desc: "Restores short- and long-rest features. Does not affect dawn features.", color: "indigo" },
+                { type: "dawn"  as const, label: "Dawn",        desc: "Restores features that refresh at dawn only.", color: "amber"  },
+              ]).map(({ type, label, desc, color }) => (
+                <button key={type}
+                  onClick={() => { handleRest(type); setShowRestModal(false) }}
+                  className={`w-full text-left px-4 py-3 rounded-xl border transition-colors
+                    ${color === "sky"    ? "bg-sky-500/10 border-sky-500/20 hover:bg-sky-500/20 text-sky-300"    : ""}
+                    ${color === "indigo" ? "bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20 text-indigo-300" : ""}
+                    ${color === "amber"  ? "bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20 text-amber-300"  : ""}
+                  `}>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs opacity-60 mt-0.5">{desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
       {showPortraitPicker && (
         <PortraitModal
           currentPortrait={data.portrait}
@@ -858,11 +911,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {saving && <span className="text-xs text-white/40 shrink-0">saving…</span>}
 
         {!readOnly && (
-          <button type="button"
-            onClick={() => setShowThemePicker(true)}
-            className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white shrink-0 transition-colors">
-            Theme
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => setShowRestModal(true)}
+              className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+              Rest
+            </button>
+            <button type="button"
+              onClick={() => setShowThemePicker(true)}
+              className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+              Theme
+            </button>
+          </div>
         )}
       </div>
 

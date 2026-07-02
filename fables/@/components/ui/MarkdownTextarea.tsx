@@ -30,7 +30,7 @@ export function MarkdownTextarea({
   return (
     <div className={wrapperClassName ?? "flex flex-col gap-1.5"}>
       <div className="flex justify-end">
-        <button type="button" onClick={insertTable} className={btnCls}>
+        <button type="button" className={btnCls} onClick={insertTable}>
           + Insert Table
         </button>
       </div>
