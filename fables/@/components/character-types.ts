@@ -58,7 +58,8 @@ export interface SpellSlot {
 export interface Feature {
   id: string
   name: string
-  source?: string            // "Fighter 1", "Variant Human", etc.
+  source?: string            // "Fighter", "Variant Human", etc.
+  level?: number             // character level this was gained at
   description?: string
   trackable?: boolean
   maxUses?: number
@@ -67,6 +68,12 @@ export interface Feature {
   resetsOn?: "short" | "long" | "dawn" | "manual"
   sliderColor?: string
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
+  itemMeta?: {                // set when created from an Items-tab documentation suggestion
+    itemType?: string
+    damage?: string
+    damageType?: string
+    properties?: string
+  }
 }
 
 export interface FavoriteRef {
@@ -122,6 +129,7 @@ export interface CharacterData {
   racialTraits?: Feature[]
   feats?: Feature[]
   classFeatures?: Feature[]
+  items?: Feature[]
   favorites?: FavoriteRef[]
   conditions?: ActiveCondition[]
   skillProfs?: Record<string, "half" | "prof" | "exp">

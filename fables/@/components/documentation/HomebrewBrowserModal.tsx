@@ -8,6 +8,7 @@ import { X, ChevronRight, Check, Loader2, Plus, Pencil, Trash2 } from "lucide-re
 import type { DocType, DocEntry } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { Markdown } from "../ui/Markdown"
+import { invalidateSuggestionCache } from "../character/entries/FeatureEntry"
 
 interface Props {
   type: DocType
@@ -176,6 +177,10 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
             <span className="text-slate-400">{(d.item_type ?? "Wondrous").replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
             {d.requires_attunement && <span className="text-xs text-amber-400">(requires attunement)</span>}
           </div>
+          {d.item_type === "weapon" && d.damage && (
+            <Row label="Damage" value={`${d.damage}${d.damage_type ? ` ${d.damage_type}` : ""}`} />
+          )}
+          {d.item_type === "weapon" && d.properties && <Row label="Properties" value={d.properties} />}
           {d.description && <Markdown text={d.description} tone="slate" />}
           {d.ac_bonus    && <Row label="AC Bonus"    value={`+${d.ac_bonus}`} />}
           {d.save_bonus  && <Row label="Save Bonus"  value={`+${d.save_bonus}`} />}
@@ -219,17 +224,18 @@ export function HomebrewBrowserModal({
     if (!userId || existingLibraryIds.size === 0) return
     supabase
       .from("objects")
-      .select("id, data, created_at")
+      .select("id, data")
       .eq("type", `doc_${singular}`)
       .eq("owner_id", userId)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { console.error("Failed to load library state:", error); return }
         const map = new Map<string, { objectId: string; added_at: string }>()
         for (const obj of data ?? []) {
           const docId = (obj as any).data?.doc_id
           if (docId) {
             map.set(docId, {
               objectId: (obj as any).id,
-              added_at: (obj as any).data?.added_at ?? (obj as any).created_at ?? "",
+              added_at: (obj as any).data?.added_at ?? "",
             })
           }
         }
@@ -266,6 +272,7 @@ export function HomebrewBrowserModal({
 
     if (data) {
       setLibraryState(prev => new Map(prev).set(entry.id, { objectId: (data as any).id, added_at }))
+      invalidateSuggestionCache()
       onLibraryChanged()
     }
   }
@@ -279,6 +286,7 @@ export function HomebrewBrowserModal({
       next.delete(docId)
       return next
     })
+    invalidateSuggestionCache()
     onLibraryChanged()
   }
 

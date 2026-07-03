@@ -10,6 +10,7 @@ import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { DocEntryForm } from "./DocEntryForm"
 import { HomebrewBrowserModal } from "./HomebrewBrowserModal"
 import { Markdown } from "../ui/Markdown"
+import { invalidateSuggestionCache } from "../character/entries/FeatureEntry"
 
 export interface LibraryObject {
   id: string
@@ -156,13 +157,18 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
 
 // ── Entry card ─────────────────────────────────────────────────────────────────
 
+// Core/homebrew entries all render as this compact tile — name only, no
+// description/details until clicked, matching the Core Rulebook grid so
+// homebrew doesn't stand out as a different, more revealing style.
 function DocCard({
-  entry, isAdminMode, onClick, onEdit,
+  name, caption, canEdit, onClick, onEdit, extraAction,
 }: {
-  entry: DocEntry
-  isAdminMode: boolean
+  name: string
+  caption?: string
+  canEdit?: boolean
   onClick: () => void
-  onEdit: () => void
+  onEdit?: () => void
+  extraAction?: React.ReactNode  // e.g. a "remove from library" button, shown left of edit
 }) {
   return (
     <button
@@ -170,55 +176,23 @@ function DocCard({
       onClick={onClick}
       className="group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/50 p-3 hover:border-amber-900/60 hover:bg-slate-900 transition-all min-h-[80px] text-center w-full"
     >
-      {isAdminMode && (
-        <span
-          role="button"
-          onClick={e => { e.stopPropagation(); onEdit() }}
-          className="absolute top-2 right-2 size-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-amber-500/20 text-slate-700 hover:text-amber-400 transition-all"
-        >
-          <Pencil className="size-3" />
-        </span>
-      )}
-      <p className="text-sm font-semibold text-slate-200 leading-tight px-5">{entry.name}</p>
-      {entry.description && (
-        <p className="text-[10px] text-slate-600 leading-tight">{entry.description}</p>
+      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+        {extraAction}
+        {canEdit && onEdit && (
+          <span
+            role="button"
+            onClick={e => { e.stopPropagation(); onEdit() }}
+            className="size-6 flex items-center justify-center rounded hover:bg-amber-500/20 text-slate-700 hover:text-amber-400"
+          >
+            <Pencil className="size-3" />
+          </span>
+        )}
+      </div>
+      <p className="text-sm font-semibold text-slate-200 leading-tight px-5">{name}</p>
+      {caption && (
+        <p className="text-[10px] text-slate-600 leading-tight">{caption}</p>
       )}
     </button>
-  )
-}
-
-// ── Library card ───────────────────────────────────────────────────────────────
-
-function LibraryCard({
-  item, isOwner, onRemove, onEdit, onClick,
-}: {
-  item: LibraryObject
-  isOwner: boolean
-  onRemove: () => void
-  onEdit: () => void
-  onClick: () => void
-}) {
-  const addedDate = item.data.added_at
-    ? new Date(item.data.added_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-    : null
-
-  return (
-    <div className="flex items-center gap-3 border-b border-slate-800/60 py-3 last:border-0">
-      <button type="button" onClick={onClick} className="flex-1 min-w-0 text-left">
-        <p className="text-sm font-semibold text-slate-200 truncate">{item.name}</p>
-        <p className="text-xs text-slate-600 mt-0.5">
-          {item.data.description}{addedDate && ` · Added ${addedDate}`}
-        </p>
-      </button>
-      <div className="flex items-center gap-2 shrink-0">
-        {isOwner && (
-          <button onClick={onEdit} className="text-xs text-amber-500/80 hover:text-amber-400 transition-colors">Edit</button>
-        )}
-        <button onClick={onRemove} className="size-6 flex items-center justify-center text-slate-700 hover:text-red-400 transition-colors">
-          <X className="size-3.5" />
-        </button>
-      </div>
-    </div>
   )
 }
 
@@ -496,6 +470,10 @@ function DetailView({
               {d.rarity    && <Prop label="Rarity"    value={<span className="capitalize text-amber-400 font-semibold">{d.rarity}</span>} />}
               {d.item_type && <Prop label="Type"      value={<span className="capitalize">{d.item_type}</span>} />}
               {d.requires_attunement && <Prop label="Attunement" value="Requires attunement" />}
+              {d.item_type === "weapon" && d.damage && (
+                <Prop label="Damage" value={`${d.damage}${d.damage_type ? ` ${d.damage_type}` : ""}`} />
+              )}
+              {d.item_type === "weapon" && d.properties && <Prop label="Weapon Properties" value={d.properties} />}
             </RefSection>
             {d.description && (
               <RefSection title="Description">
@@ -549,30 +527,39 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
     loadAll()
   }, [type, userId])
 
-  async function loadAll() {
-    setLoading(true)
+  // `silent` skips the loading spinner for background refreshes (e.g. after adding/removing
+  // homebrew) so the grid doesn't briefly collapse to a few lines of "Loading…" — that height
+  // drop was clamping the page's scroll position back up, which looked like a reset to the top.
+  async function loadAll(silent = false) {
+    if (!silent) setLoading(true)
     const [baseRes, homebrew, library] = await Promise.all([
       supabase.from("documentation").select("*").eq("type", singular).eq("is_homebrew", false).order("name"),
       userId
         ? supabase.from("documentation").select("*").eq("type", singular).eq("is_homebrew", true).eq("owner_id", userId).order("name")
         : Promise.resolve({ data: [] }),
+      // No .order() here — the objects table doesn't have a created_at column
+      // (ordering by it 400s the whole request), so sort client-side instead.
       userId
-        ? supabase.from("objects").select("*").eq("type", `doc_${singular}`).eq("owner_id", userId).order("created_at", { ascending: false })
-        : Promise.resolve({ data: [] }),
+        ? supabase.from("objects").select("*").eq("type", `doc_${singular}`).eq("owner_id", userId)
+        : Promise.resolve({ data: [], error: null }),
     ])
     const noSubclass = (e: any) => !e.data?.is_subclass
     setBaseEntries(((baseRes.data ?? []) as DocEntry[]).filter(noSubclass))
     setMyHomebrew(((homebrew.data ?? []) as DocEntry[]).filter(noSubclass))
-    setMyLibrary((library.data ?? []) as LibraryObject[])
+    if ((library as any).error) console.error("Failed to load homebrew library:", (library as any).error)
+    const libraryItems = (library.data ?? []) as LibraryObject[]
+    libraryItems.sort((a, b) => (b.data?.added_at ?? "").localeCompare(a.data?.added_at ?? ""))
+    setMyLibrary(libraryItems)
     setLoading(false)
   }
 
   async function removeFromLibrary(id: string) {
     await supabase.from("objects").delete().eq("id", id)
     setMyLibrary(prev => prev.filter(l => l.id !== id))
+    invalidateSuggestionCache()
   }
 
-  function handleFormSave() { loadAll(); setViewMode("list"); setActiveEntry(null) }
+  function handleFormSave() { loadAll(true); setViewMode("list"); setActiveEntry(null) }
   function openCreate(asHomebrew: boolean) { setCreateHomebrew(asHomebrew); setActiveEntry(null); setViewMode("create") }
   function openEdit(entry: DocEntry) { setActiveEntry(entry); setViewMode("edit") }
 
@@ -651,7 +638,7 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {baseEntries.map(entry => (
-              <DocCard key={entry.id} entry={entry} isAdminMode={isAdminMode}
+              <DocCard key={entry.id} name={entry.name} caption={entry.description} canEdit={isAdminMode}
                 onClick={() => { setActiveEntry(entry); setViewMode("view") }}
                 onEdit={() => openEdit(entry)} />
             ))}
@@ -664,34 +651,34 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
         <section>
           <h2 className="text-base font-bold text-amber-400 mb-2">My {label}s ({myHomebrew.length})</h2>
           <div className="border-t border-amber-900/30 mb-4" />
-          <div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {myHomebrew.map(entry => (
-              <div key={entry.id} className="flex items-center gap-3 py-3 border-b border-slate-800/60 last:border-0">
-                <button type="button" onClick={() => { setActiveEntry(entry); setViewMode("view") }} className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-semibold text-slate-200 truncate">{entry.name}</p>
-                  {entry.description && <p className="text-xs text-slate-600 mt-0.5 truncate">{entry.description}</p>}
-                </button>
-                <button onClick={() => openEdit(entry)}
-                  className="text-xs text-amber-500/80 hover:text-amber-400 transition-colors shrink-0">
-                  Edit
-                </button>
-              </div>
+              <DocCard key={entry.id} name={entry.name} canEdit
+                onClick={() => { setActiveEntry(entry); setViewMode("view") }}
+                onEdit={() => openEdit(entry)} />
             ))}
           </div>
         </section>
       )}
 
-      {/* My Library */}
+      {/* Homebrew — added-to-library entries that feed autofill on the character sheet */}
       {userId && myLibrary.length > 0 && (
         <section>
-          <h2 className="text-base font-bold text-amber-400 mb-2">My Library ({myLibrary.length})</h2>
+          <h2 className="text-base font-bold text-amber-400 mb-2">Homebrew ({myLibrary.length})</h2>
+          <p className="text-xs text-slate-500 -mt-1 mb-2">These show up in autofill on your character sheet. Remove one to take it out of autofill.</p>
           <div className="border-t border-amber-900/30 mb-4" />
-          <div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {myLibrary.map(item => (
-              <LibraryCard key={item.id} item={item} isOwner={item.data.doc_owner_id === userId}
-                onRemove={() => removeFromLibrary(item.id)}
+              <DocCard key={item.id} name={item.name} canEdit={item.data.doc_owner_id === userId}
+                onClick={() => openViewFromLibrary(item)}
                 onEdit={() => openEditFromLibrary(item)}
-                onClick={() => openViewFromLibrary(item)} />
+                extraAction={
+                  <span role="button" onClick={e => { e.stopPropagation(); removeFromLibrary(item.id) }}
+                    className="size-6 flex items-center justify-center rounded hover:bg-red-500/20 text-slate-700 hover:text-red-400">
+                    <X className="size-3" />
+                  </span>
+                }
+              />
             ))}
           </div>
         </section>
@@ -717,7 +704,7 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
           existingLibraryIds={new Set(myLibrary.map(l => l.data.doc_id))}
           onClose={() => setShowHBBrowser(false)}
           onAddNew={() => { setShowHBBrowser(false); openCreate(true) }}
-          onLibraryChanged={loadAll}
+          onLibraryChanged={() => loadAll(true)}
           onEditEntry={entry => { setShowHBBrowser(false); openEdit(entry) }}
         />
       )}

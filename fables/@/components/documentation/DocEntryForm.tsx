@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Plus, Trash2, GripVertical, AlertTriangle } from "luci
 import type { DocType, DocEntry } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { MarkdownTextarea } from "../ui/MarkdownTextarea"
+import { invalidateSuggestionCache } from "../character/entries/FeatureEntry"
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ function defaultData(type: DocType): Record<string, any> {
     }
     case "races": return { traits: [] }
     case "feats": return { prerequisite: "", description: "" }
-    case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "" }
+    case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "", damage: "", damage_type: "", properties: "" }
   }
 }
 
@@ -592,6 +593,22 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
         </Field>
       </Section>
 
+      {d.item_type === "weapon" && (
+        <Section title="Weapon Stats">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Damage" hint="e.g. 1d8">
+              <input value={d.damage ?? ""} onChange={e => set("damage", e.target.value)} placeholder="1d8" className={inp} />
+            </Field>
+            <Field label="Damage Type" hint="e.g. Slashing">
+              <input value={d.damage_type ?? ""} onChange={e => set("damage_type", e.target.value)} placeholder="Slashing" className={inp} />
+            </Field>
+          </div>
+          <Field label="Properties" hint="comma-separated">
+            <input value={d.properties ?? ""} onChange={e => set("properties", e.target.value)} placeholder="Versatile, Finesse…" className={inp} />
+          </Field>
+        </Section>
+      )}
+
       <Section title="Description">
         <MarkdownTextarea
           value={d.description ?? ""}
@@ -654,6 +671,7 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
 
     setSaving(false)
     if (err) { setError(err.message); return }
+    invalidateSuggestionCache()
     onSave()
   }
 
@@ -662,6 +680,7 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
     setDeleting(true)
     await supabase.from("documentation").delete().eq("id", initial.id)
     setDeleting(false)
+    invalidateSuggestionCache()
     onDelete()
   }
 

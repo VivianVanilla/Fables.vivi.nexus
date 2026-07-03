@@ -3,14 +3,14 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import type { CharacterData, Feature } from "../../character-types"
+import type { CharacterData, Feature, FavoriteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { nanoid, profBonus } from "../../character-utils"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type InfoSubTab = "overview" | "traits" | "feats" | "features" | "profs"
+type InfoSubTab = "overview" | "traits" | "feats" | "features" | "items" | "profs"
 
 interface InfoTabProps {
   data: CharacterData
@@ -22,6 +22,9 @@ interface InfoTabProps {
   card: string
   readOnly: boolean
   userId?: string | null
+  favorites: FavoriteRef[]
+  onToggleFavorite: (id: string, label: string) => void
+  onAddItemToEquipment: (feature: Feature) => void
 }
 
 // ── Sub-component: FeatureList ────────────────────────────────────────────────
@@ -40,9 +43,12 @@ interface FeatureListProps {
   pb: number
   suggestionSource?: SuggestionSource
   userId?: string | null
+  favorites: FavoriteRef[]
+  onToggleFavorite: (id: string, label: string) => void
+  onAddToEquipment?: (feature: Feature) => void
 }
 
-function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId }: FeatureListProps) {
+function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment }: FeatureListProps) {
   return (
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
       <div className="flex items-center justify-between shrink-0">
@@ -70,6 +76,9 @@ function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onL
             pb={pb}
             suggestionSource={suggestionSource}
             userId={userId}
+            isFavorite={favorites.some(fav => fav.refId === f.id)}
+            onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
+            onAddToEquipment={onAddToEquipment}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -110,11 +119,12 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["overview",  "Overview"],
   ["traits",    "Traits"],
   ["feats",     "Feats"],
-  ["features",  "Features"], 
+  ["features",  "Features"],
+  ["items",     "Items"],
   ["profs",     "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, favorites, onToggleFavorite, onAddItemToEquipment }: InfoTabProps) {
   const [subTab, setSubTab] = useState<InfoSubTab>("overview")
 
   const pb = profBonus(data.level ?? 1)
@@ -124,11 +134,12 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
     ...(data.racialTraits  ?? []),
     ...(data.feats         ?? []),
     ...(data.classFeatures ?? []),
+    ...(data.items         ?? []),
   ]
 
   // ── Feature list helpers ─────────────────────────────────────────────────
 
-  type FeatureKey = "racialTraits" | "feats" | "classFeatures"
+  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "items"
 
   function addFeature(key: FeatureKey) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "" }] })
@@ -211,6 +222,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           suggestionSource="race" userId={userId}
+          favorites={favorites} onToggleFavorite={onToggleFavorite}
         />
       )}
 
@@ -225,6 +237,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           suggestionSource="feat" userId={userId}
+          favorites={favorites} onToggleFavorite={onToggleFavorite}
         />
       )}
 
@@ -239,6 +252,23 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           onLinkToggle={onLinkToggle}
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           suggestionSource="class" userId={userId}
+          favorites={favorites} onToggleFavorite={onToggleFavorite}
+        />
+      )}
+
+      {/* ── Items ──────────────────────────────────────────────────────────── */}
+
+      {subTab === "items" && (
+        <FeatureList
+          items={data.items ?? []} allFeatures={allFeatures} label="Items"
+          onAdd={() => addFeature("items")}
+          onChange={onChangeFeature}
+          onRemove={onRemoveFeature}
+          onLinkToggle={onLinkToggle}
+          theme={theme} card={card} readOnly={readOnly} pb={pb}
+          suggestionSource="item" userId={userId}
+          favorites={favorites} onToggleFavorite={onToggleFavorite}
+          onAddToEquipment={onAddItemToEquipment}
         />
       )}
 

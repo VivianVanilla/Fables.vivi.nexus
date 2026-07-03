@@ -13,18 +13,20 @@ interface ClassEntry {
 interface Props {
   initial: ClassEntry[]
   userId?: string | null
+  existingFeatures?: Feature[]  // current data.classFeatures — used to warn before duplicate imports
   onConfirm: (classes: ClassEntry[]) => void
   onImport?: (payload: { classFeatures?: Feature[]; spellItems?: SpellItem[] }) => void
   onClose: () => void
 }
 
-export function ClassPickerModal({ initial, userId, onConfirm, onImport, onClose }: Props) {
+export function ClassPickerModal({ initial, userId, existingFeatures = [], onConfirm, onImport, onClose }: Props) {
   const [entries,          setEntries]          = useState<ClassEntry[]>(initial.length > 0 ? initial : [])
   const [search,           setSearch]           = useState("")
   const [allClasses,       setAllClasses]       = useState<string[]>([])
   const [subclassOptions,  setSubclassOptions]  = useState<Record<string, string[]>>({})
   const [selectedSubclass, setSelectedSubclass] = useState<Record<string, string>>({})
   const [importUpTo,       setImportUpTo]       = useState(1)
+  const [duplicateWarning, setDuplicateWarning] = useState<string[] | null>(null)
 
   // Load core + homebrew + library classes from the DB
   useEffect(() => {
@@ -164,8 +166,20 @@ export function ClassPickerModal({ initial, userId, onConfirm, onImport, onClose
     return results
   }
 
-  async function handleImportFeatures() {
+  async function handleImportFeatures(force = false) {
     if (!onImport || !entries.length) return
+
+    if (!force) {
+      const existingSources = new Set(existingFeatures.map(f => f.source))
+      const labels = entries.flatMap(e => [e.cls, selectedSubclass[e.cls]].filter(Boolean) as string[])
+      const dupes = labels.filter(l => existingSources.has(l))
+      if (dupes.length > 0) {
+        setDuplicateWarning(dupes)
+        return
+      }
+    }
+    setDuplicateWarning(null)
+
     setImportingFeatures(true)
     const rows = await loadClassAndSubData()
     const allFeatures: Feature[] = []
@@ -178,7 +192,8 @@ export function ClassPickerModal({ initial, userId, onConfirm, onImport, onClose
           .forEach(f => allFeatures.push({
             id:          nanoid(),
             name:        f.name,
-            source:      `${entry.cls} ${f.level}`,
+            source:      entry.cls,
+            level:       f.level,
             description: f.description ?? "",
           }))
       }
@@ -190,7 +205,8 @@ export function ClassPickerModal({ initial, userId, onConfirm, onImport, onClose
           .forEach(f => allFeatures.push({
             id:          nanoid(),
             name:        f.name,
-            source:      `${subName} ${f.level}`,
+            source:      subName,
+            level:       f.level,
             description: f.description ?? "",
           }))
       }
@@ -352,8 +368,25 @@ export function ClassPickerModal({ initial, userId, onConfirm, onImport, onClose
                   className="w-14 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-sm text-white text-center outline-none focus:border-white/30"
                 />
               </div>
+              {duplicateWarning && (
+                <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-xs text-amber-300 leading-relaxed">
+                    You've already imported features from <span className="font-semibold">{duplicateWarning.join(", ")}</span> — importing again will duplicate them.
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setDuplicateWarning(null)}
+                      className="flex-1 py-1.5 rounded-lg text-xs text-white/50 border border-white/10 hover:border-white/20 hover:text-white/80 transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleImportFeatures(true)}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 transition-colors">
+                      Import Anyway
+                    </button>
+                  </div>
+                </div>
+              )}
               <button
-                onClick={handleImportFeatures}
+                onClick={() => handleImportFeatures()}
                 disabled={importingFeatures}
                 className="w-full py-2 rounded-lg text-sm font-semibold bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/30 transition-colors disabled:opacity-40"
               >

@@ -7,6 +7,7 @@ import type { EquipmentItem } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
 import { Markdown } from "../../ui/Markdown"
+import { getSuggestions, type Suggestion } from "./FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ interface EquipmentEntryProps {
   readOnly?: boolean
   statMods?: Record<string, number>
   pb?: number
+  userId?: string | null
 }
 
 const STAT_OPTIONS = [
@@ -73,10 +75,12 @@ function computeDamage(
 
 export function EquipmentEntry({
   item, onChange, onRemove, theme, readOnly = false,
-  statMods = {}, pb = 2,
+  statMods = {}, pb = 2, userId,
 }: EquipmentEntryProps) {
   const [editing,    setEditing]    = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [showSuggest, setShowSuggest] = useState(false)
 
   const toHit  = computeToHit(item, statMods, pb)
   const damage = computeDamage(item, statMods)
@@ -119,13 +123,57 @@ export function EquipmentEntry({
 
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-              <input
-                value={item.name}
-                onChange={e => onChange({ name: e.target.value })}
-                autoFocus
-                placeholder="Item name"
-                className="flex-1 bg-transparent outline-none text-base font-bold text-white placeholder:text-white/30 mr-3"
-              />
+              <div className="relative flex-1 mr-3">
+                <input
+                  value={item.name}
+                  onChange={async e => {
+                    const q = e.target.value
+                    onChange({ name: q })
+                    if (q.length >= 2) {
+                      const all = await getSuggestions("item", userId)
+                      const ql = q.toLowerCase()
+                      const matches = all
+                        .filter(s => s.meta?.item_type === "weapon" && s.name.toLowerCase().includes(ql))
+                        .slice(0, 8)
+                      setSuggestions(matches)
+                      setShowSuggest(matches.length > 0)
+                    } else {
+                      setShowSuggest(false)
+                    }
+                  }}
+                  onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+                  autoFocus
+                  placeholder="Item name"
+                  className="w-full bg-transparent outline-none text-base font-bold text-white placeholder:text-white/30"
+                />
+                {showSuggest && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden">
+                    {suggestions.map(s => (
+                      <button
+                        key={s.name}
+                        type="button"
+                        onMouseDown={e => {
+                          e.preventDefault()
+                          onChange({
+                            name: s.name,
+                            notes: s.description || item.notes,
+                            damage: s.meta?.damage || item.damage,
+                            damageType: s.meta?.damage_type || item.damageType,
+                            properties: s.meta?.properties || item.properties,
+                          })
+                          setShowSuggest(false)
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
+                      >
+                        <span className="text-white font-medium">{s.name}</span>
+                        {s.meta?.damage && (
+                          <span className="text-white/35 ml-2">{s.meta.damage}{s.meta.damage_type ? ` ${s.meta.damage_type}` : ""}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={() => setEditing(false)}
                 className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">✕</button>
             </div>

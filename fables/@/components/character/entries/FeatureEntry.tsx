@@ -17,14 +17,25 @@ import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
 
-export type SuggestionSource = "race" | "class" | "feat"
+export type SuggestionSource = "race" | "class" | "feat" | "item"
 
-interface Suggestion { name: string; description: string }
+export interface Suggestion {
+  name: string
+  description: string
+  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string }
+}
 
 const cacheMap   = new Map<string, Suggestion[]>()
 const promiseMap = new Map<string, Promise<Suggestion[]>>()
 
-async function getSuggestions(docType: SuggestionSource, userId?: string | null): Promise<Suggestion[]> {
+// Called whenever the user's homebrew library changes (add/remove) so stale
+// suggestions don't linger for the rest of the session.
+export function invalidateSuggestionCache() {
+  cacheMap.clear()
+  promiseMap.clear()
+}
+
+export async function getSuggestions(docType: SuggestionSource, userId?: string | null): Promise<Suggestion[]> {
   const key = `${docType}:${userId ?? "anon"}`
   if (cacheMap.has(key)) return cacheMap.get(key)!
   if (promiseMap.has(key)) return promiseMap.get(key)!
@@ -43,7 +54,7 @@ async function getSuggestions(docType: SuggestionSource, userId?: string | null)
         .eq("type", docType).eq("is_homebrew", true).eq("owner_id", userId)
 
       // Library homebrew
-      const objType = docType === "race" ? "doc_race" : docType === "class" ? "doc_class" : "doc_feat"
+      const objType = docType === "race" ? "doc_race" : docType === "class" ? "doc_class" : docType === "item" ? "doc_item" : "doc_feat"
       const { data: libObjs } = await supabase
         .from("objects").select("data").eq("type", objType).eq("owner_id", userId)
       const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
@@ -61,11 +72,24 @@ async function getSuggestions(docType: SuggestionSource, userId?: string | null)
     const results: Suggestion[] = []
 
     for (const row of all) {
-      // Feats are stored as one document per feat, unlike races/classes which
-      // nest traits/features arrays. The real feat text lives in data.description —
+      // Feats and items are stored as one document per entry, unlike races/classes
+      // which nest traits/features arrays. The real text lives in data.description —
       // the top-level `description` column is actually the "Source" field (e.g. "PHB p.51").
       if (docType === "feat") {
         if (row.name) results.push({ name: row.name, description: row.data?.description ?? "" })
+        continue
+      }
+      if (docType === "item") {
+        if (row.name) results.push({
+          name: row.name,
+          description: row.data?.description ?? "",
+          meta: {
+            item_type:    row.data?.item_type,
+            damage:       row.data?.damage,
+            damage_type:  row.data?.damage_type,
+            properties:   row.data?.properties,
+          },
+        })
         continue
       }
 
@@ -111,13 +135,19 @@ interface FeatureEntryProps {
   pb:               number            // current proficiency bonus
   suggestionSource?: SuggestionSource  // which doc type to autocomplete from
   userId?:          string | null
+  isFavorite?:       boolean
+  onToggleFavorite?: () => void        // omit to hide the star (e.g. inside FavoritesPanel, which has its own)
+  onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId }: FeatureEntryProps) {
+export function FeatureEntry({
+  feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
+  isFavorite, onToggleFavorite, onAddToEquipment,
+}: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(false)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -188,7 +218,11 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
                   type="button"
                   onMouseDown={e => {
                     e.preventDefault()
-                    onChange({ name: s.name, description: s.description || feature.description })
+                    onChange({
+                      name: s.name,
+                      description: s.description || feature.description,
+                      ...(s.meta ? { itemMeta: { itemType: s.meta.item_type, damage: s.meta.damage, damageType: s.meta.damage_type, properties: s.meta.properties } } : {}),
+                    })
                     setShowSuggest(false)
                   }}
                   className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
@@ -202,10 +236,19 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
             </div>
           )}
         </div>
-        <input value={feature.source ?? ""} placeholder="Source (e.g. Fighter 1, Variant Human…)"
-          onChange={e => onChange({ source: e.target.value })}
-          className="bg-transparent outline-none text-xs text-white/60 placeholder:text-white/20"
-        />
+        <div className="flex items-center gap-2">
+          <input value={feature.source ?? ""} placeholder="Source (e.g. Fighter, Variant Human…)"
+            onChange={e => onChange({ source: e.target.value })}
+            className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/60 placeholder:text-white/20"
+          />
+          <label className="flex items-center gap-1.5 text-[10px] text-white/40 shrink-0">
+            Level
+            <input type="number" min={1} max={20} value={feature.level ?? ""} placeholder="—"
+              onChange={e => onChange({ level: e.target.value ? Math.min(20, Math.max(1, parseInt(e.target.value) || 1)) : undefined })}
+              className="w-11 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </label>
+        </div>
         <MarkdownTextarea
           value={feature.description ?? ""}
           onChange={v => onChange({ description: v })}
@@ -334,6 +377,10 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
             {feature.name || <span className="text-white/30 italic">Unnamed</span>}
           </span>
 
+          {feature.level != null && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">Lv {feature.level}</span>
+          )}
+
           {/* Desktop bar (sm and up) */}
           {hasUses && (
             <div className="hidden sm:flex shrink-0 items-center gap-1.5 w-[50%]" onClick={e => e.stopPropagation()}>
@@ -379,12 +426,27 @@ export function FeatureEntry({ feature, allFeatures, onChange, onRemove, onLinkT
                 {feature.source}
               </span>
             )}
-            {!readOnly && (
-              <button type="button" onClick={() => setEditing(true)}
-                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors ml-auto">
-                ✎
-              </button>
-            )}
+            <div className="flex items-center gap-1 ml-auto">
+              {onAddToEquipment && !readOnly && (
+                <button type="button" onClick={e => { e.stopPropagation(); onAddToEquipment(feature) }}
+                  className="text-[10px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors shrink-0">
+                  + Equipment
+                </button>
+              )}
+              {onToggleFavorite && (
+                <button type="button" onClick={e => { e.stopPropagation(); onToggleFavorite() }}
+                  title="Add to favorites"
+                  className={`text-base shrink-0 transition-colors ${isFavorite ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}>
+                  ★
+                </button>
+              )}
+              {!readOnly && (
+                <button type="button" onClick={() => setEditing(true)}
+                  className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors">
+                  ✎
+                </button>
+              )}
+            </div>
           </div>
           {feature.description ? (
             <Markdown text={feature.description} tone="dark" />

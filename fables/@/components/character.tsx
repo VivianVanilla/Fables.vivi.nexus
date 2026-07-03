@@ -227,6 +227,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.racialTraits  ?? []),
     ...(data.feats         ?? []),
     ...(data.classFeatures ?? []),
+    ...(data.items         ?? []),
   ]
 
   function addSpell()                                          { update({ spellItems: [...spellItems, { id: nanoid(), name: "", level: 0 }] }) }
@@ -236,6 +237,23 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function addEquip()                                          { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
   function changeEquip(id: string, p: Partial<EquipmentItem>) { update({ equipmentItems: equipItems.map(i => i.id === id ? { ...i, ...p } : i) }) }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
+
+  // Pushes an Items-tab entry into the Equipment list, carrying over any weapon
+  // stats captured from the documentation suggestion (see FeatureEntry's itemMeta).
+  function addItemToEquipment(feature: Feature) {
+    const meta = feature.itemMeta
+    update({
+      equipmentItems: [...equipItems, {
+        id: nanoid(),
+        name: feature.name,
+        notes: feature.description ?? "",
+        type: meta?.itemType === "weapon" ? "melee" : "misc",
+        damage: meta?.damage,
+        damageType: meta?.damageType,
+        properties: meta?.properties,
+      }],
+    })
+  }
 
   // ── SPELL SLOT HELPERS ────────────────────────────────────────────────────
 
@@ -259,6 +277,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function removeFavorite(refId: string) { update({ favorites: favorites.filter(f => f.refId !== refId) })
   }
 
+  function toggleFeatureFavorite(id: string, label: string) {
+    if (favorites.find(f => f.refId === id)) removeFavorite(id)
+    else addFavorite({ refId: id, refType: "feature", label })
+  }
+
   function reorderFavorites(fromIdx: number, toIdx: number) {
     const next = [...favorites]
     const [moved] = next.splice(fromIdx, 1)
@@ -267,7 +290,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function toggleFeatureLink(featureId: string, otherId: string) {
-    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     let featureKey: typeof KEYS[number] | null = null
     let otherKey:   typeof KEYS[number] | null = null
     for (const k of KEYS) {
@@ -295,7 +318,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function handleRest(type: "long" | "short" | "dawn") {
-    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     const patch: Partial<CharacterData> = {}
     for (const key of KEYS) {
       const features = data[key] ?? []
@@ -314,7 +337,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function patchFeature(id: string, patch: Partial<Feature>) {
-    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     const combinedPatch: Partial<CharacterData> = {}
     let linkedIds: string[] = []
 
@@ -340,7 +363,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function removeFeatureGlobal(id: string) {
-    const KEYS = ["racialTraits", "feats", "classFeatures"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     const patch: Partial<CharacterData> = {}
 
     for (const key of KEYS) {
@@ -393,6 +416,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.racialTraits  ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Trait",   refType: "feature" as const })),
     ...(data.feats         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feat",    refType: "feature" as const })),
     ...(data.classFeatures ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feature", refType: "feature" as const })),
+    ...(data.items         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Gear",    refType: "feature" as const })),
   ] : []
 
   // ── COMPUTED THEME / CARD ─────────────────────────────────────────────────
@@ -611,7 +635,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   function renderQuickSearch() {
     return (
-      <div className="relative">
+      <div className="relative w-full sm:w-64">
         <div className={`${card} px-3 py-2 flex items-center gap-2`}>
           <span className="text-white/40 text-sm">⌕</span>
           <input
@@ -625,7 +649,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           )}
         </div>
         {searchResults.length > 0 && (
-          <div className={`absolute top-full left-0 right-0 z-40 mt-1 ${theme.box} border border-white/15 rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto`}>
+          <div className={`absolute top-full left-0 right-0 z-40 mt-1 ${theme.box} border border-white/15 rounded-xl shadow-xl overflow-hidden max-h-[50vh] sm:max-h-56 overflow-y-auto`}>
             {searchResults.map(r => (
               <div key={r.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-black/30 border-b border-white/5 last:border-0">
                 <span className="text-xs text-white/40 uppercase tracking-wider w-12 shrink-0">{r.category}</span>
@@ -681,7 +705,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
         {/* Full-width spells / martial panel */}
         <SpellsEquipPanel
-          card={card} theme={theme} data={data} readOnly={readOnly}
+          card={card} theme={theme} data={data} readOnly={readOnly} userId={user?.id ?? null}
           spellItems={spellItems} equipItems={equipItems} spellSlots={spellSlots}
           slotAccent={slotAccent} characterId={character.id}
           onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
@@ -803,6 +827,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <ClassPickerModal
           initial={data.classes ?? (data.class ? [{ cls: data.class, level: data.level ?? 1 }] : [])}
           userId={user?.id ?? null}
+          existingFeatures={data.classFeatures ?? []}
           onConfirm={classes => {
             const total = classes.reduce((s, c) => s + c.level, 0)
             update({
@@ -824,6 +849,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           current={data.race ?? ""}
           currentSubrace={data.subrace}
           userId={user?.id ?? null}
+          existingFeatures={data.racialTraits ?? []}
           onConfirm={(race, subrace) => update({ race, subrace: subrace ?? undefined })}
           onImport={({ racialTraits: rt }) => {
             if (rt?.length) update({ racialTraits: [...(data.racialTraits ?? []), ...rt] })
@@ -926,14 +952,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-1 px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+      <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
         {(["main", "details", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
             {tab === "main" ? "Main" : tab === "details" ? "Details" : "Chat"}
           </button>
         ))}
-        <div className="ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
+        <div className="w-full sm:w-auto sm:ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
       </div>
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
@@ -942,7 +968,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
             userId={user?.id ?? null}
-            onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink} />
+            onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
+            favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment} />
         )}
         {activeTab === "chat" && data.partyCode && (
           <PartyChat

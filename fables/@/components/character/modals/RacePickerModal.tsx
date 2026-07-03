@@ -12,18 +12,20 @@ interface Props {
   current: string
   currentSubrace?: string
   userId?: string | null
+  existingFeatures?: Feature[]  // current data.racialTraits — used to warn before duplicate imports
   onConfirm: (race: string, subrace?: string) => void
   onImport?: (payload: { racialTraits?: Feature[] }) => void
   onClose: () => void
 }
 
-export function RacePickerModal({ current, currentSubrace, userId, onConfirm, onImport, onClose }: Props) {
+export function RacePickerModal({ current, currentSubrace, userId, existingFeatures = [], onConfirm, onImport, onClose }: Props) {
   const [raceEntries, setRaceEntries] = useState<RaceEntry[]>([])
   const [search,      setSearch]      = useState("")
   const [selRace,     setSelRace]     = useState(current)
   const [selSubrace,  setSelSubrace]  = useState(currentSubrace ?? "")
   const [subraceStep, setSubraceStep] = useState<RaceEntry | null>(null)  // non-null = subrace picker open
   const [importing,   setImporting]   = useState(false)
+  const [duplicateWarning, setDuplicateWarning] = useState<string[] | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -92,8 +94,19 @@ export function RacePickerModal({ current, currentSubrace, userId, onConfirm, on
     onClose()
   }
 
-  async function handleImport() {
+  async function handleImport(force = false) {
     if (!onImport || !selRace) return
+
+    if (!force) {
+      const existingSources = new Set(existingFeatures.map(f => f.source))
+      const labels = [selRace, selSubrace].filter(Boolean)
+      const dupes = labels.filter(l => existingSources.has(l))
+      if (dupes.length > 0) {
+        setDuplicateWarning(dupes)
+        return
+      }
+    }
+    setDuplicateWarning(null)
     setImporting(true)
 
     const { data: rows } = await supabase
@@ -270,9 +283,26 @@ export function RacePickerModal({ current, currentSubrace, userId, onConfirm, on
           )}
 
           {onImport && selRace && (
-            <div className="border-t border-white/10 pt-3">
+            <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
+              {duplicateWarning && (
+                <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-xs text-amber-300 leading-relaxed">
+                    You've already imported traits from <span className="font-semibold">{duplicateWarning.join(", ")}</span> — importing again will duplicate them.
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setDuplicateWarning(null)}
+                      className="flex-1 py-1.5 rounded-lg text-xs text-white/50 border border-white/10 hover:border-white/20 hover:text-white/80 transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={() => handleImport(true)}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 transition-colors">
+                      Import Anyway
+                    </button>
+                  </div>
+                </div>
+              )}
               <button
-                onClick={handleImport}
+                onClick={() => handleImport()}
                 disabled={importing}
                 className="w-full py-2 rounded-lg text-sm font-semibold bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 transition-colors disabled:opacity-40"
               >
