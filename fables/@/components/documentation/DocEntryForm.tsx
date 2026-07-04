@@ -93,7 +93,7 @@ function DomainSpellsField({ d, set }: { d: Record<string,any>; set: (k: string,
 
   function addRow() {
     const existingLevels = new Set(rows.map(r => r.level))
-    const next = [1,3,5,7,9].find(l => !existingLevels.has(l)) ?? rows.length + 1
+    const next = [1,3,5,7,9,11,13,15,17,19].find(l => !existingLevels.has(l)) ?? rows.length + 1
     set("domain_spells", [...rows, { level: next, spells: [] }])
   }
 
@@ -119,7 +119,7 @@ function DomainSpellsField({ d, set }: { d: Record<string,any>; set: (k: string,
               onChange={e => updateRow(i, { level: parseInt(e.target.value) })}
               className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600"
             >
-              {[1,3,5,7,9].map(l => <option key={l} value={l}>{l}</option>)}
+              {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-0.5 flex-1 min-w-0">
