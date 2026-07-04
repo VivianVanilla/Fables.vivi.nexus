@@ -114,14 +114,14 @@ export function FamiliarsTab({
 
                 {/* HP tracker */}
                 {monster && mData && (mData.maxHp ?? 0) > 0 && (
-                  <div className="hidden sm:flex items-center gap-1.5 w-36 shrink-0" onClick={e => e.stopPropagation()}>
+                  <div className="hidden sm:flex items-center gap-2.5 w-64 shrink-0" onClick={e => e.stopPropagation()}>
                     <TracingSlider
                       value={fam.currentHp ?? mData.maxHp ?? 0} max={mData.maxHp ?? 0} disabled={readOnly}
-                      showButtons buttonSize="sm" color="#22c55e"
+                      showButtons buttonSize="md" color="#22c55e"
                       onChange={val => onUpdate(fam.id, { currentHp: val })}
                       className="flex-1 min-w-0"
                     />
-                    <span className="text-xs text-white/40 tabular-nums shrink-0">
+                    <span className="text-sm text-white/50 tabular-nums shrink-0 font-semibold">
                       {fam.currentHp ?? mData.maxHp}/{mData.maxHp}
                     </span>
                   </div>

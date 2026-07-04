@@ -119,32 +119,44 @@ function CompactField({ label, value, onChange, readOnly }: { label: string; val
 }
 
 function ActionSection({
-  label, category, actions, readOnly, onAdd, onChange, onRemove, extra,
+  label, category, actions, readOnly, onAdd, onChange, onRemove, extra, toggle,
 }: {
   label: string; category: ActionCategory; actions: MonsterAction[]; readOnly?: boolean
   onAdd: () => void; onChange: (id: string, patch: Partial<MonsterAction>) => void; onRemove: (id: string) => void
   extra?: React.ReactNode
+  toggle?: { enabled: boolean; onChange: (v: boolean) => void }
 }) {
-  if (readOnly && actions.length === 0) return null
+  const enabled = toggle ? toggle.enabled : true
+  if (readOnly && (!enabled || actions.length === 0)) return null
   return (
     <div className={`${CARD} p-4 flex flex-col gap-2`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`text-xs uppercase tracking-widest font-semibold ${SECTION_HEADER_COLOR[category]}`}>{label}</span>
-        {extra}
-        {!readOnly && (
+        {enabled && extra}
+        {toggle && !readOnly && (
+          <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
+            <input type="checkbox" checked={toggle.enabled} onChange={e => toggle.onChange(e.target.checked)} />
+            Has {label.toLowerCase()}
+          </label>
+        )}
+        {!readOnly && enabled && (
           <button type="button" onClick={onAdd}
             className="text-xs px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
             + Add
           </button>
         )}
       </div>
-      {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
-      <div className="flex flex-col gap-1.5">
-        {actions.map(a => (
-          <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
-            onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
-        ))}
-      </div>
+      {enabled && (
+        <>
+          {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
+          <div className="flex flex-col gap-1.5">
+            {actions.map(a => (
+              <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
+                onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -222,9 +234,10 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   for (const slot of spellSlots) if (!grouped.has(slot.level)) grouped.set(slot.level, [])
   const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
 
-  // Explicit toggle — falls back to auto-detecting existing spell data for
-  // monsters created before the toggle existed.
+  // Explicit toggles — fall back to auto-detecting existing data for monsters
+  // created before the toggle existed.
   const spellcastingEnabled = data.hasSpellcasting ?? (levels.length > 0 || !!data.spellcastingAbility)
+  const legendaryEnabled    = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
 
   function feelingLucky() {
     if (spellItems.length === 0) return
@@ -294,6 +307,10 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
           onAdd={() => addAction(key)}
           onChange={(id, patch) => changeAction(key, id, patch)}
           onRemove={id => removeAction(key, id)}
+          toggle={key === "legendaryActions" ? {
+            enabled: legendaryEnabled,
+            onChange: v => onUpdate({ hasLegendaryActions: v }),
+          } : undefined}
           extra={key === "legendaryActions" ? (
             <LegendaryTracker
               used={data.legendaryActionsUsed ?? 0}

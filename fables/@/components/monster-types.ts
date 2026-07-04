@@ -53,6 +53,7 @@ export interface MonsterData {
   bonusActions?: MonsterAction[]
   reactions?: MonsterAction[]
   legendaryActions?: MonsterAction[]
+  hasLegendaryActions?: boolean  // toggle — off hides the whole legendary actions section
   legendaryActionsMax?: number
   legendaryActionsUsed?: number
 
