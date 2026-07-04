@@ -138,6 +138,7 @@ interface FeatureEntryProps {
   isFavorite?:       boolean
   onToggleFavorite?: () => void        // omit to hide the star (e.g. inside FavoritesPanel, which has its own)
   onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab
+  showAttunement?:   boolean            // only true for the Items tab — shows an "Attuned" toggle
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ interface FeatureEntryProps {
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddToEquipment,
+  isFavorite, onToggleFavorite, onAddToEquipment, showAttunement,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(false)
@@ -257,6 +258,16 @@ export function FeatureEntry({
           className="bg-transparent outline-none text-xs text-white/70 placeholder:text-white/20 resize-none leading-relaxed border-t border-white/10 pt-2 w-full"
           variant="light"
         />
+
+        {showAttunement && (
+          <label className="flex items-center gap-2 text-xs text-purple-300 cursor-pointer select-none border-t border-white/10 pt-2">
+            <input type="checkbox" checked={feature.attuned ?? false}
+              onChange={e => onChange({ attuned: e.target.checked })}
+              className="accent-purple-500"
+            />
+            Attuned
+          </label>
+        )}
 
         {/* Use tracking */}
         <div className="border-t border-white/10 pt-2 flex flex-col gap-2">
@@ -379,6 +390,14 @@ export function FeatureEntry({
 
           {feature.level != null && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">Lv {feature.level}</span>
+          )}
+
+          {showAttunement && (
+            <label className="flex items-center gap-1 shrink-0 text-[10px] text-purple-300" onClick={e => e.stopPropagation()} title="Attuned">
+              <input type="checkbox" checked={feature.attuned ?? false} disabled={readOnly}
+                onChange={e => onChange({ attuned: e.target.checked })}
+                className="size-3.5 accent-purple-500 cursor-pointer" />
+            </label>
           )}
 
           {/* Desktop bar (sm and up) */}

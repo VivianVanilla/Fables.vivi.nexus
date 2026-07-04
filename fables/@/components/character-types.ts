@@ -68,6 +68,7 @@ export interface Feature {
   resetsOn?: "short" | "long" | "dawn" | "manual"
   sliderColor?: string
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
+  attuned?: boolean          // Items tab only — is the character currently attuned to this item?
   itemMeta?: {                // set when created from an Items-tab documentation suggestion
     itemType?: string
     damage?: string

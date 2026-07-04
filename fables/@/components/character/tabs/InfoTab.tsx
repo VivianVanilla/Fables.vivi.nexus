@@ -47,16 +47,28 @@ interface FeatureListProps {
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
   onAddToEquipment?: (feature: Feature) => void
+  showAttunement?: boolean
 }
 
-function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment }: FeatureListProps) {
+const MAX_ATTUNEMENTS = 3
+
+function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, showAttunement }: FeatureListProps) {
+  const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
+
   return (
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex items-center justify-between shrink-0 gap-2">
         <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">{label}</span>
+        {showAttunement && (
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${
+            attunedCount > MAX_ATTUNEMENTS ? "bg-red-500/20 text-red-300" : "bg-purple-500/15 text-purple-300"
+          }`}>
+            Attuned {attunedCount}/{MAX_ATTUNEMENTS}
+          </span>
+        )}
         {!readOnly && (
           <button type="button" onClick={onAdd}
-            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
+            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ml-auto">
             + Add
           </button>
         )}
@@ -80,6 +92,7 @@ function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onL
             isFavorite={favorites.some(fav => fav.refId === f.id)}
             onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
             onAddToEquipment={onAddToEquipment}
+            showAttunement={showAttunement}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -269,6 +282,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           suggestionSource="item" userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
           onAddToEquipment={onAddItemToEquipment}
+          showAttunement
         />
       )}
 

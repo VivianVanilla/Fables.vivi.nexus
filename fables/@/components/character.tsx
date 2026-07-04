@@ -240,6 +240,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.items         ?? []),
   ]
 
+  const attunedCount = (data.items ?? []).filter(i => i.attuned).length
+
   function addSpell()                                          { update({ spellItems: [...spellItems, { id: nanoid(), name: "", level: 0 }] }) }
   function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
@@ -1008,6 +1010,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 ? data.classes.reduce((s, c) => s + c.level, 0)
                 : (data.level ?? "—")}
             </span>
+            <button type="button"
+              onClick={() => { setInfoSubTab("items"); setActiveTab("details") }}
+              title="Attunement — click to open Items"
+              className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors cursor-pointer hover:border-white/20 hover:bg-white/15 ${
+                attunedCount > 3 ? "bg-red-500/15 border-red-400/30 text-red-300" : "bg-purple-500/10 border-purple-400/20 text-purple-300"
+              }`}>
+              ⚭ {attunedCount}/3
+            </button>
           </div>
 
           {(concentrationPrompts.length > 0 || conditions.some(c => CONDITION_EFFECTS[c.name])) && (
