@@ -11,7 +11,7 @@ import { supabase } from "../../src/supabase"
 
 import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
-  SpellSlot, FavoriteRef, Feature,
+  SpellSlot, FavoriteRef, Feature, FamiliarRef,
 } from "./character-types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
 import { profBonus, nanoid, safeParseJson } from "./character-utils"
@@ -31,6 +31,7 @@ import { SavesCard }             from "./character/panels/SavesCard"
 import { SkillsCard }            from "./character/panels/SkillsCard"
 import { SpellsEquipPanel }      from "./character/panels/SpellsEquipPanel"
 import { FavoritesPanel }        from "./character/panels/FavoritesPanel"
+import { FloatingPanel }         from "./character/ui/FloatingPanel"
 
 // Modals
 import { MaxStatsModal }         from "./character/modals/MaxStatsModal"
@@ -45,7 +46,9 @@ import { ThemeModal }            from "./character/modals/ThemeModal"
 import { PortraitModal }         from "./character/modals/PortraitModal"
 
 // Tabs / other
-import { InfoTab }               from "./character/tabs/InfoTab"
+import { InfoTab, type InfoSubTab } from "./character/tabs/InfoTab"
+import { FamiliarsTab }          from "./character/tabs/FamiliarsTab"
+import { FamiliarMonsterView }   from "./monster"
 import { PartyChat }             from "./PartyChat"
 import { ClassPickerModal }      from "./character/modals/ClassPickerModal"
 import { RacePickerModal }       from "./character/modals/RacePickerModal"
@@ -59,14 +62,14 @@ interface Props {
   readOnly?: boolean
 }
 
-type Tab = "main" | "details" | "chat"
+type Tab = "main" | "details" | "familiars" | "chat"
 
 // ════════════════════════════════════════════════════════════════════════════
 // CharacterSheet
 // ════════════════════════════════════════════════════════════════════════════
 
 export function CharacterSheet({ character, readOnly = false }: Props) {
-  const { user, updateObject } = useUserContext()
+  const { user, updateObject, objects } = useUserContext()
 
   // ── STATE ─────────────────────────────────────────────────────────────────
 
@@ -104,8 +107,15 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // Favorites
   const [favDragOver, setFavDragOver] = useState(false)
 
+  // Familiar pop-out windows — ephemeral, resets on reload/reopen
+  const [openPopouts, setOpenPopouts] = useState<Record<string, { x: number; y: number }>>({})
+
   // Quick search
   const [quickSearch, setQuickSearch] = useState("")
+
+  // Sub-tab state lifted out of child panels so quick-search "navigate to" can drive them
+  const [spellsSubTab, setSpellsSubTab] = useState<"spells" | "martial">("spells")
+  const [infoSubTab,   setInfoSubTab]   = useState<InfoSubTab>("overview")
 
   const [dmUserId, setDmUserId] = useState<string | null>(null)
 
@@ -289,6 +299,52 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     update({ favorites: next })
   }
 
+  // ── FAMILIARS HELPERS ─────────────────────────────────────────────────────
+
+  const familiars = data.familiars ?? []
+  const monsters  = objects.filter(o => o.type === "monster")
+
+  function addFamiliar(monsterId: string) {
+    update({ familiars: [...familiars, { id: nanoid(), monsterId }] })
+  }
+  function updateFamiliar(id: string, patch: Partial<FamiliarRef>) {
+    update({ familiars: familiars.map(f => f.id === id ? { ...f, ...patch } : f) })
+  }
+  function removeFamiliar(id: string) {
+    update({
+      familiars: familiars.filter(f => f.id !== id),
+      favorites: favorites.filter(f => f.refId !== id),
+    })
+    closePopout(id)
+  }
+  function toggleFamiliarFavorite(id: string, label: string) {
+    if (favorites.find(f => f.refId === id)) removeFavorite(id)
+    else addFavorite({ refId: id, refType: "familiar", label })
+  }
+
+  // ── FAMILIAR POP-OUT HELPERS ──────────────────────────────────────────────
+
+  function togglePopout(id: string) {
+    setOpenPopouts(prev => {
+      if (prev[id]) {
+        const { [id]: _removed, ...rest } = prev
+        return rest
+      }
+      const count = Object.keys(prev).length
+      return { ...prev, [id]: { x: 96 + count * 28, y: 96 + count * 28 } }
+    })
+  }
+  function closePopout(id: string) {
+    setOpenPopouts(prev => {
+      if (!prev[id]) return prev
+      const { [id]: _removed, ...rest } = prev
+      return rest
+    })
+  }
+  function movePopout(id: string, x: number, y: number) {
+    setOpenPopouts(prev => prev[id] ? { ...prev, [id]: { x, y } } : prev)
+  }
+
   function toggleFeatureLink(featureId: string, otherId: string) {
     const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     let featureKey: typeof KEYS[number] | null = null
@@ -333,6 +389,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       })
       if (updated.some((f, i) => f !== features[i])) patch[key] = updated
     }
+
+    // Spell slots recover on the same short/long cadence as trackable features
+    if (type === "long" || type === "short") {
+      const updatedSlots = spellSlots.map(s => {
+        const should = type === "long" ? true : s.resetsOn === "short"
+        return should ? { ...s, used: 0 } : s
+      })
+      if (updatedSlots.some((s, i) => s !== spellSlots[i])) patch.spellSlots = updatedSlots
+    }
+
+    // Long rest restores HP to full
+    if (type === "long") patch.hp = effectiveMax
+
     if (Object.keys(patch).length) update(patch)
   }
 
@@ -417,6 +486,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.feats         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feat",    refType: "feature" as const })),
     ...(data.classFeatures ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feature", refType: "feature" as const })),
     ...(data.items         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Gear",    refType: "feature" as const })),
+    ...familiars
+      .map(f => ({ id: f.id, label: f.nickname || monsters.find(m => m.id === f.monsterId)?.name || "Familiar", category: "Familiar", refType: "familiar" as const }))
+      .filter(f => f.label.toLowerCase().includes(q)),
   ] : []
 
   // ── COMPUTED THEME / CARD ─────────────────────────────────────────────────
@@ -472,7 +544,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     : (data.class ? [data.class] : [])
 
   const favPanelProps = {
-    favorites, spellItems, equipItems, features: allFeatures, pb, statMods, classes: availableClasses,
+    favorites, spellItems, equipItems, features: allFeatures, familiars, monsters,
+    poppedOutIds: new Set(Object.keys(openPopouts)),
+    pb, statMods, classes: availableClasses,
     onRemove: removeFavorite,
     onReorder: reorderFavorites,
     onChangeSpell: changeSpell,
@@ -482,6 +556,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     onUpdateFeature: patchFeature,
     onRemoveFeature: removeFeatureGlobal,
     onLinkToggle: toggleFeatureLink,
+    onPopOutFamiliar: togglePopout,
     theme: { ...theme, box: effectiveBox }, card, readOnly,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
@@ -633,6 +708,25 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // RENDER: QUICK SEARCH (inline — tightly coupled to tab bar)
   // ══════════════════════════════════════════════════════════════════════════
 
+  const INFO_SUBTAB_BY_CATEGORY: Record<string, InfoSubTab> = {
+    Trait: "traits", Feat: "feats", Feature: "features", Gear: "items",
+  }
+
+  function navigateToResult(r: (typeof searchResults)[number]) {
+    if (r.refType === "spell") {
+      setSpellsSubTab("spells"); setActiveTab("main")
+    } else if (r.refType === "equipment") {
+      setSpellsSubTab("martial"); setActiveTab("main")
+    } else if (r.refType === "familiar") {
+      setActiveTab("familiars")
+      if (!openPopouts[r.id]) togglePopout(r.id)
+    } else {
+      setInfoSubTab(INFO_SUBTAB_BY_CATEGORY[r.category] ?? "overview")
+      setActiveTab("details")
+    }
+    setQuickSearch("")
+  }
+
   function renderQuickSearch() {
     return (
       <div className="relative w-full sm:w-64">
@@ -651,11 +745,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {searchResults.length > 0 && (
           <div className={`absolute top-full left-0 right-0 z-40 mt-1 ${theme.box} border border-white/15 rounded-xl shadow-xl overflow-hidden max-h-[50vh] sm:max-h-56 overflow-y-auto`}>
             {searchResults.map(r => (
-              <div key={r.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-black/30 border-b border-white/5 last:border-0">
-                <span className="text-xs text-white/40 uppercase tracking-wider w-12 shrink-0">{r.category}</span>
-                <span className="text-sm text-white flex-1 truncate">{r.label}</span>
+              <div key={r.id}
+                onClick={() => navigateToResult(r)}
+                className="flex items-center gap-2 px-3 py-2.5 hover:bg-black/30 border-b border-white/5 last:border-0 cursor-pointer">
+                <span className="text-xs text-white/40 uppercase tracking-wider w-16 shrink-0 truncate">{r.category}</span>
+                <span className="text-sm text-white flex-1 min-w-0 truncate">{r.label}</span>
                 <button type="button"
-                  onClick={() => addFavorite({ refId: r.id, refType: r.refType, label: r.label })}
+                  onClick={e => { e.stopPropagation(); addFavorite({ refId: r.id, refType: r.refType, label: r.label }) }}
                   className={`text-base shrink-0 transition-colors ${favorites.find(f => f.refId === r.id) ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}
                   title="Add to favorites">★</button>
               </div>
@@ -708,6 +804,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           card={card} theme={theme} data={data} readOnly={readOnly} userId={user?.id ?? null}
           spellItems={spellItems} equipItems={equipItems} spellSlots={spellSlots}
           slotAccent={slotAccent} characterId={character.id}
+          activeSubTab={spellsSubTab} onChangeSubTab={setSpellsSubTab}
           onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
           onChangeSlot={changeSlot}
           onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
@@ -953,10 +1050,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
-        {(["main", "details", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
+        {(["main", "details", "familiars", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "main" ? "Main" : tab === "details" ? "Details" : "Chat"}
+            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "familiars" ? "Familiars" : "Chat"}
           </button>
         ))}
         <div className="w-full sm:w-auto sm:ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
@@ -968,8 +1065,24 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
             userId={user?.id ?? null}
+            subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment} />
+        )}
+        {activeTab === "familiars" && (
+          <FamiliarsTab
+            familiars={familiars}
+            monsters={monsters}
+            favorites={favorites}
+            card={card}
+            readOnly={readOnly}
+            poppedOutIds={new Set(Object.keys(openPopouts))}
+            onAdd={addFamiliar}
+            onUpdate={updateFamiliar}
+            onRemove={removeFamiliar}
+            onToggleFavorite={toggleFamiliarFavorite}
+            onPopOut={togglePopout}
+          />
         )}
         {activeTab === "chat" && data.partyCode && (
           <PartyChat
@@ -980,6 +1093,21 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           />
         )}
       </div>
+
+      {/* ── Popped-out familiars — float above everything, ephemeral ────────── */}
+      {Object.entries(openPopouts).map(([id, pos]) => {
+        const fam     = familiars.find(f => f.id === id)
+        const monster = fam ? monsters.find(m => m.id === fam.monsterId) : undefined
+        if (!fam || !monster) return null
+        return (
+          <FloatingPanel key={id} title={fam.nickname || monster.name}
+            x={pos.x} y={pos.y}
+            onMove={(x, y) => movePopout(id, x, y)}
+            onClose={() => closePopout(id)}>
+            <FamiliarMonsterView monster={monster} readOnly={readOnly} />
+          </FloatingPanel>
+        )
+      })}
 
     </div>
   )

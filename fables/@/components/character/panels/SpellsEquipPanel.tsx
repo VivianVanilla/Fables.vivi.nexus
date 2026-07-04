@@ -19,6 +19,8 @@ interface Props {
   spellSlots: SpellSlot[]
   slotAccent: string
   characterId: string
+  activeSubTab: "spells" | "martial"
+  onChangeSubTab: (v: "spells" | "martial") => void
   onShowSpellcastingModal: () => void
   onChangeSlot: (id: string, patch: Partial<SpellSlot>) => void
   onAddSpell: () => void
@@ -32,11 +34,12 @@ interface Props {
 export function SpellsEquipPanel({
   card, theme, data, readOnly, userId,
   spellItems, equipItems, spellSlots, slotAccent, characterId,
+  activeSubTab, onChangeSubTab,
   onShowSpellcastingModal, onChangeSlot,
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
 }: Props) {
-  const [showSpells, setShowSpells] = useState(true)
+  const showSpells = activeSubTab === "spells"
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
@@ -85,11 +88,11 @@ export function SpellsEquipPanel({
       <div className="flex flex-col gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0">
-            <button type="button" onClick={() => setShowSpells(true)}
+            <button type="button" onClick={() => onChangeSubTab("spells")}
               className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
               Spells
             </button>
-            <button type="button" onClick={() => setShowSpells(false)}
+            <button type="button" onClick={() => onChangeSubTab("martial")}
               className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${!showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
               Martial
             </button>

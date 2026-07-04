@@ -78,7 +78,7 @@ export interface Feature {
 
 export interface FavoriteRef {
   refId: string
-  refType: "spell" | "equipment" | "feature"
+  refType: "spell" | "equipment" | "feature" | "familiar"
   label: string   // snapshot of the item name at time of favoriting
 }
 
@@ -86,6 +86,16 @@ export interface ActiveCondition {
   id: string
   name: string
   level?: number   // for Exhaustion (1–6)
+}
+
+export interface FamiliarRef {
+  id: string          // stable instance id, independent of the source monster
+  monsterId: string   // id of the linked Monster object — live reference
+  nickname?: string
+  currentHp?: number
+  notes?: string
+  // Favorited status lives in the shared `favorites` list (refType "familiar"),
+  // not here — keeps familiars consistent with how spells/items/features favorite.
 }
 
 export interface CharacterData {
@@ -132,6 +142,7 @@ export interface CharacterData {
   items?: Feature[]
   favorites?: FavoriteRef[]
   conditions?: ActiveCondition[]
+  familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">
   skillBonuses?: Record<string, number>
   saveBonuses?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>

@@ -11,6 +11,7 @@ import {
 import { CharacterSheet } from "@/components/character";
 import { CampaignView } from "@/components/campaign-view";
 import { NoteView } from "@/components/NoteView";
+import { MonsterSheet } from "@/components/monster";
 import { useUserContext } from "./contexts/UserContext";
 import "./index.css";
 
@@ -69,6 +70,12 @@ export default function Dashboard() {
                 <NoteView
                   key={liveSelected.id}
                   note={liveSelected}
+                  onClose={() => setSelectedObject(null)}
+                />
+              ) : liveSelected?.type === "monster" ? (
+                <MonsterSheet
+                  key={liveSelected.id}
+                  monster={liveSelected}
                   onClose={() => setSelectedObject(null)}
                 />
               ) : liveSelected ? (

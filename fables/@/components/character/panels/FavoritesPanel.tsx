@@ -9,11 +9,39 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import type { FavoriteRef, SpellItem, EquipmentItem, Feature } from "../../character-types"
+import type { userInfo } from "@/types/userInfo"
+import type { FavoriteRef, SpellItem, EquipmentItem, Feature, FamiliarRef } from "../../character-types"
+import type { MonsterData } from "../../monster-types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { FeatureEntry } from "../entries/FeatureEntry"
+import { safeParseJson } from "../../character-utils"
 import type { Theme } from "../../character-themes"
+
+// ── Familiar favorite card — compact, resolves the linked Monster live ───────
+
+function FamiliarFavoriteEntry({
+  fam, monster, poppedOut, onPopOut,
+}: { fam: FamiliarRef; monster: userInfo.Objects; poppedOut: boolean; onPopOut: () => void }) {
+  const mData = safeParseJson(monster.data) as MonsterData
+  return (
+    <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 flex items-center gap-2.5 min-h-11">
+      <div className="size-8 rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10 shrink-0 flex items-center justify-center">
+        {mData.portrait
+          ? <img src={mData.portrait} alt="" className="w-full h-full object-cover" />
+          : <span className="text-[9px] text-white/20">—</span>}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-white truncate">{fam.nickname || monster.name}</p>
+        <p className="text-[10px] text-white/40 uppercase tracking-wider">Familiar</p>
+      </div>
+      <button type="button" onClick={onPopOut} title={poppedOut ? "Already popped out" : "Pop out"}
+        className={`size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-sm shrink-0 transition-colors ${poppedOut ? "text-primary" : "text-white/50 hover:text-white"}`}>
+        ⧉
+      </button>
+    </div>
+  )
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +50,9 @@ interface FavoritesPanelProps {
   spellItems:        SpellItem[]
   equipItems:        EquipmentItem[]
   features:          Feature[]
+  familiars:         FamiliarRef[]
+  monsters:          userInfo.Objects[]
+  poppedOutIds:      Set<string>
   pb:                number
   statMods:          Record<string, number>
   classes:           string[]
@@ -34,6 +65,7 @@ interface FavoritesPanelProps {
   onUpdateFeature:   (featureId: string, patch: Partial<Feature>) => void
   onRemoveFeature:   (featureId: string) => void
   onLinkToggle:      (featureId: string, otherId: string) => void
+  onPopOutFamiliar:  (id: string) => void
   theme:             Theme
   card:              string
   readOnly:          boolean
@@ -46,10 +78,10 @@ interface FavoritesPanelProps {
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function FavoritesPanel({
-  favorites, spellItems, equipItems, features, pb, statMods, classes,
+  favorites, spellItems, equipItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
   onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
-  onUpdateFeature, onRemoveFeature, onLinkToggle,
+  onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
   theme, card, readOnly,
   dragOver, onDragOver, onDragLeave, onDrop,
 }: FavoritesPanelProps) {
@@ -58,9 +90,10 @@ export function FavoritesPanel({
 
   // ── Resolve helpers ──────────────────────────────────────────────────────
 
-  function resolveSpell(refId: string)   { return spellItems.find(s => s.id === refId) }
-  function resolveEquip(refId: string)   { return equipItems.find(i => i.id === refId) }
-  function resolveFeature(refId: string) { return features.find(f => f.id === refId) }
+  function resolveSpell(refId: string)    { return spellItems.find(s => s.id === refId) }
+  function resolveEquip(refId: string)    { return equipItems.find(i => i.id === refId) }
+  function resolveFeature(refId: string)  { return features.find(f => f.id === refId) }
+  function resolveFamiliar(refId: string) { return familiars.find(f => f.id === refId) }
 
   // ── Reorder drag handlers ────────────────────────────────────────────────
 
@@ -117,7 +150,7 @@ export function FavoritesPanel({
           {favorites.length === 0 && (
             <div className={`flex-1 flex flex-col items-center justify-center text-center py-8 rounded-xl border-2 border-dashed transition-colors ${dragOver ? "border-primary/50" : "border-white/10"}`}>
               <span className="text-white/20 text-2xl mb-2">★</span>
-              <p className="text-sm text-white/30">Drag spells, items or features here</p>
+              <p className="text-sm text-white/30">Drag spells, items, features or familiars here</p>
               <p className="text-xs text-white/20 mt-0.5">or use ★ in quick search</p>
             </div>
           )}
@@ -141,6 +174,14 @@ export function FavoritesPanel({
                     onChange={p => onChangeEquip(fav.refId, p)}
                     onRemove={() => onRemoveEquip(fav.refId)} />
                 : <p className="text-sm text-white/30 italic px-3 py-2.5">Item not found.</p>
+            } else if (fav.refType === "familiar") {
+              const fam = resolveFamiliar(fav.refId)
+              const monster = fam ? monsters.find(m => m.id === fam.monsterId) : undefined
+              entry = fam && monster
+                ? <FamiliarFavoriteEntry fam={fam} monster={monster}
+                    poppedOut={poppedOutIds.has(fam.id)}
+                    onPopOut={() => onPopOutFamiliar(fam.id)} />
+                : <p className="text-sm text-white/30 italic px-3 py-2.5">Familiar not found.</p>
             } else {
               const feat = resolveFeature(fav.refId)
               entry = feat

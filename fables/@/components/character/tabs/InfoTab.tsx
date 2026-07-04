@@ -2,7 +2,6 @@
 // InfoTab.tsx — Info tab with Overview / Traits / Feats / Features / Profs
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react"
 import type { CharacterData, Feature, FavoriteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { nanoid, profBonus } from "../../character-utils"
@@ -10,7 +9,7 @@ import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type InfoSubTab = "overview" | "traits" | "feats" | "features" | "items" | "profs"
+export type InfoSubTab = "overview" | "traits" | "feats" | "features" | "items" | "profs"
 
 interface InfoTabProps {
   data: CharacterData
@@ -25,6 +24,8 @@ interface InfoTabProps {
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
   onAddItemToEquipment: (feature: Feature) => void
+  subTab: InfoSubTab
+  onSubTabChange: (tab: InfoSubTab) => void
 }
 
 // ── Sub-component: FeatureList ────────────────────────────────────────────────
@@ -124,8 +125,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",     "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, favorites, onToggleFavorite, onAddItemToEquipment }: InfoTabProps) {
-  const [subTab, setSubTab] = useState<InfoSubTab>("overview")
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, favorites, onToggleFavorite, onAddItemToEquipment, subTab, onSubTabChange }: InfoTabProps) {
 
   const pb = profBonus(data.level ?? 1)
 
@@ -153,7 +153,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
       {/* Sub-tab bar */}
       <div className="flex items-center gap-1 flex-wrap shrink-0">
         {SUB_TABS.map(([tab, label]) => (
-          <button key={tab} type="button" onClick={() => setSubTab(tab)}
+          <button key={tab} type="button" onClick={() => onSubTabChange(tab)}
             className={`px-3 py-1 text-[10px] uppercase tracking-widest rounded-full font-semibold transition-colors ${
               subTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"
             }`}>
