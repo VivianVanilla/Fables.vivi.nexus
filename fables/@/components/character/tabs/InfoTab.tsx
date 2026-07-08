@@ -15,7 +15,7 @@ import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "../ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 import { connectNoteChannel, applyTextDiff, encodeDocState, applyEncodedState } from "../../collab/noteSync"
-import { useCollaboratorCandidates } from "../../collab/useCollaboratorCandidates"
+import { ShareMenu } from "../../collab/ShareMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -348,79 +348,6 @@ function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: st
   )
 }
 
-// Combined note menu — Edit/Preview toggle, Collaborators invite, and Unlink
-// all live behind one trigger instead of three separate buttons. Mirrors
-// NoteView.tsx's standalone Collaborators menu so a linked note inside the
-// character sheet gets the exact same live-collaboration + invite features
-// as opening the note on its own.
-function NoteMenu({ editing, expanded, onEditClick, isOwner, collaboratorIds, onToggleCollaborator, onUnlink, readOnly }: {
-  editing: boolean
-  expanded: boolean
-  onEditClick: () => void
-  isOwner: boolean
-  collaboratorIds: string[]
-  onToggleCollaborator: (userId: string) => void
-  onUnlink?: () => void
-  readOnly: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const pos = usePopoverPosition(open, triggerRef)
-  const { candidates, loading } = useCollaboratorCandidates(open && isOwner)
-
-  return (
-    <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
-      <button type="button" ref={triggerRef}
-        onClick={() => setOpen(v => !v)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        title="Note options"
-        className={`text-xs size-6 flex items-center justify-center rounded-lg transition-colors ${collaboratorIds.length > 0 ? "text-purple-300 hover:bg-purple-500/10" : "text-white/40 hover:text-white hover:bg-white/10"}`}>
-        {collaboratorIds.length > 0 ? "👥" : "⋮"}
-      </button>
-      {open && pos && createPortal(
-        <div style={{ position: "fixed", top: pos.top, right: pos.right }}
-          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-56 animate-in fade-in zoom-in-95 duration-150"
-          onMouseDown={e => e.preventDefault()}>
-          {!readOnly && (
-            <button type="button" onClick={() => { onEditClick(); setOpen(false) }}
-              className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors">
-              {expanded && editing ? "👁 Preview" : "✎ Edit"}
-            </button>
-          )}
-          {isOwner && (
-            <div className="border-t border-white/10">
-              <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-white/30 font-semibold">Invite collaborators</p>
-              <div className="max-h-32 overflow-y-auto flex flex-col">
-                {loading && <p className="px-3 py-1.5 text-[11px] text-white/30">Loading…</p>}
-                {!loading && candidates.length === 0 && (
-                  <p className="px-3 py-1.5 text-[11px] text-white/30 italic">No party members found — link one of your characters to a party first.</p>
-                )}
-                {candidates.map(c => (
-                  <button key={c.userId} type="button" onClick={() => onToggleCollaborator(c.userId)}
-                    className="w-full text-left px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/10 transition-colors flex items-center justify-between">
-                    {c.label}
-                    {collaboratorIds.includes(c.userId) && <span className="text-purple-300">✓</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {!isOwner && collaboratorIds.length > 0 && (
-            <p className="px-3 py-2 text-[10px] text-purple-300/70 border-t border-white/10">You're collaborating on this note</p>
-          )}
-          {onUnlink && (
-            <button type="button" onMouseDown={e => { e.preventDefault(); setOpen(false); onUnlink() }}
-              className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors border-t border-white/10">
-              Unlink note
-            </button>
-          )}
-        </div>,
-        document.body
-      )}
-    </div>
-  )
-}
-
 // Full live-collaborative note editor, embedded inline in the character sheet.
 // Backed by the same Yjs CRDT + Supabase broadcast relay as the standalone
 // NoteView page (see ./collab/noteSync.ts) — a linked note behaves identically
@@ -435,12 +362,13 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
   onAutoEditConsumed?: () => void
 }) {
   const { user, updateObject, updateSharedObject } = useUserContext()
-  const initialData = safeParseJson(note.data) as { content?: string; ydocState?: string; collaboratorIds?: string[] }
+  const initialData = safeParseJson(note.data) as { content?: string; ydocState?: string; collaboratorIds?: string[]; pendingInviteIds?: string[] }
   const isOwner = note.owner_id === user?.id
 
   const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!!autoEdit)
-  const [collaboratorIds, setCollaboratorIds] = useState(initialData.collaboratorIds ?? [])
+  const [collaboratorIds, setCollaboratorIds]   = useState(initialData.collaboratorIds ?? [])
+  const [pendingInviteIds, setPendingInviteIds] = useState(initialData.pendingInviteIds ?? [])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const ydoc = useMemo(() => {
@@ -468,10 +396,10 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id])
 
-  function scheduleSave(nextCollaboratorIds: string[] = collaboratorIds) {
+  function scheduleSave() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
-      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: nextCollaboratorIds }
+      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds, pendingInviteIds }
       try {
         if (isOwner) await updateObject(note.id, { data: patch as unknown as JSON })
         else await updateSharedObject(note.id, { data: patch as unknown as JSON })
@@ -484,14 +412,23 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
     scheduleSave()
   }
 
-  function handleToggleCollaborator(userId: string) {
-    const next = collaboratorIds.includes(userId)
-      ? collaboratorIds.filter(id => id !== userId)
-      : [...collaboratorIds, userId]
-    setCollaboratorIds(next)
+  function persistSharing(nextCollaboratorIds: string[], nextPendingInviteIds: string[]) {
+    setCollaboratorIds(nextCollaboratorIds)
+    setPendingInviteIds(nextPendingInviteIds)
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: next } as unknown as JSON })
+    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: nextCollaboratorIds, pendingInviteIds: nextPendingInviteIds } as unknown as JSON })
       .catch(e => console.error(e))
+  }
+
+  function handleInvite(userId: string) {
+    if (collaboratorIds.includes(userId) || pendingInviteIds.includes(userId)) return
+    persistSharing(collaboratorIds, [...pendingInviteIds, userId])
+  }
+  function handleCancelInvite(userId: string) {
+    persistSharing(collaboratorIds, pendingInviteIds.filter(id => id !== userId))
+  }
+  function handleRemoveCollaborator(userId: string) {
+    persistSharing(collaboratorIds.filter(id => id !== userId), pendingInviteIds)
   }
 
   function handleEditClick() {
@@ -504,15 +441,20 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
       <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors" onClick={onToggle}>
         <span className="text-[10px] text-white/30 w-3 shrink-0">{expanded ? "▼" : "▶"}</span>
         <span className="text-xs text-white/70 flex-1 min-w-0 truncate">{note.name}</span>
-        <NoteMenu
-          editing={editing}
-          expanded={expanded}
-          onEditClick={handleEditClick}
+        <ShareMenu
           isOwner={isOwner}
           collaboratorIds={collaboratorIds}
-          onToggleCollaborator={handleToggleCollaborator}
+          pendingInviteIds={pendingInviteIds}
+          onInvite={handleInvite}
+          onCancelInvite={handleCancelInvite}
+          onRemoveCollaborator={handleRemoveCollaborator}
           onUnlink={onRemove}
-          readOnly={readOnly}
+          topSlot={!readOnly ? (
+            <button type="button" onClick={handleEditClick}
+              className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors">
+              {expanded && editing ? "👁 Preview" : "✎ Edit"}
+            </button>
+          ) : undefined}
         />
       </div>
       {expanded && (

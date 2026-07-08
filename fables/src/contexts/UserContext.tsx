@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "../supabase"
 import type { userInfo } from "@/types/userInfo"
+import { ensureProfile } from "@/components/collab/profiles"
 
 export async function getObjectsForUser(userId: string) {
   const { data, error } = await supabase
@@ -57,6 +58,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user)
 
       if (data.user?.id) {
+        ensureProfile(data.user.id, data.user.email).catch(err => console.error("ensureProfile failed:", err))
         try {
           const objs = await getObjectsForUser(data.user.id)
           setObjects(objs)

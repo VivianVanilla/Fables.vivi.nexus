@@ -43,7 +43,7 @@ export function SpeedDisplay({ speeds, size = "sm", zeroed }: Props) {
   }
 
   // Monster-size ("lg") lays the movement types out side by side — a vertical
-  // stack of 3-4 entries took up too much room in the compact stats summary.
+  // stack of 3-4 entries took up too much room in the compact stats summary. 
   return (
     <div className={`flex items-center transition-all duration-200 ${size === "lg" ? "flex-row gap-2" : "flex-col gap-0"}`}>
       {entries.map(e => (

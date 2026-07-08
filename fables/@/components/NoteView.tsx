@@ -21,7 +21,7 @@ import { useUserContext } from "../../src/contexts/UserContext"
 import { safeParseJson } from "./character-utils"
 import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 import { connectNoteChannel, applyTextDiff, encodeDocState, applyEncodedState } from "./collab/noteSync"
-import { useCollaboratorCandidates } from "./collab/useCollaboratorCandidates"
+import { ShareMenu } from "./collab/ShareMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ interface NoteData {
   content?: string
   ydocState?: string
   collaboratorIds?: string[]
+  pendingInviteIds?: string[]
 }
 
 interface NoteViewProps {
@@ -97,64 +98,6 @@ function renderMarkdown(md: string): React.ReactNode {
   return <>{nodes}</>
 }
 
-// ── Collaborators popover ────────────────────────────────────────────────────
-
-function CollaboratorsMenu({ note, data, onChange }: {
-  note: SidebarObject
-  data: NoteData
-  onChange: (ids: string[]) => void
-}) {
-  const { user } = useUserContext()
-  const [open, setOpen] = useState(false)
-  const isOwner = note.owner_id === user?.id
-  const { candidates, loading } = useCollaboratorCandidates(open && isOwner)
-
-  const collaboratorIds = data.collaboratorIds ?? []
-
-  function toggle(userId: string) {
-    onChange(collaboratorIds.includes(userId)
-      ? collaboratorIds.filter(id => id !== userId)
-      : [...collaboratorIds, userId])
-  }
-
-  if (!isOwner) {
-    return collaboratorIds.length > 0 ? (
-      <span className="text-[10px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-300 shrink-0" title="You're collaborating on this note">
-        Shared
-      </span>
-    ) : null
-  }
-
-  return (
-    <div className="relative shrink-0">
-      <button type="button" onClick={() => setOpen(v => !v)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className={`text-xs px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 ${collaboratorIds.length > 0 ? "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"}`}>
-        👥 {collaboratorIds.length > 0 ? collaboratorIds.length : "Invite"}
-      </button>
-      {open && (
-        <div className="absolute z-50 top-full right-0 mt-1 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-56 animate-in fade-in zoom-in-95 duration-150"
-          onMouseDown={e => e.preventDefault()}>
-          <p className="px-3 pt-2.5 pb-1 text-[10px] uppercase tracking-widest text-white/40 font-semibold">Invite party members</p>
-          <div className="max-h-52 overflow-y-auto flex flex-col">
-            {loading && <p className="px-3 py-2 text-xs text-white/30">Loading…</p>}
-            {!loading && candidates.length === 0 && (
-              <p className="px-3 py-2 text-xs text-white/30 italic">No party members found — link one of your characters to a party first.</p>
-            )}
-            {candidates.map(c => (
-              <button key={c.userId} type="button" onClick={() => toggle(c.userId)}
-                className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors flex items-center justify-between">
-                {c.label}
-                {collaboratorIds.includes(c.userId) && <span className="text-purple-300">✓</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function NoteView({ note, onClose }: NoteViewProps) {
@@ -166,7 +109,8 @@ export function NoteView({ note, onClose }: NoteViewProps) {
   const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!initialData.content)
   const [saving,  setSaving]  = useState(false)
-  const [collaboratorIds, setCollaboratorIds] = useState(initialData.collaboratorIds ?? [])
+  const [collaboratorIds, setCollaboratorIds]   = useState(initialData.collaboratorIds ?? [])
+  const [pendingInviteIds, setPendingInviteIds] = useState(initialData.pendingInviteIds ?? [])
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -207,7 +151,7 @@ export function NoteView({ note, onClose }: NoteViewProps) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       setSaving(true)
-      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds }
+      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds, pendingInviteIds }
       try {
         if (isOwner) await updateObject(note.id, { data: patch as unknown as JSON })
         else await updateSharedObject(note.id, { data: patch as unknown as JSON })
@@ -221,11 +165,23 @@ export function NoteView({ note, onClose }: NoteViewProps) {
     scheduleSave()
   }
 
-  function handleCollaboratorsChange(ids: string[]) {
-    setCollaboratorIds(ids)
+  function persistSharing(nextCollaboratorIds: string[], nextPendingInviteIds: string[]) {
+    setCollaboratorIds(nextCollaboratorIds)
+    setPendingInviteIds(nextPendingInviteIds)
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: ids } as unknown as JSON })
+    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: nextCollaboratorIds, pendingInviteIds: nextPendingInviteIds } as unknown as JSON })
       .catch(e => console.error(e))
+  }
+
+  function handleInvite(userId: string) {
+    if (collaboratorIds.includes(userId) || pendingInviteIds.includes(userId)) return
+    persistSharing(collaboratorIds, [...pendingInviteIds, userId])
+  }
+  function handleCancelInvite(userId: string) {
+    persistSharing(collaboratorIds, pendingInviteIds.filter(id => id !== userId))
+  }
+  function handleRemoveCollaborator(userId: string) {
+    persistSharing(collaboratorIds.filter(id => id !== userId), pendingInviteIds)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -239,7 +195,14 @@ export function NoteView({ note, onClose }: NoteViewProps) {
 
         {saving && <span className="text-[10px] text-white/40 animate-pulse">saving…</span>}
 
-        <CollaboratorsMenu note={note} data={{ ...initialData, collaboratorIds }} onChange={handleCollaboratorsChange} />
+        <ShareMenu
+          isOwner={isOwner}
+          collaboratorIds={collaboratorIds}
+          pendingInviteIds={pendingInviteIds}
+          onInvite={handleInvite}
+          onCancelInvite={handleCancelInvite}
+          onRemoveCollaborator={handleRemoveCollaborator}
+        />
 
         <button
           type="button"

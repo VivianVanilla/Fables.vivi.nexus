@@ -368,6 +368,7 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
     const isDropInside = activeDropTarget?.id === node.id && activeDropTarget.position === "inside"
     const nodeData: any = typeof node.data === "string" ? JSON.parse((node.data as string) ?? "{}") : (node.data ?? {})
     const bgImage: string | undefined = nodeData?.backgroundImage
+    const isSharedWithMe = node.type === "note" && node.owner_id !== user?.id && !!nodeData?.collaboratorIds?.includes(user?.id)
 
     return (
       <div key={node.id} className="relative">
@@ -420,6 +421,12 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
               {isFolder && isNoNesting(node) && (
                 <span className="rounded px-1 bg-sidebar-foreground/10 text-sidebar-foreground/50 tracking-normal normal-case">
                   no-nest
+                </span>
+              )}
+
+              {isSharedWithMe && (
+                <span className="rounded px-1 bg-purple-500/20 text-purple-300 tracking-normal normal-case" title="Someone shared this note with you">
+                  shared
                 </span>
               )}
             </div>

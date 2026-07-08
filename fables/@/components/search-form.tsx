@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/sidebar"
 import { BookOpenText } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogClose,
@@ -19,6 +19,8 @@ import {
 import { Field, FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useUserContext } from "../../src/contexts/UserContext"
+import { supabase } from "../../src/supabase"
+import { PendingInvitesBell } from "@/components/collab/PendingInvitesBell"
 import { Link } from "react-router-dom"
 
 
@@ -252,21 +254,51 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+async function isPartyCodeTaken(code: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("objects")
+    .select("id")
+    .filter("data->>partyCode", "eq", code)
+    .limit(1)
+  if (error) { console.error("party code check failed:", error); return false }
+  return (data ?? []).length > 0
+}
+
 function CampaignForm({ onCreated }: { onCreated: () => void }) {
   const { createObject } = useUserContext()
   const [name, setName] = useState("New Campaign")
   const [partyCode, setPartyCode] = useState(() => generatePartyCode())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [codeTaken, setCodeTaken] = useState(false)
+  const [checkingCode, setCheckingCode] = useState(false)
+
+  // Live-check as the user types/regenerates, plus a final check on submit —
+  // codes are otherwise just random strings with no uniqueness guarantee.
+  useEffect(() => {
+    const code = partyCode.trim().toUpperCase()
+    if (!code) { setCodeTaken(false); return }
+    setCheckingCode(true)
+    const t = setTimeout(() => {
+      isPartyCodeTaken(code).then(taken => { setCodeTaken(taken); setCheckingCode(false) })
+    }, 300)
+    return () => clearTimeout(t)
+  }, [partyCode])
 
   async function handleCreate() {
     setSaving(true)
     setError(null)
     try {
+      const code = partyCode.trim().toUpperCase()
+      if (await isPartyCodeTaken(code)) {
+        setCodeTaken(true)
+        setError("That code is already in use — try a different one.")
+        return
+      }
       await createObject({
         name,
         type: "campaign",
-        data: { partyCode: partyCode.toUpperCase() },
+        data: { partyCode: code },
       })
       onCreated()
     } catch (e: any) {
@@ -294,7 +326,7 @@ function CampaignForm({ onCreated }: { onCreated: () => void }) {
               id="party-code"
               value={partyCode}
               onChange={(e) => setPartyCode(e.target.value.toUpperCase().slice(0, 8))}
-              className="font-mono tracking-widest"
+              className={`font-mono tracking-widest ${codeTaken ? "border-destructive" : ""}`}
               placeholder="ABC123"
             />
             <Button
@@ -306,7 +338,13 @@ function CampaignForm({ onCreated }: { onCreated: () => void }) {
               ↺
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Players enter this code in the Info tab of their character sheet.</p>
+          {checkingCode ? (
+            <p className="text-xs text-muted-foreground mt-1">Checking availability…</p>
+          ) : codeTaken ? (
+            <p className="text-xs text-destructive mt-1">This code is already in use — try another or regenerate.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">Players enter this code in the Info tab of their character sheet.</p>
+          )}
         </Field>
       </FieldGroup>
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -314,7 +352,7 @@ function CampaignForm({ onCreated }: { onCreated: () => void }) {
         <DialogClose asChild>
           <Button variant="outline">Cancel</Button>
         </DialogClose>
-        <Button onClick={handleCreate} disabled={saving || !name.trim() || !partyCode.trim()}>
+        <Button onClick={handleCreate} disabled={saving || checkingCode || codeTaken || !name.trim() || !partyCode.trim()}>
           {saving ? "Creating…" : "Create"}
         </Button>
       </DialogFooter>
@@ -405,6 +443,8 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
 
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <PendingInvitesBell />
 
         <Button
           variant="outline"
