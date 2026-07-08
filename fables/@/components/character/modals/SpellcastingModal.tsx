@@ -50,9 +50,9 @@ export function SpellcastingModal({
               <span className="text-xs text-white/40">Ability</span>
               <select value={data.spellcastingAbility ?? ""} disabled={readOnly}
                 onChange={e => onUpdate({ spellcastingAbility: e.target.value })}
-                className="bg-black/30 rounded-lg px-2 py-2 text-white outline-none text-sm disabled:opacity-50">
-                <option value="">—</option>
-                {["STR","DEX","CON","INT","WIS","CHA"].map(a => <option key={a} value={a}>{a}</option>)}
+                className="bg-zinc-800 rounded-lg px-2 py-2 text-white outline-none text-sm disabled:opacity-50">
+                <option value="" className="bg-zinc-800 text-white">—</option>
+                {["STR","DEX","CON","INT","WIS","CHA"].map(a => <option key={a} value={a} className="bg-zinc-800 text-white">{a}</option>)}
               </select>
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -170,8 +170,8 @@ export function SpellcastingModal({
                   <div className="flex items-center gap-2 flex-wrap text-xs">
                     <label className="flex items-center gap-1.5 text-white/50">Level
                       <select value={newSlotLevel} onChange={e => setNewSlotLevel(parseInt(e.target.value))}
-                        className="bg-black/30 rounded-lg px-2 py-1 text-white outline-none">
-                        {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l}>{l}</option>)}
+                        className="bg-zinc-800 rounded-lg px-2 py-1 text-white outline-none">
+                        {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l} className="bg-zinc-800 text-white">{l}</option>)}
                       </select>
                     </label>
                     <label className="flex items-center gap-1.5 text-white/50">Slots
@@ -182,9 +182,9 @@ export function SpellcastingModal({
                     </label>
                     <label className="flex items-center gap-1.5 text-white/50">Resets
                       <select value={newSlotRests} onChange={e => setNewSlotRests(e.target.value as "short" | "long")}
-                        className="bg-black/30 rounded-lg px-2 py-1 text-white outline-none">
-                        <option value="long">Long</option>
-                        <option value="short">Short</option>
+                        className="bg-zinc-800 rounded-lg px-2 py-1 text-white outline-none">
+                        <option value="long" className="bg-zinc-800 text-white">Long</option>
+                        <option value="short" className="bg-zinc-800 text-white">Short</option>
                       </select>
                     </label>
                     <button type="button" onClick={() => { onAddSlot(newSlotLevel, newSlotTotal, newSlotRests); setNewSlotTotal(2) }}

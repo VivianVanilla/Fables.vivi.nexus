@@ -248,11 +248,11 @@ export function PartyChat({
               <select
                 value={dmTarget?.userId ?? ""}
                 onChange={e => setDmTarget(partyMembers.find(p => p.userId === e.target.value) ?? null)}
-                className="w-full bg-black/30 text-white text-xs rounded-lg px-2 py-1.5 outline-none"
+                className="w-full bg-zinc-800 text-white text-xs rounded-lg px-2 py-1.5 outline-none"
               >
-                <option value="" disabled>Select a player…</option>
+                <option value="" disabled className="bg-zinc-800 text-white">Select a player…</option>
                 {partyMembers.map(m => (
-                  <option key={m.userId} value={m.userId}>{m.name}{getDmMessages(m.userId).length > 0 ? " ·" : ""}</option>
+                  <option key={m.userId} value={m.userId} className="bg-zinc-800 text-white">{m.name}{getDmMessages(m.userId).length > 0 ? " ·" : ""}</option>
                 ))}
               </select>
             )}

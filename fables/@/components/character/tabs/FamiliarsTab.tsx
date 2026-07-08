@@ -60,9 +60,9 @@ export function FamiliarsTab({
           ) : (
             <>
               <select value={pickerValue} onChange={e => setPickerValue(e.target.value)}
-                className="flex-1 min-w-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
-                <option value="">Choose a monster to add as a familiar…</option>
-                {monsters.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                <option value="" className="bg-zinc-800 text-white">Choose a monster to add as a familiar…</option>
+                {monsters.map(m => <option key={m.id} value={m.id} className="bg-zinc-800 text-white">{m.name}</option>)}
               </select>
               <button type="button" onClick={handleAdd} disabled={!pickerValue}
                 className="text-sm px-3 py-2 rounded-lg bg-primary/80 hover:bg-primary disabled:opacity-30 disabled:cursor-default text-white font-semibold transition-colors shrink-0">

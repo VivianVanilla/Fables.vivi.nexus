@@ -26,6 +26,8 @@ interface Props {
   onAddSpell: () => void
   onChangeSpell: (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell: (id: string) => void
+  pendingSpellId?: string | null
+  onAutoEditConsumed?: () => void
   onAddEquip: () => void
   onChangeEquip: (id: string, patch: Partial<EquipmentItem>) => void
   onRemoveEquip: (id: string) => void
@@ -38,6 +40,7 @@ export function SpellsEquipPanel({
   onShowSpellcastingModal, onChangeSlot,
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
+  pendingSpellId, onAutoEditConsumed,
 }: Props) {
   const showSpells = activeSubTab === "spells"
   const [hideUnprepared, setHideUnprepared] = useState(() => {
@@ -51,10 +54,13 @@ export function SpellsEquipPanel({
   })
 
   const slotDisplay    = data.spellSlotDisplay ?? "integrated"
-  const preparedCount  = spellItems.filter(s => s.prepared && !s.alwaysPrepared).length
-  const knownCount     = spellItems.filter(s => s.alwaysPrepared).length
+  // Cantrips are always considered prepared/available — they don't count
+  // against the Prepared total (that's leveled spells only) or Known either.
+  const preparedCount  = spellItems.filter(s => s.prepared && !s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
+  const knownCount     = spellItems.filter(s => s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
+  const cantripCount   = spellItems.filter(s => (s.level ?? 0) === 0 && !s.freeSpell).length
   const visibleSpells  = spellItems
-    .filter(s => !hideUnprepared || s.prepared || s.alwaysPrepared)
+    .filter(s => !hideUnprepared || s.prepared || s.alwaysPrepared || (s.level ?? 0) === 0)
     .slice()
     .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
 
@@ -135,7 +141,9 @@ export function SpellsEquipPanel({
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Known</span>
             </div>
             <div className="flex flex-col items-center leading-none gap-0.5">
-              <span className="text-lg font-bold text-white tabular-nums">{data.cantripsKnown ?? "—"}</span>
+              <span className={`text-lg font-bold tabular-nums ${cantripCount > (data.cantripsKnown ?? Infinity) ? "text-red-400" : "text-white"}`}>
+                {cantripCount}<span className="text-white/30 text-sm">/{data.cantripsKnown ?? "—"}</span>
+              </span>
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
             </div>
             {!!data.invocationsKnown && (
@@ -217,55 +225,67 @@ export function SpellsEquipPanel({
                 }
               }
               const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
-              return levels.map(lvl => {
-                const spells       = grouped.get(lvl)!
-                const isOpen       = !collapsedLevels.has(lvl)
-                const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
-                const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
-                return (
-                  <div key={lvl} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
-                      <button type="button"
-                        onClick={() => setCollapsedLevels(prev => {
-                          const next = new Set(prev)
-                          next.has(lvl) ? next.delete(lvl) : next.add(lvl)
-                          try { localStorage.setItem(`fables-spell-collapsed-${characterId}`, JSON.stringify([...next])) } catch {}
-                          return next
-                        })}
-                        className="flex items-center gap-2 shrink-0 select-none">
-                        <span className="text-sm font-bold uppercase tracking-widest text-white/75">{groupLabel}</span>
-                        <span className="text-xs text-white/40">({spells.length})</span>
-                      </button>
-                      {matchingSlots.length > 0 && (
-                        <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
-                          {matchingSlots.map(slot => {
-                            const rem = Math.max(0, slot.total - slot.used)
-                            return (
-                              <div key={slot.id} className="flex items-center gap-1.5 flex-1 min-w-35">
-                                {slot.pact && (
-                                  <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none shrink-0">Pact</span>
-                                )}
-                                <TracingSlider
-                                  value={rem} max={slot.total} disabled={readOnly}
-                                  showButtons buttonSize="sm"
-                                  color={slotLevelColor(slotAccent, slot.level)}
-                                  onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
-                                  className="flex-1 min-w-0"
-                                />
-                                <span className="text-xs text-white/30 tabular-nums shrink-0">{rem}/{slot.total}</span>
-                              </div>
-                            )
+              // Rendered as ONE flat list of siblings (not nested per-level containers) so
+              // that changing a spell's level — which moves it between groups — reorders it
+              // within the same parent instead of unmounting/remounting it (which would lose
+              // the spell's own open edit/detail modal state).
+              return (
+                <div className="flex flex-col gap-1">
+                  {levels.flatMap(lvl => {
+                    const spells       = grouped.get(lvl)!
+                    const isOpen       = !collapsedLevels.has(lvl)
+                    const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
+                    const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
+                    const nodes: React.ReactNode[] = [
+                      <div key={`header-${lvl}`} className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
+                        <button type="button"
+                          onClick={() => setCollapsedLevels(prev => {
+                            const next = new Set(prev)
+                            next.has(lvl) ? next.delete(lvl) : next.add(lvl)
+                            try { localStorage.setItem(`fables-spell-collapsed-${characterId}`, JSON.stringify([...next])) } catch {}
+                            return next
                           })}
-                        </div>
-                      )}
-                    </div>
-                    {isOpen && spells.map(spell => (
-                      <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
-                        onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
-                    ))}
-                  </div>
-                )
-              })
+                          className="flex items-center gap-2 shrink-0 select-none">
+                          <span className="text-sm font-bold uppercase tracking-widest text-white/75">{groupLabel}</span>
+                          <span className="text-xs text-white/40">({spells.length})</span>
+                        </button>
+                        {matchingSlots.length > 0 && (
+                          <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
+                            {matchingSlots.map(slot => {
+                              const rem = Math.max(0, slot.total - slot.used)
+                              return (
+                                <div key={slot.id} className="flex items-center gap-1.5 flex-1 min-w-35">
+                                  {slot.pact && (
+                                    <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none shrink-0">Pact</span>
+                                  )}
+                                  <TracingSlider
+                                    value={rem} max={slot.total} disabled={readOnly}
+                                    showButtons buttonSize="sm"
+                                    color={slotLevelColor(slotAccent, slot.level)}
+                                    onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
+                                    className="flex-1 min-w-0"
+                                  />
+                                  <span className="text-xs text-white/30 tabular-nums shrink-0">{rem}/{slot.total}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ]
+                    if (isOpen) {
+                      for (const spell of spells) {
+                        nodes.push(
+                          <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
+                            autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
+                            onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+                        )
+                      }
+                    }
+                    return nodes
+                  })}
+                </div>
+              )
             })()}
             {!readOnly && (
               <button type="button" onClick={onAddSpell}

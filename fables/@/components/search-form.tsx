@@ -171,7 +171,7 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
             onChange={(e) => setRace(e.target.value)}
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            {RACES.map((r) => <option key={r}>{r}</option>)}
+            {RACES.map((r) => <option key={r} className="bg-zinc-800 text-white">{r}</option>)}
           </select>
         </Field>
 
@@ -200,7 +200,7 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
                 onChange={(e) => setClassEntry(i, "cls", e.target.value)}
                 className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                {CLASSES.map((c) => <option key={c}>{c}</option>)}
+                {CLASSES.map((c) => <option key={c} className="bg-zinc-800 text-white">{c}</option>)}
               </select>
               <div className="flex items-center gap-1">
                 <Button

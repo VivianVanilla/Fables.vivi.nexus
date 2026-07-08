@@ -79,8 +79,8 @@ export function HitDice({ card, pools, readOnly, onUpdate, onRemove, onAdd }: Pr
           {pools.map(pool => (
             <div key={pool.id} className="flex items-center gap-2">
               <select value={pool.dieType} onChange={e => onUpdate(pool.id, { dieType: e.target.value })}
-                className="bg-black/30 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
-                {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d}>{d}</option>)}
+                className="bg-zinc-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
+                {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d} className="bg-zinc-800 text-white">{d}</option>)}
               </select>
               <div className="flex items-center gap-1.5 flex-1">
                 <button type="button"
@@ -104,8 +104,8 @@ export function HitDice({ card, pools, readOnly, onUpdate, onRemove, onAdd }: Pr
           ) : (
             <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2">
               <select value={newDie} onChange={e => setNewDie(e.target.value)}
-                className="bg-black/30 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
-                {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d}>{d}</option>)}
+                className="bg-zinc-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
+                {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d} className="bg-zinc-800 text-white">{d}</option>)}
               </select>
               <div className="flex items-center gap-1.5 flex-1">
                 <button type="button" onClick={() => setNewCount(c => Math.max(1, c - 1))}

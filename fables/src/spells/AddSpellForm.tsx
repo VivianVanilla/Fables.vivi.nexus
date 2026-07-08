@@ -84,15 +84,15 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
         />
 
         <select value={draft.school} onChange={(e) => set('school', e.target.value)} className={selectCls}>
-          {SCHOOLS.map((s) => <option key={s}>{s}</option>)}
+          {SCHOOLS.map((s) => <option key={s} className="bg-slate-900 text-slate-100">{s}</option>)}
         </select>
 
         <select value={draft.casting_time} onChange={(e) => set('casting_time', e.target.value)} className={selectCls}>
-          {CASTING.map((t) => <option key={t}>{t}</option>)}
+          {CASTING.map((t) => <option key={t} className="bg-slate-900 text-slate-100">{t}</option>)}
         </select>
 
         <select value={draft.damageType} onChange={(e) => set('damageType', e.target.value)} className={selectCls}>
-          {DAMAGE_TYPES.map((d) => <option key={d}>{d}</option>)}
+          {DAMAGE_TYPES.map((d) => <option key={d} className="bg-slate-900 text-slate-100">{d}</option>)}
         </select>
 
         <select
@@ -100,10 +100,10 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
           onChange={(e) => set('ctag', e.target.value)}
           className={selectCls}
         >
-          <option value="">Campaign Tag (none)</option>
-          <option value="Twilight">Twilight</option>
-          <option value="Special-Banned">Special/Banned</option>
-          <option value="Squain">Squain</option>
+          <option value="" className="bg-slate-900 text-slate-100">Campaign Tag (none)</option>
+          <option value="Twilight" className="bg-slate-900 text-slate-100">Twilight</option>
+          <option value="Special-Banned" className="bg-slate-900 text-slate-100">Special/Banned</option>
+          <option value="Squain" className="bg-slate-900 text-slate-100">Squain</option>
         </select>
 
         <input

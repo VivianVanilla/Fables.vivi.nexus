@@ -306,11 +306,11 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], onCon
                       <select
                         value={selectedSubclass[e.cls] ?? ""}
                         onChange={ev => setSelectedSubclass(prev => ({ ...prev, [e.cls]: ev.target.value }))}
-                        className="w-full appearance-none bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/70 outline-none focus:border-white/25 pr-7"
+                        className="w-full appearance-none bg-zinc-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/70 outline-none focus:border-white/25 pr-7"
                       >
-                        <option value="">No subclass</option>
+                        <option value="" className="bg-zinc-800 text-white">No subclass</option>
                         {subclassOptions[e.cls].map(sc => (
-                          <option key={sc} value={sc}>{sc}</option>
+                          <option key={sc} value={sc} className="bg-zinc-800 text-white">{sc}</option>
                         ))}
                       </select>
                       <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-white/30 pointer-events-none" />

@@ -7,6 +7,8 @@ import type { EquipmentItem } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
 import { Markdown } from "../../ui/Markdown"
+import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
+import { PopTransition } from "../ui/PopTransition"
 import { getSuggestions, type Suggestion } from "./FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -186,10 +188,10 @@ export function EquipmentEntry({
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Type</span>
                   <select value={item.type ?? "melee"} onChange={e => onChange({ type: e.target.value })}
-                    className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
-                    <option value="melee">Melee</option>
-                    <option value="ranged">Ranged</option>
-                    <option value="misc">Misc</option>
+                    className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
+                    <option value="melee" className="bg-zinc-800 text-white">Melee</option>
+                    <option value="ranged" className="bg-zinc-800 text-white">Ranged</option>
+                    <option value="misc" className="bg-zinc-800 text-white">Misc</option>
                   </select>
                 </label>
 
@@ -199,10 +201,10 @@ export function EquipmentEntry({
                     <select
                       value={item.attackStat ?? ""}
                       onChange={e => onChange({ attackStat: (e.target.value as EquipmentItem["attackStat"]) || undefined })}
-                      className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm"
+                      className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm"
                     >
                       {STAT_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                        <option key={o.value} value={o.value} className="bg-zinc-800 text-white">{o.label}</option>
                       ))}
                     </select>
                   </label>
@@ -258,8 +260,11 @@ export function EquipmentEntry({
 
                     <label className="flex flex-col gap-1">
                       <span className="text-xs text-white/40 uppercase tracking-wider">Dmg Type</span>
-                      <input value={item.damageType ?? ""} onChange={e => onChange({ damageType: e.target.value })} placeholder="Slashing"
-                        className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                      <select value={item.damageType ?? ""} onChange={e => onChange({ damageType: e.target.value || undefined })}
+                        className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30">
+                        <option value="" className="bg-zinc-800 text-white">—</option>
+                        {DAMAGE_TYPES.map(t => <option key={t} value={t} className="bg-zinc-800 text-white">{t}</option>)}
+                      </select>
                     </label>
                   </>
                 )}
@@ -268,6 +273,35 @@ export function EquipmentEntry({
                   <span className="text-xs text-white/40 uppercase tracking-wider">Properties</span>
                   <input value={item.properties ?? ""} onChange={e => onChange({ properties: e.target.value })} placeholder="Versatile, Finesse…"
                     className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                </label>
+
+                <PopTransition show={item.type === "melee"} className="col-span-2">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <label className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-white/40 uppercase tracking-wider">Melee Range</span>
+                      <input value={item.meleeRange ?? ""} onChange={e => onChange({ meleeRange: e.target.value })} placeholder="5 ft."
+                        className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                    </label>
+                    <label className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-white/40 uppercase tracking-wider">Throw Range</span>
+                      <input value={item.throwRange ?? ""} onChange={e => onChange({ throwRange: e.target.value })} placeholder="20/60 ft."
+                        className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                    </label>
+                  </div>
+                </PopTransition>
+
+                <PopTransition show={item.type === "ranged"} className="col-span-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-white/40 uppercase tracking-wider">Range</span>
+                    <input value={item.range ?? ""} onChange={e => onChange({ range: e.target.value })} placeholder="80/320 ft."
+                      className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                  </label>
+                </PopTransition>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-white/40 uppercase tracking-wider">Weight (lb)</span>
+                  <input type="number" min={0} step="0.1" value={item.weight ?? ""} onChange={e => onChange({ weight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })} placeholder="0"
+                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                 </label>
 
                 <label className="flex items-center gap-2 col-span-2 cursor-pointer select-none">
@@ -287,7 +321,7 @@ export function EquipmentEntry({
                   {damage && (
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] uppercase tracking-widest text-white/35 font-semibold">Damage</span>
-                      <span className="text-sm px-2.5 py-1 rounded-lg bg-red-500/15 text-red-300 font-medium">{damage}</span>
+                      <span className={`text-sm px-2.5 py-1 rounded-lg font-medium ${damageTypeClasses(item.damageType)}`}>{damage}</span>
                     </div>
                   )}
                 </div>
@@ -337,10 +371,22 @@ export function EquipmentEntry({
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">{toHit} to hit</span>
               )}
               {damage && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300/80">{damage}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${damageTypeClasses(item.damageType)}`}>{damage}</span>
+              )}
+              {item.meleeRange && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">↔ {item.meleeRange}</span>
+              )}
+              {item.throwRange && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">⇒ {item.throwRange}</span>
+              )}
+              {item.range && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">⇒ {item.range}</span>
               )}
               {item.properties && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic">{item.properties}</span>
+              )}
+              {!!item.weight && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">{item.weight} lb</span>
               )}
             </div>
           </div>

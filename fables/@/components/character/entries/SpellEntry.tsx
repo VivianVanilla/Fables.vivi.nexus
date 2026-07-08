@@ -8,6 +8,8 @@ import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
+import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
+import { PopTransition } from "../ui/PopTransition"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 
@@ -21,6 +23,8 @@ interface SpellEntryProps {
   readOnly?: boolean
   showPrepToggle?: boolean
   classes?: string[]   // character's class(es) — lets a spell be tagged as known/prepared from a specific one
+  autoEdit?: boolean            // open the edit modal immediately (newly-added spell)
+  onAutoEditConsumed?: () => void
 }
 
 // ── Parse spell description for combat data ───────────────────────────────────
@@ -125,9 +129,9 @@ function SpellNameInput({
 
 function Pill({ label, value, color = "bg-white/10 text-white/60" }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-widest text-white/35 font-semibold">{label}</span>
-      <span className={`text-sm px-2.5 py-1 rounded-lg font-medium ${color}`}>{value}</span>
+    <div className="flex flex-col gap-0.5 sm:gap-1">
+      <span className="text-[10px] sm:text-xs uppercase tracking-widest text-white/35 font-semibold">{label}</span>
+      <span className={`text-sm sm:text-base px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg font-medium ${color}`}>{value}</span>
     </div>
   )
 }
@@ -137,14 +141,14 @@ function Pill({ label, value, color = "bg-white/10 text-white/60" }: { label: st
 function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellItem; onClose: () => void; onEdit: () => void; readOnly: boolean }) {
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(560px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(760px,calc(100vw-2rem))] max-h-[88vh] flex flex-col overflow-hidden">
 
         {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
+        <div className="px-6 sm:px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-white/10 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-bold text-white leading-tight">{spell.name || "Unnamed Spell"}</h2>
-              <p className="text-sm text-white/45 mt-0.5 italic">
+              <h2 className="text-lg sm:text-2xl font-bold text-white leading-tight">{spell.name || "Unnamed Spell"}</h2>
+              <p className="text-sm sm:text-base text-white/45 mt-0.5 italic">
                 {spell.level === 0
                   ? `${spell.school ?? "Cantrip"} cantrip`
                   : `Level ${spell.level}${spell.school ? ` ${spell.school}` : ""}`}
@@ -154,21 +158,21 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
             </div>
             <div className="flex items-center gap-2 shrink-0 mt-0.5">
               {!spell.alwaysPrepared && spell.prepared && (
-                <span className="text-[10px] border border-primary/50 text-primary rounded-full px-2 py-0.5 font-semibold tracking-wide">Prepared</span>
+                <span className="text-[10px] sm:text-xs border border-primary/50 text-primary rounded-full px-2 py-0.5 font-semibold tracking-wide">Prepared</span>
               )}
               {!readOnly && (
                 <button type="button" onClick={onEdit}
-                  className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm transition-colors">✎</button>
+                  className="size-7 sm:size-9 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white text-sm sm:text-base transition-colors">✎</button>
               )}
               <button type="button" onClick={onClose}
-                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
+                className="size-7 sm:size-9 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
             </div>
           </div>
         </div>
 
         {/* Stats grid */}
-        <div className="px-6 py-4 border-b border-white/10 shrink-0">
-          <div className="flex flex-wrap gap-3">
+        <div className="px-6 sm:px-8 py-4 sm:py-6 border-b border-white/10 shrink-0">
+          <div className="flex flex-wrap gap-3 sm:gap-4">
             {spell.castTime  && <Pill label="Cast Time" value={spell.castTime} />}
             {spell.range     && <Pill label="Range"     value={spell.range} />}
             {spell.duration  && <Pill label="Duration"  value={spell.duration} />}
@@ -178,12 +182,12 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
               <Pill
                 label="Damage"
                 value={`${spell.damage}${spell.damageType ? ` ${spell.damageType}` : ""}`}
-                color="bg-red-500/15 text-red-300"
+                color={damageTypeClasses(spell.damageType)}
               />
             )}
           </div>
           {spell.components && (
-            <p className="text-xs text-white/40 mt-3">
+            <p className="text-xs sm:text-sm text-white/40 mt-3">
               <span className="font-semibold text-white/50">Components:</span> {spell.components}
               {spell.materialComponents ? ` (${spell.materialComponents})` : ""}
             </p>
@@ -191,7 +195,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
         </div>
 
         {/* Description */}
-        <div className="px-6 py-4 overflow-y-auto flex-1">
+        <div className="px-6 sm:px-8 py-4 sm:py-6 overflow-y-auto flex-1 sm:text-base sm:leading-relaxed">
           {spell.notes
             ? <Markdown text={spell.notes} tone="dark" />
             : <p className="text-sm text-white/25 italic">No description saved.</p>
@@ -204,9 +208,14 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [] }: SpellEntryProps) {
-  const [editing, setEditing] = useState(false)
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], autoEdit = false, onAutoEditConsumed }: SpellEntryProps) {
+  const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
+
+  useEffect(() => {
+    if (autoEdit) onAutoEditConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Fill all spell fields from the database spell record (autofill only)
   function fillFromSpell(s: Spell) {
@@ -280,8 +289,11 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Level</span>
-                  <input type="number" value={spell.level ?? ""} onChange={e => onChange({ level: parseInt(e.target.value) || 0 })} placeholder="0"
-                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  <select value={spell.level ?? 0} onChange={e => onChange({ level: parseInt(e.target.value) || 0 })}
+                    className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30">
+                    <option value={0} className="bg-zinc-800 text-white">Cantrip</option>
+                    {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l} className="bg-zinc-800 text-white">Level {l}</option>)}
+                  </select>
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">School</span>
@@ -300,8 +312,11 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Dmg Type</span>
-                  <input value={spell.damageType ?? ""} onChange={e => onChange({ damageType: e.target.value })} placeholder="Fire"
-                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                  <select value={spell.damageType ?? ""} onChange={e => onChange({ damageType: e.target.value || undefined })}
+                    className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30">
+                    <option value="" className="bg-zinc-800 text-white">—</option>
+                    {DAMAGE_TYPES.map(t => <option key={t} value={t} className="bg-zinc-800 text-white">{t}</option>)}
+                  </select>
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Cast Time</span>
@@ -323,41 +338,66 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                   <input value={spell.components ?? ""} onChange={e => onChange({ components: e.target.value })} placeholder="V, S, M"
                     className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
                 </label>
+                <div className="flex flex-col gap-1.5 justify-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-white/60">
+                    <input type="checkbox" checked={spell.requiresMaterial ?? false}
+                      onChange={e => onChange({ requiresMaterial: e.target.checked, materialOwned: e.target.checked ? spell.materialOwned : undefined })}
+                      className="accent-primary" />
+                    Requires Material Component
+                  </label>
+                  <PopTransition show={!!spell.requiresMaterial}>
+                    <label className="flex items-center gap-2 cursor-pointer text-yellow-300/90 pl-6 pt-1.5">
+                      <input type="checkbox" checked={spell.materialOwned ?? false}
+                        onChange={e => onChange({ materialOwned: e.target.checked })}
+                        className="accent-yellow-500" />
+                      Material Owned
+                    </label>
+                  </PopTransition>
+                </div>
               </div>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-white/40 uppercase tracking-wider">Material Components</span>
-                <input value={spell.materialComponents ?? ""} onChange={e => onChange({ materialComponents: e.target.value })} placeholder="A pinch of sulfur…"
-                  className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 text-sm" />
-              </label>
+              <PopTransition show={!!spell.requiresMaterial}>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-white/40 uppercase tracking-wider">Material Components</span>
+                  <input value={spell.materialComponents ?? ""} onChange={e => onChange({ materialComponents: e.target.value })} placeholder="A pinch of sulfur…"
+                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 text-sm" />
+                </label>
+              </PopTransition>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/60">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={spell.prepared ?? false} onChange={e => onChange({ prepared: e.target.checked })} className="accent-primary" />
-                  Prepared
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={spell.alwaysPrepared ?? false} onChange={e => onChange({ alwaysPrepared: e.target.checked })} className="accent-primary" />
-                  Always / Known
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={spell.ritual ?? false} onChange={e => onChange({ ritual: e.target.checked })} className="accent-primary" />
-                  Ritual
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <PopTransition show={spell.level !== 0} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={spell.prepared ?? false} onChange={e => onChange({ prepared: e.target.checked })} className="accent-primary" />
+                    Prepared
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={spell.alwaysPrepared ?? false} onChange={e => onChange({ alwaysPrepared: e.target.checked })} className="accent-primary" />
+                     Known
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={spell.ritual ?? false} onChange={e => onChange({ ritual: e.target.checked })} className="accent-primary" />
+                    Ritual
+                  </label>
+                </PopTransition>
+                <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
                   <input type="checkbox" checked={spell.concentration ?? false} onChange={e => onChange({ concentration: e.target.checked })} className="accent-primary" />
                   Concentration
                 </label>
-        
+                <PopTransition show={!!spell.alwaysPrepared} className="flex">
+                  <label className="flex items-center gap-2 cursor-pointer text-emerald-300/90 whitespace-nowrap" title="Granted free by a subclass/domain — doesn't count toward Known or Cantrips totals">
+                    <input type="checkbox" checked={spell.freeSpell ?? false} onChange={e => onChange({ freeSpell: e.target.checked })} className="accent-emerald-500" />
+                    Not counted toward Known Spells
+                  </label>
+                </PopTransition>
               </div>
 
               {classes.length > 1 && (
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Class</span>
                   <select value={spell.sourceClass ?? ""} onChange={e => onChange({ sourceClass: e.target.value || undefined })}
-                    className="bg-black/30 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
-                    <option value="">—</option>
-                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                    className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 text-sm">
+                    <option value="" className="bg-zinc-800 text-white">—</option>
+                    {classes.map(c => <option key={c} value={c} className="bg-zinc-800 text-white">{c}</option>)}
                   </select>
                 </label>
               )}
@@ -390,8 +430,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
         onClick={() => setShowDetail(true)}
         className={`rounded-lg ${theme.box} border border-white/10 px-3 py-2.5 flex items-center gap-2 min-h-11 cursor-pointer hover:border-white/20 transition-colors`}
       >
-        {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells have no mark at all */}
-        {showPrepToggle && !spell.alwaysPrepared && (
+        {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells and cantrips have no mark at all */}
+        {showPrepToggle && !spell.alwaysPrepared && spell.level !== 0 && (
           <button
             type="button"
             disabled={readOnly}
@@ -422,7 +462,16 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             {spell.concentration && (
               <span className="text-[9px] border border-sky-400/40 text-sky-400/80 rounded px-1 leading-tight shrink-0">Conc.</span>
             )}
-            
+            {spell.freeSpell && (
+              <span className="text-[9px] border border-emerald-400/40 text-emerald-400/80 rounded px-1 leading-tight shrink-0">Free</span>
+            )}
+            {spell.requiresMaterial && (
+              <span className={`text-[9px] border rounded px-1 leading-tight shrink-0 ${
+                spell.materialOwned ? "border-yellow-400/50 text-yellow-300" : "border-yellow-400/30 text-yellow-400/50"
+              }`} title={spell.materialOwned ? "Material component owned" : "Requires a material component — not marked owned"}>
+                {spell.materialOwned ? "Material ✓" : "Material"}
+              </span>
+            )}
           </div>
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {spell.level !== undefined && (
@@ -440,7 +489,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">{spell.toHit} atk</span>
             )}
             {spell.damage && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300/80">
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${damageTypeClasses(spell.damageType)}`}>
                 {spell.damage}{spell.damageType ? ` ${spell.damageType}` : ""}
               </span>
             )}

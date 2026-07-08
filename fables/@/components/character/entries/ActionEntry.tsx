@@ -11,6 +11,7 @@ import { useState } from "react"
 import type { MonsterAction, ActionCategory } from "../../monster-types"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
+import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 
 const CATEGORY_STYLE: Record<ActionCategory, { border: string; text: string; badge: string; ring: string }> = {
   action:      { border: "border-sky-500/30",    text: "text-sky-300",    badge: "bg-sky-500/15 text-sky-300",    ring: "focus:ring-sky-400/40" },
@@ -65,8 +66,11 @@ export function ActionEntry({ action, category, onChange, onRemove, readOnly = f
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-white/40 uppercase tracking-wider">Damage Type</span>
-            <input value={action.damageType ?? ""} placeholder="Fire" onChange={e => onChange({ damageType: e.target.value })}
-              className="bg-white/10 rounded-lg px-2 py-1.5 text-white outline-none placeholder:text-white/20" />
+            <select value={action.damageType ?? ""} onChange={e => onChange({ damageType: e.target.value || undefined })}
+              className="bg-zinc-800 rounded-lg px-2 py-1.5 text-white outline-none">
+              <option value="" className="bg-zinc-800 text-white">—</option>
+              {DAMAGE_TYPES.map(t => <option key={t} value={t} className="bg-zinc-800 text-white">{t}</option>)}
+            </select>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-white/40 uppercase tracking-wider">Save</span>
@@ -89,10 +93,10 @@ export function ActionEntry({ action, category, onChange, onRemove, readOnly = f
             <label className="flex items-center gap-1.5 text-white/50">
               on
               <select value={action.recharge} onChange={e => onChange({ recharge: parseInt(e.target.value) })}
-                className="bg-black/30 rounded px-2 py-1 text-white outline-none text-xs">
-                <option value={4}>4-6</option>
-                <option value={5}>5-6</option>
-                <option value={6}>6</option>
+                className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                <option value={4} className="bg-zinc-800 text-white">4-6</option>
+                <option value={5} className="bg-zinc-800 text-white">5-6</option>
+                <option value={6} className="bg-zinc-800 text-white">6</option>
               </select>
             </label>
           )}
@@ -143,7 +147,7 @@ export function ActionEntry({ action, category, onChange, onRemove, readOnly = f
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">{action.attackBonus} to hit</span>
             )}
             {action.damage && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300/80">
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${damageTypeClasses(action.damageType)}`}>
                 {action.damage}{action.damageType ? ` ${action.damageType}` : ""}
               </span>
             )}

@@ -219,38 +219,38 @@ export function SpellBrowser({
           <LevelMultiSelect selectedLevels={selectedLevels} setSelectedLevels={setSelectedLevels} />
 
           <select value={filters.school} onChange={(e) => setFilters((f) => ({ ...f, school: e.target.value }))} className={selectCls}>
-            <option value="All">All Schools</option>
-            {SCHOOLS.map((s) => <option key={s}>{s}</option>)}
+            <option value="All" className="bg-slate-900 text-slate-100">All Schools</option>
+            {SCHOOLS.map((s) => <option key={s} className="bg-slate-900 text-slate-100">{s}</option>)}
           </select>
 
           <select value={filters.casting_time} onChange={(e) => setFilters((f) => ({ ...f, casting_time: e.target.value }))} className={selectCls}>
-            <option value="All">Casting Time</option>
-            {CASTING.map((t) => <option key={t}>{t}</option>)}
+            <option value="All" className="bg-slate-900 text-slate-100">Casting Time</option>
+            {CASTING.map((t) => <option key={t} className="bg-slate-900 text-slate-100">{t}</option>)}
           </select>
 
           <select value={filters.damageType} onChange={(e) => setFilters((f) => ({ ...f, damageType: e.target.value }))} className={selectCls}>
-            <option value="All">Damage Type</option>
-            {DAMAGE_TYPES.map((d) => <option key={d}>{d}</option>)}
+            <option value="All" className="bg-slate-900 text-slate-100">Damage Type</option>
+            {DAMAGE_TYPES.map((d) => <option key={d} className="bg-slate-900 text-slate-100">{d}</option>)}
           </select>
 
           <select value={filters.concentration} onChange={(e) => setFilters((f) => ({ ...f, concentration: e.target.value }))} className={selectCls}>
-            <option value="All">Concentration</option>
-            <option value="Concentration">Conc. only</option>
-            <option value="No Concentration">No conc.</option>
+            <option value="All" className="bg-slate-900 text-slate-100">Concentration</option>
+            <option value="Concentration" className="bg-slate-900 text-slate-100">Conc. only</option>
+            <option value="No Concentration" className="bg-slate-900 text-slate-100">No conc.</option>
           </select>
 
           <select value={filters.ritual} onChange={(e) => setFilters((f) => ({ ...f, ritual: e.target.value }))} className={selectCls}>
-            <option value="All">Ritual</option>
-            <option value="true">Ritual only</option>
-            <option value="false">No ritual</option>
+            <option value="All" className="bg-slate-900 text-slate-100">Ritual</option>
+            <option value="true" className="bg-slate-900 text-slate-100">Ritual only</option>
+            <option value="false" className="bg-slate-900 text-slate-100">No ritual</option>
           </select>
 
           {!hideHomebrew && (
             <select value={filters.campaignTag} onChange={(e) => setFilters((f) => ({ ...f, campaignTag: e.target.value }))} className={selectCls}>
-              <option value="All">Campaign</option>
-              <option value="Twilight">Twilight</option>
-              <option value="Squain">Squain</option>
-              <option value="Special-Banned">Special/Banned</option>
+              <option value="All" className="bg-slate-900 text-slate-100">Campaign</option>
+              <option value="Twilight" className="bg-slate-900 text-slate-100">Twilight</option>
+              <option value="Squain" className="bg-slate-900 text-slate-100">Squain</option>
+              <option value="Special-Banned" className="bg-slate-900 text-slate-100">Special/Banned</option>
             </select>
           )}
         </div>

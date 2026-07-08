@@ -69,7 +69,7 @@ type Tab = "main" | "details" | "familiars" | "chat"
 // ════════════════════════════════════════════════════════════════════════════
 
 export function CharacterSheet({ character, readOnly = false }: Props) {
-  const { user, updateObject, objects } = useUserContext()
+  const { user, updateObject, createObject, objects } = useUserContext()
 
   // ── STATE ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +116,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // Sub-tab state lifted out of child panels so quick-search "navigate to" can drive them
   const [spellsSubTab, setSpellsSubTab] = useState<"spells" | "martial">("spells")
   const [infoSubTab,   setInfoSubTab]   = useState<InfoSubTab>("overview")
+
+  // Newly-added spell — opens its edit modal automatically, once
+  const [pendingSpellId, setPendingSpellId] = useState<string | null>(null)
 
   const [dmUserId, setDmUserId] = useState<string | null>(null)
 
@@ -240,9 +243,24 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.items         ?? []),
   ]
 
- 
+  // Equipped armor/shields contribute their AC bonus to the displayed AC total
+  const equippedAcBonus = (data.items ?? [])
+    .filter(i => i.equipped && i.itemMeta?.acBonus)
+    .reduce((sum, i) => sum + (i.itemMeta!.acBonus ?? 0), 0)
 
-  function addSpell()                                          { update({ spellItems: [...spellItems, { id: nanoid(), name: "", level: 0 }] }) }
+  // Total carried weight — items (× amount for stacked generics) + equipment (weapons/armor/gear)
+  const totalWeight =
+    (data.items ?? []).reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0) +
+    (data.equipmentItems ?? []).reduce((sum, i) => sum + (i.weight ?? 0), 0)
+
+  // Total carried value (gp) — Items tab entries only, × amount for stacked generics
+  const totalValue = (data.items ?? []).reduce((sum, i) => sum + (i.value ?? 0) * (i.amount ?? 1), 0)
+
+  function addSpell() {
+    const id = nanoid()
+    update({ spellItems: [...spellItems, { id, name: "", level: 0 }] })
+    setPendingSpellId(id)
+  }
   function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
@@ -250,19 +268,28 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function changeEquip(id: string, p: Partial<EquipmentItem>) { update({ equipmentItems: equipItems.map(i => i.id === id ? { ...i, ...p } : i) }) }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
 
-  // Pushes an Items-tab entry into the Equipment list, carrying over any weapon
-  // stats captured from the documentation suggestion (see FeatureEntry's itemMeta).
+  // Pushes an Items-tab entry into the Equipment (martial) list, carrying over
+  // weapon stats — either from the explicit Armor/Weapon/Misc selector on the
+  // Items-tab entry (equipKind/itemMeta), or from a documentation suggestion.
   function addItemToEquipment(feature: Feature) {
     const meta = feature.itemMeta
+    const kind = feature.equipKind ?? (
+      meta?.itemType?.toLowerCase().includes("weapon") ? "weapon" :
+      meta?.itemType?.toLowerCase().includes("armor")  ? "armor"  : "misc"
+    )
     update({
       equipmentItems: [...equipItems, {
         id: nanoid(),
         name: feature.name,
         notes: feature.description ?? "",
-        type: meta?.itemType === "weapon" ? "melee" : "misc",
+        type: kind === "weapon" ? (meta?.weaponKind ?? "melee") : kind,
         damage: meta?.damage,
         damageType: meta?.damageType,
         properties: meta?.properties,
+        meleeRange: meta?.meleeRange,
+        throwRange: meta?.throwRange,
+        range: meta?.range,
+        weight: feature.weight,
       }],
     })
   }
@@ -437,18 +464,33 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     const patch: Partial<CharacterData> = {}
 
+    // Cascade: removing a container also removes everything nested inside it (recursively)
+    const idsToRemove = new Set<string>([id])
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const key of KEYS) {
+        for (const f of data[key] ?? []) {
+          if (f.parentId && idsToRemove.has(f.parentId) && !idsToRemove.has(f.id)) {
+            idsToRemove.add(f.id)
+            grew = true
+          }
+        }
+      }
+    }
+
     for (const key of KEYS) {
       const list = data[key]
-      if (list?.some(f => f.id === id)) patch[key] = list.filter(f => f.id !== id)
+      if (list?.some(f => idsToRemove.has(f.id))) patch[key] = list.filter(f => !idsToRemove.has(f.id))
     }
-    if (data.favorites?.find(f => f.refId === id)) {
-      patch.favorites = (data.favorites ?? []).filter(f => f.refId !== id)
+    if (data.favorites?.some(f => idsToRemove.has(f.refId))) {
+      patch.favorites = (data.favorites ?? []).filter(f => !idsToRemove.has(f.refId))
     }
-    // Remove this id from any other feature's linkedTo
+    // Remove these ids from any other feature's linkedTo
     for (const key of KEYS) {
       const list = (patch[key] as Feature[] | undefined) ?? data[key]
-      if (list?.some(f => f.linkedTo?.includes(id))) {
-        patch[key] = list.map(f => f.linkedTo?.includes(id) ? { ...f, linkedTo: f.linkedTo.filter(lid => lid !== id) } : f)
+      if (list?.some(f => f.linkedTo?.some(lid => idsToRemove.has(lid)))) {
+        patch[key] = list.map(f => f.linkedTo?.some(lid => idsToRemove.has(lid)) ? { ...f, linkedTo: f.linkedTo.filter(lid => !idsToRemove.has(lid)) } : f)
       }
     }
     update(patch)
@@ -612,8 +654,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <Shield className="size-11 text-white/60" />
-              <span className="absolute text-base font-bold text-white leading-none">{data.ac ?? 0}</span>
+              <span className="absolute text-base font-bold text-white leading-none">{(data.ac ?? 0) + equippedAcBonus}</span>
             </div>
+            {equippedAcBonus > 0 && !data.hideEquipAcBadge && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold shrink-0 whitespace-nowrap"
+                title="AC bonus from equipped armor/shield">
+                +{equippedAcBonus} equip
+              </span>
+            )}
           </div>
 
           {/* HP value */}
@@ -711,7 +759,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   const INFO_SUBTAB_BY_CATEGORY: Record<string, InfoSubTab> = {
-    Trait: "traits", Feat: "feats", Feature: "features", Gear: "items",
+    Trait: "raceFeats", Feat: "raceFeats", Feature: "features", Gear: "items",
   }
 
   function navigateToResult(r: (typeof searchResults)[number]) {
@@ -737,7 +785,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <input
             value={quickSearch}
             onChange={e => setQuickSearch(e.target.value)}
-            placeholder="Quick search…"
+            placeholder="Quick search (WIP)"
             className="flex-1 bg-transparent outline-none text-sm text-white placeholder:text-white/30"
           />
           {quickSearch && (
@@ -810,6 +858,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
           onChangeSlot={changeSlot}
           onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
+          pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
         />
       </div>
@@ -971,6 +1020,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-base font-bold tracking-wide truncate">{character.name}</p>
+            {totalWeight > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 shrink-0" title="Total carried weight (items + equipment)">
+                ⚖ {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} lb
+              </span>
+            )}
+            {totalValue > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 shrink-0" title="Total value of carried items">
+                {totalValue % 1 === 0 ? totalValue : totalValue.toFixed(2)} gp
+              </span>
+            )}
             {readOnly && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 uppercase tracking-widest shrink-0">
                 View Only
@@ -1067,7 +1126,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
-            userId={user?.id ?? null}
+            userId={user?.id ?? null} objects={objects} createObject={createObject} updateObject={updateObject}
             subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment} />

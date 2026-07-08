@@ -14,6 +14,10 @@ export interface EquipmentItem {
   attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
   extraToHit?: number  // flat bonus added to computed to-hit
   extraDamage?: number // flat bonus added to computed damage
+  meleeRange?: string  // reach, e.g. "5 ft." — melee weapons
+  throwRange?: string  // e.g. "20/60 ft." — thrown melee weapons
+  range?: string       // e.g. "80/320 ft." — ranged weapons
+  weight?: number      // lb — rolled into the character's total carried weight
 }
 
 export interface SpellItem {
@@ -29,11 +33,14 @@ export interface SpellItem {
   duration?: string             // "Instantaneous", "1 minute", etc.
   components?: string           // "V, S, M"
   materialComponents?: string
+  requiresMaterial?: boolean    // toggle — track whether this spell needs a costed/consumable material
+  materialOwned?: boolean       // only meaningful when requiresMaterial is set
   damage?: string               // "8d6"
   damageType?: string           // "Thunder", "Fire", etc.
   notes?: string                // description
   prepared?: boolean
   alwaysPrepared?: boolean
+  freeSpell?: boolean            // granted free (subclass/domain spell) — doesn't count toward Known/Prepared caps
   ritual?: boolean
   concentration?: boolean
   sourceClass?: string           // which class this spell is known/prepared from (multiclass)
@@ -69,11 +76,25 @@ export interface Feature {
   sliderColor?: string
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
   attuned?: boolean          // Items tab only — is the character currently attuned to this item?
-  itemMeta?: {                // set when created from an Items-tab documentation suggestion
+  equipped?: boolean         // Items tab only — currently worn/wielded (applies itemMeta.acBonus to AC)
+  weight?: number            // lb — rolled into the character's total carried weight
+  value?: number             // gp — per-unit value, rolled into the character's total carried value
+  amount?: number            // Items tab, generic items only — quantity (armor/equipment is always qty 1)
+  category?: "armor" | "item" // Items tab only — which section it's listed under
+  equipKind?: "armor" | "weapon" | "misc" // Armor & Equipment section only — which stat fields apply
+  isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
+  maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
+  parentId?: string          // Items tab only — id of the containing item, when nested inside a container
+  itemMeta?: {                // set when created from an Items-tab documentation suggestion, or edited directly
     itemType?: string
     damage?: string
     damageType?: string
     properties?: string
+    acBonus?: number          // AC bonus granted while equipped (armor/shield)
+    weaponKind?: "melee" | "ranged"  // only meaningful when equipKind === "weapon"
+    meleeRange?: string       // e.g. "5 ft."
+    throwRange?: string       // e.g. "20/60 ft." — thrown melee weapons
+    range?: string            // e.g. "80/320 ft." — ranged weapons
   }
 }
 
@@ -87,6 +108,16 @@ export interface ActiveCondition {
   id: string
   name: string
   level?: number   // for Exhaustion (1–6)
+}
+
+export interface ProficiencyEntry {
+  id: string
+  name: string
+}
+
+export interface LinkedNoteRef {
+  id: string             // object id — a note or a folder
+  type: "note" | "folder"
 }
 
 export interface FamiliarRef {
@@ -110,6 +141,7 @@ export interface CharacterData {
   hp?: number
   maxHp?: number
   maxHpMod?: number    // flat bonus or penalty to max HP (positive = bonus, negative = reduction)
+  hideEquipAcBadge?: boolean // hides the "+X equip" AC-bonus badge under the HP/AC ring
   tempHp?: number
   speed?: number
   initiative?: number
@@ -153,11 +185,15 @@ export interface CharacterData {
   themeMode?: "dark" | "light"
   themeBg?: string         // background override key from BG_OPTIONS
   plainSkills?: boolean    // when true, disable ability-color-coding on skills
-  // Proficiencies (free-text per category)
-  weaponProfs?: string
-  armorProfs?: string
-  toolProfs?: string
-  languageProfs?: string
+  // Proficiencies — entry lists per category (legacy characters may still have
+  // these as a single free-text string; components normalize on read).
+  weaponProfs?: ProficiencyEntry[] | string
+  armorProfs?: ProficiencyEntry[] | string
+  toolProfs?: ProficiencyEntry[] | string
+  languageProfs?: ProficiencyEntry[] | string
+  // Notes linked into the character's Notes tab — either a specific note, or a
+  // whole folder (all notes found under it are shown).
+  linkedNoteRefs?: LinkedNoteRef[]
   // Death saving throws
   deathSaves?: { successes: number; failures: number; dead?: boolean }
   // Party / multiclass

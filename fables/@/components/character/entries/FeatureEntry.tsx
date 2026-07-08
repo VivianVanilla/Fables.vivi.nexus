@@ -13,6 +13,8 @@ import type { Theme } from "../../character-themes"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
+import { PopTransition } from "../ui/PopTransition"
+import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
@@ -139,6 +141,7 @@ interface FeatureEntryProps {
   onToggleFavorite?: () => void        // omit to hide the star (e.g. inside FavoritesPanel, which has its own)
   onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab
   showAttunement?:   boolean            // only true for the Items tab — shows an "Attuned" toggle
+  showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -147,13 +150,16 @@ interface FeatureEntryProps {
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddToEquipment, showAttunement,
+  isFavorite, onToggleFavorite, onAddToEquipment, showAttunement, showItemExtras,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(false)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [showSuggest, setShowSuggest] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
+
+  const namePlaceholder = showItemExtras ? "Item name" : "Feature name"
+  const unnamedLabel    = showItemExtras ? "Unnamed Item" : "Unnamed"
 
   // Preload cache when entering edit mode
   useEffect(() => {
@@ -194,7 +200,7 @@ export function FeatureEntry({
             ref={nameInputRef}
             value={feature.name}
             autoFocus
-            placeholder="Feature name"
+            placeholder={namePlaceholder}
             onChange={async e => {
               const q = e.target.value
               onChange({ name: q })
@@ -237,19 +243,21 @@ export function FeatureEntry({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <input value={feature.source ?? ""} placeholder="Source (e.g. Fighter, Variant Human…)"
-            onChange={e => onChange({ source: e.target.value })}
-            className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/60 placeholder:text-white/20"
-          />
-          <label className="flex items-center gap-1.5 text-[10px] text-white/40 shrink-0">
-            Level
-            <input type="number" min={1} max={20} value={feature.level ?? ""} placeholder="—"
-              onChange={e => onChange({ level: e.target.value ? Math.min(20, Math.max(1, parseInt(e.target.value) || 1)) : undefined })}
-              className="w-11 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        <PopTransition show={!showItemExtras}>
+          <div className="flex items-center gap-2">
+            <input value={feature.source ?? ""} placeholder="Source (e.g. Fighter, Variant Human…)"
+              onChange={e => onChange({ source: e.target.value })}
+              className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/60 placeholder:text-white/20"
             />
-          </label>
-        </div>
+            <label className="flex items-center gap-1.5 text-[10px] text-white/40 shrink-0">
+              Level
+              <input type="number" min={1} max={20} value={feature.level ?? ""} placeholder="—"
+                onChange={e => onChange({ level: e.target.value ? Math.min(20, Math.max(1, parseInt(e.target.value) || 1)) : undefined })}
+                className="w-11 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </label>
+          </div>
+        </PopTransition>
         <MarkdownTextarea
           value={feature.description ?? ""}
           onChange={v => onChange({ description: v })}
@@ -267,6 +275,159 @@ export function FeatureEntry({
             />
             Attuned
           </label>
+        )}
+
+        {showItemExtras && (
+          <div className="flex flex-col gap-2 text-xs border-t border-white/10 pt-2">
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+              <button type="button" onClick={() => onChange({ category: "armor" })}
+                className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${feature.category === "armor" ? "bg-sky-500/30 text-sky-200" : "text-white/40 hover:text-white/70"}`}>
+                Armor & Equipment
+              </button>
+              <button type="button" onClick={() => onChange({ category: "item" })}
+                className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${feature.category !== "armor" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Generic Item
+              </button>
+            </div>
+
+            <PopTransition show={feature.category === "armor"}>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+                  <button type="button" onClick={() => onChange({ equipKind: "armor" })}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${(feature.equipKind ?? "armor") === "armor" ? "bg-sky-500/30 text-sky-200" : "text-white/40 hover:text-white/70"}`}>
+                    Armor
+                  </button>
+                  <button type="button" onClick={() => onChange({ equipKind: "weapon" })}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${feature.equipKind === "weapon" ? "bg-red-500/30 text-red-200" : "text-white/40 hover:text-white/70"}`}>
+                    Weapon
+                  </button>
+                  <button type="button" onClick={() => onChange({ equipKind: "misc" })}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${feature.equipKind === "misc" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                    Misc
+                  </button>
+                </div>
+
+                <PopTransition show={(feature.equipKind ?? "armor") === "armor"}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-sky-300 cursor-pointer select-none whitespace-nowrap">
+                      <input type="checkbox" checked={feature.equipped ?? false}
+                        onChange={e => onChange({ equipped: e.target.checked })}
+                        className="accent-sky-500"
+                      />
+                      Equipped
+                    </label>
+                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                      AC Bonus
+                      <input type="number" value={feature.itemMeta?.acBonus ?? ""}
+                        onChange={e => onChange({ itemMeta: { ...feature.itemMeta, acBonus: e.target.value ? parseInt(e.target.value) || 0 : undefined } })}
+                        placeholder="0"
+                        className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                    </label>
+                  </div>
+                </PopTransition>
+
+                <PopTransition show={feature.equipKind === "weapon"}>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+                      <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, weaponKind: "melee" } })}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${(feature.itemMeta?.weaponKind ?? "melee") === "melee" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                        Melee
+                      </button>
+                      <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, weaponKind: "ranged" } })}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${feature.itemMeta?.weaponKind === "ranged" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                        Ranged
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                        Damage
+                        <input value={feature.itemMeta?.damage ?? ""} placeholder="1d8"
+                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, damage: e.target.value } })}
+                          className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
+                      </label>
+                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                        Dmg Type
+                        <select value={feature.itemMeta?.damageType ?? ""}
+                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, damageType: e.target.value } })}
+                          className="bg-zinc-800 rounded px-2 py-1 text-white text-xs outline-none">
+                          <option value="" className="bg-zinc-800 text-white">—</option>
+                          {DAMAGE_TYPES.map(dt => <option key={dt} value={dt} className="bg-zinc-800 text-white">{dt}</option>)}
+                        </select>
+                      </label>
+                      <PopTransition show={(feature.itemMeta?.weaponKind ?? "melee") === "melee"}>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                            Melee Range
+                            <input value={feature.itemMeta?.meleeRange ?? ""} placeholder="5 ft."
+                              onChange={e => onChange({ itemMeta: { ...feature.itemMeta, meleeRange: e.target.value } })}
+                              className="w-20 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
+                          </label>
+                          <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                            Throw Range
+                            <input value={feature.itemMeta?.throwRange ?? ""} placeholder="20/60 ft."
+                              onChange={e => onChange({ itemMeta: { ...feature.itemMeta, throwRange: e.target.value } })}
+                              className="w-24 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
+                          </label>
+                        </div>
+                      </PopTransition>
+                      <PopTransition show={feature.itemMeta?.weaponKind === "ranged"}>
+                        <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                          Range
+                          <input value={feature.itemMeta?.range ?? ""} placeholder="80/320 ft."
+                            onChange={e => onChange({ itemMeta: { ...feature.itemMeta, range: e.target.value } })}
+                            className="w-24 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
+                        </label>
+                      </PopTransition>
+                    </div>
+                  </div>
+                </PopTransition>
+              </div>
+            </PopTransition>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <PopTransition show={feature.category !== "armor"}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                    Amount
+                    <input type="number" min={1} value={feature.amount ?? 1}
+                      onChange={e => onChange({ amount: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  </label>
+                  <label className="flex items-center gap-2 text-amber-300 cursor-pointer select-none whitespace-nowrap">
+                    <input type="checkbox" checked={feature.isContainer ?? false}
+                      onChange={e => onChange({ isContainer: e.target.checked })}
+                      className="accent-amber-500"
+                    />
+                    Is a Container (drag items onto it to store them)
+                  </label>
+                  <PopTransition show={!!feature.isContainer}>
+                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                      Max Weight (lb)
+                      <input type="number" min={0} step="0.1" value={feature.maxWeight ?? ""}
+                        onChange={e => onChange({ maxWeight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
+                        placeholder="—"
+                        className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                    </label>
+                  </PopTransition>
+                </div>
+              </PopTransition>
+
+              <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                Weight (lb)
+                <input type="number" min={0} step="0.1" value={feature.weight ?? ""}
+                  onChange={e => onChange({ weight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
+                  placeholder="0"
+                  className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              </label>
+              <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                Value (gp)
+                <input type="number" min={0} step="0.01" value={feature.value ?? ""}
+                  onChange={e => onChange({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
+                  placeholder="0"
+                  className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              </label>
+            </div>
+          </div>
         )}
 
         {/* Use tracking */}
@@ -303,11 +464,11 @@ export function FeatureEntry({
                   Resets on
                   <select value={feature.resetsOn ?? "long"}
                     onChange={e => onChange({ resetsOn: e.target.value as Feature["resetsOn"] })}
-                    className="bg-black/30 rounded px-2 py-1 text-white outline-none text-xs">
-                    <option value="short">Short Rest</option>
-                    <option value="long">Long Rest</option>
-                    <option value="dawn">Dawn</option>
-                    <option value="manual">Manual</option>
+                    className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                    <option value="short" className="bg-zinc-800 text-white">Short Rest</option>
+                    <option value="long" className="bg-zinc-800 text-white">Long Rest</option>
+                    <option value="dawn" className="bg-zinc-800 text-white">Dawn</option>
+                    <option value="manual" className="bg-zinc-800 text-white">Manual</option>
                   </select>
                 </label>
                 <label className="flex items-center gap-1.5 text-white/50 cursor-pointer">
@@ -385,19 +546,33 @@ export function FeatureEntry({
           <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
           <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
-            {feature.name || <span className="text-white/30 italic">Unnamed</span>}
+            {feature.name || <span className="text-white/30 italic">{unnamedLabel}</span>}
           </span>
 
-          {feature.level != null && (
+          {!showItemExtras && feature.level != null && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">Lv {feature.level}</span>
           )}
 
           {showAttunement && (
-            <label className="flex items-center gap-1 shrink-0 text-[10px] text-purple-300" onClick={e => e.stopPropagation()} title="Attuned">
+            <label className="flex items-center gap-1 shrink-0 text-[10px] text-purple-300 cursor-pointer" onClick={e => e.stopPropagation()} title="Attuned">
               <input type="checkbox" checked={feature.attuned ?? false} disabled={readOnly}
                 onChange={e => onChange({ attuned: e.target.checked })}
                 className="size-3.5 accent-purple-500 cursor-pointer" />
+              Attuned
             </label>
+          )}
+
+          {showItemExtras && feature.category === "armor" && (feature.equipKind ?? "armor") === "armor" && (
+            <label className="flex items-center gap-1 shrink-0 text-[10px] text-sky-300 cursor-pointer" onClick={e => e.stopPropagation()} title="Equipped">
+              <input type="checkbox" checked={feature.equipped ?? false} disabled={readOnly}
+                onChange={e => onChange({ equipped: e.target.checked })}
+                className="size-3.5 accent-sky-500 cursor-pointer" />
+              Equip
+            </label>
+          )}
+
+          {showItemExtras && feature.category !== "armor" && (feature.amount ?? 1) > 1 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">×{feature.amount}</span>
           )}
 
           {/* Desktop bar (sm and up) */}
@@ -439,11 +614,36 @@ export function FeatureEntry({
       {/* Expanded content */}
       {expanded && (
         <div className="px-4 pb-3 border-t border-white/5 flex flex-col gap-3">
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             {feature.source && hasUses && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 truncate">
                 {feature.source}
               </span>
+            )}
+            {showItemExtras && (feature.equipKind ?? "armor") === "armor" && !!feature.itemMeta?.acBonus && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">+{feature.itemMeta.acBonus} AC</span>
+            )}
+            {showItemExtras && feature.equipKind === "weapon" && feature.itemMeta?.damage && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${damageTypeClasses(feature.itemMeta.damageType)}`}>
+                {feature.itemMeta.damage} {feature.itemMeta.damageType ?? ""}
+              </span>
+            )}
+            {showItemExtras && feature.equipKind === "weapon" && (
+              feature.itemMeta?.weaponKind === "ranged"
+                ? feature.itemMeta?.range && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">⇒ {feature.itemMeta.range}</span>
+                : (feature.itemMeta?.meleeRange || feature.itemMeta?.throwRange) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">
+                    {feature.itemMeta?.meleeRange && `↔ ${feature.itemMeta.meleeRange}`}
+                    {feature.itemMeta?.meleeRange && feature.itemMeta?.throwRange && " / "}
+                    {feature.itemMeta?.throwRange && `⇒ ${feature.itemMeta.throwRange}`}
+                  </span>
+                )
+            )}
+            {showItemExtras && !!feature.weight && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">{feature.weight} lb</span>
+            )}
+            {showItemExtras && !!feature.value && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">{feature.value} gp</span>
             )}
             <div className="flex items-center gap-1 ml-auto">
               {onAddToEquipment && !readOnly && (

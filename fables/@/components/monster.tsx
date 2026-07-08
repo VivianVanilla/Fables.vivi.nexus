@@ -25,6 +25,7 @@ import { Markdown } from "./ui/Markdown"
 import { TracingSlider } from "./ui/tracing-slider"
 import { NumInput } from "./character/ui/NumInput"
 import { Modal } from "./character/ui/Modal"
+import { PopTransition } from "./character/ui/PopTransition"
 
 import { ActionEntry } from "./character/entries/ActionEntry"
 import { SpellEntry } from "./character/entries/SpellEntry"
@@ -146,17 +147,15 @@ function ActionSection({
           </button>
         )}
       </div>
-      {enabled && (
-        <>
+      <PopTransition show={enabled}>
+        <div className="flex flex-col gap-1.5">
           {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
-          <div className="flex flex-col gap-1.5">
-            {actions.map(a => (
-              <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
-                onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
-            ))}
-          </div>
-        </>
-      )}
+          {actions.map(a => (
+            <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
+              onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
+          ))}
+        </div>
+      </PopTransition>
     </div>
   )
 }
@@ -213,8 +212,13 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
 
   const spellItems = data.spellItems ?? []
   const spellSlots = data.spellSlots ?? []
+  const [pendingSpellId, setPendingSpellId] = useState<string | null>(null)
 
-  function addSpell()                                       { onUpdate({ spellItems: [...spellItems, { id: nanoid(), name: "", level: 0 }] }) }
+  function addSpell() {
+    const id = nanoid()
+    onUpdate({ spellItems: [...spellItems, { id, name: "", level: 0 }] })
+    setPendingSpellId(id)
+  }
   function changeSpell(id: string, patch: Partial<SpellItem>) { onUpdate({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...patch } : s) }) }
   function removeSpell(id: string)                          { onUpdate({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
@@ -337,8 +341,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
             )}
           </div>
 
-          {spellcastingEnabled && (
-      <>
+          <PopTransition show={spellcastingEnabled} className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <TextTile label="Caster Level" value={data.spellcastingLevel} onChange={v => onUpdate({ spellcastingLevel: v })} readOnly={readOnly} placeholder="9th" />
             <NumTile label="Spell Atk" value={data.spellAttackBonus} onChange={v => onUpdate({ spellAttackBonus: v })} readOnly={readOnly} />
@@ -357,10 +360,14 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
-            {levels.map(lvl => (
-              <div key={lvl} className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-3 flex-wrap px-1">
+          {/* Rendered as ONE flat list of siblings (not nested per-level containers) so that
+              changing a spell's level — which moves it between groups — reorders it within the
+              same parent instead of unmounting/remounting it (which would lose the spell's own
+              open edit/detail modal state). */}
+          <div className="flex flex-col gap-1.5">
+            {levels.flatMap(lvl => {
+              const nodes: React.ReactNode[] = [
+                <div key={`header-${lvl}`} className="flex items-center gap-3 flex-wrap px-1">
                   <span className="text-sm font-bold uppercase tracking-widest text-white/75">{lvl === 0 ? "Cantrips" : `Level ${lvl}`}</span>
                   {spellSlots.filter(s => s.level === lvl).map(slot => {
                     const rem = Math.max(0, slot.total - slot.used)
@@ -383,12 +390,17 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
                     )
                   })}
                 </div>
-                {grouped.get(lvl)!.map(spell => (
+              ]
+              for (const spell of grouped.get(lvl)!) {
+                nodes.push(
                   <SpellEntry key={spell.id} spell={spell} theme={NEUTRAL_THEME} readOnly={readOnly} showPrepToggle={false}
+                    autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
                     onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
-                ))}
-              </div>
-            ))}
+                )
+              }
+              return nodes
+            })}
+          </div>
 
             {!readOnly && (
               <div className="flex items-center gap-2 flex-wrap">
@@ -402,9 +414,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
                 </button>
               </div>
             )}
-          </div>
-      </>
-          )}
+          </PopTransition>
         </div>
       )}
 

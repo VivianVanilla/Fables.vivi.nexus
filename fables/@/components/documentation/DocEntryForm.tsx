@@ -119,7 +119,7 @@ function DomainSpellsField({ d, set }: { d: Record<string,any>; set: (k: string,
               onChange={e => updateRow(i, { level: parseInt(e.target.value) })}
               className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600"
             >
-              {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l}>{l}</option>)}
+              {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l} className="bg-slate-900 text-slate-100">{l}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-0.5 flex-1 min-w-0">
@@ -241,9 +241,9 @@ function ClassFields({
             onChange={e => set("parent_class_id", e.target.value)}
             className={sel}
           >
-            <option value="">— Select a class —</option>
+            <option value="" className="bg-slate-900 text-slate-100">— Select a class —</option>
             {classOptions.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id} className="bg-slate-900 text-slate-100">{c.name}</option>
             ))}
           </select>
           {classOptions.length === 0 && isSubclass && (
@@ -261,7 +261,7 @@ function ClassFields({
           <>
             <Field label="Hit Die">
               <select value={d.hit_die ?? "d8"} onChange={e => set("hit_die", e.target.value)} className={sel}>
-                {["d6","d8","d10","d12"].map(v => <option key={v}>{v}</option>)}
+                {["d6","d8","d10","d12"].map(v => <option key={v} className="bg-slate-900 text-slate-100">{v}</option>)}
               </select>
             </Field>
 
@@ -306,17 +306,17 @@ function ClassFields({
             <div className="grid grid-cols-2 gap-3">
               <Field label="Spellcasting Ability">
                 <select value={d.spellcasting_ability ?? ""} onChange={e => set("spellcasting_ability", e.target.value)} className={sel}>
-                  <option value="">None</option>
-                  {["str","dex","con","int","wis","cha"].map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+                  <option value="" className="bg-slate-900 text-slate-100">None</option>
+                  {["str","dex","con","int","wis","cha"].map(a => <option key={a} value={a} className="bg-slate-900 text-slate-100">{a.toUpperCase()}</option>)}
                 </select>
               </Field>
               <Field label="Casting Type">
                 <select value={d.spellcasting_type ?? ""} onChange={e => set("spellcasting_type", e.target.value)} className={sel} disabled={!d.spellcasting_ability}>
-                  <option value="">None</option>
-                  <option value="full">Full Caster</option>
-                  <option value="half">Half Caster</option>
-                  <option value="third">Third Caster</option>
-                  <option value="pact">Pact Magic</option>
+                  <option value="" className="bg-slate-900 text-slate-100">None</option>
+                  <option value="full" className="bg-slate-900 text-slate-100">Full Caster</option>
+                  <option value="half" className="bg-slate-900 text-slate-100">Half Caster</option>
+                  <option value="third" className="bg-slate-900 text-slate-100">Third Caster</option>
+                  <option value="pact" className="bg-slate-900 text-slate-100">Pact Magic</option>
                 </select>
               </Field>
             </div>
@@ -576,12 +576,12 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
         <div className="grid grid-cols-2 gap-3">
           <Field label="Rarity">
             <select value={d.rarity ?? "common"} onChange={e => set("rarity", e.target.value)} className={sel}>
-              {["common","uncommon","rare","very rare","legendary","artifact"].map(r => <option key={r} value={r}>{r.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
+              {["common","uncommon","rare","very rare","legendary","artifact"].map(r => <option key={r} value={r} className="bg-slate-900 text-slate-100">{r.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
             </select>
           </Field>
           <Field label="Item Type">
             <select value={d.item_type ?? "wondrous"} onChange={e => set("item_type", e.target.value)} className={sel}>
-              {["armor","potion","ring","rod","scroll","staff","wand","weapon","wondrous","other"].map(t => <option key={t} value={t}>{t.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
+              {["armor","potion","ring","rod","scroll","staff","wand","weapon","wondrous","other"].map(t => <option key={t} value={t} className="bg-slate-900 text-slate-100">{t.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
             </select>
           </Field>
         </div>
