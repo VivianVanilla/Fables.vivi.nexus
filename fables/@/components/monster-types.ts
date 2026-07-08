@@ -29,7 +29,9 @@ export interface MonsterData {
   hp?: number
   maxHp?: number
   hitDice?: string        // e.g. "9d8+18"
-  speed?: string          // e.g. "30 ft., fly 60 ft."
+  speed?: string          // legacy free-text notes (e.g. "burrow 20 ft.") — kept for movement types
+                           // not covered by `speeds`, and as a fallback display for older monsters
+  speeds?: { walk?: number; fly?: number; swim?: number; climb?: number }  // ft/round
 
   strength?: number
   dexterity?: number
@@ -53,6 +55,8 @@ export interface MonsterData {
   bonusActions?: MonsterAction[]
   reactions?: MonsterAction[]
   legendaryActions?: MonsterAction[]
+  hasBonusActions?: boolean      // toggle — off hides the whole section (Actions is always shown)
+  hasReactions?: boolean         // toggle — off hides the whole section
   hasLegendaryActions?: boolean  // toggle — off hides the whole legendary actions section
   legendaryActionsMax?: number
   legendaryActionsUsed?: number

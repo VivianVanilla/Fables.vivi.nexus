@@ -3,6 +3,7 @@ import type { SidebarObject } from "@/components/sidebar-utils"
 import { safeParseJson } from "./character-utils"
 import { CharacterSheet } from "./character"
 import { PartyChat } from "./PartyChat"
+import { InitiativeTracker } from "./campaign/InitiativeTracker"
 import { useUserContext } from "../../src/contexts/UserContext"
 import { supabase } from "../../src/supabase"
 
@@ -53,10 +54,10 @@ function passiveStat(baseScore: number, skillName: string, level: number, skillP
   return 10 + base + profMod + bonus
 }
 
-type CampaignTab = "overview" | "chat"
+type CampaignTab = "overview" | "initiative" | "chat"
 
 export function CampaignView({ campaign, onClose }: Props) {
-  const { user } = useUserContext()
+  const { user, updateSharedObject } = useUserContext()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [partyMembers, setPartyMembers] = useState<SidebarObject[]>([])
   const [activeTab, setActiveTab] = useState<CampaignTab>("overview")
@@ -76,6 +77,20 @@ export function CampaignView({ campaign, onClose }: Props) {
         setPartyMembers((data ?? []) as SidebarObject[])
       })
   }, [partyCode])
+
+  // DM editing a PC's HP straight from the Initiative tracker — writes through
+  // to the player's real character sheet. Needs an RLS policy on `objects`
+  // permitting a DM to UPDATE a party member's character row (same caveat as
+  // note collaborators — see updateSharedObject's comment in UserContext.tsx).
+  async function updatePartyMemberHp(characterId: string, hp: number) {
+    const char = partyMembers.find(c => c.id === characterId)
+    if (!char) return
+    const charData = safeParseJson(char.data) as CharData
+    try {
+      const updated = await updateSharedObject(characterId, { data: { ...charData, hp } as unknown as JSON })
+      setPartyMembers(prev => prev.map(c => c.id === characterId ? (updated as unknown as SidebarObject) : c))
+    } catch (e) { console.error(e) }
+  }
 
   function copyCode() {
     if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
@@ -121,13 +136,18 @@ export function CampaignView({ campaign, onClose }: Props) {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 px-4 py-2 border-b border-white/10 bg-slate-900 shrink-0">
-        {(["overview", "chat"] as CampaignTab[]).map(tab => (
+        {(["overview", "initiative", "chat"] as CampaignTab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "overview" ? "Overview" : "Party Chat"}
+            {tab === "overview" ? "Overview" : tab === "initiative" ? "Initiative" : "Party Chat"}
           </button>
         ))}
       </div>
+
+      {/* Initiative tracker */}
+      {activeTab === "initiative" && (
+        <InitiativeTracker campaign={campaign} partyMembers={partyMembers} onUpdateCharacterHp={updatePartyMemberHp} />
+      )}
 
       {/* Chat panel */}
       {activeTab === "chat" && partyCode && (

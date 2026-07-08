@@ -87,6 +87,7 @@ export interface Feature {
   isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
   maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
   parentId?: string          // Items tab only — id of the containing item, when nested inside a container
+  rarity?: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact"  // Items tab only
   itemMeta?: {                // set when created from an Items-tab documentation suggestion, or edited directly
     itemType?: string
     damage?: string
@@ -145,7 +146,8 @@ export interface CharacterData {
   maxHpMod?: number    // flat bonus or penalty to max HP (positive = bonus, negative = reduction)
   hideEquipAcBadge?: boolean // hides the "+X equip" AC-bonus badge under the HP/AC ring
   tempHp?: number
-  speed?: number
+  speed?: number   // walk speed, ft/round
+  speeds?: { fly?: number; swim?: number; climb?: number }  // extra movement types, ft/round
   initiative?: number
   strength?: number
   dexterity?: number
@@ -175,6 +177,7 @@ export interface CharacterData {
   feats?: Feature[]
   classFeatures?: Feature[]
   items?: Feature[]
+  invocations?: Feature[]  // Eldritch Invocations (Warlock)
   favorites?: FavoriteRef[]
   conditions?: ActiveCondition[]
   familiars?: FamiliarRef[]

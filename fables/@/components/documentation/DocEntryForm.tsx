@@ -545,9 +545,19 @@ function RaceFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
 
 // ── FeatFields ─────────────────────────────────────────────────────────────────
 
-function FeatFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any) => void }) {
+function FeatFields({ d, set, isHomebrew }: { d: Record<string,any>; set: (k: string, v: any) => void; isHomebrew: boolean }) {
   return (
     <>
+      {isHomebrew && (
+        <Section title="Entry Type">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={!!d.is_invocation} onChange={e => set("is_invocation", e.target.checked)} className="rounded accent-purple-500 size-4" />
+            <span className="text-sm text-slate-300">This is an Eldritch Invocation</span>
+          </label>
+          <p className="text-[10px] text-slate-600 mt-1">Saves under Invocations instead of Feats, and autofills independently on the character sheet's Invocations tab.</p>
+        </Section>
+      )}
+
       <Section title="Requirements (optional)">
         <Field label="Prerequisite" hint="leave blank if none">
           <input value={d.prerequisite ?? ""} onChange={e => set("prerequisite", e.target.value)} placeholder="Proficiency with a musical instrument, CHA 13+…" className={inp} />
@@ -655,9 +665,10 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
     setSaving(true)
     setError(null)
 
+    const isInvocation = type === "feats" && isHomebrew && !!data.is_invocation
     const payload = {
       name: name.trim(),
-      type: SINGULAR[type],
+      type: isInvocation ? "invocation" : SINGULAR[type],
       description: desc.trim(),
       is_homebrew: isHomebrew,
       owner_id: isHomebrew ? userId : null,
@@ -721,7 +732,7 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
       {/* Type-specific fields */}
       {type === "classes" && <ClassFields d={data} set={setField} isHomebrew={isHomebrew} userId={userId} />}
       {type === "races"   && <RaceFields  d={data} set={setField} />}
-      {type === "feats"   && <FeatFields  d={data} set={setField} />}
+      {type === "feats"   && <FeatFields  d={data} set={setField} isHomebrew={isHomebrew} />}
       {type === "items"   && <ItemFields  d={data} set={setField} />}
 
       {error && <p className="text-sm text-red-400 bg-red-400/10 rounded-lg px-3 py-2">{error}</p>}

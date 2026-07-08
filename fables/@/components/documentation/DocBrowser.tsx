@@ -11,6 +11,7 @@ import { DocEntryForm } from "./DocEntryForm"
 import { HomebrewBrowserModal } from "./HomebrewBrowserModal"
 import { Markdown } from "../ui/Markdown"
 import { invalidateSuggestionCache } from "../character/entries/FeatureEntry"
+import { InvocationsSection } from "./InvocationsSection"
 
 export interface LibraryObject {
   id: string
@@ -517,6 +518,7 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
   const [activeEntry,    setActiveEntry]    = useState<DocEntry | null>(null)
   const [createHomebrew, setCreateHomebrew] = useState(false)
   const [showHBBrowser,  setShowHBBrowser]  = useState(false)
+  const [invocationRefresh, setInvocationRefresh] = useState(0)
 
   const singular = SINGULAR[type]
   const label    = TYPE_LABEL[type]
@@ -559,7 +561,7 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
     invalidateSuggestionCache()
   }
 
-  function handleFormSave() { loadAll(true); setViewMode("list"); setActiveEntry(null) }
+  function handleFormSave() { loadAll(true); setInvocationRefresh(n => n + 1); setViewMode("list"); setActiveEntry(null) }
   function openCreate(asHomebrew: boolean) { setCreateHomebrew(asHomebrew); setActiveEntry(null); setViewMode("create") }
   function openEdit(entry: DocEntry) { setActiveEntry(entry); setViewMode("edit") }
 
@@ -645,6 +647,8 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
           </div>
         )}
       </section>
+
+      {type === "feats" && <InvocationsSection userId={userId} isAdminMode={isAdminMode} refreshKey={invocationRefresh} />}
 
       {/* My Homebrew */}
       {userId && myHomebrew.length > 0 && (

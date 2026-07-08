@@ -16,16 +16,17 @@ import { Markdown } from "../../ui/Markdown"
 import { PopTransition } from "../ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
+import { ITEM_RARITIES, RARITY_COLORS } from "../../character-constants"
 import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
 
-export type SuggestionSource = "race" | "class" | "feat" | "item"
+export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation"
 
 export interface Suggestion {
   name: string
   description: string
-  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string }
+  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; prerequisite?: string }
 }
 
 const cacheMap   = new Map<string, Suggestion[]>()
@@ -56,19 +57,24 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
         .from("documentation").select("name, description, data")
         .eq("type", docType).eq("is_homebrew", true).eq("owner_id", userId)
 
-      // Library homebrew
-      const objType = docType === "race" ? "doc_race" : docType === "class" ? "doc_class" : docType === "item" ? "doc_item" : "doc_feat"
-      const { data: libObjs } = await supabase
-        .from("objects").select("data").eq("type", objType).eq("owner_id", userId)
-      const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
+      homebrew = [...(ownRows ?? [])]
 
-      let libRows: any[] = []
-      if (libIds.length) {
-        const { data: lr } = await supabase.from("documentation").select("name, description, data").in("id", libIds)
-        libRows = lr ?? []
+      // Library homebrew — invocations have no "add to library" flow (they're
+      // browsed/created directly under Feats in Documentation), so skip this lookup.
+      if (docType !== "invocation") {
+        const objType = docType === "race" ? "doc_race" : docType === "class" ? "doc_class" : docType === "item" ? "doc_item" : "doc_feat"
+        const { data: libObjs } = await supabase
+          .from("objects").select("data").eq("type", objType).eq("owner_id", userId)
+        const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
+
+        let libRows: any[] = []
+        if (libIds.length) {
+          const { data: lr } = await supabase.from("documentation").select("name, description, data").in("id", libIds)
+          libRows = lr ?? []
+        }
+
+        homebrew = [...homebrew, ...libRows]
       }
-
-      homebrew = [...(ownRows ?? []), ...libRows]
     }
 
     const all = [...(coreRows ?? []), ...homebrew]
@@ -80,6 +86,14 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
       // the top-level `description` column is actually the "Source" field (e.g. "PHB p.51").
       if (docType === "feat") {
         if (row.name) results.push({ name: row.name, description: row.data?.description ?? "" })
+        continue
+      }
+      if (docType === "invocation") {
+        if (row.name) results.push({
+          name: row.name,
+          description: row.data?.description ?? "",
+          meta: { prerequisite: row.data?.prerequisite },
+        })
         continue
       }
       if (docType === "item") {
@@ -227,10 +241,13 @@ export function FeatureEntry({
                   type="button"
                   onMouseDown={e => {
                     e.preventDefault()
+                    const desc = s.meta?.prerequisite
+                      ? `*Prerequisite: ${s.meta.prerequisite}*\n\n${s.description}`
+                      : (s.description || feature.description)
                     onChange({
                       name: s.name,
-                      description: s.description || feature.description,
-                      ...(s.meta ? { itemMeta: { itemType: s.meta.item_type, damage: s.meta.damage, damageType: s.meta.damage_type, properties: s.meta.properties } } : {}),
+                      description: desc,
+                      ...(s.meta && !s.meta.prerequisite ? { itemMeta: { itemType: s.meta.item_type, damage: s.meta.damage, damageType: s.meta.damage_type, properties: s.meta.properties } } : {}),
                     })
                     setShowSuggest(false)
                   }}
@@ -427,6 +444,15 @@ export function FeatureEntry({
                   onChange={e => onChange({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
                   placeholder="0"
                   className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              </label>
+              <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                Rarity
+                <select value={feature.rarity ?? ""}
+                  onChange={e => onChange({ rarity: (e.target.value || undefined) as Feature["rarity"] })}
+                  className="bg-zinc-800 rounded px-2 py-1 text-white text-xs outline-none">
+                  <option value="" className="bg-zinc-800 text-white">—</option>
+                  {ITEM_RARITIES.map(r => <option key={r} value={r} className="bg-zinc-800 text-white">{r}</option>)}
+                </select>
               </label>
             </div>
           </div>
@@ -646,6 +672,9 @@ export function FeatureEntry({
             )}
             {showItemExtras && !!feature.value && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">{feature.value} gp</span>
+            )}
+            {showItemExtras && feature.rarity && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${RARITY_COLORS[feature.rarity] ?? "bg-white/10 text-white/40"}`}>{feature.rarity}</span>
             )}
             <div className="flex items-center gap-1 ml-auto">
               {onAddToEquipment && !readOnly && (

@@ -45,9 +45,10 @@ import { SpeedModal }            from "./character/modals/SpeedModal"
 import { ConditionPickerModal }  from "./character/modals/ConditionPickerModal"
 import { ThemeModal }            from "./character/modals/ThemeModal"
 import { PortraitModal }         from "./character/modals/PortraitModal"
+import { SpeedDisplay }          from "./character/ui/SpeedDisplay"
 
 // Tabs / other
-import { InfoTab, type InfoSubTab } from "./character/tabs/InfoTab"
+import { InfoTab, FeatureList, type InfoSubTab } from "./character/tabs/InfoTab"
 import { FamiliarsTab }          from "./character/tabs/FamiliarsTab"
 import { FamiliarMonsterView }   from "./monster"
 import { PartyChat }             from "./PartyChat"
@@ -63,7 +64,7 @@ interface Props {
   readOnly?: boolean
 }
 
-type Tab = "main" | "details" | "familiars" | "chat"
+type Tab = "main" | "details" | "invocations" | "familiars" | "chat"
 
 // ════════════════════════════════════════════════════════════════════════════
 // CharacterSheet
@@ -109,7 +110,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [favDragOver, setFavDragOver] = useState(false)
 
   // Familiar pop-out windows — ephemeral, resets on reload/reopen
-  const [openPopouts, setOpenPopouts] = useState<Record<string, { x: number; y: number }>>({})
+  const [openPopouts, setOpenPopouts] = useState<Record<string, { x: number; y: number; w?: number; h?: number }>>({})
 
   // Quick search
   const [quickSearch, setQuickSearch] = useState("")
@@ -242,6 +243,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.feats         ?? []),
     ...(data.classFeatures ?? []),
     ...(data.items         ?? []),
+    ...(data.invocations   ?? []),
   ]
 
   // Equipped armor/shields contribute their AC bonus to the displayed AC total
@@ -263,6 +265,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Total carried value (gp) — Items tab entries only, × amount for stacked generics
   const totalValue = (data.items ?? []).reduce((sum, i) => sum + (i.value ?? 0) * (i.amount ?? 1), 0)
+
+  // Carrying capacity (PHB) — STR score × 15 lb
+  const carryCapacity = (data.strength ?? 10) * 15
+  const encumbered     = totalWeight > carryCapacity
 
   function addSpell() {
     const id = nanoid()
@@ -435,11 +441,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     })
   }
   function movePopout(id: string, x: number, y: number) {
-    setOpenPopouts(prev => prev[id] ? { ...prev, [id]: { x, y } } : prev)
+    setOpenPopouts(prev => prev[id] ? { ...prev, [id]: { ...prev[id], x, y } } : prev)
+  }
+  function resizePopout(id: string, w: number, h: number, x: number) {
+    setOpenPopouts(prev => prev[id] ? { ...prev, [id]: { ...prev[id], w, h, x } } : prev)
   }
 
   function toggleFeatureLink(featureId: string, otherId: string) {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
     let featureKey: typeof KEYS[number] | null = null
     let otherKey:   typeof KEYS[number] | null = null
     for (const k of KEYS) {
@@ -467,7 +476,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function handleRest(type: "long" | "short" | "dawn") {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
     const patch: Partial<CharacterData> = {}
     for (const key of KEYS) {
       const features = data[key] ?? []
@@ -499,7 +508,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function patchFeature(id: string, patch: Partial<Feature>) {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
     const combinedPatch: Partial<CharacterData> = {}
     let linkedIds: string[] = []
     let patchedFeature: Feature | undefined
@@ -537,7 +546,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function removeFeatureGlobal(id: string) {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
     const patch: Partial<CharacterData> = {}
 
     // Cascade: removing a container also removes everything nested inside it (recursively)
@@ -611,6 +620,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.feats         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feat",    refType: "feature" as const })),
     ...(data.classFeatures ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feature", refType: "feature" as const })),
     ...(data.items         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Gear",    refType: "feature" as const })),
+    ...(data.invocations   ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Invocation", refType: "feature" as const })),
     ...familiars
       .map(f => ({ id: f.id, label: f.nickname || monsters.find(m => m.id === f.monsterId)?.name || "Familiar", category: "Familiar", refType: "familiar" as const }))
       .filter(f => f.label.toLowerCase().includes(q)),
@@ -667,6 +677,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const availableClasses = data.multiclass && data.classes?.length
     ? data.classes.map(c => c.cls).filter(Boolean)
     : (data.class ? [data.class] : [])
+
+  const isWarlock = availableClasses.some(c => c.toLowerCase() === "warlock")
+
+  useEffect(() => {
+    if (activeTab === "invocations" && !isWarlock) setActiveTab("main")
+  }, [activeTab, isWarlock])
+
+  function addInvocation() { update({ invocations: [...(data.invocations ?? []), { id: nanoid(), name: "" }] }) }
 
   const favPanelProps = {
     favorites, spellItems, equipItems, features: allFeatures, familiars, monsters,
@@ -808,7 +826,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setShowSpeedModal(true)}
             className={`${card} p-3 flex flex-col items-center gap-1 hover:brightness-110 transition-all`}>
-            <span className={`text-xl font-bold ${speedOverrideReason ? "text-red-400" : "text-white"}`}>{effectiveSpeed}</span>
+            <SpeedDisplay
+              speeds={{ walk: effectiveSpeed, fly: data.speeds?.fly, swim: data.speeds?.swim, climb: data.speeds?.climb }}
+              zeroed={!!speedOverrideReason}
+            />
             <span className="text-xs uppercase tracking-widest text-white/50">Speed{speedOverrideReason ? ` (${speedOverrideReason})` : ""}</span>
           </button>
           <button type="button" onClick={() => setShowInitiativeModal(true)}
@@ -923,6 +944,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <AbilitiesCard card={card} data={data} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} />
             <SavesCard card={card} data={data} readOnly={readOnly} getSaveMod={getSaveMod} onShowModal={() => setShowSavesModal(true)} />
             <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} />
+            <div className={`${card} p-3 flex items-center justify-around gap-2`} title="Running jump distances — PHB: Long Jump = STR score (ft), High Jump = 3 + STR mod (ft)">
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">High Jump</span>
+                <span className="text-lg font-mono font-semibold text-white">{Math.max(0, 3 + statMods.str)} ft</span>
+              </div>
+              <div className="w-px h-8 bg-white/10" />
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Long Jump</span>
+                <span className="text-lg font-mono font-semibold text-white">{Math.max(0, data.strength ?? 10)} ft</span>
+              </div>
+            </div>
           </div>
 
           {/* Col 3: Favorites */}
@@ -1103,8 +1135,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-base font-bold tracking-wide truncate">{character.name}</p>
             {totalWeight > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 shrink-0" title="Total carried weight (items + equipment)">
-                ⚖ {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} lb
+              <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${encumbered ? "bg-red-500/20 text-red-300" : "bg-white/10 text-white/40"}`} title="Carrying capacity: STR score × 15 lb">
+                ⚖ {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} / {carryCapacity} lb
               </span>
             )}
             {totalValue > 0 && (
@@ -1194,10 +1226,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
-        {(["main", "details", "familiars", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
+        {(["main", "details", ...(isWarlock ? ["invocations"] : []), "familiars", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "familiars" ? "Familiars" : "Chat"}
+            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "invocations" ? "Invocations" : tab === "familiars" ? "Familiars" : "Chat"}
           </button>
         ))}
         <div className="w-full sm:w-auto sm:ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
@@ -1213,6 +1245,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment}
             equipmentLinkedIds={equipmentLinkedIds} />
+        )}
+        {activeTab === "invocations" && (
+          <FeatureList
+            items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
+            onAdd={addInvocation}
+            onChange={patchFeature}
+            onRemove={removeFeatureGlobal}
+            onLinkToggle={toggleFeatureLink}
+            theme={theme} card={card} readOnly={readOnly} pb={pb}
+            suggestionSource="invocation" userId={user?.id ?? null}
+            favorites={favorites} onToggleFavorite={toggleFeatureFavorite}
+          />
         )}
         {activeTab === "familiars" && (
           <FamiliarsTab
@@ -1246,8 +1290,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         if (!fam || !monster) return null
         return (
           <FloatingPanel key={id} title={fam.nickname || monster.name}
-            x={pos.x} y={pos.y}
+            x={pos.x} y={pos.y} width={pos.w} height={pos.h}
             onMove={(x, y) => movePopout(id, x, y)}
+            onResize={(w, h, x) => resizePopout(id, w, h, x)}
             onClose={() => closePopout(id)}>
             <FamiliarMonsterView monster={monster} readOnly={readOnly} />
           </FloatingPanel>

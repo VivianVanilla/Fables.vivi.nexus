@@ -2,15 +2,20 @@
 // InfoTab.tsx — Info tab with Notes / Traits / Feats / Features / Armor & Items / Profs
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
+import { createPortal } from "react-dom"
+import * as Y from "yjs"
 import type { userInfo } from "@/types/userInfo"
 import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { nanoid, profBonus, safeParseJson } from "../../character-utils"
+import { useUserContext } from "../../../../src/contexts/UserContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "../ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
+import { connectNoteChannel, applyTextDiff, encodeDocState, applyEncodedState } from "../../collab/noteSync"
+import { useCollaboratorCandidates } from "../../collab/useCollaboratorCandidates"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,7 +68,7 @@ interface FeatureListProps {
 
 const MAX_ATTUNEMENTS = 3
 
-function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
 
   return (
@@ -296,19 +301,156 @@ function getDescendantNotes(objects: userInfo.Objects[], folderId: string): user
   return [...notes, ...subfolders.flatMap(f => getDescendantNotes(objects, f.id))]
 }
 
-function InlineNote({ note, expanded, onToggle, onRemove, readOnly, onUpdateContent, autoEdit, onAutoEditConsumed }: {
+// Dropdowns triggered from inside a note row need to escape that row's
+// `overflow-hidden` (used for its own rounded corners) or they render clipped
+// — invisible on an empty/short note. Position is computed from the trigger's
+// screen rect and the menu itself is portaled to <body> as `position: fixed`,
+// so it always pops out above everything regardless of any ancestor's overflow.
+function usePopoverPosition(open: boolean, triggerRef: React.RefObject<HTMLElement | null>) {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  useEffect(() => {
+    if (!open || !triggerRef.current) { setPos(null); return }
+    const rect = triggerRef.current.getBoundingClientRect()
+    setPos({ top: rect.bottom + 4, right: Math.max(4, window.innerWidth - rect.right) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  return pos
+}
+
+// Unlinking used to be a bare "✕" — easy to hit by accident while scanning the
+// list. It now lives behind a small edit menu so unlinking is a deliberate
+// two-click action instead of a hair-trigger one.
+function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: string }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const pos = usePopoverPosition(open, triggerRef)
+
+  return (
+    <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+      <button type="button" ref={triggerRef}
+        onClick={() => setOpen(v => !v)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        title="Edit link"
+        className="text-white/30 hover:text-white text-xs size-5 flex items-center justify-center rounded hover:bg-white/10 transition-colors">
+        ✎
+      </button>
+      {open && pos && createPortal(
+        <div style={{ position: "fixed", top: pos.top, right: pos.right }}
+          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-36 animate-in fade-in zoom-in-95 duration-150">
+          <button type="button" onMouseDown={e => { e.preventDefault(); setOpen(false); onUnlink() }}
+            className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors whitespace-nowrap">
+            Unlink {itemLabel}
+          </button>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+// Combined note menu — Edit/Preview toggle, Collaborators invite, and Unlink
+// all live behind one trigger instead of three separate buttons. Mirrors
+// NoteView.tsx's standalone Collaborators menu so a linked note inside the
+// character sheet gets the exact same live-collaboration + invite features
+// as opening the note on its own.
+function NoteMenu({ editing, expanded, onEditClick, isOwner, collaboratorIds, onToggleCollaborator, onUnlink, readOnly }: {
+  editing: boolean
+  expanded: boolean
+  onEditClick: () => void
+  isOwner: boolean
+  collaboratorIds: string[]
+  onToggleCollaborator: (userId: string) => void
+  onUnlink?: () => void
+  readOnly: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const pos = usePopoverPosition(open, triggerRef)
+  const { candidates, loading } = useCollaboratorCandidates(open && isOwner)
+
+  return (
+    <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+      <button type="button" ref={triggerRef}
+        onClick={() => setOpen(v => !v)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        title="Note options"
+        className={`text-xs size-6 flex items-center justify-center rounded-lg transition-colors ${collaboratorIds.length > 0 ? "text-purple-300 hover:bg-purple-500/10" : "text-white/40 hover:text-white hover:bg-white/10"}`}>
+        {collaboratorIds.length > 0 ? "👥" : "⋮"}
+      </button>
+      {open && pos && createPortal(
+        <div style={{ position: "fixed", top: pos.top, right: pos.right }}
+          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-56 animate-in fade-in zoom-in-95 duration-150"
+          onMouseDown={e => e.preventDefault()}>
+          {!readOnly && (
+            <button type="button" onClick={() => { onEditClick(); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors">
+              {expanded && editing ? "👁 Preview" : "✎ Edit"}
+            </button>
+          )}
+          {isOwner && (
+            <div className="border-t border-white/10">
+              <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-white/30 font-semibold">Invite collaborators</p>
+              <div className="max-h-32 overflow-y-auto flex flex-col">
+                {loading && <p className="px-3 py-1.5 text-[11px] text-white/30">Loading…</p>}
+                {!loading && candidates.length === 0 && (
+                  <p className="px-3 py-1.5 text-[11px] text-white/30 italic">No party members found — link one of your characters to a party first.</p>
+                )}
+                {candidates.map(c => (
+                  <button key={c.userId} type="button" onClick={() => onToggleCollaborator(c.userId)}
+                    className="w-full text-left px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/10 transition-colors flex items-center justify-between">
+                    {c.label}
+                    {collaboratorIds.includes(c.userId) && <span className="text-purple-300">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {!isOwner && collaboratorIds.length > 0 && (
+            <p className="px-3 py-2 text-[10px] text-purple-300/70 border-t border-white/10">You're collaborating on this note</p>
+          )}
+          {onUnlink && (
+            <button type="button" onMouseDown={e => { e.preventDefault(); setOpen(false); onUnlink() }}
+              className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors border-t border-white/10">
+              Unlink note
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+// Full live-collaborative note editor, embedded inline in the character sheet.
+// Backed by the same Yjs CRDT + Supabase broadcast relay as the standalone
+// NoteView page (see ./collab/noteSync.ts) — a linked note behaves identically
+// whether you open it here or from the sidebar.
+function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, onAutoEditConsumed }: {
   note: userInfo.Objects
   expanded: boolean
   onToggle: () => void
   onRemove?: () => void
   readOnly: boolean
-  onUpdateContent: (id: string, content: string) => void
   autoEdit?: boolean
   onAutoEditConsumed?: () => void
 }) {
-  const [content, setContent] = useState(() => (safeParseJson(note.data) as { content?: string }).content ?? "")
+  const { user, updateObject, updateSharedObject } = useUserContext()
+  const initialData = safeParseJson(note.data) as { content?: string; ydocState?: string; collaboratorIds?: string[] }
+  const isOwner = note.owner_id === user?.id
+
+  const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!!autoEdit)
+  const [collaboratorIds, setCollaboratorIds] = useState(initialData.collaboratorIds ?? [])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const ydoc = useMemo(() => {
+    const doc = new Y.Doc()
+    if (initialData.ydocState) applyEncodedState(doc, initialData.ydocState)
+    else if (initialData.content) doc.getText("content").insert(0, initialData.content)
+    return doc
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id])
+  const ytext = ydoc.getText("content")
 
   // Newly-created notes open straight into edit mode, once — mirrors the
   // auto-edit-on-add pattern used for newly added spells.
@@ -317,10 +459,44 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, onUpdateCont
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function handleChange(next: string) {
-    setContent(next)
+  useEffect(() => {
+    setContent(ytext.toString())
+    const observer = () => setContent(ytext.toString())
+    ytext.observe(observer)
+    const disconnect = connectNoteChannel(note.id, ydoc)
+    return () => { ytext.unobserve(observer); disconnect() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id])
+
+  function scheduleSave(nextCollaboratorIds: string[] = collaboratorIds) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => onUpdateContent(note.id, next), 700)
+    saveTimer.current = setTimeout(async () => {
+      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: nextCollaboratorIds }
+      try {
+        if (isOwner) await updateObject(note.id, { data: patch as unknown as JSON })
+        else await updateSharedObject(note.id, { data: patch as unknown as JSON })
+      } catch (e) { console.error(e) }
+    }, 700)
+  }
+
+  function handleChange(next: string) {
+    applyTextDiff(ytext, next)  // triggers the observer above, which sets `content`
+    scheduleSave()
+  }
+
+  function handleToggleCollaborator(userId: string) {
+    const next = collaboratorIds.includes(userId)
+      ? collaboratorIds.filter(id => id !== userId)
+      : [...collaboratorIds, userId]
+    setCollaboratorIds(next)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: next } as unknown as JSON })
+      .catch(e => console.error(e))
+  }
+
+  function handleEditClick() {
+    if (!expanded) onToggle()
+    setEditing(expanded ? v => !v : true)
   }
 
   return (
@@ -328,16 +504,16 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, onUpdateCont
       <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors" onClick={onToggle}>
         <span className="text-[10px] text-white/30 w-3 shrink-0">{expanded ? "▼" : "▶"}</span>
         <span className="text-xs text-white/70 flex-1 min-w-0 truncate">{note.name}</span>
-        {expanded && !readOnly && (
-          <button type="button" onClick={e => { e.stopPropagation(); setEditing(v => !v) }}
-            className={`text-[10px] px-2 py-0.5 rounded-full transition-colors shrink-0 ${editing ? "bg-white/20 text-white" : "bg-white/10 hover:bg-white/20 text-white/50 hover:text-white"}`}>
-            {editing ? "Preview" : "✎ Edit"}
-          </button>
-        )}
-        {onRemove && (
-          <button type="button" onClick={e => { e.stopPropagation(); onRemove() }}
-            className="text-white/20 hover:text-red-400 text-xs shrink-0">✕</button>
-        )}
+        <NoteMenu
+          editing={editing}
+          expanded={expanded}
+          onEditClick={handleEditClick}
+          isOwner={isOwner}
+          collaboratorIds={collaboratorIds}
+          onToggleCollaborator={handleToggleCollaborator}
+          onUnlink={onRemove}
+          readOnly={readOnly}
+        />
       </div>
       {expanded && (
         <div className="px-3 pb-2 max-h-64 overflow-y-auto">
@@ -354,20 +530,24 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, onUpdateCont
           ) : (
             content.trim()
               ? <Markdown text={content} tone="dark" size="xs" />
-              : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ✎ Edit to start writing."}</p>
+              : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ⋮ then Edit to start writing."}</p>
           )}
+        </div>
+      )}
+      {collaboratorIds.length > 0 && (
+        <div className="px-3 pb-1.5 -mt-0.5">
+          <span className="text-[9px] text-purple-300/60">Live-syncing with {collaboratorIds.length} collaborator{collaboratorIds.length === 1 ? "" : "s"}</span>
         </div>
       )}
     </div>
   )
 }
 
-function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, onUpdateNoteContent, readOnly, card }: {
+function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, readOnly, card }: {
   objects: userInfo.Objects[]
   linkedRefs: LinkedNoteRef[]
   onChange: (refs: LinkedNoteRef[]) => void
   onCreateNote: () => Promise<string>
-  onUpdateNoteContent: (id: string, content: string) => void
   readOnly: boolean
   card: string
 }) {
@@ -438,7 +618,7 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, onUpd
             return (
               <div key={ref.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5">
                 <span className="text-xs text-white/30 italic">Not found (deleted?)</span>
-                {!readOnly && <button type="button" onClick={() => handleRemove(ref.id)} className="text-white/20 hover:text-red-400 text-xs">✕</button>}
+                {!readOnly && <LinkMenu onUnlink={() => handleRemove(ref.id)} itemLabel="reference" />}
               </div>
             )
           }
@@ -450,7 +630,7 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, onUpd
                 <div className="flex items-center gap-2 px-3 py-2">
                   <span className="text-xs font-semibold text-white/70 flex-1 min-w-0 truncate">📁 {obj.name}</span>
                   <span className="text-[10px] text-white/30 shrink-0">{notes.length} note{notes.length === 1 ? "" : "s"}</span>
-                  {!readOnly && <button type="button" onClick={() => handleRemove(ref.id)} className="text-white/20 hover:text-red-400 text-xs shrink-0">✕</button>}
+                  {!readOnly && <LinkMenu onUnlink={() => handleRemove(ref.id)} itemLabel="folder" />}
                 </div>
                 {notes.length > 0 && (
                   <div className="flex flex-col gap-1 px-2 pb-2">
@@ -458,7 +638,6 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, onUpd
                       <InlineNote key={n.id} note={n} readOnly={readOnly}
                         expanded={expandedId === n.id}
                         onToggle={() => setExpandedId(expandedId === n.id ? null : n.id)}
-                        onUpdateContent={onUpdateNoteContent}
                         autoEdit={pendingEditId === n.id}
                         onAutoEditConsumed={() => setPendingEditId(null)} />
                     ))}
@@ -473,7 +652,6 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, onUpd
               expanded={expandedId === ref.id}
               onToggle={() => setExpandedId(expandedId === ref.id ? null : ref.id)}
               onRemove={!readOnly ? () => handleRemove(ref.id) : undefined}
-              onUpdateContent={onUpdateNoteContent}
               autoEdit={pendingEditId === ref.id}
               onAutoEditConsumed={() => setPendingEditId(null)} />
           )
@@ -493,7 +671,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",      "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, updateObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange }: InfoTabProps) {
 
   const pb = profBonus(data.level ?? 1)
 
@@ -503,11 +681,12 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
     ...(data.feats         ?? []),
     ...(data.classFeatures ?? []),
     ...(data.items         ?? []),
+    ...(data.invocations   ?? []),
   ]
 
   // ── Feature list helpers ─────────────────────────────────────────────────
 
-  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "items"
+  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "items" | "invocations"
 
   function addFeature(key: FeatureKey, patch?: Partial<Feature>) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "", ...patch }] })
@@ -519,10 +698,6 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
     const note = await createObject({ name: "New Note", type: "note" })
     update({ linkedNoteRefs: [...(data.linkedNoteRefs ?? []), { id: note.id, type: "note" }] })
     return note.id
-  }
-
-  function handleUpdateNoteContent(id: string, content: string) {
-    updateObject(id, { data: { content } as unknown as JSON }).catch(e => console.error(e))
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -587,7 +762,6 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             linkedRefs={data.linkedNoteRefs ?? []}
             onChange={refs => update({ linkedNoteRefs: refs })}
             onCreateNote={handleCreateNote}
-            onUpdateNoteContent={handleUpdateNoteContent}
             readOnly={readOnly}
             card={card}
           />
@@ -597,7 +771,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
       {/* ── Race & Feats (tiled, side-by-side) ───────────────────────────────── */}
 
       {subTab === "raceFeats" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 min-h-0">
           <FeatureList
             items={data.racialTraits ?? []} allFeatures={allFeatures} label="Racial Traits"
             onAdd={() => addFeature("racialTraits")}
@@ -616,6 +790,16 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             onLinkToggle={onLinkToggle}
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             suggestionSource="feat" userId={userId}
+            favorites={favorites} onToggleFavorite={onToggleFavorite}
+          />
+          <FeatureList
+            items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
+            onAdd={() => addFeature("invocations")}
+            onChange={onChangeFeature}
+            onRemove={onRemoveFeature}
+            onLinkToggle={onLinkToggle}
+            theme={theme} card={card} readOnly={readOnly} pb={pb}
+            suggestionSource="invocation" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
           />
         </div>

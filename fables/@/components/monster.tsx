@@ -5,6 +5,11 @@
 // (via FamiliarMonsterView) by the character sheet's Familiars tab and its
 // pop-out window, so editing a familiar's stat block there writes straight
 // back to the shared Monster object — it's a live reference, not a copy.
+//
+// Stats/saves/skills/resistances and the section on/off toggles live behind an
+// "Edit Stat Block" modal — the page itself only ever shows a clean read-out,
+// so a freshly-created familiar doesn't show a "Legendary Actions" section (or
+// any of the other rarely-used toggles) until someone deliberately turns it on.
 // ════════════════════════════════════════════════════════════════════════════
 
 import React, { useRef, useState } from "react"
@@ -26,6 +31,7 @@ import { TracingSlider } from "./ui/tracing-slider"
 import { NumInput } from "./character/ui/NumInput"
 import { Modal } from "./character/ui/Modal"
 import { PopTransition } from "./character/ui/PopTransition"
+import { SpeedDisplay } from "./character/ui/SpeedDisplay"
 
 import { ActionEntry } from "./character/entries/ActionEntry"
 import { SpellEntry } from "./character/entries/SpellEntry"
@@ -61,7 +67,7 @@ const SECTION_HEADER_COLOR: Record<ActionCategory, string> = {
   action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300",
 }
 
-const CARD = "rounded-xl bg-zinc-900 ring-1 ring-zinc-700"
+const CARD = "rounded-xl bg-zinc-900 ring-1 ring-zinc-700 transition-colors"
 
 const NEUTRAL_THEME: Theme = {
   label: "Neutral",
@@ -74,31 +80,23 @@ function abilityMod(score: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`
 }
 
-// ── Small display/edit helpers ──────────────────────────────────────────────
+// ── Small display/edit helpers (used inside the Edit Stat Block modal) ──────
 
-function NumTile({ label, value, onChange, readOnly }: { label: string; value?: number; onChange: (v: number) => void; readOnly?: boolean }) {
+function NumTile({ label, value, onChange }: { label: string; value?: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-14">
-      {readOnly ? (
-        <span className="text-base font-bold text-white">{value ?? 0}</span>
-      ) : (
-        <NumInput value={value ?? 0} onChange={e => onChange(parseInt(e.target.value) || 0)}
-          className="w-10 text-center bg-transparent text-base font-bold text-white outline-none" />
-      )}
+    <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-14 transition-colors focus-within:bg-white/10">
+      <NumInput value={value ?? 0} onChange={e => onChange(parseInt(e.target.value) || 0)}
+        className="w-10 text-center bg-transparent text-base font-bold text-white outline-none" />
       <span className="text-[9px] uppercase tracking-widest text-white/40 whitespace-nowrap">{label}</span>
     </div>
   )
 }
 
-function TextTile({ label, value, onChange, readOnly, placeholder }: { label: string; value?: string; onChange: (v: string) => void; readOnly?: boolean; placeholder?: string }) {
+function TextTile({ label, value, onChange, placeholder }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-16 max-w-28">
-      {readOnly ? (
-        <span className="text-xs font-semibold text-white truncate max-w-full">{value || "—"}</span>
-      ) : (
-        <input value={value ?? ""} placeholder={placeholder} onChange={e => onChange(e.target.value)}
-          className="w-full text-center bg-transparent text-xs font-semibold text-white outline-none placeholder:text-white/20" />
-      )}
+    <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-16 max-w-28 transition-colors focus-within:bg-white/10">
+      <input value={value ?? ""} placeholder={placeholder} onChange={e => onChange(e.target.value)}
+        className="w-full text-center bg-transparent text-xs font-semibold text-white outline-none placeholder:text-white/20" />
       <span className="text-[9px] uppercase tracking-widest text-white/40 whitespace-nowrap">{label}</span>
     </div>
   )
@@ -113,70 +111,307 @@ function CompactField({ label, value, onChange, readOnly }: { label: string; val
         <span className="text-white/70 truncate min-w-0">{value || "—"}</span>
       ) : (
         <input value={value ?? ""} onChange={e => onChange(e.target.value)}
-          className="flex-1 min-w-0 bg-transparent outline-none text-white/70 border-b border-white/10 focus:border-white/30 py-0.5" />
+          className="flex-1 min-w-0 bg-transparent outline-none text-white/70 border-b border-white/10 focus:border-white/30 py-0.5 transition-colors" />
       )}
     </div>
   )
 }
 
 function ActionSection({
-  label, category, actions, readOnly, onAdd, onChange, onRemove, extra, toggle,
+  label, category, actions, readOnly, onAdd, onChange, onRemove, extra,
 }: {
   label: string; category: ActionCategory; actions: MonsterAction[]; readOnly?: boolean
   onAdd: () => void; onChange: (id: string, patch: Partial<MonsterAction>) => void; onRemove: (id: string) => void
   extra?: React.ReactNode
-  toggle?: { enabled: boolean; onChange: (v: boolean) => void }
 }) {
-  const enabled = toggle ? toggle.enabled : true
-  if (readOnly && (!enabled || actions.length === 0)) return null
+  if (readOnly && actions.length === 0) return null
   return (
-    <div className={`${CARD} p-4 flex flex-col gap-2`}>
+    <div className={`${CARD} p-4 flex flex-col gap-2 animate-in fade-in duration-200`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`text-xs uppercase tracking-widest font-semibold ${SECTION_HEADER_COLOR[category]}`}>{label}</span>
-        {enabled && extra}
-        {toggle && !readOnly && (
-          <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
-            <input type="checkbox" checked={toggle.enabled} onChange={e => toggle.onChange(e.target.checked)} />
-            Has {label.toLowerCase()}
-          </label>
-        )}
-        {!readOnly && enabled && (
+        {extra}
+        {!readOnly && (
           <button type="button" onClick={onAdd}
             className="text-xs px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
             + Add
           </button>
         )}
       </div>
-      <PopTransition show={enabled}>
-        <div className="flex flex-col gap-1.5">
-          {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
-          {actions.map(a => (
-            <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
-              onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
-          ))}
-        </div>
-      </PopTransition>
+      <div className="flex flex-col gap-1.5">
+        {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
+        {actions.map(a => (
+          <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
+            onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
+        ))}
+      </div>
     </div>
   )
 }
 
 function LegendaryTracker({
-  used, max, readOnly, onChangeMax, onChangeUsed,
-}: { used: number; max: number; readOnly?: boolean; onChangeMax: (n: number) => void; onChangeUsed: (n: number) => void }) {
+  used, max, readOnly, onChangeUsed,
+}: { used: number; max: number; readOnly?: boolean; onChangeUsed: (n: number) => void }) {
   const remaining = Math.max(0, max - used)
   return (
     <div className="flex items-center gap-2 flex-1 min-w-40">
       <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
         color="#EAB308" onChange={val => onChangeUsed(Math.max(0, max - val))} className="flex-1 min-w-0" />
       <span className="text-xs text-white/40 tabular-nums shrink-0">{remaining}/{max} left</span>
-      {!readOnly && (
-        <label className="flex items-center gap-1 text-[10px] text-white/30 shrink-0">
-          Max
-          <NumInput value={max} min={0} onChange={e => onChangeMax(parseInt(e.target.value) || 0)}
-            className="w-10 bg-white/10 rounded px-1 text-center text-white outline-none" />
-        </label>
+    </div>
+  )
+}
+
+// ── Compact, always-visible stat-block summary ───────────────────────────────
+
+const COMPACT_FIELD_ROWS: { key: keyof MonsterData; label: string }[] = [
+  { key: "savingThrows",         label: "Saving Throws" },
+  { key: "skills",               label: "Skills" },
+  { key: "damageResistances",    label: "Dmg Resistances" },
+  { key: "damageImmunities",     label: "Dmg Immunities" },
+  { key: "damageVulnerabilities",label: "Dmg Vulnerabilities" },
+  { key: "conditionImmunities",  label: "Condition Immunities" },
+  { key: "senses",               label: "Senses" },
+  { key: "languages",            label: "Languages" },
+  { key: "challengeRating",      label: "Challenge" },
+]
+
+function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData; onUpdate: (patch: Partial<MonsterData>) => void; readOnly?: boolean; onEdit: () => void }) {
+  const hasStructuredSpeed = !!(data.speeds && (data.speeds.walk || data.speeds.fly || data.speeds.swim || data.speeds.climb))
+  const [hpStep, setHpStep] = useState(1)
+
+  function adjustHp(delta: number) {
+    const max = data.maxHp
+    const next = (data.hp ?? 0) + delta
+    onUpdate({ hp: Math.max(0, max != null ? Math.min(max, next) : next) })
+  }
+
+  return (
+    <div className={`${CARD} p-3 flex flex-col gap-2.5`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-stretch gap-1.5">
+          <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg bg-white/5 px-3 py-1.5 min-w-14">
+            <span className="text-base font-bold text-white">{data.ac ?? 0}</span>
+            <span className="text-[9px] uppercase tracking-widest text-white/40">AC</span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-16">
+            <div className="flex items-center gap-1.5">
+              {!readOnly && (
+                <button type="button" onClick={() => adjustHp(-hpStep)}
+                  className="size-5 rounded-full bg-white/10 hover:bg-red-900 text-white hover:text-red-200 flex items-center justify-center text-xs font-bold transition-colors shrink-0">
+                  −
+                </button>
+              )}
+              <span className="text-base font-bold text-white tabular-nums">{data.hp ?? 0}<span className="text-xs text-white/30">/{data.maxHp ?? 0}</span></span>
+              {!readOnly && (
+                <button type="button" onClick={() => adjustHp(hpStep)}
+                  className="size-5 rounded-full bg-white/10 hover:bg-green-900 text-white hover:text-green-200 flex items-center justify-center text-xs font-bold transition-colors shrink-0">
+                  +
+                </button>
+              )}
+            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-1">
+                
+                <NumInput value={hpStep} min={1}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setHpStep(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-7 text-center text-[10px] bg-white/10 rounded px-0.5 py-0.5 text-white outline-none" />
+                   <span className="text-[9px] uppercase tracking-widest text-white/40">HP</span>
+              </div>
+              
+            )}
+           
+          </div>
+          {data.hitDice && (
+            <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg bg-white/5 px-3 py-1.5 min-w-16 animate-in fade-in duration-200">
+              <span className="text-xs font-semibold text-white">{data.hitDice}</span>
+              <span className="text-[9px] uppercase tracking-widest text-white/40">Hit Dice</span>
+            </div>
+          )}
+          <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg bg-white/5 px-3 py-1.5 min-w-16">
+            {hasStructuredSpeed ? (
+              <SpeedDisplay speeds={data.speeds!} size="lg" />
+            ) : (
+              <span className="text-xs font-semibold text-white">{data.speed || "—"}</span>
+            )}
+            <span className="text-[9px] uppercase tracking-widest text-white/40">Speed</span>
+          </div>
+          {(data.creatureType || data.alignment) && (
+            <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg bg-white/5 px-3 py-1.5 min-w-24 max-w-44 animate-in fade-in duration-200">
+              {data.creatureType && <span className="text-[11px] font-semibold text-white/80 text-center leading-tight truncate max-w-full">{data.creatureType}</span>}
+              {data.alignment && <span className="text-[9px] text-white/40 text-center leading-tight truncate max-w-full">{data.alignment}</span>}
+            </div>
+          )}
+        </div>
+        {!readOnly && (
+          <button type="button" onClick={onEdit} title="Edit stat block"
+            className="shrink-0 size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors">
+            ✎
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+        {ABILITY_KEYS.map(key => {
+          const score = (data[key] as number | undefined) ?? 10
+          return (
+            <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5">
+              <span className={`text-[9px] uppercase tracking-widest font-bold ${ABILITY_COLORS[key]}`}>{ABILITY_ABBR[key]}</span>
+              <span className="text-sm font-bold text-white">{score}</span>
+              <span className={`text-[10px] font-mono ${ABILITY_COLORS[key]}`}>{abilityMod(score)}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {COMPACT_FIELD_ROWS.some(r => data[r.key]) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 border-t border-white/10 pt-2.5">
+          {COMPACT_FIELD_ROWS.map(r => (
+            <CompactField key={r.key} label={r.label} value={data[r.key] as string | undefined} onChange={() => {}} readOnly />
+          ))}
+        </div>
       )}
     </div>
+  )
+}
+
+// ── Edit Stat Block modal — everything configuration-shaped lives here ──────
+
+const SPEED_FIELDS = ["walk", "fly", "swim", "climb"] as const
+
+function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpdate: (patch: Partial<MonsterData>) => void; onClose: () => void }) {
+  const speeds = data.speeds ?? {}
+  function setSpeed(key: typeof SPEED_FIELDS[number], v: number) {
+    onUpdate({ speeds: { ...speeds, [key]: v || undefined } })
+  }
+
+  const bonusEnabled  = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
+  const reactEnabled  = data.hasReactions ?? (data.reactions ?? []).length > 0
+  const legendEnabled = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
+  const spellEnabled  = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(520px,calc(100vw-2rem))] max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-5 text-white animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between shrink-0">
+          <p className="text-sm font-bold">Edit Stat Block</p>
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white text-sm transition-colors">✕</button>
+        </div>
+
+        {/* Identity */}
+        <div className="flex gap-2">
+          <input value={data.creatureType ?? ""} placeholder="Medium beast, unaligned"
+            onChange={e => onUpdate({ creatureType: e.target.value })}
+            className="flex-1 min-w-0 bg-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none placeholder:text-white/20 transition-colors focus:bg-white/10" />
+          <input value={data.alignment ?? ""} placeholder="unaligned"
+            onChange={e => onUpdate({ alignment: e.target.value })}
+            className="w-32 shrink-0 bg-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none placeholder:text-white/20 transition-colors focus:bg-white/10" />
+        </div>
+
+        {/* Core stats */}
+        <div className="flex flex-wrap gap-1.5">
+          <NumTile label="AC" value={data.ac} onChange={v => onUpdate({ ac: v })} />
+          <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-14 transition-colors focus-within:bg-white/10">
+            <div className="flex items-baseline gap-1">
+              <NumInput value={data.hp ?? 0} onChange={e => onUpdate({ hp: parseInt(e.target.value) || 0 })}
+                className="w-9 text-center bg-transparent text-base font-bold text-white outline-none" />
+              <span className="text-xs text-white/30">/</span>
+              <NumInput value={data.maxHp ?? 0} onChange={e => onUpdate({ maxHp: parseInt(e.target.value) || 0 })}
+                className="w-9 text-center bg-transparent text-xs text-white/50 outline-none" />
+            </div>
+            <span className="text-[9px] uppercase tracking-widest text-white/40">HP</span>
+          </div>
+          <TextTile label="Hit Dice" value={data.hitDice} onChange={v => onUpdate({ hitDice: v })} placeholder="9d8+18" />
+        </div>
+
+        {/* Speeds */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Speed (ft/round)</span>
+          <div className="grid grid-cols-4 gap-1.5">
+            {SPEED_FIELDS.map(k => (
+              <label key={k} className="flex flex-col items-center gap-1">
+                <span className="text-[9px] uppercase text-white/40">{k}</span>
+                <NumInput value={speeds[k] ?? ""} min={0} placeholder="—"
+                  onChange={e => setSpeed(k, parseInt(e.target.value) || 0)}
+                  className="w-full bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none text-sm transition-colors focus:bg-white/15" />
+              </label>
+            ))}
+          </div>
+          <input value={data.speed ?? ""} placeholder="Other movement notes (e.g. burrow 20 ft.)"
+            onChange={e => onUpdate({ speed: e.target.value })}
+            className="bg-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white/70 outline-none placeholder:text-white/20 transition-colors focus:bg-white/10" />
+        </div>
+
+        {/* Ability scores */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Ability Scores</span>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            {ABILITY_KEYS.map(key => {
+              const score = (data[key] as number | undefined) ?? 10
+              return (
+                <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5 transition-colors focus-within:bg-white/10">
+                  <span className={`text-[9px] uppercase tracking-widest font-bold ${ABILITY_COLORS[key]}`}>{ABILITY_ABBR[key]}</span>
+                  <NumInput value={score} onChange={e => onUpdate({ [key]: parseInt(e.target.value) || 0 } as Partial<MonsterData>)}
+                    className="w-8 text-center bg-transparent text-sm font-bold text-white outline-none" />
+                  <span className={`text-[10px] font-mono ${ABILITY_COLORS[key]}`}>{abilityMod(score)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Traits */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 border-t border-white/10 pt-3">
+          <CompactField label="Saving Throws"        value={data.savingThrows}         onChange={v => onUpdate({ savingThrows: v })} />
+          <CompactField label="Skills"               value={data.skills}               onChange={v => onUpdate({ skills: v })} />
+          <CompactField label="Dmg Resistances"      value={data.damageResistances}     onChange={v => onUpdate({ damageResistances: v })} />
+          <CompactField label="Dmg Immunities"       value={data.damageImmunities}      onChange={v => onUpdate({ damageImmunities: v })} />
+          <CompactField label="Dmg Vulnerabilities"  value={data.damageVulnerabilities} onChange={v => onUpdate({ damageVulnerabilities: v })} />
+          <CompactField label="Condition Immunities" value={data.conditionImmunities}   onChange={v => onUpdate({ conditionImmunities: v })} />
+          <CompactField label="Senses"                value={data.senses}               onChange={v => onUpdate({ senses: v })} />
+          <CompactField label="Languages"              value={data.languages}            onChange={v => onUpdate({ languages: v })} />
+          <CompactField label="Challenge"              value={data.challengeRating}      onChange={v => onUpdate({ challengeRating: v })} />
+          <CompactField label="Prof. Bonus"            value={data.proficiencyBonus != null ? String(data.proficiencyBonus) : ""}
+            onChange={v => onUpdate({ proficiencyBonus: v ? parseInt(v) || 0 : undefined })} />
+        </div>
+
+        {/* Section toggles */}
+        <div className="flex flex-col gap-2.5 border-t border-white/10 pt-3">
+          <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Sections</span>
+          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+            Bonus Actions
+            <input type="checkbox" checked={bonusEnabled} onChange={e => onUpdate({ hasBonusActions: e.target.checked })} />
+          </label>
+          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+            Reactions
+            <input type="checkbox" checked={reactEnabled} onChange={e => onUpdate({ hasReactions: e.target.checked })} />
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Legendary Actions
+              <input type="checkbox" checked={legendEnabled} onChange={e => onUpdate({ hasLegendaryActions: e.target.checked })} />
+            </label>
+            <PopTransition show={legendEnabled}>
+              <label className="flex items-center justify-between text-xs text-white/40 pl-3">
+                Max per round
+                <NumInput value={data.legendaryActionsMax ?? 3} min={0}
+                  onChange={e => onUpdate({ legendaryActionsMax: parseInt(e.target.value) || 0 })}
+                  className="w-14 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none transition-colors focus:bg-white/15" />
+              </label>
+            </PopTransition>
+          </div>
+          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+            Spellcasting
+            <input type="checkbox" checked={spellEnabled} onChange={e => onUpdate({ hasSpellcasting: e.target.checked })} />
+          </label>
+        </div>
+
+        <button type="button" onClick={onClose}
+          className="shrink-0 text-sm font-semibold px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors self-end">
+          Done
+        </button>
+      </div>
+    </Modal>
   )
 }
 
@@ -192,6 +427,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   const { user } = useUserContext()
   const isLucky = user?.email === LUCKY_EMAIL
   const [luckySpell, setLuckySpell] = useState<SpellItem | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const actionsBySection = {
     actions: data.actions ?? [],
@@ -238,10 +474,20 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   for (const slot of spellSlots) if (!grouped.has(slot.level)) grouped.set(slot.level, [])
   const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
 
-  // Explicit toggles — fall back to auto-detecting existing data for monsters
-  // created before the toggle existed.
+  // Explicit toggles, editable only from the Edit Stat Block modal — fall back
+  // to auto-detecting existing data for monsters created before the toggle
+  // existed, so nothing that already had content quietly disappears.
+  const bonusEnabled       = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
+  const reactEnabled       = data.hasReactions ?? (data.reactions ?? []).length > 0
+  const legendaryEnabled   = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
   const spellcastingEnabled = data.hasSpellcasting ?? (levels.length > 0 || !!data.spellcastingAbility)
-  const legendaryEnabled    = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
+
+  const sectionEnabled: Record<string, boolean> = {
+    actions: true,
+    bonusActions: bonusEnabled,
+    reactions: reactEnabled,
+    legendaryActions: legendaryEnabled,
+  }
 
   function feelingLucky() {
     if (spellItems.length === 0) return
@@ -251,76 +497,21 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   return (
     <div className="flex flex-col gap-4">
 
-      {/* ── Stats ─────────────────────────────────────────────────────────── */}
-      <div className={`${CARD} p-3 flex flex-col gap-2.5`}>
-        <div className="flex flex-wrap gap-1.5">
-          <NumTile label="AC" value={data.ac} onChange={v => onUpdate({ ac: v })} readOnly={readOnly} />
-          <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-2.5 py-1.5 min-w-14">
-            <div className="flex items-baseline gap-1">
-              {readOnly ? <span className="text-base font-bold text-white">{data.hp ?? 0}</span> :
-                <NumInput value={data.hp ?? 0} onChange={e => onUpdate({ hp: parseInt(e.target.value) || 0 })}
-                  className="w-9 text-center bg-transparent text-base font-bold text-white outline-none" />}
-              <span className="text-xs text-white/30">/</span>
-              {readOnly ? <span className="text-xs text-white/40">{data.maxHp ?? 0}</span> :
-                <NumInput value={data.maxHp ?? 0} onChange={e => onUpdate({ maxHp: parseInt(e.target.value) || 0 })}
-                  className="w-9 text-center bg-transparent text-xs text-white/50 outline-none" />}
-            </div>
-            <span className="text-[9px] uppercase tracking-widest text-white/40">HP</span>
-          </div>
-          <TextTile label="Hit Dice" value={data.hitDice} onChange={v => onUpdate({ hitDice: v })} readOnly={readOnly} placeholder="9d8+18" />
-          <TextTile label="Speed" value={data.speed} onChange={v => onUpdate({ speed: v })} readOnly={readOnly} placeholder="30 ft." />
-        </div>
-
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-          {ABILITY_KEYS.map(key => {
-            const score = (data[key] as number | undefined) ?? 10
-            return (
-              <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5">
-                <span className={`text-[9px] uppercase tracking-widest font-bold ${ABILITY_COLORS[key]}`}>{ABILITY_ABBR[key]}</span>
-                {readOnly ? (
-                  <span className="text-sm font-bold text-white">{score}</span>
-                ) : (
-                  <NumInput value={score} onChange={e => onUpdate({ [key]: parseInt(e.target.value) || 0 } as Partial<MonsterData>)}
-                    className="w-8 text-center bg-transparent text-sm font-bold text-white outline-none" />
-                )}
-                <span className={`text-[10px] font-mono ${ABILITY_COLORS[key]}`}>{abilityMod(score)}</span>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 border-t border-white/10 pt-2.5">
-          <CompactField label="Saving Throws"         value={data.savingThrows}          onChange={v => onUpdate({ savingThrows: v })}          readOnly={readOnly} />
-          <CompactField label="Skills"                value={data.skills}                onChange={v => onUpdate({ skills: v })}                readOnly={readOnly} />
-          <CompactField label="Dmg Resistances"       value={data.damageResistances}      onChange={v => onUpdate({ damageResistances: v })}     readOnly={readOnly} />
-          <CompactField label="Dmg Immunities"        value={data.damageImmunities}       onChange={v => onUpdate({ damageImmunities: v })}      readOnly={readOnly} />
-          <CompactField label="Dmg Vulnerabilities"   value={data.damageVulnerabilities}  onChange={v => onUpdate({ damageVulnerabilities: v })} readOnly={readOnly} />
-          <CompactField label="Condition Immunities"  value={data.conditionImmunities}    onChange={v => onUpdate({ conditionImmunities: v })}   readOnly={readOnly} />
-          <CompactField label="Senses"                value={data.senses}                onChange={v => onUpdate({ senses: v })}                readOnly={readOnly} />
-          <CompactField label="Languages"              value={data.languages}             onChange={v => onUpdate({ languages: v })}             readOnly={readOnly} />
-          <CompactField label="Challenge"              value={data.challengeRating}       onChange={v => onUpdate({ challengeRating: v })}       readOnly={readOnly} />
-          <CompactField label="Prof. Bonus"            value={data.proficiencyBonus != null ? String(data.proficiencyBonus) : ""}
-            onChange={v => onUpdate({ proficiencyBonus: v ? parseInt(v) || 0 : undefined })} readOnly={readOnly} />
-        </div>
-      </div>
+      {/* ── Stats (read-only summary — edit via the modal) ──────────────────── */}
+      <StatsSummary data={data} onUpdate={onUpdate} readOnly={readOnly} onEdit={() => setShowEditModal(true)} />
 
       {/* ── Action sections ──────────────────────────────────────────────── */}
-      {ACTION_SECTIONS.map(({ key, category, label }) => (
+      {ACTION_SECTIONS.filter(({ key }) => sectionEnabled[key]).map(({ key, category, label }) => (
         <ActionSection key={key} label={label} category={category}
           actions={actionsBySection[key]} readOnly={readOnly}
           onAdd={() => addAction(key)}
           onChange={(id, patch) => changeAction(key, id, patch)}
           onRemove={id => removeAction(key, id)}
-          toggle={key === "legendaryActions" ? {
-            enabled: legendaryEnabled,
-            onChange: v => onUpdate({ hasLegendaryActions: v }),
-          } : undefined}
           extra={key === "legendaryActions" ? (
             <LegendaryTracker
               used={data.legendaryActionsUsed ?? 0}
               max={data.legendaryActionsMax ?? 3}
               readOnly={readOnly}
-              onChangeMax={n => onUpdate({ legendaryActionsMax: n })}
               onChangeUsed={n => onUpdate({ legendaryActionsUsed: n })}
             />
           ) : undefined}
@@ -328,25 +519,26 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
       ))}
 
       {/* ── Spellcasting ─────────────────────────────────────────────────── */}
-      {(!readOnly || spellcastingEnabled) && (
-        <div className={`${CARD} p-4 flex flex-col gap-3`}>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Spellcasting</span>
-            {!readOnly && (
-              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
-                <input type="checkbox" checked={spellcastingEnabled}
-                  onChange={e => onUpdate({ hasSpellcasting: e.target.checked })} />
-                Has spellcasting
-              </label>
-            )}
-          </div>
+      {spellcastingEnabled && (
+        <div className={`${CARD} p-4 flex flex-col gap-3 animate-in fade-in duration-200`}>
+          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Spellcasting</span>
 
-          <PopTransition show={spellcastingEnabled} className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <TextTile label="Caster Level" value={data.spellcastingLevel} onChange={v => onUpdate({ spellcastingLevel: v })} readOnly={readOnly} placeholder="9th" />
-            <NumTile label="Spell Atk" value={data.spellAttackBonus} onChange={v => onUpdate({ spellAttackBonus: v })} readOnly={readOnly} />
-            <NumTile label="Spell Save DC" value={data.spellSaveDC} onChange={v => onUpdate({ spellSaveDC: v })} readOnly={readOnly} />
-            <TextTile label="Ability" value={data.spellcastingAbility} onChange={v => onUpdate({ spellcastingAbility: v })} readOnly={readOnly} placeholder="INT" />
+            {readOnly ? (
+              <>
+                {data.spellcastingLevel && <span className="text-xs text-white/60">{data.spellcastingLevel}</span>}
+                {data.spellcastingAbility && <span className="text-xs text-white/50">{data.spellcastingAbility}</span>}
+                {data.spellAttackBonus != null && <span className="text-xs text-white/50">Atk +{data.spellAttackBonus}</span>}
+                {data.spellSaveDC != null && <span className="text-xs text-white/50">DC {data.spellSaveDC}</span>}
+              </>
+            ) : (
+              <>
+                <TextTile label="Caster Level" value={data.spellcastingLevel} onChange={v => onUpdate({ spellcastingLevel: v })} placeholder="9th" />
+                <NumTile label="Spell Atk" value={data.spellAttackBonus} onChange={v => onUpdate({ spellAttackBonus: v })} />
+                <NumTile label="Spell Save DC" value={data.spellSaveDC} onChange={v => onUpdate({ spellSaveDC: v })} />
+                <TextTile label="Ability" value={data.spellcastingAbility} onChange={v => onUpdate({ spellcastingAbility: v })} placeholder="INT" />
+              </>
+            )}
             {isLucky && spellItems.length > 0 && (
               <button type="button" onClick={feelingLucky}
                 className="ml-auto text-xs font-extrabold px-3 py-1.5 rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 shrink-0"
@@ -383,7 +575,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
                             <NumInput value={slot.total} min={0} onChange={e => changeSlot(slot.id, { total: parseInt(e.target.value) || 0 })}
                               className="w-12 bg-white/10 rounded px-1 py-0.5 text-center text-white text-xs outline-none" />
                             <button type="button" onClick={() => removeSlot(slot.id)}
-                              className="text-white/20 hover:text-red-400 text-xs px-1" title="Remove slot row">✕</button>
+                              className="text-white/20 hover:text-red-400 text-xs px-1 transition-colors" title="Remove slot row">✕</button>
                           </>
                         )}
                       </div>
@@ -402,19 +594,18 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
             })}
           </div>
 
-            {!readOnly && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={addSpell}
-                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
-                  + Add Spell
-                </button>
-                <button type="button" onClick={addSlotLevel}
-                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
-                  + Add Slot Level
-                </button>
-              </div>
-            )}
-          </PopTransition>
+          {!readOnly && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={addSpell}
+                className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
+                + Add Spell
+              </button>
+              <button type="button" onClick={addSlotLevel}
+                className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
+                + Add Slot Level
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -444,6 +635,10 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
             </div>
           </div>
         </Modal>
+      )}
+
+      {showEditModal && !readOnly && (
+        <EditStatsModal data={data} onUpdate={onUpdate} onClose={() => setShowEditModal(false)} />
       )}
     </div>
   )
@@ -539,7 +734,7 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
         {readOnly && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 uppercase tracking-widest shrink-0">View Only</span>
         )}
-        {saving && <span className="text-xs text-white/40 shrink-0">saving…</span>}
+        {saving && <span className="text-xs text-white/40 shrink-0 animate-pulse">saving…</span>}
         <button type="button" onClick={onClose}
           className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/50 hover:text-white transition-colors shrink-0">
           ✕
@@ -549,17 +744,9 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col gap-4">
 
-        {/* Name/description + artwork */}
+        {/* Description + artwork — creature type/alignment now live in the stat block summary/modal */}
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <div className="flex gap-2">
-              <input value={data.creatureType ?? ""} readOnly={readOnly} placeholder="Medium beast"
-                onChange={e => update({ creatureType: e.target.value })}
-                className="flex-1 min-w-0 bg-white/5 rounded-lg px-2 py-1 text-xs text-white/70 outline-none placeholder:text-white/20" />
-              <input value={data.alignment ?? ""} readOnly={readOnly} placeholder="unaligned"
-                onChange={e => update({ alignment: e.target.value })}
-                className="w-32 shrink-0 bg-white/5 rounded-lg px-2 py-1 text-xs text-white/70 outline-none placeholder:text-white/20" />
-            </div>
             {readOnly ? (
               data.description
                 ? <Markdown text={data.description} tone="dark" />
@@ -567,7 +754,7 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
             ) : (
               <MarkdownTextarea value={data.description ?? ""} onChange={v => update({ description: v })}
                 placeholder="Description…" rows={6}
-                className="bg-white/5 rounded-lg px-3 py-2 outline-none text-sm text-white/70 placeholder:text-white/20 resize-none leading-relaxed"
+                className="bg-white/5 rounded-lg px-3 py-2 outline-none text-sm text-white/70 placeholder:text-white/20 resize-none leading-relaxed transition-colors focus:bg-white/10"
                 variant="light" />
             )}
           </div>
@@ -576,7 +763,7 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
           <div className="lg:w-72 shrink-0 flex flex-col gap-2">
             <div className="relative aspect-square rounded-xl overflow-hidden bg-white/5 ring-1 ring-white/10 flex items-center justify-center">
               {data.portrait ? (
-                <img src={data.portrait} alt="portrait" className="w-full h-full object-cover" style={{ filter: filterCss }} />
+                <img src={data.portrait} alt="portrait" className="w-full h-full object-cover transition-[filter] duration-200" style={{ filter: filterCss }} />
               ) : (
                 <span className="text-xs text-white/20">No artwork</span>
               )}
@@ -595,7 +782,7 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
               )}
 
               {showLighting && !readOnly && (
-                <div className="absolute inset-x-2 bottom-12 bg-black/80 backdrop-blur-sm rounded-lg p-3 flex flex-col gap-2">
+                <div className="absolute inset-x-2 bottom-12 bg-black/80 backdrop-blur-sm rounded-lg p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-1 duration-150">
                   {(["brightness", "contrast", "saturate"] as const).map(key => (
                     <label key={key} className="flex items-center gap-2 text-[10px] text-white/50">
                       <span className="w-16 uppercase tracking-wider shrink-0">{key}</span>
@@ -606,7 +793,7 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
                     </label>
                   ))}
                   <button type="button" onClick={() => update({ portraitFilter: { brightness: 100, contrast: 100, saturate: 100 } })}
-                    className="text-[10px] text-white/30 hover:text-white/60 self-end">Reset</button>
+                    className="text-[10px] text-white/30 hover:text-white/60 self-end transition-colors">Reset</button>
                 </div>
               )}
             </div>

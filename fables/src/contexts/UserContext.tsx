@@ -12,7 +12,20 @@ export async function getObjectsForUser(userId: string) {
 
   if (error) throw error
 
-  return data as userInfo.Objects[]
+  // Notes someone else owns but has invited this user to collaborate on
+  // (data.collaboratorIds contains our id). Requires an RLS policy allowing
+  // SELECT on `objects` when auth.uid() appears in data->collaboratorIds —
+  // without it this simply returns nothing, same as before.
+  const { data: shared, error: sharedError } = await supabase
+    .from("objects")
+    .select("*")
+    .eq("type", "note")
+    .neq("owner_id", userId)
+    .filter("data->collaboratorIds", "cs", JSON.stringify([userId]))
+
+  if (sharedError) console.error("Error loading shared notes:", sharedError)
+
+  return [...(data as userInfo.Objects[]), ...((shared ?? []) as userInfo.Objects[])]
 }
 
 type User = any
@@ -24,6 +37,7 @@ interface UserContextType {
   refreshObjects: () => Promise<void>
   createObject: (payload: { name: string; type: string; parent_id?: string | null; data?: Record<string, unknown> }) => Promise<userInfo.Objects>
   updateObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
+  updateSharedObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
   deleteObject: (id: string) => Promise<void>
   batchUpdateObjects: (changes: Array<userInfo.ObjectsUpdate & { id: string }>) => Promise<userInfo.Objects[]>
 }
@@ -131,6 +145,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     return updated
   }
 
+  // Like updateObject, but without the owner_id filter — needed so a note
+  // collaborator (not the owner) can save their edits. Only ever call this
+  // for fields gated behind an explicit collaborator check (see NoteView),
+  // and it only actually works once a matching RLS policy exists on
+  // `objects` allowing UPDATE when auth.uid() is listed in data.collaboratorIds.
+  async function updateSharedObject(id: string, updates: userInfo.ObjectsUpdate) {
+    const { data, error } = await supabase
+      .from("objects")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) throw new Error("No matching object found for update (missing RLS permission?)")
+
+    const updated = data as userInfo.Objects
+    setObjects((prev) => prev.map((item) => (item.id === id ? updated : item)))
+    return updated
+  }
+
   async function deleteObject(id: string) {
     if (!user?.id) throw new Error("No authenticated user")
 
@@ -187,6 +222,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         refreshObjects,
         createObject,
         updateObject,
+        updateSharedObject,
         deleteObject,
         batchUpdateObjects,
       }}
