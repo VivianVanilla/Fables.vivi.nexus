@@ -368,7 +368,8 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
     const isDropInside = activeDropTarget?.id === node.id && activeDropTarget.position === "inside"
     const nodeData: any = typeof node.data === "string" ? JSON.parse((node.data as string) ?? "{}") : (node.data ?? {})
     const bgImage: string | undefined = nodeData?.backgroundImage
-    const isSharedWithMe = node.type === "note" && node.owner_id !== user?.id && !!nodeData?.collaboratorIds?.includes(user?.id)
+    const myEmail = user?.email?.toLowerCase()
+    const isSharedWithMe = node.type === "note" && node.owner_id !== user?.id && !!myEmail && !!nodeData?.collaboratorEmails?.includes(myEmail)
 
     return (
       <div key={node.id} className="relative">

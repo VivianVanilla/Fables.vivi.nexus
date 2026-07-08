@@ -28,8 +28,8 @@ import { ShareMenu } from "./collab/ShareMenu"
 interface NoteData {
   content?: string
   ydocState?: string
-  collaboratorIds?: string[]
-  pendingInviteIds?: string[]
+  collaboratorEmails?: string[]
+  pendingInviteEmails?: string[]
 }
 
 interface NoteViewProps {
@@ -109,8 +109,8 @@ export function NoteView({ note, onClose }: NoteViewProps) {
   const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!initialData.content)
   const [saving,  setSaving]  = useState(false)
-  const [collaboratorIds, setCollaboratorIds]   = useState(initialData.collaboratorIds ?? [])
-  const [pendingInviteIds, setPendingInviteIds] = useState(initialData.pendingInviteIds ?? [])
+  const [collaboratorEmails, setCollaboratorEmails]     = useState(initialData.collaboratorEmails ?? [])
+  const [pendingInviteEmails, setPendingInviteEmails]   = useState(initialData.pendingInviteEmails ?? [])
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -151,7 +151,7 @@ export function NoteView({ note, onClose }: NoteViewProps) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       setSaving(true)
-      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds, pendingInviteIds }
+      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorEmails, pendingInviteEmails }
       try {
         if (isOwner) await updateObject(note.id, { data: patch as unknown as JSON })
         else await updateSharedObject(note.id, { data: patch as unknown as JSON })
@@ -165,23 +165,23 @@ export function NoteView({ note, onClose }: NoteViewProps) {
     scheduleSave()
   }
 
-  function persistSharing(nextCollaboratorIds: string[], nextPendingInviteIds: string[]) {
-    setCollaboratorIds(nextCollaboratorIds)
-    setPendingInviteIds(nextPendingInviteIds)
+  function persistSharing(nextCollaboratorEmails: string[], nextPendingInviteEmails: string[]) {
+    setCollaboratorEmails(nextCollaboratorEmails)
+    setPendingInviteEmails(nextPendingInviteEmails)
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: nextCollaboratorIds, pendingInviteIds: nextPendingInviteIds } as unknown as JSON })
+    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorEmails: nextCollaboratorEmails, pendingInviteEmails: nextPendingInviteEmails } as unknown as JSON })
       .catch(e => console.error(e))
   }
 
-  function handleInvite(userId: string) {
-    if (collaboratorIds.includes(userId) || pendingInviteIds.includes(userId)) return
-    persistSharing(collaboratorIds, [...pendingInviteIds, userId])
+  function handleInvite(email: string) {
+    if (collaboratorEmails.includes(email) || pendingInviteEmails.includes(email)) return
+    persistSharing(collaboratorEmails, [...pendingInviteEmails, email])
   }
-  function handleCancelInvite(userId: string) {
-    persistSharing(collaboratorIds, pendingInviteIds.filter(id => id !== userId))
+  function handleCancelInvite(email: string) {
+    persistSharing(collaboratorEmails, pendingInviteEmails.filter(e => e !== email))
   }
-  function handleRemoveCollaborator(userId: string) {
-    persistSharing(collaboratorIds.filter(id => id !== userId), pendingInviteIds)
+  function handleRemoveCollaborator(email: string) {
+    persistSharing(collaboratorEmails.filter(e => e !== email), pendingInviteEmails)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -197,20 +197,18 @@ export function NoteView({ note, onClose }: NoteViewProps) {
 
         <ShareMenu
           isOwner={isOwner}
-          collaboratorIds={collaboratorIds}
-          pendingInviteIds={pendingInviteIds}
+          collaboratorEmails={collaboratorEmails}
+          pendingInviteEmails={pendingInviteEmails}
           onInvite={handleInvite}
           onCancelInvite={handleCancelInvite}
           onRemoveCollaborator={handleRemoveCollaborator}
+          topSlot={
+            <button type="button" onClick={() => setEditing(v => !v)}
+              className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors">
+              {editing ? "👁 Preview" : "✎ Edit"}
+            </button>
+          }
         />
-
-        <button
-          type="button"
-          onClick={() => setEditing(v => !v)}
-          className={`text-xs px-2.5 py-1 rounded-full transition-colors ${editing ? "bg-white/20 text-white" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"}`}
-        >
-          {editing ? "Preview" : "✎ Edit"}
-        </button>
 
         <button
           type="button"
@@ -257,8 +255,8 @@ export function NoteView({ note, onClose }: NoteViewProps) {
         <p className="text-[10px] text-white/20">
           Supports: <span className="font-mono"># headers</span>  <span className="font-mono">**bold**</span>  <span className="font-mono">*italic*</span>  <span className="font-mono">`code`</span>  <span className="font-mono">- lists</span>
         </p>
-        {collaboratorIds.length > 0 && (
-          <p className="text-[10px] text-purple-300/70 shrink-0">Live-syncing with {collaboratorIds.length} collaborator{collaboratorIds.length === 1 ? "" : "s"}</p>
+        {collaboratorEmails.length > 0 && (
+          <p className="text-[10px] text-purple-300/70 shrink-0">Live-syncing with {collaboratorEmails.length} collaborator{collaboratorEmails.length === 1 ? "" : "s"}</p>
         )}
       </div>
     </div>

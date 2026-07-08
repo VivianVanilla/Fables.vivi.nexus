@@ -16,6 +16,7 @@ import { PopTransition } from "../ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 import { connectNoteChannel, applyTextDiff, encodeDocState, applyEncodedState } from "../../collab/noteSync"
 import { ShareMenu } from "../../collab/ShareMenu"
+import { usePopoverPosition, useClickOutside } from "../../collab/usePortalMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -301,43 +302,32 @@ function getDescendantNotes(objects: userInfo.Objects[], folderId: string): user
   return [...notes, ...subfolders.flatMap(f => getDescendantNotes(objects, f.id))]
 }
 
-// Dropdowns triggered from inside a note row need to escape that row's
-// `overflow-hidden` (used for its own rounded corners) or they render clipped
-// — invisible on an empty/short note. Position is computed from the trigger's
-// screen rect and the menu itself is portaled to <body> as `position: fixed`,
-// so it always pops out above everything regardless of any ancestor's overflow.
-function usePopoverPosition(open: boolean, triggerRef: React.RefObject<HTMLElement | null>) {
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
-  useEffect(() => {
-    if (!open || !triggerRef.current) { setPos(null); return }
-    const rect = triggerRef.current.getBoundingClientRect()
-    setPos({ top: rect.bottom + 4, right: Math.max(4, window.innerWidth - rect.right) })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-  return pos
-}
-
 // Unlinking used to be a bare "✕" — easy to hit by accident while scanning the
 // list. It now lives behind a small edit menu so unlinking is a deliberate
-// two-click action instead of a hair-trigger one.
+// two-click action instead of a hair-trigger one. Dropdowns triggered from
+// inside a note row need to escape that row's `overflow-hidden` (used for its
+// own rounded corners) or they render clipped — position is computed from the
+// trigger's screen rect and the menu is portaled to <body> as `position: fixed`
+// (see ../../collab/usePortalMenu), closing on click-outside rather than blur.
 function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: string }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const pos = usePopoverPosition(open, triggerRef)
+  useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
 
   return (
     <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
       <button type="button" ref={triggerRef}
         onClick={() => setOpen(v => !v)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         title="Edit link"
         className="text-white/30 hover:text-white text-xs size-5 flex items-center justify-center rounded hover:bg-white/10 transition-colors">
         ✎
       </button>
       {open && pos && createPortal(
-        <div style={{ position: "fixed", top: pos.top, right: pos.right }}
+        <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
           className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-36 animate-in fade-in zoom-in-95 duration-150">
-          <button type="button" onMouseDown={e => { e.preventDefault(); setOpen(false); onUnlink() }}
+          <button type="button" onClick={() => { setOpen(false); onUnlink() }}
             className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors whitespace-nowrap">
             Unlink {itemLabel}
           </button>
@@ -362,13 +352,13 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
   onAutoEditConsumed?: () => void
 }) {
   const { user, updateObject, updateSharedObject } = useUserContext()
-  const initialData = safeParseJson(note.data) as { content?: string; ydocState?: string; collaboratorIds?: string[]; pendingInviteIds?: string[] }
+  const initialData = safeParseJson(note.data) as { content?: string; ydocState?: string; collaboratorEmails?: string[]; pendingInviteEmails?: string[] }
   const isOwner = note.owner_id === user?.id
 
   const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!!autoEdit)
-  const [collaboratorIds, setCollaboratorIds]   = useState(initialData.collaboratorIds ?? [])
-  const [pendingInviteIds, setPendingInviteIds] = useState(initialData.pendingInviteIds ?? [])
+  const [collaboratorEmails, setCollaboratorEmails]   = useState(initialData.collaboratorEmails ?? [])
+  const [pendingInviteEmails, setPendingInviteEmails] = useState(initialData.pendingInviteEmails ?? [])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const ydoc = useMemo(() => {
@@ -399,7 +389,7 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
   function scheduleSave() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
-      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds, pendingInviteIds }
+      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorEmails, pendingInviteEmails }
       try {
         if (isOwner) await updateObject(note.id, { data: patch as unknown as JSON })
         else await updateSharedObject(note.id, { data: patch as unknown as JSON })
@@ -412,23 +402,23 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
     scheduleSave()
   }
 
-  function persistSharing(nextCollaboratorIds: string[], nextPendingInviteIds: string[]) {
-    setCollaboratorIds(nextCollaboratorIds)
-    setPendingInviteIds(nextPendingInviteIds)
+  function persistSharing(nextCollaboratorEmails: string[], nextPendingInviteEmails: string[]) {
+    setCollaboratorEmails(nextCollaboratorEmails)
+    setPendingInviteEmails(nextPendingInviteEmails)
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorIds: nextCollaboratorIds, pendingInviteIds: nextPendingInviteIds } as unknown as JSON })
+    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorEmails: nextCollaboratorEmails, pendingInviteEmails: nextPendingInviteEmails } as unknown as JSON })
       .catch(e => console.error(e))
   }
 
-  function handleInvite(userId: string) {
-    if (collaboratorIds.includes(userId) || pendingInviteIds.includes(userId)) return
-    persistSharing(collaboratorIds, [...pendingInviteIds, userId])
+  function handleInvite(email: string) {
+    if (collaboratorEmails.includes(email) || pendingInviteEmails.includes(email)) return
+    persistSharing(collaboratorEmails, [...pendingInviteEmails, email])
   }
-  function handleCancelInvite(userId: string) {
-    persistSharing(collaboratorIds, pendingInviteIds.filter(id => id !== userId))
+  function handleCancelInvite(email: string) {
+    persistSharing(collaboratorEmails, pendingInviteEmails.filter(e => e !== email))
   }
-  function handleRemoveCollaborator(userId: string) {
-    persistSharing(collaboratorIds.filter(id => id !== userId), pendingInviteIds)
+  function handleRemoveCollaborator(email: string) {
+    persistSharing(collaboratorEmails.filter(e => e !== email), pendingInviteEmails)
   }
 
   function handleEditClick() {
@@ -443,8 +433,8 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
         <span className="text-xs text-white/70 flex-1 min-w-0 truncate">{note.name}</span>
         <ShareMenu
           isOwner={isOwner}
-          collaboratorIds={collaboratorIds}
-          pendingInviteIds={pendingInviteIds}
+          collaboratorEmails={collaboratorEmails}
+          pendingInviteEmails={pendingInviteEmails}
           onInvite={handleInvite}
           onCancelInvite={handleCancelInvite}
           onRemoveCollaborator={handleRemoveCollaborator}
@@ -476,9 +466,9 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
           )}
         </div>
       )}
-      {collaboratorIds.length > 0 && (
+      {collaboratorEmails.length > 0 && (
         <div className="px-3 pb-1.5 -mt-0.5">
-          <span className="text-[9px] text-purple-300/60">Live-syncing with {collaboratorIds.length} collaborator{collaboratorIds.length === 1 ? "" : "s"}</span>
+          <span className="text-[9px] text-purple-300/60">Live-syncing with {collaboratorEmails.length} collaborator{collaboratorEmails.length === 1 ? "" : "s"}</span>
         </div>
       )}
     </div>
@@ -606,20 +596,21 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, readO
 // Notes someone invited you to collaborate on that aren't linked to THIS
 // character yet — without this, being added as a collaborator was invisible;
 // the note just silently started live-syncing with nothing showing it existed.
-function SharedNotesSection({ objects, userId, linkedRefs, onLink, card }: {
+function SharedNotesSection({ objects, linkedRefs, onLink, card }: {
   objects: userInfo.Objects[]
-  userId?: string | null
   linkedRefs: LinkedNoteRef[]
   onLink: (id: string) => void
   card: string
 }) {
+  const { user } = useUserContext()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const sharedNotes = userId
+  const myEmail = user?.email?.toLowerCase()
+  const sharedNotes = myEmail
     ? objects.filter(o =>
         o.type === "note" &&
-        o.owner_id !== userId &&
-        (safeParseJson(o.data) as { collaboratorIds?: string[] }).collaboratorIds?.includes(userId) &&
+        o.owner_id !== user?.id &&
+        (safeParseJson(o.data) as { collaboratorEmails?: string[] }).collaboratorEmails?.includes(myEmail) &&
         !linkedRefs.some(r => r.id === o.id)
       )
     : []
@@ -748,7 +739,6 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
 
           <SharedNotesSection
             objects={objects}
-            userId={userId}
             linkedRefs={data.linkedNoteRefs ?? []}
             onLink={id => update({ linkedNoteRefs: [...(data.linkedNoteRefs ?? []), { id, type: "note" }] })}
             card={card}

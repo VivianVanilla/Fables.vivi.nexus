@@ -3,9 +3,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "../supabase"
 import type { userInfo } from "@/types/userInfo"
-import { ensureProfile } from "@/components/collab/profiles"
 
-export async function getObjectsForUser(userId: string) {
+export async function getObjectsForUser(userId: string, email?: string | null) {
   const { data, error } = await supabase
     .from("objects")
     .select("*")
@@ -13,20 +12,25 @@ export async function getObjectsForUser(userId: string) {
 
   if (error) throw error
 
-  // Notes someone else owns but has invited this user to collaborate on
-  // (data.collaboratorIds contains our id). Requires an RLS policy allowing
-  // SELECT on `objects` when auth.uid() appears in data->collaboratorIds —
-  // without it this simply returns nothing, same as before.
-  const { data: shared, error: sharedError } = await supabase
-    .from("objects")
-    .select("*")
-    .eq("type", "note")
-    .neq("owner_id", userId)
-    .filter("data->collaboratorIds", "cs", JSON.stringify([userId]))
+  let shared: userInfo.Objects[] = []
+  if (email) {
+    // Notes someone else owns but has invited this user to collaborate on
+    // (data.collaboratorEmails contains our email — identity here is by email,
+    // not a separate profiles table). Requires an RLS policy allowing SELECT
+    // on `objects` when the caller's email appears in data->collaboratorEmails
+    // — without it this simply returns nothing, same as before.
+    const { data: sharedRows, error: sharedError } = await supabase
+      .from("objects")
+      .select("*")
+      .eq("type", "note")
+      .neq("owner_id", userId)
+      .filter("data->collaboratorEmails", "cs", JSON.stringify([email.toLowerCase()]))
 
-  if (sharedError) console.error("Error loading shared notes:", sharedError)
+    if (sharedError) console.error("Error loading shared notes:", sharedError)
+    else shared = (sharedRows ?? []) as userInfo.Objects[]
+  }
 
-  return [...(data as userInfo.Objects[]), ...((shared ?? []) as userInfo.Objects[])]
+  return [...(data as userInfo.Objects[]), ...shared]
 }
 
 type User = any
@@ -58,9 +62,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user)
 
       if (data.user?.id) {
-        ensureProfile(data.user.id, data.user.email).catch(err => console.error("ensureProfile failed:", err))
         try {
-          const objs = await getObjectsForUser(data.user.id)
+          const objs = await getObjectsForUser(data.user.id, data.user.email)
           setObjects(objs)
         } catch (err) {
           console.error("Error calling getObjectsForUser:", err)
@@ -81,7 +84,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const objs = await getObjectsForUser(user.id)
+      const objs = await getObjectsForUser(user.id, user.email)
       setObjects(objs)
     } catch (err) {
       console.error("Error refreshing objects:", err)

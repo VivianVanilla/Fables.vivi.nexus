@@ -2,11 +2,12 @@
 // PendingInvitesBell.tsx — "someone invited you to a note" notification
 //
 // Lives in the sidebar header (next to the "+ Create" button). Polls for
-// objects of type "note" where our user id is listed in data.pendingInviteIds.
-// Accept moves you from pendingInviteIds into collaboratorIds (and the note
-// shows up under "Shared With You" on any character, and in your own sidebar
-// once the RLS policy is in place). Deny just drops the pending entry — there's
-// no persistent "denied" record, so the owner has to invite you again to retry.
+// objects of type "note" where our own email is listed in data.pendingInviteEmails.
+// Accept moves you from pendingInviteEmails into collaboratorEmails (and the
+// note shows up under "Shared With You" on any character, and in your own
+// sidebar once the RLS policy is in place). Deny just drops the pending entry
+// — there's no persistent "denied" record, so the owner has to invite you
+// again to retry.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
@@ -15,7 +16,6 @@ import { Bell } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { supabase } from "../../../src/supabase"
 import { safeParseJson } from "../character-utils"
-import { getUsernames } from "./profiles"
 
 const MENU_WIDTH = 288  // matches the dropdown's w-72
 const EDGE_MARGIN = 8
@@ -23,15 +23,13 @@ const EDGE_MARGIN = 8
 interface NoteData {
   content?: string
   ydocState?: string
-  collaboratorIds?: string[]
-  pendingInviteIds?: string[]
+  collaboratorEmails?: string[]
+  pendingInviteEmails?: string[]
 }
 
 interface InviteRow {
   id: string
   name: string
-  ownerId: string
-  ownerName: string
 }
 
 const POLL_MS = 20000
@@ -43,25 +41,25 @@ export function PendingInvitesBell() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
+  const myEmail = user?.email?.toLowerCase()
+
   async function load() {
-    if (!user?.id) return
+    if (!myEmail) return
     const { data, error } = await supabase
       .from("objects").select("id, name, owner_id")
       .eq("type", "note")
-      .neq("owner_id", user.id)
-      .filter("data->pendingInviteIds", "cs", JSON.stringify([user.id]))
+      .neq("owner_id", user?.id ?? "")
+      .filter("data->pendingInviteEmails", "cs", JSON.stringify([myEmail]))
     if (error) { console.error("pending invites fetch failed (RLS not set up yet?)", error); return }
-    const rows = (data ?? []) as { id: string; name: string; owner_id: string }[]
-    const names = await getUsernames(Array.from(new Set(rows.map(r => r.owner_id))))
-    setInvites(rows.map(r => ({ id: r.id, name: r.name, ownerId: r.owner_id, ownerName: names[r.owner_id] ?? "Someone" })))
+    setInvites(((data ?? []) as { id: string; name: string }[]).map(r => ({ id: r.id, name: r.name })))
   }
 
-  useEffect(() => { load() }, [user?.id])
+  useEffect(() => { load() }, [myEmail])
   useEffect(() => {
     const t = setInterval(load, POLL_MS)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [myEmail])
 
   function handleToggle() {
     if (!open && triggerRef.current) {
@@ -81,12 +79,12 @@ export function PendingInvitesBell() {
 
   async function respond(noteId: string, accept: boolean) {
     const { data: row, error } = await supabase.from("objects").select("data").eq("id", noteId).maybeSingle()
-    if (error || !row || !user?.id) return
+    if (error || !row || !myEmail) return
     const noteData = safeParseJson(row.data) as NoteData
-    const pending = (noteData.pendingInviteIds ?? []).filter(id => id !== user.id)
-    const collaborators = accept ? [...(noteData.collaboratorIds ?? []), user.id] : (noteData.collaboratorIds ?? [])
+    const pending = (noteData.pendingInviteEmails ?? []).filter(e => e !== myEmail)
+    const collaborators = accept ? [...(noteData.collaboratorEmails ?? []), myEmail] : (noteData.collaboratorEmails ?? [])
     try {
-      await updateSharedObject(noteId, { data: { ...noteData, pendingInviteIds: pending, collaboratorIds: collaborators } as unknown as JSON })
+      await updateSharedObject(noteId, { data: { ...noteData, pendingInviteEmails: pending, collaboratorEmails: collaborators } as unknown as JSON })
       if (accept) await refreshObjects()
     } catch (e) { console.error(e) }
     setInvites(prev => prev.filter(i => i.id !== noteId))
@@ -115,7 +113,7 @@ export function PendingInvitesBell() {
               {invites.map(inv => (
                 <div key={inv.id} className="px-3 py-2 border-t border-white/5 flex flex-col gap-1.5">
                   <p className="text-xs text-white/80">
-                    <span className="text-purple-300">@{inv.ownerName}</span> invited you to collaborate on <span className="font-semibold">{inv.name}</span>
+                    You've been invited to collaborate on <span className="font-semibold">{inv.name}</span>
                   </p>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => respond(inv.id, true)}

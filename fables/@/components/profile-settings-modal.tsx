@@ -10,11 +10,10 @@ import {
 } from "@/components/ui/dialog"
 import { supabase } from "../../src/supabase"
 import { useHomebrewFilter, setHomebrewFilterValue } from "../../src/hooks/useHomebrewFilter"
-import { ensureProfile, updateUsername } from "./collab/profiles"
-import { DndSudokuModal } from "./sudoku/DndSudokuModal"
+import { SpelldleModal } from "./spelldle/SpelldleModal"
 
 const BUCKET = "fableimages"
-const SUDOKU_EMAILS = ["spaghettiloverjake@gmail.com", "vivian.bonilla@outlook.com"]
+const SPELLDLE_EMAILS = ["spaghettiloverjake@gmail.com", "vivian.bonilla@outlook.com", "liamlillico06@gmail.com"]
 
 interface Props {
   open: boolean
@@ -33,38 +32,16 @@ export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const hideHomebrew = useHomebrewFilter()
 
-  const [username, setUsername] = React.useState("")
-  const [usernameSaved, setUsernameSaved] = React.useState("")
-  const [usernameSaving, setUsernameSaving] = React.useState(false)
-  const [usernameError, setUsernameError] = React.useState<string | null>(null)
-
-  const [showSudoku, setShowSudoku] = React.useState(false)
+  const [showSpelldle, setShowSpelldle] = React.useState(false)
 
   const userId = user?.id
-  const canPlaySudoku = SUDOKU_EMAILS.includes(user?.email)
+  const canPlaySpelldle = SPELLDLE_EMAILS.includes(user?.email)
 
   const fullName =
     user?.user_metadata?.full_name ||
     user?.user_metadata?.name ||
     user?.email ||
     "User"
-
-  React.useEffect(() => {
-    if (!open || !userId) return
-    ensureProfile(userId, user?.email).then(p => {
-      if (p) { setUsername(p.username); setUsernameSaved(p.username) }
-    })
-  }, [open, userId])
-
-  async function handleSaveUsername() {
-    if (!userId || username === usernameSaved) return
-    setUsernameSaving(true)
-    setUsernameError(null)
-    const { error } = await updateUsername(userId, username)
-    setUsernameSaving(false)
-    if (error) { setUsernameError(error); return }
-    setUsernameSaved(username)
-  }
 
   const avatarUrl = user?.user_metadata?.avatar_url
 
@@ -153,32 +130,6 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
 
         <div className="border-t border-border" />
 
-        {/* Username — how other players find & invite you to collaborate on notes */}
-        <div className="space-y-2">
-          <span className="text-sm font-medium">Username</span>
-          <p className="text-xs text-muted-foreground -mt-1">Other players invite you to collaborate on notes by searching this.</p>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground shrink-0">@</span>
-            <input
-              value={username}
-              onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
-              placeholder="username"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
-            />
-            <button
-              type="button"
-              onClick={handleSaveUsername}
-              disabled={usernameSaving || !username.trim() || username === usernameSaved}
-              className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40"
-            >
-              {usernameSaving ? "Saving…" : "Save"}
-            </button>
-          </div>
-          {usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
-        </div>
-
-        <div className="border-t border-border" />
-
         {/* Background images */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -223,17 +174,17 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
           )}
         </div>
 
-        {canPlaySudoku && (
+        {canPlaySpelldle && (
           <>
             <div className="border-t border-border" />
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium">🧩 D&D Sudoku</div>
-                <div className="text-xs text-muted-foreground mt-0.5">A new puzzle every day, made of feats instead of numbers.</div>
+                <div className="text-sm font-medium">✨ Spelldle</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Wordle, but the answer is a new D&D spell every day.</div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowSudoku(true)}
+                onClick={() => setShowSpelldle(true)}
                 className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               >
                 Play
@@ -298,8 +249,8 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
       </DialogContent>
     </Dialog>
 
-    {showSudoku && canPlaySudoku && (
-      <DndSudokuModal onClose={() => setShowSudoku(false)} />
+    {showSpelldle && canPlaySpelldle && (
+      <SpelldleModal onClose={() => setShowSpelldle(false)} />
     )}
     </>
   )
