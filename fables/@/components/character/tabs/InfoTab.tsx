@@ -661,6 +661,53 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, readO
   )
 }
 
+// Notes someone invited you to collaborate on that aren't linked to THIS
+// character yet — without this, being added as a collaborator was invisible;
+// the note just silently started live-syncing with nothing showing it existed.
+function SharedNotesSection({ objects, userId, linkedRefs, onLink, card }: {
+  objects: userInfo.Objects[]
+  userId?: string | null
+  linkedRefs: LinkedNoteRef[]
+  onLink: (id: string) => void
+  card: string
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const sharedNotes = userId
+    ? objects.filter(o =>
+        o.type === "note" &&
+        o.owner_id !== userId &&
+        (safeParseJson(o.data) as { collaboratorIds?: string[] }).collaboratorIds?.includes(userId) &&
+        !linkedRefs.some(r => r.id === o.id)
+      )
+    : []
+
+  if (sharedNotes.length === 0) return null
+
+  return (
+    <div className={`${card} p-3 flex flex-col gap-2 animate-in fade-in duration-200`}>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-purple-300 font-semibold">👥 Shared With You</span>
+        <span className="text-[10px] text-white/30">{sharedNotes.length}</span>
+      </div>
+      <p className="text-[10px] text-white/30 -mt-1">Someone invited you to collaborate on these. Link one to keep it on this character sheet.</p>
+      <div className="flex flex-col gap-1.5">
+        {sharedNotes.map(note => (
+          <div key={note.id} className="flex flex-col gap-1">
+            <InlineNote note={note} readOnly={false}
+              expanded={expandedId === note.id}
+              onToggle={() => setExpandedId(expandedId === note.id ? null : note.id)} />
+            <button type="button" onClick={() => onLink(note.id)}
+              className="self-end text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors">
+              + Link to this character
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Main InfoTab component ────────────────────────────────────────────────────
 
 const SUB_TABS: [InfoSubTab, string][] = [
@@ -756,6 +803,14 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
               ))}
             </div>
           )}
+
+          <SharedNotesSection
+            objects={objects}
+            userId={userId}
+            linkedRefs={data.linkedNoteRefs ?? []}
+            onLink={id => update({ linkedNoteRefs: [...(data.linkedNoteRefs ?? []), { id, type: "note" }] })}
+            card={card}
+          />
 
           <LinkedNotesSection
             objects={objects}
