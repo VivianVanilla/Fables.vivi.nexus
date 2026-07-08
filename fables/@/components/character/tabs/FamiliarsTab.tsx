@@ -11,6 +11,7 @@ import type { FamiliarRef, FavoriteRef } from "../../character-types"
 import type { MonsterData } from "../../monster-types"
 import { FamiliarMonsterView } from "../../monster"
 import { TracingSlider } from "../../ui/tracing-slider"
+import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "../../character-utils"
 
 interface FamiliarsTabProps {
@@ -129,11 +130,7 @@ export function FamiliarsTab({
 
                 {/* Actions */}
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button type="button" onClick={() => onToggleFavorite(fam.id, label)}
-                    title="Add to favorites"
-                    className={`size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-base transition-colors ${isFavorited(fam.id) ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}>
-                    ★
-                  </button>
+                  <FavoriteStar isFavorite={isFavorited(fam.id)} onToggle={() => onToggleFavorite(fam.id, label)} />
                   {monster && (
                     <button type="button" onClick={() => onPopOut(fam.id)}
                       title={poppedOut ? "Already popped out" : "Pop out"}

@@ -32,6 +32,7 @@ interface InfoTabProps {
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
   onAddItemToEquipment: (feature: Feature) => void
+  equipmentLinkedIds: Set<string>
   subTab: InfoSubTab
   onSubTabChange: (tab: InfoSubTab) => void
 }
@@ -55,13 +56,14 @@ interface FeatureListProps {
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
   onAddToEquipment?: (feature: Feature) => void
+  equipmentLinkedIds?: Set<string>
   showAttunement?: boolean
   showItemExtras?: boolean
 }
 
 const MAX_ATTUNEMENTS = 3
 
-function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, showAttunement, showItemExtras }: FeatureListProps) {
+function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
 
   return (
@@ -101,6 +103,7 @@ function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onL
             isFavorite={favorites.some(fav => fav.refId === f.id)}
             onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
             onAddToEquipment={onAddToEquipment}
+            inEquipment={equipmentLinkedIds?.has(f.id)}
             showAttunement={showAttunement}
             showItemExtras={showItemExtras}
             onChange={patch => onChange(f.id, patch)}
@@ -490,7 +493,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",      "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, updateObject, favorites, onToggleFavorite, onAddItemToEquipment, subTab, onSubTabChange }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, updateObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange }: InfoTabProps) {
 
   const pb = profBonus(data.level ?? 1)
 
@@ -647,6 +650,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             suggestionSource="item" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             onAddToEquipment={onAddItemToEquipment}
+            equipmentLinkedIds={equipmentLinkedIds}
             showAttunement
             showItemExtras
           />

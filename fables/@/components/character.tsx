@@ -32,6 +32,7 @@ import { SkillsCard }            from "./character/panels/SkillsCard"
 import { SpellsEquipPanel }      from "./character/panels/SpellsEquipPanel"
 import { FavoritesPanel }        from "./character/panels/FavoritesPanel"
 import { FloatingPanel }         from "./character/ui/FloatingPanel"
+import { FavoriteStar }          from "./character/ui/FavoriteStar"
 
 // Modals
 import { MaxStatsModal }         from "./character/modals/MaxStatsModal"
@@ -248,10 +249,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     .filter(i => i.equipped && i.itemMeta?.acBonus)
     .reduce((sum, i) => sum + (i.itemMeta!.acBonus ?? 0), 0)
 
+  // Items sent over to the Martial list keep a `sourceFeatureId` link — used both to render
+  // "+ Equipment" as a toggle (on/off, not a repeatable spawn) and to avoid double-counting
+  // their weight below (it's already counted via the source Feature in data.items).
+  const equipmentLinkedIds = new Set(
+    (data.equipmentItems ?? []).map(i => i.sourceFeatureId).filter((id): id is string => !!id)
+  )
+
   // Total carried weight — items (× amount for stacked generics) + equipment (weapons/armor/gear)
   const totalWeight =
     (data.items ?? []).reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0) +
-    (data.equipmentItems ?? []).reduce((sum, i) => sum + (i.weight ?? 0), 0)
+    (data.equipmentItems ?? []).reduce((sum, i) => sum + (i.sourceFeatureId ? 0 : (i.weight ?? 0)), 0)
 
   // Total carried value (gp) — Items tab entries only, × amount for stacked generics
   const totalValue = (data.items ?? []).reduce((sum, i) => sum + (i.value ?? 0) * (i.amount ?? 1), 0)
@@ -265,31 +273,87 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
   function addEquip()                                          { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
-  function changeEquip(id: string, p: Partial<EquipmentItem>) { update({ equipmentItems: equipItems.map(i => i.id === id ? { ...i, ...p } : i) }) }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
 
-  // Pushes an Items-tab entry into the Equipment (martial) list, carrying over
-  // weapon stats — either from the explicit Armor/Weapon/Misc selector on the
-  // Items-tab entry (equipKind/itemMeta), or from a documentation suggestion.
-  function addItemToEquipment(feature: Feature) {
+  // ── Armor & Equipment ↔ Martial backlink ─────────────────────────────────
+  //
+  // Once toggled on (via addItemToEquipment), a Martial entry keeps a
+  // `sourceFeatureId` pointing back at its Items-tab Feature. These two helpers
+  // convert between the two shapes' shared fields so edits made on either side
+  // are mirrored onto the other — see changeEquip / patchFeature below, which
+  // each perform one `update()` touching both slices, so there's no ping-pong.
+
+  function equipmentFieldsFromFeature(feature: Feature): Partial<EquipmentItem> {
     const meta = feature.itemMeta
     const kind = feature.equipKind ?? (
       meta?.itemType?.toLowerCase().includes("weapon") ? "weapon" :
       meta?.itemType?.toLowerCase().includes("armor")  ? "armor"  : "misc"
     )
+    return {
+      name: feature.name,
+      notes: feature.description ?? "",
+      weight: feature.weight,
+      type: kind === "weapon" ? (meta?.weaponKind ?? "melee") : kind,
+      damage: meta?.damage,
+      damageType: meta?.damageType,
+      properties: meta?.properties,
+      meleeRange: meta?.meleeRange,
+      throwRange: meta?.throwRange,
+      range: meta?.range,
+    }
+  }
+
+  function featureFieldsFromEquipment(equip: EquipmentItem, existingFeature: Feature): Partial<Feature> {
+    const kind: NonNullable<Feature["equipKind"]> =
+      equip.type === "melee" || equip.type === "ranged" ? "weapon" :
+      equip.type === "armor" ? "armor" : "misc"
+    return {
+      name: equip.name,
+      description: equip.notes ?? "",
+      weight: equip.weight,
+      equipKind: kind,
+      itemMeta: {
+        ...existingFeature.itemMeta,
+        damage: equip.damage,
+        damageType: equip.damageType,
+        properties: equip.properties,
+        meleeRange: equip.meleeRange,
+        throwRange: equip.throwRange,
+        range: equip.range,
+        weaponKind: kind === "weapon" ? (equip.type as "melee" | "ranged") : existingFeature.itemMeta?.weaponKind,
+      },
+    }
+  }
+
+  function changeEquip(id: string, p: Partial<EquipmentItem>) {
+    const target = equipItems.find(i => i.id === id)
+    const nextEquip = target ? { ...target, ...p } : undefined
+    const patch: Partial<CharacterData> = {
+      equipmentItems: equipItems.map(i => i.id === id ? { ...i, ...p } : i),
+    }
+    const sourceFeature = nextEquip?.sourceFeatureId ? (data.items ?? []).find(f => f.id === nextEquip.sourceFeatureId) : undefined
+    if (nextEquip && sourceFeature) {
+      patch.items = (data.items ?? []).map(f =>
+        f.id === sourceFeature.id ? { ...f, ...featureFieldsFromEquipment(nextEquip, sourceFeature) } : f
+      )
+    }
+    update(patch)
+  }
+
+  // Toggles an Items-tab entry into/out of the Equipment (martial) list — clicking
+  // again removes the linked copy rather than spawning a duplicate.
+  function addItemToEquipment(feature: Feature) {
+    const existing = equipItems.find(i => i.sourceFeatureId === feature.id)
+    if (existing) {
+      update({ equipmentItems: equipItems.filter(i => i.id !== existing.id) })
+      return
+    }
     update({
       equipmentItems: [...equipItems, {
         id: nanoid(),
+        sourceFeatureId: feature.id,
+        ...equipmentFieldsFromFeature(feature),
         name: feature.name,
-        notes: feature.description ?? "",
-        type: kind === "weapon" ? (meta?.weaponKind ?? "melee") : kind,
-        damage: meta?.damage,
-        damageType: meta?.damageType,
-        properties: meta?.properties,
-        meleeRange: meta?.meleeRange,
-        throwRange: meta?.throwRange,
-        range: meta?.range,
-        weight: feature.weight,
       }],
     })
   }
@@ -438,12 +502,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     const KEYS = ["racialTraits", "feats", "classFeatures", "items"] as const
     const combinedPatch: Partial<CharacterData> = {}
     let linkedIds: string[] = []
+    let patchedFeature: Feature | undefined
 
     for (const key of KEYS) {
       const list = data[key]
       const target = list?.find(f => f.id === id)
       if (!target) continue
-      combinedPatch[key] = list!.map(f => f.id === id ? { ...f, ...patch } : f)
+      patchedFeature = { ...target, ...patch }
+      combinedPatch[key] = list!.map(f => f.id === id ? patchedFeature! : f)
       linkedIds = target.linkedTo ?? []
       break
     }
@@ -454,6 +520,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         const list = (combinedPatch[key] as Feature[] | undefined) ?? data[key]
         if (!list?.some(f => linkedIds.includes(f.id))) continue
         combinedPatch[key] = list.map(f => linkedIds.includes(f.id) ? { ...f, usesUsed: patch.usesUsed } : f)
+      }
+    }
+
+    // Backlink: mirror shared fields onto the linked Martial entry, if any
+    if (patchedFeature) {
+      const linkedEquip = equipItems.find(i => i.sourceFeatureId === id)
+      if (linkedEquip) {
+        combinedPatch.equipmentItems = equipItems.map(i =>
+          i.id === linkedEquip.id ? { ...i, ...equipmentFieldsFromFeature(patchedFeature!) } : i
+        )
       }
     }
 
@@ -485,6 +561,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     }
     if (data.favorites?.some(f => idsToRemove.has(f.refId))) {
       patch.favorites = (data.favorites ?? []).filter(f => !idsToRemove.has(f.refId))
+    }
+    // Drop any Martial entry linked to a removed feature — otherwise it'd be
+    // left pointing at a sourceFeatureId that no longer exists.
+    if (equipItems.some(i => i.sourceFeatureId && idsToRemove.has(i.sourceFeatureId))) {
+      patch.equipmentItems = equipItems.filter(i => !(i.sourceFeatureId && idsToRemove.has(i.sourceFeatureId)))
     }
     // Remove these ids from any other feature's linkedTo
     for (const key of KEYS) {
@@ -800,10 +881,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 className="flex items-center gap-2 px-3 py-2.5 hover:bg-black/30 border-b border-white/5 last:border-0 cursor-pointer">
                 <span className="text-xs text-white/40 uppercase tracking-wider w-16 shrink-0 truncate">{r.category}</span>
                 <span className="text-sm text-white flex-1 min-w-0 truncate">{r.label}</span>
-                <button type="button"
-                  onClick={e => { e.stopPropagation(); addFavorite({ refId: r.id, refType: r.refType, label: r.label }) }}
-                  className={`text-base shrink-0 transition-colors ${favorites.find(f => f.refId === r.id) ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}
-                  title="Add to favorites">★</button>
+                <FavoriteStar
+                  isFavorite={favorites.some(f => f.refId === r.id)}
+                  onToggle={() => favorites.some(f => f.refId === r.id) ? removeFavorite(r.id) : addFavorite({ refId: r.id, refType: r.refType, label: r.label })}
+                  label="Favorite"
+                />
               </div>
             ))}
           </div>
@@ -1129,7 +1211,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             userId={user?.id ?? null} objects={objects} createObject={createObject} updateObject={updateObject}
             subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
-            favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment} />
+            favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment}
+            equipmentLinkedIds={equipmentLinkedIds} />
         )}
         {activeTab === "familiars" && (
           <FamiliarsTab

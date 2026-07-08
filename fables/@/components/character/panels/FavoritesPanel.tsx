@@ -15,6 +15,7 @@ import type { MonsterData } from "../../monster-types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { FeatureEntry } from "../entries/FeatureEntry"
+import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "../../character-utils"
 import type { Theme } from "../../character-themes"
 
@@ -218,12 +219,7 @@ export function FavoritesPanel({
                 <div className="flex-1 min-w-0">{entry}</div>
 
                 {!readOnly && (
-                  <button type="button"
-                    onClick={() => onRemove(fav.refId)}
-                    title="Remove from favorites"
-                    className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-yellow-400 hover:text-yellow-200 text-base shrink-0 transition-colors">
-                    ★
-                  </button>
+                  <FavoriteStar isFavorite onToggle={() => onRemove(fav.refId)} />
                 )}
               </div>
             )

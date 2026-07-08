@@ -14,6 +14,7 @@ import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
 import { PopTransition } from "../ui/PopTransition"
+import { FavoriteStar } from "../ui/FavoriteStar"
 import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 import { supabase } from "../../../../src/supabase"
 
@@ -139,7 +140,8 @@ interface FeatureEntryProps {
   userId?:          string | null
   isFavorite?:       boolean
   onToggleFavorite?: () => void        // omit to hide the star (e.g. inside FavoritesPanel, which has its own)
-  onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab
+  onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab — toggles into/out of Martial
+  inEquipment?:      boolean            // whether this feature already has a linked copy in the Martial list
   showAttunement?:   boolean            // only true for the Items tab — shows an "Attuned" toggle
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
 }
@@ -150,7 +152,7 @@ interface FeatureEntryProps {
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddToEquipment, showAttunement, showItemExtras,
+  isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(false)
@@ -648,16 +650,15 @@ export function FeatureEntry({
             <div className="flex items-center gap-1 ml-auto">
               {onAddToEquipment && !readOnly && (
                 <button type="button" onClick={e => { e.stopPropagation(); onAddToEquipment(feature) }}
-                  className="text-[10px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors shrink-0">
-                  + Equipment
+                  title={inEquipment ? "Remove from the Martial list" : "Send to the Martial list"}
+                  className={`text-[10px] px-2 py-1 rounded-full transition-colors shrink-0 ${
+                    inEquipment ? "bg-primary/30 text-primary hover:bg-primary/20" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
+                  }`}>
+                  {inEquipment ? "◯ In Martial" : "+ Equipment"}
                 </button>
               )}
               {onToggleFavorite && (
-                <button type="button" onClick={e => { e.stopPropagation(); onToggleFavorite() }}
-                  title="Add to favorites"
-                  className={`text-base shrink-0 transition-colors ${isFavorite ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}>
-                  ★
-                </button>
+                <FavoriteStar isFavorite={!!isFavorite} onToggle={onToggleFavorite} label="Favorite" />
               )}
               {!readOnly && (
                 <button type="button" onClick={() => setEditing(true)}

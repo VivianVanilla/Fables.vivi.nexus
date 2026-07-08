@@ -18,6 +18,8 @@ export interface EquipmentItem {
   throwRange?: string  // e.g. "20/60 ft." — thrown melee weapons
   range?: string       // e.g. "80/320 ft." — ranged weapons
   weight?: number      // lb — rolled into the character's total carried weight
+  sourceFeatureId?: string  // set when toggled in from an Armor & Equipment item — its weight is
+                             // already counted via that Feature, so it's excluded here to avoid double-counting
 }
 
 export interface SpellItem {
