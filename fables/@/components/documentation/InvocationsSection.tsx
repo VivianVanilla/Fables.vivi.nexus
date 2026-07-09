@@ -43,13 +43,13 @@ function InvocationCard({ name, prerequisite, canEdit, onClick, onEdit }: {
         <span
           role="button"
           onClick={e => { e.stopPropagation(); onEdit() }}
-          className="absolute top-2 right-2 size-6 flex items-center justify-center rounded hover:bg-violet-500/20 text-slate-700 hover:text-violet-300 opacity-0 group-hover:opacity-100 transition-all"
+          className="absolute top-2 right-2 size-6 flex items-center justify-center rounded hover:bg-violet-500/20 text-muted-foreground hover:text-violet-300 opacity-0 group-hover:opacity-100 transition-all"
         >
           <Pencil className="size-3" />
         </span>
       )}
-      <p className="text-sm font-semibold text-slate-200 leading-tight px-5">{name}</p>
-      {prerequisite && <p className="text-[10px] text-slate-600 leading-tight">{prerequisite}</p>}
+      <p className="text-sm font-semibold text-foreground leading-tight px-5">{name}</p>
+      {prerequisite && <p className="text-[10px] text-muted-foreground leading-tight">{prerequisite}</p>}
     </button>
   )
 }
@@ -106,48 +106,48 @@ function InvocationForm({ initial, isHomebrew, userId, onSave, onCancel, onDelet
     <div className="max-w-xl rounded-xl border border-violet-900/40 bg-violet-950/10 p-5 flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-violet-400" />
-        <h3 className="text-sm font-bold text-slate-100">
+        <h3 className="text-sm font-bold text-foreground">
           {initial ? "Edit" : "New"} Eldritch Invocation{isHomebrew ? "" : " (Core)"}
         </h3>
       </div>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold text-slate-400">Name</span>
+        <span className="text-xs font-semibold text-muted-foreground">Name</span>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Agonizing Blast"
-          className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-700" />
+          className="bg-card border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-violet-700" />
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold text-slate-400">Prerequisite</span>
+        <span className="text-xs font-semibold text-muted-foreground">Prerequisite</span>
         <input value={prereq} onChange={e => setPrereq(e.target.value)} placeholder="5th level, eldritch blast cantrip"
-          className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-700" />
+          className="bg-card border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-violet-700" />
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold text-slate-400">Description</span>
+        <span className="text-xs font-semibold text-muted-foreground">Description</span>
         <MarkdownTextarea
           value={desc} onChange={setDesc} rows={6}
           placeholder="What the invocation does…"
-          className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-700 resize-none leading-relaxed"
+          className="bg-card border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-violet-700 resize-none leading-relaxed"
         />
       </label>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
-      <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+      <div className="flex items-center justify-between pt-2 border-t border-border">
         {onDelete ? (
           confirmDelete ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-red-400">Delete this invocation?</span>
               <button onClick={handleDelete} disabled={saving} className="text-xs px-2 py-1 rounded bg-red-600/80 hover:bg-red-600 text-white">Yes, delete</button>
-              <button onClick={() => setConfirmDelete(false)} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-400">Cancel</button>
+              <button onClick={() => setConfirmDelete(false)} className="text-xs px-2 py-1 rounded border border-border text-muted-foreground">Cancel</button>
             </div>
           ) : (
             <button onClick={() => setConfirmDelete(true)} className="text-xs text-red-400/70 hover:text-red-400">Delete</button>
           )
         ) : <span />}
         <div className="flex items-center gap-2">
-          <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded border border-slate-700 text-slate-400 hover:text-slate-200">Cancel</button>
+          <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded border border-border text-muted-foreground hover:text-foreground">Cancel</button>
           <button onClick={save} disabled={saving}
             className="text-xs px-3 py-1.5 rounded bg-violet-600/80 hover:bg-violet-600 text-white font-semibold disabled:opacity-50">
             {saving ? "Saving…" : "Save"}
@@ -220,7 +220,7 @@ export function InvocationsSection({ userId, isAdminMode, refreshKey }: Props) {
     return (
       <section className="mt-10 max-w-xl">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => { setMode("list"); setActive(null) }} className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+          <button onClick={() => { setMode("list"); setActive(null) }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             ← Back
           </button>
           {canEdit && (
@@ -230,8 +230,8 @@ export function InvocationsSection({ userId, isAdminMode, refreshKey }: Props) {
             </button>
           )}
         </div>
-        <h2 className="text-xl font-bold text-slate-100 mb-1">{active.name}</h2>
-        {active.data?.prerequisite && <p className="text-sm text-slate-500 italic mb-4">Prerequisite: {active.data.prerequisite}</p>}
+        <h2 className="text-xl font-bold text-foreground mb-1">{active.name}</h2>
+        {active.data?.prerequisite && <p className="text-sm text-muted-foreground italic mb-4">Prerequisite: {active.data.prerequisite}</p>}
         {active.data?.description && <Markdown text={active.data.description} tone="slate" />}
       </section>
     )
@@ -255,12 +255,12 @@ export function InvocationsSection({ userId, isAdminMode, refreshKey }: Props) {
       <div className="border-t border-violet-900/30 mb-4" />
 
       {loading ? (
-        <div className="flex items-center gap-2 py-10 text-slate-600">
+        <div className="flex items-center gap-2 py-10 text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /><span className="text-sm">Loading…</span>
         </div>
       ) : entries.length === 0 ? (
-        <div className="py-10 text-center border border-dashed border-slate-800 rounded-lg">
-          <p className="text-sm text-slate-600">No invocations yet.</p>
+        <div className="py-10 text-center border border-dashed border-border rounded-lg">
+          <p className="text-sm text-muted-foreground">No invocations yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">

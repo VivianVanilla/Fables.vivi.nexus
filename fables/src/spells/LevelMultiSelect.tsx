@@ -25,8 +25,8 @@ export function LevelMultiSelect({ selectedLevels, setSelectedLevels }: Props) {
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors whitespace-nowrap ${
           open || selectedLevels.length > 0
-            ? 'bg-slate-700 border border-slate-600 text-slate-100'
-            : 'bg-slate-900 border border-slate-800 text-slate-400 hover:border-slate-700'
+            ? 'bg-muted border border-border text-foreground'
+            : 'bg-card border border-border text-muted-foreground hover:border-border'
         }`}
       >
         {selectedLevels.length === 0 ? 'All Levels' : `${selectedLevels.length} Levels`}
@@ -34,7 +34,7 @@ export function LevelMultiSelect({ selectedLevels, setSelectedLevels }: Props) {
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 bg-slate-950 border border-slate-800 rounded-xl p-3 shadow-2xl w-screen max-w-xs sm:w-auto sm:min-w-56">
+        <div className="absolute z-50 top-full mt-1 left-0 bg-background border border-border rounded-xl p-3 shadow-2xl w-screen max-w-xs sm:w-auto sm:min-w-56">
           <div className="flex flex-wrap gap-1.5 mb-3">
             {LEVELS.map((lvl) => {
               const active = selectedLevels.includes(lvl)
@@ -59,7 +59,7 @@ export function LevelMultiSelect({ selectedLevels, setSelectedLevels }: Props) {
           {selectedLevels.length > 0 && (
             <button
               onClick={() => setSelectedLevels([])}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Clear all
             </button>

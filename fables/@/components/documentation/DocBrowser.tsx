@@ -52,8 +52,8 @@ function RefSection({ title, children }: { title: string; children: React.ReactN
 function Prop({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col sm:flex-row sm:gap-1 text-sm leading-snug mb-2 last:mb-0">
-      <span className="font-semibold text-slate-200 shrink-0">{label}:</span>
-      <span className="text-slate-400 sm:ml-0.5">{value}</span>
+      <span className="font-semibold text-foreground shrink-0">{label}:</span>
+      <span className="text-muted-foreground sm:ml-0.5">{value}</span>
     </div>
   )
 }
@@ -66,15 +66,15 @@ function SpellsTable({ rows }: { rows: { level: number; spells: string[] }[] }) 
     <table className="w-full text-sm border-collapse mt-1">
       <thead>
         <tr>
-          <th className="text-left text-[10px] uppercase tracking-wider text-slate-500 font-semibold pb-2 w-28">Level</th>
-          <th className="text-left text-[10px] uppercase tracking-wider text-slate-500 font-semibold pb-2">Spells</th>
+          <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold pb-2 w-28">Level</th>
+          <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold pb-2">Spells</th>
         </tr>
       </thead>
       <tbody>
         {[...rows].sort((a,b) => a.level - b.level).map(row => (
-          <tr key={row.level} className="border-t border-slate-800/60">
-            <td className="py-2 text-slate-400">{ORDINAL[row.level] ?? row.level}</td>
-            <td className="py-2 text-slate-300">{(row.spells ?? []).join(", ")}</td>
+          <tr key={row.level} className="border-t border-border/60">
+            <td className="py-2 text-muted-foreground">{ORDINAL[row.level] ?? row.level}</td>
+            <td className="py-2 text-foreground">{(row.spells ?? []).join(", ")}</td>
           </tr>
         ))}
       </tbody>
@@ -102,12 +102,12 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-slate-950 border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-slate-800 shrink-0">
+      <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-amber-500/60 font-semibold mb-0.5">Subclass</p>
-            <h2 className="text-xl font-bold text-slate-100">{sc.name}</h2>
-            {sc.description && <p className="text-sm text-slate-500 mt-0.5 leading-snug italic">{sc.description}</p>}
+            <h2 className="text-xl font-bold text-foreground">{sc.name}</h2>
+            {sc.description && <p className="text-sm text-muted-foreground mt-0.5 leading-snug italic">{sc.description}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {canEdit && onEdit && (
@@ -116,7 +116,7 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
                 <Pencil className="size-3" /> Edit
               </button>
             )}
-            <button onClick={onClose} className="size-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-200">
+            <button onClick={onClose} className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
               <X className="size-4" />
             </button>
           </div>
@@ -133,12 +133,12 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
             <RefSection title="Subclass Features">
               {Object.entries(byLevel).sort(([a],[b]) => parseInt(a)-parseInt(b)).map(([level, feats]) => (
                 <div key={level} className="mb-5 last:mb-0">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                     Level {level}
                   </p>
                   {(feats as any[]).map((f: any) => (
                     <div key={f.id} className="mb-3 last:mb-0">
-                      <p className="text-sm font-bold text-slate-200 mb-0.5">{f.name}</p>
+                      <p className="text-sm font-bold text-foreground mb-0.5">{f.name}</p>
                       {f.description && <Markdown text={f.description} tone="slate" />}
                     </div>
                   ))}
@@ -148,7 +148,7 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
           )}
 
           {features.length === 0 && domainSpells.length === 0 && (
-            <p className="text-sm text-slate-600 italic mt-2">No features recorded yet.</p>
+            <p className="text-sm text-muted-foreground italic mt-2">No features recorded yet.</p>
           )}
         </div>
       </div>
@@ -175,7 +175,7 @@ function DocCard({
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/50 p-3 hover:border-amber-900/60 hover:bg-slate-900 transition-all min-h-[80px] text-center w-full"
+      className="group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card/50 p-3 hover:border-amber-900/60 hover:bg-card transition-all min-h-[80px] text-center w-full"
     >
       <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
         {extraAction}
@@ -183,15 +183,15 @@ function DocCard({
           <span
             role="button"
             onClick={e => { e.stopPropagation(); onEdit() }}
-            className="size-6 flex items-center justify-center rounded hover:bg-amber-500/20 text-slate-700 hover:text-amber-400"
+            className="size-6 flex items-center justify-center rounded hover:bg-amber-500/20 text-muted-foreground hover:text-amber-400"
           >
             <Pencil className="size-3" />
           </span>
         )}
       </div>
-      <p className="text-sm font-semibold text-slate-200 leading-tight px-5">{name}</p>
+      <p className="text-sm font-semibold text-foreground leading-tight px-5">{name}</p>
       {caption && (
-        <p className="text-[10px] text-slate-600 leading-tight">{caption}</p>
+        <p className="text-[10px] text-muted-foreground leading-tight">{caption}</p>
       )}
     </button>
   )
@@ -241,13 +241,13 @@ function DetailView({
       <div className="max-w-2xl">
         {/* Nav */}
         <div className="flex items-center justify-between mb-5">
-          <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+          <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="size-4" /> Back
           </button>
           <div className="flex items-center gap-2">
             {type === "classes" && onGoToSpells && (
               <button onClick={() => onGoToSpells(entry.name)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-700/40 transition-colors">
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border border-border text-muted-foreground hover:text-purple-400 hover:border-purple-700/40 transition-colors">
                 <Sparkles className="size-3" />{entry.name} Spells<ExternalLink className="size-2.5 opacity-50 ml-0.5" />
               </button>
             )}
@@ -263,13 +263,13 @@ function DetailView({
         {/* Page title */}
         <div className="mb-1">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-slate-100">{entry.name}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{entry.name}</h1>
             {entry.is_homebrew && (
               <span className="text-xs text-purple-400 font-semibold uppercase tracking-wider">Homebrew</span>
             )}
           </div>
           {entry.description && (
-            <p className="text-sm text-slate-500 mt-1 italic leading-relaxed">{entry.description}</p>
+            <p className="text-sm text-muted-foreground mt-1 italic leading-relaxed">{entry.description}</p>
           )}
         </div>
 
@@ -309,12 +309,12 @@ function DetailView({
             {/* Equipment */}
             {d.equipment?.length > 0 && (
               <RefSection title="Equipment">
-                <p className="text-sm text-slate-400 mb-2">
+                <p className="text-sm text-muted-foreground mb-2">
                   You start with the following equipment, in addition to the equipment granted by your background:
                 </p>
                 <ul className="flex flex-col gap-1.5">
                   {(d.equipment as string[]).map((line, i) => (
-                    <li key={i} className="text-sm text-slate-300 pl-3 border-l-2 border-slate-800">{line}</li>
+                    <li key={i} className="text-sm text-foreground pl-3 border-l-2 border-border">{line}</li>
                   ))}
                 </ul>
               </RefSection>
@@ -338,17 +338,17 @@ function DetailView({
             {/* Class Features */}
             {features.length > 0 && (
               <RefSection title="Class Features">
-                <p className="text-sm text-slate-500 italic mb-4">
+                <p className="text-sm text-muted-foreground italic mb-4">
                   As a {className}, you gain the following class features.
                 </p>
                 {Object.entries(byLevel).sort(([a],[b]) => parseInt(a)-parseInt(b)).map(([level, feats]) => (
                   <div key={level} className="mb-5 last:mb-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                       Level {level}
                     </p>
                     {(feats as any[]).map((f: any) => (
                       <div key={f.id} className="mb-3 last:mb-0">
-                        <p className="text-sm font-bold text-slate-200 mb-0.5">{f.name}</p>
+                        <p className="text-sm font-bold text-foreground mb-0.5">{f.name}</p>
                         {f.description && <Markdown text={f.description} tone="slate" />}
                       </div>
                     ))}
@@ -361,7 +361,7 @@ function DetailView({
             {d.subclass_feature_name && (
               <RefSection title={`${d.subclass_feature_name}s`}>
                 {subclasses.length === 0 ? (
-                  <p className="text-sm text-slate-600 italic">No subclasses recorded yet.</p>
+                  <p className="text-sm text-muted-foreground italic">No subclasses recorded yet.</p>
                 ) : (
                   <div>
                     {subclasses.map(sc => (
@@ -369,13 +369,13 @@ function DetailView({
                         key={sc.id}
                         type="button"
                         onClick={() => setOpenSubclass(sc)}
-                        className="group w-full flex items-center justify-between py-3 border-b border-slate-800/60 last:border-0 text-left transition-colors hover:bg-slate-900/40 px-1 rounded"
+                        className="group w-full flex items-center justify-between py-3 border-b border-border/60 last:border-0 text-left transition-colors hover:bg-card/40 px-1 rounded"
                       >
                         <div>
-                          <p className="text-sm font-semibold text-slate-200 group-hover:text-amber-400 transition-colors">{sc.name}</p>
-                          {sc.description && <p className="text-xs text-slate-600 mt-0.5">{sc.description}</p>}
+                          <p className="text-sm font-semibold text-foreground group-hover:text-amber-400 transition-colors">{sc.name}</p>
+                          {sc.description && <p className="text-xs text-muted-foreground mt-0.5">{sc.description}</p>}
                         </div>
-                        <ExternalLink className="size-3.5 text-slate-700 group-hover:text-amber-500 shrink-0 ml-3 transition-colors" />
+                        <ExternalLink className="size-3.5 text-muted-foreground group-hover:text-amber-500 shrink-0 ml-3 transition-colors" />
                       </button>
                     ))}
                   </div>
@@ -392,13 +392,13 @@ function DetailView({
                       key={sc.id}
                       type="button"
                       onClick={() => setOpenSubclass(sc)}
-                      className="group w-full flex items-center justify-between py-3 border-b border-slate-800/60 last:border-0 text-left hover:bg-slate-900/40 px-1 rounded transition-colors"
+                      className="group w-full flex items-center justify-between py-3 border-b border-border/60 last:border-0 text-left hover:bg-card/40 px-1 rounded transition-colors"
                     >
                       <div>
-                        <p className="text-sm font-semibold text-slate-200 group-hover:text-amber-400 transition-colors">{sc.name}</p>
-                        {sc.description && <p className="text-xs text-slate-600 mt-0.5">{sc.description}</p>}
+                        <p className="text-sm font-semibold text-foreground group-hover:text-amber-400 transition-colors">{sc.name}</p>
+                        {sc.description && <p className="text-xs text-muted-foreground mt-0.5">{sc.description}</p>}
                       </div>
-                      <ExternalLink className="size-3.5 text-slate-700 group-hover:text-amber-500 shrink-0 ml-3 transition-colors" />
+                      <ExternalLink className="size-3.5 text-muted-foreground group-hover:text-amber-500 shrink-0 ml-3 transition-colors" />
                     </button>
                   ))}
                 </div>
@@ -417,7 +417,7 @@ function DetailView({
                   const desc = typeof t === "string" ? "" : (t?.description ?? "")
                   return (
                     <div key={i} className="mb-3 last:mb-0">
-                      <p className="text-sm font-bold text-slate-200">{name}</p>
+                      <p className="text-sm font-bold text-foreground">{name}</p>
                       {desc && <Markdown text={desc} tone="slate" size="xs" className="mt-0.5" />}
                     </div>
                   )
@@ -429,13 +429,13 @@ function DetailView({
                 <div className="flex flex-col gap-4">
                   {d.subraces.map((s: any, si: number) => (
                     <div key={si}>
-                      <p className="text-sm font-bold text-slate-200 mb-1.5">{s.name}</p>
+                      <p className="text-sm font-bold text-foreground mb-1.5">{s.name}</p>
                       {(s.traits ?? []).map((t: any, ti: number) => {
                         const name = typeof t === "string" ? t : (t?.name ?? "")
                         const desc = typeof t === "string" ? "" : (t?.description ?? "")
                         return (
-                          <div key={ti} className="mb-2 pl-3 border-l border-slate-700">
-                            <p className="text-xs font-semibold text-slate-300">{name}</p>
+                          <div key={ti} className="mb-2 pl-3 border-l border-border">
+                            <p className="text-xs font-semibold text-foreground">{name}</p>
                             {desc && <Markdown text={desc} tone="slate" size="xs" className="mt-0.5" />}
                           </div>
                         )
@@ -629,13 +629,13 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
         <div className="border-t border-amber-900/30 mb-4" />
 
         {loading ? (
-          <div className="flex items-center gap-2 py-10 text-slate-600">
+          <div className="flex items-center gap-2 py-10 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /><span className="text-sm">Loading…</span>
           </div>
         ) : baseEntries.length === 0 ? (
-          <div className="py-10 text-center border border-dashed border-slate-800 rounded-lg">
-            <p className="text-sm text-slate-600">No entries yet.</p>
-            {isAdminMode && <p className="text-xs text-slate-700 mt-1">Use "Add Core {label}" above.</p>}
+          <div className="py-10 text-center border border-dashed border-border rounded-lg">
+            <p className="text-sm text-muted-foreground">No entries yet.</p>
+            {isAdminMode && <p className="text-xs text-muted-foreground mt-1">Use "Add Core {label}" above.</p>}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
@@ -669,7 +669,7 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
       {userId && myLibrary.length > 0 && (
         <section>
           <h2 className="text-base font-bold text-amber-400 mb-2">Homebrew ({myLibrary.length})</h2>
-          <p className="text-xs text-slate-500 -mt-1 mb-2">These show up in autofill on your character sheet. Remove one to take it out of autofill.</p>
+          <p className="text-xs text-muted-foreground -mt-1 mb-2">These show up in autofill on your character sheet. Remove one to take it out of autofill.</p>
           <div className="border-t border-amber-900/30 mb-4" />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {myLibrary.map(item => (
@@ -678,7 +678,7 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
                 onEdit={() => openEditFromLibrary(item)}
                 extraAction={
                   <span role="button" onClick={e => { e.stopPropagation(); removeFromLibrary(item.id) }}
-                    className="size-6 flex items-center justify-center rounded hover:bg-red-500/20 text-slate-700 hover:text-red-400">
+                    className="size-6 flex items-center justify-center rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
                     <X className="size-3" />
                   </span>
                 }
@@ -693,9 +693,9 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
         <h2 className="text-base font-bold text-amber-400 mb-2">Community Homebrew</h2>
         <div className="border-t border-amber-900/30 mb-4" />
         <div className="flex items-center justify-between py-3">
-          <p className="text-sm text-slate-500">Browse community {label.toLowerCase()}s or publish your own.</p>
+          <p className="text-sm text-muted-foreground">Browse community {label.toLowerCase()}s or publish your own.</p>
           <button onClick={() => setShowHBBrowser(true)}
-            className="flex items-center gap-2 text-sm px-4 py-2 rounded border border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-700/50 transition-colors shrink-0 ml-4">
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded border border-border text-muted-foreground hover:text-purple-400 hover:border-purple-700/50 transition-colors shrink-0 ml-4">
             <Library className="size-3.5" /> Browse {label}s
           </button>
         </div>

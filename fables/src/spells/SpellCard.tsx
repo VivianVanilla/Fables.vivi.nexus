@@ -12,7 +12,7 @@ export function SpellCard({ spell, adminMode, onOpen, onEdit }: Props) {
   return (
     <div
       onClick={() => onOpen(spell)}
-      className="group relative bg-slate-900/60 border border-slate-800 hover:border-slate-600 p-4 rounded-xl cursor-pointer transition-all hover:bg-slate-900 hover:shadow-lg hover:shadow-black/20"
+      className="group relative bg-card/60 border border-border hover:border-border p-4 rounded-xl cursor-pointer transition-all hover:bg-card hover:shadow-lg hover:shadow-black/20"
     >
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <h3 className="font-semibold text-sm leading-snug text-foreground">{spell.name}</h3>
@@ -26,10 +26,10 @@ export function SpellCard({ spell, adminMode, onOpen, onEdit }: Props) {
         )}
       </div>
 
-      <div className="text-xs text-slate-500 space-y-0.5 mb-3">
-        <div><span className="text-slate-600">Cast:</span> {spell.casting_time}</div>
-        <div><span className="text-slate-600">Range:</span> {spell.range}</div>
-        <div><span className="text-slate-600">Duration:</span> {spell.duration}</div>
+      <div className="text-xs text-muted-foreground space-y-0.5 mb-3">
+        <div><span className="text-muted-foreground">Cast:</span> {spell.casting_time}</div>
+        <div><span className="text-muted-foreground">Range:</span> {spell.range}</div>
+        <div><span className="text-muted-foreground">Duration:</span> {spell.duration}</div>
       </div>
 
       <div className="flex flex-wrap gap-1">

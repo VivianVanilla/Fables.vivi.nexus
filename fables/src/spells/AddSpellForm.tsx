@@ -44,7 +44,7 @@ interface Props {
   editingIndex: string | null
 }
 
-const inputCls = 'w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-slate-500 transition-colors'
+const inputCls = 'w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-border transition-colors'
 const selectCls = `${inputCls} cursor-pointer`
 
 export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
@@ -60,8 +60,8 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
     }))
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-xl mb-6">
-      <h2 className="flex items-center gap-2 text-base font-semibold mb-4 text-slate-200">
+    <div className="bg-card/80 border border-border p-5 rounded-xl mb-6">
+      <h2 className="flex items-center gap-2 text-base font-semibold mb-4 text-foreground">
         <Plus className="size-4" />
         {editingIndex ? 'Edit Spell' : 'Add Spell'}
       </h2>
@@ -84,15 +84,15 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
         />
 
         <select value={draft.school} onChange={(e) => set('school', e.target.value)} className={selectCls}>
-          {SCHOOLS.map((s) => <option key={s} className="bg-slate-900 text-slate-100">{s}</option>)}
+          {SCHOOLS.map((s) => <option key={s} className="bg-card text-foreground">{s}</option>)}
         </select>
 
         <select value={draft.casting_time} onChange={(e) => set('casting_time', e.target.value)} className={selectCls}>
-          {CASTING.map((t) => <option key={t} className="bg-slate-900 text-slate-100">{t}</option>)}
+          {CASTING.map((t) => <option key={t} className="bg-card text-foreground">{t}</option>)}
         </select>
 
         <select value={draft.damageType} onChange={(e) => set('damageType', e.target.value)} className={selectCls}>
-          {DAMAGE_TYPES.map((d) => <option key={d} className="bg-slate-900 text-slate-100">{d}</option>)}
+          {DAMAGE_TYPES.map((d) => <option key={d} className="bg-card text-foreground">{d}</option>)}
         </select>
 
         <select
@@ -100,10 +100,10 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
           onChange={(e) => set('ctag', e.target.value)}
           className={selectCls}
         >
-          <option value="" className="bg-slate-900 text-slate-100">Campaign Tag (none)</option>
-          <option value="Twilight" className="bg-slate-900 text-slate-100">Twilight</option>
-          <option value="Special-Banned" className="bg-slate-900 text-slate-100">Special/Banned</option>
-          <option value="Squain" className="bg-slate-900 text-slate-100">Squain</option>
+          <option value="" className="bg-card text-foreground">Campaign Tag (none)</option>
+          <option value="Twilight" className="bg-card text-foreground">Twilight</option>
+          <option value="Special-Banned" className="bg-card text-foreground">Special/Banned</option>
+          <option value="Squain" className="bg-card text-foreground">Squain</option>
         </select>
 
         <input
@@ -129,7 +129,7 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
           className={`${inputCls} sm:col-span-2`}
         />
 
-        <label className="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer">
+        <label className="flex items-center gap-3 bg-card border border-border rounded-lg px-3 py-2 cursor-pointer">
           <input
             type="checkbox"
             checked={draft.materialComponents}
@@ -142,17 +142,17 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
             }
             className="accent-purple-500"
           />
-          <span className="text-sm text-slate-300">Material Components</span>
+          <span className="text-sm text-foreground">Material Components</span>
         </label>
 
-        <label className="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer">
+        <label className="flex items-center gap-3 bg-card border border-border rounded-lg px-3 py-2 cursor-pointer">
           <input
             type="checkbox"
             checked={draft.ritual}
             onChange={(e) => set('ritual', e.target.checked)}
             className="accent-purple-500"
           />
-          <span className="text-sm text-slate-300">Ritual</span>
+          <span className="text-sm text-foreground">Ritual</span>
         </label>
 
         {draft.materialComponents && (
@@ -174,7 +174,7 @@ export function AddSpellForm({ draft, setDraft, onSave, editingIndex }: Props) {
         />
 
         <div className="sm:col-span-2">
-          <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Classes</p>
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">Classes</p>
           <div className="flex flex-wrap gap-1.5">
             {CLASS_OPTIONS.map((cls) => {
               const active = draft.classes.includes(cls)

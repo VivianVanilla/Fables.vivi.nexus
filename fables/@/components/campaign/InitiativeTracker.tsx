@@ -175,34 +175,34 @@ export function InitiativeTracker({ campaign, partyMembers, onUpdateCharacterHp 
       <div className="flex items-center gap-2 flex-wrap">
         {encounters.map(e => (
           <button key={e.id} type="button" onClick={() => setActiveId(e.id)}
-            className={`px-3 py-1.5 text-xs rounded-full font-semibold transition-colors ${activeId === e.id ? "bg-white/20 text-white" : "bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/10"}`}>
+            className={`px-3 py-1.5 text-xs rounded-full font-semibold transition-colors ${activeId === e.id ? "bg-foreground/20 text-foreground" : "bg-foreground/5 text-foreground/50 hover:text-foreground/80 hover:bg-foreground/10"}`}>
             {e.name}
           </button>
         ))}
         <button type="button" onClick={createEncounter}
-          className="px-3 py-1.5 text-xs rounded-full bg-primary/70 hover:bg-primary text-white font-semibold transition-colors">
+          className="px-3 py-1.5 text-xs rounded-full bg-primary/70 hover:bg-primary text-foreground font-semibold transition-colors">
           + New Encounter
         </button>
       </div>
 
       {!active && (
-        <p className="text-sm text-white/30 italic text-center py-10">No encounter selected — create one above.</p>
+        <p className="text-sm text-foreground/30 italic text-center py-10">No encounter selected — create one above.</p>
       )}
 
       {active && (
         <div className="flex flex-col gap-4 animate-in fade-in duration-200">
           {/* Header row */}
-          <div className="rounded-xl bg-slate-800 ring-1 ring-slate-700 p-4 flex items-center gap-3 flex-wrap">
+          <div className="rounded-xl bg-muted ring-1 ring-border p-4 flex items-center gap-3 flex-wrap">
             <input value={active.name} onChange={e => updateActive({ name: e.target.value })}
-              className="bg-transparent text-sm font-bold text-white outline-none border-b border-transparent focus:border-white/20 transition-colors flex-1 min-w-32" />
-            <span className="text-xs text-white/40 tabular-nums">Round {active.round}</span>
+              className="bg-transparent text-sm font-bold text-foreground outline-none border-b border-transparent focus:border-foreground/20 transition-colors flex-1 min-w-32" />
+            <span className="text-xs text-foreground/40 tabular-nums">Round {active.round}</span>
             <div className="flex items-center gap-1.5">
               <button type="button" onClick={prevTurn}
-                className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
+                className="text-xs px-2.5 py-1.5 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors">
                 ◀ Prev
               </button>
               <button type="button" onClick={nextTurn}
-                className="text-xs px-2.5 py-1.5 rounded-full bg-primary/70 hover:bg-primary text-white font-semibold transition-colors">
+                className="text-xs px-2.5 py-1.5 rounded-full bg-primary/70 hover:bg-primary text-foreground font-semibold transition-colors">
                 Next Turn ▶
               </button>
             </div>
@@ -216,23 +216,23 @@ export function InitiativeTracker({ campaign, partyMembers, onUpdateCharacterHp 
           <div className="flex flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <select value={addMonsterId} onChange={e => setAddMonsterId(e.target.value)}
-                className="bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
+                className="bg-muted rounded-lg px-2.5 py-1.5 text-xs text-foreground outline-none">
                 <option value="">Add a monster…</option>
                 {monsters.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
               <button type="button" onClick={addMonster} disabled={!addMonsterId}
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white/70 hover:text-white transition-colors">
+                className="text-xs px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 disabled:opacity-30 text-foreground/70 hover:text-foreground transition-colors">
                 + Add
               </button>
             </div>
             <div className="flex items-center gap-2">
               <select value={addCharId} onChange={e => setAddCharId(e.target.value)}
-                className="bg-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
+                className="bg-muted rounded-lg px-2.5 py-1.5 text-xs text-foreground outline-none">
                 <option value="">Add a character…</option>
                 {partyMembers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <button type="button" onClick={addCharacter} disabled={!addCharId}
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white/70 hover:text-white transition-colors">
+                className="text-xs px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 disabled:opacity-30 text-foreground/70 hover:text-foreground transition-colors">
                 + Add
               </button>
             </div>
@@ -241,16 +241,16 @@ export function InitiativeTracker({ campaign, partyMembers, onUpdateCharacterHp 
           {/* Combatant list, sorted by initiative */}
           <div className="flex flex-col gap-1.5">
             {ordered.length > 0 && (
-              <div className="flex items-center gap-1.5 self-end text-[10px] text-white/30">
+              <div className="flex items-center gap-1.5 self-end text-[10px] text-foreground/30">
                 <span className="uppercase tracking-widest">HP step</span>
                 <input type="number" min={1} value={hpStep}
                   onFocus={e => e.target.select()}
                   onChange={e => setHpStep(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-10 bg-white/10 rounded px-1 py-0.5 text-center text-white outline-none transition-colors focus:bg-white/15" />
+                  className="w-10 bg-foreground/10 rounded px-1 py-0.5 text-center text-foreground outline-none transition-colors focus:bg-foreground/15" />
               </div>
             )}
             {ordered.length === 0 && (
-              <p className="text-xs text-white/25 italic text-center py-6">No combatants yet — add monsters or characters above.</p>
+              <p className="text-xs text-foreground/25 italic text-center py-6">No combatants yet — add monsters or characters above.</p>
             )}
             {ordered.map((c, i) => {
               const isTurn      = i === active.turnIndex
@@ -260,38 +260,38 @@ export function InitiativeTracker({ campaign, partyMembers, onUpdateCharacterHp 
               const hp          = c.refType === "character" ? (charHp?.hp ?? 0) : (c.hp ?? 0)
               const maxHp       = c.refType === "character" ? charHp?.maxHp : c.maxHp
               const hpPercent   = maxHp ? Math.max(0, Math.min(100, Math.round(hp / maxHp * 100))) : null
-              const hpBarColor  = hpPercent == null ? "bg-white/20" : hpPercent > 50 ? "bg-green-500" : hpPercent > 25 ? "bg-yellow-500" : "bg-red-500"
+              const hpBarColor  = hpPercent == null ? "bg-foreground/20" : hpPercent > 50 ? "bg-green-500" : hpPercent > 25 ? "bg-yellow-500" : "bg-red-500"
               return (
                 <div key={c.id}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2 transition-all duration-200 ${isTurn ? "bg-primary/20 ring-1 ring-primary/60" : "bg-white/5 ring-1 ring-white/5"}`}>
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2 transition-all duration-200 ${isTurn ? "bg-primary/20 ring-1 ring-primary/60" : "bg-foreground/5 ring-1 ring-foreground/5"}`}>
                   {isTurn
                     ? <span className="text-primary text-xs shrink-0 animate-pulse" title="Current turn">▶</span>
                     : <span className="size-3 shrink-0" />}
                   <input type="number" value={c.initiative}
                     onChange={e => setInitiative(c.id, parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white/10 rounded px-1.5 py-1 text-center text-white text-xs font-bold outline-none transition-colors focus:bg-white/15" />
+                    className="w-12 bg-foreground/10 rounded px-1.5 py-1 text-center text-foreground text-xs font-bold outline-none transition-colors focus:bg-foreground/15" />
                   <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0 ${c.refType === "monster" ? "bg-red-500/15 text-red-300" : "bg-sky-500/15 text-sky-300"}`}>
                     {c.refType === "monster" ? "Monster" : "PC"}
                   </span>
-                  <span className="flex-1 min-w-0 text-sm text-white truncate">{c.name}</span>
+                  <span className="flex-1 min-w-0 text-sm text-foreground truncate">{c.name}</span>
 
                   {/* HP — monsters track an independent per-combatant snapshot; PCs are
                       live-linked to (and editable straight through to) the real character */}
                   <div className="flex items-center gap-1.5 shrink-0" title={c.refType === "character" ? "Linked to this character's sheet" : undefined}>
                     <button type="button" onClick={() => adjustHp(c, -hpStep)}
-                      className="size-6 rounded-full bg-white/10 hover:bg-red-900 text-white hover:text-red-200 flex items-center justify-center text-xs font-bold transition-colors">
+                      className="size-6 rounded-full bg-foreground/10 hover:bg-red-900 text-foreground hover:text-red-200 flex items-center justify-center text-xs font-bold transition-colors">
                       −
                     </button>
                     <div className="flex flex-col items-center gap-0.5 w-16">
-                      <span className="text-xs font-mono text-white tabular-nums">{hp}{maxHp ? `/${maxHp}` : ""}</span>
+                      <span className="text-xs font-mono text-foreground tabular-nums">{hp}{maxHp ? `/${maxHp}` : ""}</span>
                       {hpPercent != null && (
-                        <div className="w-full h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div className="w-full h-1 rounded-full bg-foreground/10 overflow-hidden">
                           <div className={`h-full ${hpBarColor} transition-all duration-300`} style={{ width: `${hpPercent}%` }} />
                         </div>
                       )}
                     </div>
                     <button type="button" onClick={() => adjustHp(c, hpStep)}
-                      className="size-6 rounded-full bg-white/10 hover:bg-green-900 text-white hover:text-green-200 flex items-center justify-center text-xs font-bold transition-colors">
+                      className="size-6 rounded-full bg-foreground/10 hover:bg-green-900 text-foreground hover:text-green-200 flex items-center justify-center text-xs font-bold transition-colors">
                       +
                     </button>
                   </div>
@@ -299,12 +299,12 @@ export function InitiativeTracker({ campaign, partyMembers, onUpdateCharacterHp 
                   {monsterObj && (
                     <button type="button" onClick={() => togglePopout(monsterObj.id)}
                       title={popouts[monsterObj.id] ? "Already popped out" : "Pop out stat block"}
-                      className={`size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-sm shrink-0 transition-colors ${popouts[monsterObj.id] ? "text-primary" : "text-white/50 hover:text-white"}`}>
+                      className={`size-7 flex items-center justify-center rounded-lg hover:bg-foreground/10 text-sm shrink-0 transition-colors ${popouts[monsterObj.id] ? "text-primary" : "text-foreground/50 hover:text-foreground"}`}>
                       ⧉
                     </button>
                   )}
                   <button type="button" onClick={() => removeCombatant(c.id)}
-                    className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">
+                    className="text-foreground/20 hover:text-red-400 text-xs shrink-0 transition-colors">
                     ✕
                   </button>
                 </div>

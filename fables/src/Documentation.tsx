@@ -57,7 +57,7 @@ export default function Documentation() {
       <SidebarInset className="overflow-hidden flex flex-col h-screen">
 
         {/* ── Top bar ─────────────────────────────────────────────────── */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-800 px-4 bg-slate-950">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 bg-background">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
           <Breadcrumb>
@@ -86,7 +86,7 @@ export default function Documentation() {
               className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 adminMode
                   ? "bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30"
-                  : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"
+                  : "bg-muted border border-border text-muted-foreground hover:text-foreground"
               }`}
             >
               {adminMode ? <ShieldCheck className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -96,38 +96,38 @@ export default function Documentation() {
         </header>
 
         {/* ── Full-width horizontal tab bar ───────────────────────────── */}
-        <nav className="flex shrink-0 border-b border-slate-800 bg-slate-950 overflow-x-auto">
+        <nav className="flex shrink-0 border-b border-border bg-background overflow-x-auto">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               onClick={() => setSection(item.id)}
               className={`flex items-center gap-2 px-5 py-4 text-sm font-medium shrink-0 border-b-2 transition-colors whitespace-nowrap ${
                 section === item.id
-                  ? "border-purple-500 text-white bg-slate-900/40"
-                  : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900/20"
+                  ? "border-purple-500 text-foreground bg-card/40"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-card/20"
               }`}
             >
-              <span className={section === item.id ? "text-purple-400" : "text-slate-600"}>{item.icon}</span>
+              <span className={section === item.id ? "text-purple-400" : "text-muted-foreground"}>{item.icon}</span>
               {item.label}
             </button>
           ))}
         </nav>
 
         {/* ── Content ─────────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto bg-slate-950">
+        <main className="flex-1 overflow-y-auto bg-background">
           <div className="max-w-7xl mx-auto px-4 py-6 sm:px-8">
 
             {/* Welcome */}
             {section === "welcome" && (
               <div className="space-y-6">
-                <div className="rounded-xl bg-slate-900 border border-slate-800 p-5">
+                <div className="rounded-xl bg-card border border-border p-5">
                   <div className="flex items-center gap-4">
                     {user?.user_metadata?.avatar_url && (
-                      <img src={user.user_metadata.avatar_url} alt="" className="size-12 rounded-full ring-2 ring-slate-700" />
+                      <img src={user.user_metadata.avatar_url} alt="" className="size-12 rounded-full ring-2 ring-border" />
                     )}
                     <div>
-                      <h1 className="text-xl font-bold text-slate-100">Hi {fullName}!</h1>
-                      <p className="text-sm text-slate-500 mt-0.5">Browse rules, classes, spells, items, and more.</p>
+                      <h1 className="text-xl font-bold text-foreground">Hi {fullName}!</h1>
+                      <p className="text-sm text-muted-foreground mt-0.5">Browse rules, classes, spells, items, and more.</p>
                     </div>
                   </div>
                 </div>
@@ -137,7 +137,7 @@ export default function Documentation() {
                     <button
                       key={item.id}
                       onClick={() => setSection(item.id)}
-                      className="group flex flex-col items-start gap-3 p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-600 hover:bg-slate-800/80 transition-all text-left"
+                      className="group flex flex-col items-start gap-3 p-5 rounded-xl bg-card border border-border hover:border-border hover:bg-muted/80 transition-all text-left"
                     >
                       <span className="p-2.5 rounded-lg bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20 transition-colors">
                         {item.id === "spells"  && <Sparkles   className="size-6" />}
@@ -147,8 +147,8 @@ export default function Documentation() {
                         {item.id === "races"   && <Users      className="size-6" />}
                       </span>
                       <div>
-                        <p className="text-sm font-semibold text-slate-200">{item.label}</p>
-                        <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                        <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
                           {item.id === "spells"  && "Browse & manage spells"}
                           {item.id === "classes" && "Core & homebrew classes"}
                           {item.id === "feats"   && "Core & homebrew feats"}

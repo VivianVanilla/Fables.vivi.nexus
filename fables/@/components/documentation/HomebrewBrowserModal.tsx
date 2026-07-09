@@ -22,7 +22,7 @@ interface Props {
 
 // Rarity color helpers for items
 const RARITY_COLOR: Record<string, string> = {
-  common: "text-slate-400",
+  common: "text-muted-foreground",
   uncommon: "text-green-400",
   rare: "text-blue-400",
   "very rare": "text-purple-400",
@@ -33,8 +33,8 @@ const RARITY_COLOR: Record<string, string> = {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
-      <span className="text-slate-500 shrink-0 w-32">{label}</span>
-      <span className="text-slate-300">{value}</span>
+      <span className="text-muted-foreground shrink-0 w-32">{label}</span>
+      <span className="text-foreground">{value}</span>
     </div>
   )
 }
@@ -65,8 +65,8 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
       {/* Title + actions */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-bold text-slate-100">{entry.name}</h3>
-          <p className="text-sm text-slate-500 mt-0.5">{entry.description}</p>
+          <h3 className="text-lg font-bold text-foreground">{entry.name}</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">{entry.description}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {isOwner ? (
@@ -82,10 +82,10 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-green-800/30 text-green-400 border border-green-700/30">
                   <Check className="size-3.5" /> Added
                 </div>
-                {addedDate && <p className="text-[10px] text-slate-600">Since {addedDate}</p>}
+                {addedDate && <p className="text-[10px] text-muted-foreground">Since {addedDate}</p>}
                 <button
                   onClick={() => onRemove(entry.id)}
-                  className="flex items-center gap-1 text-[10px] text-slate-700 hover:text-red-400 transition-colors mt-0.5"
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-red-400 transition-colors mt-0.5"
                 >
                   <Trash2 className="size-3" /> Remove from library
                 </button>
@@ -99,7 +99,7 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
               </button>
             )
           ) : (
-            <p className="text-xs text-slate-600 italic">Sign in to save</p>
+            <p className="text-xs text-muted-foreground italic">Sign in to save</p>
           )}
         </div>
       </div>
@@ -117,14 +117,14 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
           {d.subclass_level && <Row label="Subclass at" value={`Level ${d.subclass_level}`} />}
           {d.features?.length > 0 && (
             <div className="mt-2 flex flex-col gap-1">
-              <span className="text-slate-500 font-medium">Features ({d.features.length})</span>
+              <span className="text-muted-foreground font-medium">Features ({d.features.length})</span>
               {(d.features as any[]).slice(0, 5).map((f: any) => (
                 <div key={f.id} className="flex gap-2 text-xs">
-                  <span className="text-slate-600 shrink-0 w-12">Lv {f.level}</span>
-                  <span className="text-slate-400">{f.name}</span>
+                  <span className="text-muted-foreground shrink-0 w-12">Lv {f.level}</span>
+                  <span className="text-muted-foreground">{f.name}</span>
                 </div>
               ))}
-              {d.features.length > 5 && <span className="text-xs text-slate-600">+{d.features.length - 5} more…</span>}
+              {d.features.length > 5 && <span className="text-xs text-muted-foreground">+{d.features.length - 5} more…</span>}
             </div>
           )}
         </div>
@@ -149,10 +149,10 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
           {d.languages?.length > 0 && <Row label="Languages" value={d.languages.join(", ")} />}
           {d.traits?.length > 0 && (
             <div className="flex flex-col gap-1">
-              <span className="text-slate-500 font-medium">Traits</span>
+              <span className="text-muted-foreground font-medium">Traits</span>
               <div className="flex flex-wrap gap-1.5">
                 {d.traits.map((t: string) => (
-                  <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">{t}</span>
+                  <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-muted border border-border text-foreground">{t}</span>
                 ))}
               </div>
             </div>
@@ -170,11 +170,11 @@ function EntryDetail({ entry, type, userId, libraryState, onAdd, onRemove, onEdi
       {type === "items" && (
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-semibold ${RARITY_COLOR[d.rarity ?? "common"] ?? "text-slate-400"}`}>
+            <span className={`font-semibold ${RARITY_COLOR[d.rarity ?? "common"] ?? "text-muted-foreground"}`}>
               {(d.rarity ?? "Common").replace(/\b\w/g, (c: string) => c.toUpperCase())}
             </span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">{(d.item_type ?? "Wondrous").replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">{(d.item_type ?? "Wondrous").replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
             {d.requires_attunement && <span className="text-xs text-amber-400">(requires attunement)</span>}
           </div>
           {d.item_type === "weapon" && d.damage && (
@@ -297,15 +297,15 @@ export function HomebrewBrowserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <div className="flex-1 min-w-0">
-            <p className="text-base font-bold text-slate-100">
+            <p className="text-base font-bold text-foreground">
               Community {type.charAt(0).toUpperCase() + type.slice(1)}
             </p>
-            <p className="text-xs text-slate-500 mt-0.5">{filtered.length} entries · click to view details</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{filtered.length} entries · click to view details</p>
           </div>
           {onAddNew && userId && (
             <button
@@ -316,29 +316,29 @@ export function HomebrewBrowserModal({
               Add New {TYPE_LABEL[type]}
             </button>
           )}
-          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-200 shrink-0">
+          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
             <X className="size-4" />
           </button>
         </div>
 
         <div className="flex flex-1 min-h-0">
           {/* List panel — hidden on mobile when something is selected */}
-          <div className={`${selected ? "hidden sm:flex" : "flex"} flex-col w-full sm:w-72 sm:shrink-0 border-r border-slate-800`}>
-            <div className="p-3 border-b border-slate-800">
+          <div className={`${selected ? "hidden sm:flex" : "flex"} flex-col w-full sm:w-72 sm:shrink-0 border-r border-border`}>
+            <div className="p-3 border-b border-border">
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search…"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-purple-500 placeholder:text-slate-600"
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:border-purple-500 placeholder:text-muted-foreground"
               />
             </div>
             <div className="flex-1 overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center p-8">
-                  <Loader2 className="size-5 text-slate-600 animate-spin" />
+                  <Loader2 className="size-5 text-muted-foreground animate-spin" />
                 </div>
               ) : filtered.length === 0 ? (
-                <p className="text-sm text-slate-600 text-center p-8">
+                <p className="text-sm text-muted-foreground text-center p-8">
                   {search ? "No matches" : `No homebrew ${type} yet`}
                 </p>
               ) : (
@@ -349,16 +349,16 @@ export function HomebrewBrowserModal({
                     <button
                       key={e.id}
                       onClick={() => setSelected(e)}
-                      className={`w-full text-left flex items-center justify-between px-4 py-3 border-b border-slate-800/50 transition-colors hover:bg-slate-800/50 ${selected?.id === e.id ? "bg-slate-800" : ""}`}
+                      className={`w-full text-left flex items-center justify-between px-4 py-3 border-b border-border/50 transition-colors hover:bg-muted/50 ${selected?.id === e.id ? "bg-muted" : ""}`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-200 truncate">{e.name}</p>
-                        <p className="text-xs text-slate-600 truncate mt-0.5">{e.description}</p>
+                        <p className="text-sm font-medium text-foreground truncate">{e.name}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{e.description}</p>
                       </div>
                       <div className="shrink-0 ml-2 flex items-center gap-1.5">
                         {isOwn && <Pencil className="size-3 text-amber-600" />}
                         {inLib && <Check className="size-3 text-green-500" />}
-                        <ChevronRight className="size-4 text-slate-600" />
+                        <ChevronRight className="size-4 text-muted-foreground" />
                       </div>
                     </button>
                   )
@@ -373,7 +373,7 @@ export function HomebrewBrowserModal({
             {selected && (
               <button
                 onClick={() => setSelected(null)}
-                className="sm:hidden flex items-center gap-1.5 px-4 py-3 text-sm text-slate-400 hover:text-slate-200 border-b border-slate-800 shrink-0 transition-colors"
+                className="sm:hidden flex items-center gap-1.5 px-4 py-3 text-sm text-muted-foreground hover:text-foreground border-b border-border shrink-0 transition-colors"
               >
                 <ChevronRight className="size-4 rotate-180" />
                 Back to list
@@ -392,9 +392,9 @@ export function HomebrewBrowserModal({
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center gap-2">
-                  <p className="text-slate-600 text-sm">Select a {TYPE_LABEL[type]} from the list to view details</p>
+                  <p className="text-muted-foreground text-sm">Select a {TYPE_LABEL[type]} from the list to view details</p>
                   {!userId && (
-                    <p className="text-xs text-slate-700">Sign in to add entries to your library</p>
+                    <p className="text-xs text-muted-foreground">Sign in to add entries to your library</p>
                   )}
                 </div>
               )}

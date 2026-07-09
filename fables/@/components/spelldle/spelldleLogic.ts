@@ -5,7 +5,7 @@
 // as the old sudoku easter egg) from the site's live spell list. Each guess
 // must be a real spell (picked via autocomplete, like the old letter-based
 // version) — instead of scoring individual letters, each guess is compared
-// attribute-by-attribute (level, school, class list, damage type, save)
+// attribute-by-attribute (level, school, class list, damage type, casting time)
 // against the target, Wordle-colored per attribute: green = exact match,
 // yellow = close/partial, gray = no match. Winning means guessing the actual
 // spell name; the attribute grid is a hint trail, not the win condition
@@ -16,7 +16,7 @@ import { getSpells } from "../../../src/spells/spellCache"
 import type { Spell } from "../../../src/spells/types"
 
 export type CellStatus = "correct" | "close" | "absent"
-export type AttrKey = "level" | "school" | "classes" | "damageType" | "saveAttr"
+export type AttrKey = "level" | "school" | "classes" | "damageType" | "castingTime"
 
 export interface AttributeResult {
   key: AttrKey
@@ -36,7 +36,7 @@ export interface SpellAttributes {
   school: string
   classes: string[]
   damageType: string  // "None" when the spell deals no damage
-  saveAttr: string    // "None" when the spell doesn't call for a save
+  castingTime: string
 }
 
 export interface SpelldleSave {
@@ -52,7 +52,7 @@ const STORAGE_KEY = "fables-spelldle"
 export const MAX_GUESSES = 6
 
 const ATTR_LABELS: Record<AttrKey, string> = {
-  level: "Level", school: "School", classes: "Class", damageType: "Damage", saveAttr: "Save",
+  level: "Level", school: "School", classes: "Class", damageType: "Damage", castingTime: "Cast Time",
 }
 
 // ── Seeded PRNG (mulberry32) — deterministic per day ─────────────────────────
@@ -96,7 +96,7 @@ export function toAttrs(spell: Spell): SpellAttributes {
     school: spell.school?.name ?? "Unknown",
     classes: (spell.classes ?? []).map(c => c.name).sort(),
     damageType: spell.damageType || "None",
-    saveAttr: spell.saveAttr || "None",
+    castingTime: spell.casting_time || "Unknown",
   }
 }
 
@@ -139,8 +139,8 @@ export function scoreGuess(guess: Spell, target: SpellAttributes): AttributeResu
   })
 
   results.push({
-    key: "saveAttr", label: ATTR_LABELS.saveAttr, value: g.saveAttr,
-    status: g.saveAttr === target.saveAttr ? "correct" : "absent",
+    key: "castingTime", label: ATTR_LABELS.castingTime, value: g.castingTime,
+    status: g.castingTime === target.castingTime ? "correct" : "absent",
   })
 
   return results

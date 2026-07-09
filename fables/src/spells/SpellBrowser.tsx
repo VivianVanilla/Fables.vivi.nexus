@@ -154,19 +154,19 @@ export function SpellBrowser({
     setSearch('')
   }
 
-  const selectCls = 'bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-400 hover:border-slate-700 transition-colors focus:outline-none cursor-pointer'
+  const selectCls = 'bg-card border border-border rounded-lg px-3 py-2 text-sm text-muted-foreground hover:border-border transition-colors focus:outline-none cursor-pointer'
 
   return (
     <div className="flex flex-col h-full">
       {/* Header bar */}
       <div className="flex items-center justify-between mb-4 gap-3">
-        <div className="flex items-center gap-2 text-slate-300">
+        <div className="flex items-center gap-2 text-foreground">
           <Sparkles className="size-4 text-purple-400" />
           <span className="font-semibold text-sm tracking-wide">
             {loading ? 'Loading…' : `${baseCount} Spells`}
           </span>
           {!loading && filtered.length !== baseCount && (
-            <span className="text-slate-500 text-xs">({filtered.length} shown)</span>
+            <span className="text-muted-foreground text-xs">({filtered.length} shown)</span>
           )}
         </div>
 
@@ -174,7 +174,7 @@ export function SpellBrowser({
           {activeFilterCount > 0 && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="size-3" /> Clear filters
             </button>
@@ -201,8 +201,8 @@ export function SpellBrowser({
           onClick={() => setFiltersOpen((v) => !v)}
           className={`md:hidden flex items-center gap-2 text-sm px-3 py-2 rounded-lg border transition-colors ${
             filtersOpen || activeFilterCount > 0
-              ? 'bg-slate-700 border-slate-600 text-slate-100'
-              : 'bg-slate-900 border-slate-800 text-slate-400'
+              ? 'bg-muted border-border text-foreground'
+              : 'bg-card border-border text-muted-foreground'
           }`}
         >
           <SlidersHorizontal className="size-3.5" />
@@ -219,38 +219,38 @@ export function SpellBrowser({
           <LevelMultiSelect selectedLevels={selectedLevels} setSelectedLevels={setSelectedLevels} />
 
           <select value={filters.school} onChange={(e) => setFilters((f) => ({ ...f, school: e.target.value }))} className={selectCls}>
-            <option value="All" className="bg-slate-900 text-slate-100">All Schools</option>
-            {SCHOOLS.map((s) => <option key={s} className="bg-slate-900 text-slate-100">{s}</option>)}
+            <option value="All" className="bg-card text-foreground">All Schools</option>
+            {SCHOOLS.map((s) => <option key={s} className="bg-card text-foreground">{s}</option>)}
           </select>
 
           <select value={filters.casting_time} onChange={(e) => setFilters((f) => ({ ...f, casting_time: e.target.value }))} className={selectCls}>
-            <option value="All" className="bg-slate-900 text-slate-100">Casting Time</option>
-            {CASTING.map((t) => <option key={t} className="bg-slate-900 text-slate-100">{t}</option>)}
+            <option value="All" className="bg-card text-foreground">Casting Time</option>
+            {CASTING.map((t) => <option key={t} className="bg-card text-foreground">{t}</option>)}
           </select>
 
           <select value={filters.damageType} onChange={(e) => setFilters((f) => ({ ...f, damageType: e.target.value }))} className={selectCls}>
-            <option value="All" className="bg-slate-900 text-slate-100">Damage Type</option>
-            {DAMAGE_TYPES.map((d) => <option key={d} className="bg-slate-900 text-slate-100">{d}</option>)}
+            <option value="All" className="bg-card text-foreground">Damage Type</option>
+            {DAMAGE_TYPES.map((d) => <option key={d} className="bg-card text-foreground">{d}</option>)}
           </select>
 
           <select value={filters.concentration} onChange={(e) => setFilters((f) => ({ ...f, concentration: e.target.value }))} className={selectCls}>
-            <option value="All" className="bg-slate-900 text-slate-100">Concentration</option>
-            <option value="Concentration" className="bg-slate-900 text-slate-100">Conc. only</option>
-            <option value="No Concentration" className="bg-slate-900 text-slate-100">No conc.</option>
+            <option value="All" className="bg-card text-foreground">Concentration</option>
+            <option value="Concentration" className="bg-card text-foreground">Conc. only</option>
+            <option value="No Concentration" className="bg-card text-foreground">No conc.</option>
           </select>
 
           <select value={filters.ritual} onChange={(e) => setFilters((f) => ({ ...f, ritual: e.target.value }))} className={selectCls}>
-            <option value="All" className="bg-slate-900 text-slate-100">Ritual</option>
-            <option value="true" className="bg-slate-900 text-slate-100">Ritual only</option>
-            <option value="false" className="bg-slate-900 text-slate-100">No ritual</option>
+            <option value="All" className="bg-card text-foreground">Ritual</option>
+            <option value="true" className="bg-card text-foreground">Ritual only</option>
+            <option value="false" className="bg-card text-foreground">No ritual</option>
           </select>
 
           {!hideHomebrew && (
             <select value={filters.campaignTag} onChange={(e) => setFilters((f) => ({ ...f, campaignTag: e.target.value }))} className={selectCls}>
-              <option value="All" className="bg-slate-900 text-slate-100">Campaign</option>
-              <option value="Twilight" className="bg-slate-900 text-slate-100">Twilight</option>
-              <option value="Squain" className="bg-slate-900 text-slate-100">Squain</option>
-              <option value="Special-Banned" className="bg-slate-900 text-slate-100">Special/Banned</option>
+              <option value="All" className="bg-card text-foreground">Campaign</option>
+              <option value="Twilight" className="bg-card text-foreground">Twilight</option>
+              <option value="Squain" className="bg-card text-foreground">Squain</option>
+              <option value="Special-Banned" className="bg-card text-foreground">Special/Banned</option>
             </select>
           )}
         </div>
@@ -269,7 +269,7 @@ export function SpellBrowser({
       {/* Admin login — only shown to non-admin users who aren't already in admin mode */}
       {!adminMode && !isAdmin && (
         <details className="mb-4 group">
-          <summary className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 cursor-pointer select-none list-none">
+          <summary className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-muted-foreground cursor-pointer select-none list-none">
             <Shield className="size-3" /> Admin
           </summary>
           <div className="mt-2 flex gap-2">
@@ -279,11 +279,11 @@ export function SpellBrowser({
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-slate-600"
+              className="flex-1 bg-card border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-border"
             />
             <button
               onClick={handleAdminLogin}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-sm transition-colors"
+              className="bg-muted hover:bg-muted text-foreground px-3 py-1.5 rounded-lg text-sm transition-colors"
             >
               Enter
             </button>
@@ -302,11 +302,11 @@ export function SpellBrowser({
 
       {/* Spell list */}
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-slate-600">
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           Loading spells…
         </div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-slate-600">
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           No spells match your filters.
         </div>
       ) : (
@@ -315,9 +315,9 @@ export function SpellBrowser({
             .sort(([a], [b]) => Number(a) - Number(b))
             .map(([level, levelSpells]) => (
               <section key={level}>
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3 border-b border-slate-800 pb-2">
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 border-b border-border pb-2">
                   {level === '0' ? 'Cantrips' : `Level ${level}`}
-                  <span className="ml-2 text-slate-700 normal-case font-normal tracking-normal">({levelSpells.length})</span>
+                  <span className="ml-2 text-muted-foreground normal-case font-normal tracking-normal">({levelSpells.length})</span>
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {levelSpells.map((spell) => (

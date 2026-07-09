@@ -16,8 +16,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline gap-2">
-        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">{label}</span>
-        {hint && <span className="text-[10px] text-slate-700">{hint}</span>}
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</span>
+        {hint && <span className="text-[10px] text-muted-foreground">{hint}</span>}
       </div>
       {children}
     </div>
@@ -28,15 +28,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{title}</span>
-        <div className="flex-1 h-px bg-slate-800" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{title}</span>
+        <div className="flex-1 h-px bg-muted" />
       </div>
       {children}
     </div>
   )
 }
 
-const inp = "bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full"
+const inp = "bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full"
 const sel = `${inp} cursor-pointer`
 
 function ToggleChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -44,7 +44,7 @@ function ToggleChip({ label, active, onClick }: { label: string; active: boolean
     <button
       type="button" onClick={onClick}
       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-        active ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-500 border border-slate-700 hover:border-slate-600 hover:text-slate-300"
+        active ? "bg-purple-600 text-white" : "bg-muted text-muted-foreground border border-border hover:border-border hover:text-foreground"
       }`}
     >
       {label}
@@ -108,36 +108,36 @@ function DomainSpellsField({ d, set }: { d: Record<string,any>; set: (k: string,
   return (
     <div className="flex flex-col gap-2">
       {rows.length === 0 && (
-        <p className="text-xs text-slate-700 italic">No domain spells yet.</p>
+        <p className="text-xs text-muted-foreground italic">No domain spells yet.</p>
       )}
       {rows.map((row, i) => (
         <div key={i} className="flex gap-2 items-center">
           <div className="flex flex-col gap-0.5 w-20 shrink-0">
-            <span className="text-[9px] uppercase text-slate-600">Level</span>
+            <span className="text-[9px] uppercase text-muted-foreground">Level</span>
             <select
               value={row.level}
               onChange={e => updateRow(i, { level: parseInt(e.target.value) })}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600"
+              className="bg-card border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border"
             >
-              {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l} className="bg-slate-900 text-slate-100">{l}</option>)}
+              {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l} className="bg-card text-foreground">{l}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-            <span className="text-[9px] uppercase text-slate-600">Spells (comma-separated)</span>
+            <span className="text-[9px] uppercase text-muted-foreground">Spells (comma-separated)</span>
             <input
               value={(row.spells ?? []).join(", ")}
               onChange={e => updateRow(i, { spells: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
               placeholder="Burning Hands, Command…"
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full"
+              className="bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full"
             />
           </div>
-          <button onClick={() => removeRow(i)} className="size-7 flex items-center justify-center text-slate-700 hover:text-red-400 hover:bg-red-400/10 rounded-lg shrink-0 mt-4">
+          <button onClick={() => removeRow(i)} className="size-7 flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-lg shrink-0 mt-4">
             <Trash2 className="size-3.5" />
           </button>
         </div>
       ))}
       {rows.length < 5 && (
-        <button type="button" onClick={addRow} className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+        <button type="button" onClick={addRow} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
           <Plus className="size-4" /> Add level
         </button>
       )}
@@ -152,7 +152,7 @@ function EquipmentField({ d, set }: { d: Record<string,any>; set: (k: string, v:
   const lines: string[] = d.equipment ?? []
   return (
     <div className="flex flex-col gap-2">
-      {lines.length === 0 && <p className="text-xs text-slate-700 italic">No equipment lines yet.</p>}
+      {lines.length === 0 && <p className="text-xs text-muted-foreground italic">No equipment lines yet.</p>}
       {lines.map((line, i) => (
         <div key={i} className="flex gap-2">
           <input
@@ -162,13 +162,13 @@ function EquipmentField({ d, set }: { d: Record<string,any>; set: (k: string, v:
             className={inp}
           />
           <button type="button" onClick={() => set("equipment", lines.filter((_,j) => j !== i))}
-            className="size-9 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 shrink-0">
+            className="size-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 shrink-0">
             <Trash2 className="size-3.5" />
           </button>
         </div>
       ))}
       <button type="button" onClick={() => set("equipment", [...lines, ""])}
-        className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
         <Plus className="size-4" /> Add line
       </button>
     </div>
@@ -241,13 +241,13 @@ function ClassFields({
             onChange={e => set("parent_class_id", e.target.value)}
             className={sel}
           >
-            <option value="" className="bg-slate-900 text-slate-100">— Select a class —</option>
+            <option value="" className="bg-card text-foreground">— Select a class —</option>
             {classOptions.map(c => (
-              <option key={c.id} value={c.id} className="bg-slate-900 text-slate-100">{c.name}</option>
+              <option key={c.id} value={c.id} className="bg-card text-foreground">{c.name}</option>
             ))}
           </select>
           {classOptions.length === 0 && isSubclass && (
-            <p className="text-[10px] text-slate-600 italic mt-0.5">
+            <p className="text-[10px] text-muted-foreground italic mt-0.5">
               {isHomebrew
                 ? "No homebrew classes found under your account — create a class first."
                 : "No official classes found — add a core class first."}
@@ -261,7 +261,7 @@ function ClassFields({
           <>
             <Field label="Hit Die">
               <select value={d.hit_die ?? "d8"} onChange={e => set("hit_die", e.target.value)} className={sel}>
-                {["d6","d8","d10","d12"].map(v => <option key={v} className="bg-slate-900 text-slate-100">{v}</option>)}
+                {["d6","d8","d10","d12"].map(v => <option key={v} className="bg-card text-foreground">{v}</option>)}
               </select>
             </Field>
 
@@ -306,17 +306,17 @@ function ClassFields({
             <div className="grid grid-cols-2 gap-3">
               <Field label="Spellcasting Ability">
                 <select value={d.spellcasting_ability ?? ""} onChange={e => set("spellcasting_ability", e.target.value)} className={sel}>
-                  <option value="" className="bg-slate-900 text-slate-100">None</option>
-                  {["str","dex","con","int","wis","cha"].map(a => <option key={a} value={a} className="bg-slate-900 text-slate-100">{a.toUpperCase()}</option>)}
+                  <option value="" className="bg-card text-foreground">None</option>
+                  {["str","dex","con","int","wis","cha"].map(a => <option key={a} value={a} className="bg-card text-foreground">{a.toUpperCase()}</option>)}
                 </select>
               </Field>
               <Field label="Casting Type">
                 <select value={d.spellcasting_type ?? ""} onChange={e => set("spellcasting_type", e.target.value)} className={sel} disabled={!d.spellcasting_ability}>
-                  <option value="" className="bg-slate-900 text-slate-100">None</option>
-                  <option value="full" className="bg-slate-900 text-slate-100">Full Caster</option>
-                  <option value="half" className="bg-slate-900 text-slate-100">Half Caster</option>
-                  <option value="third" className="bg-slate-900 text-slate-100">Third Caster</option>
-                  <option value="pact" className="bg-slate-900 text-slate-100">Pact Magic</option>
+                  <option value="" className="bg-card text-foreground">None</option>
+                  <option value="full" className="bg-card text-foreground">Full Caster</option>
+                  <option value="half" className="bg-card text-foreground">Half Caster</option>
+                  <option value="third" className="bg-card text-foreground">Third Caster</option>
+                  <option value="pact" className="bg-card text-foreground">Pact Magic</option>
                 </select>
               </Field>
             </div>
@@ -347,7 +347,7 @@ function ClassFields({
 
       {!isSubclass && (
         <Section title="Starting Equipment">
-          <p className="text-xs text-slate-600 -mt-1 mb-2">Each line becomes a bullet point. Use (a)/(b) notation for choices.</p>
+          <p className="text-xs text-muted-foreground -mt-1 mb-2">Each line becomes a bullet point. Use (a)/(b) notation for choices.</p>
           <EquipmentField d={d} set={set} />
         </Section>
       )}
@@ -355,7 +355,7 @@ function ClassFields({
       {/* Subclass Spells — spells known/granted by this subclass at certain levels */}
       {isSubclass && (
         <Section title="Subclass Spells">
-          <p className="text-xs text-slate-600 -mt-1 mb-2">Optional. Spells this subclass grants or adds to the known list at certain levels.</p>
+          <p className="text-xs text-muted-foreground -mt-1 mb-2">Optional. Spells this subclass grants or adds to the known list at certain levels.</p>
           <DomainSpellsField d={d} set={set} />
         </Section>
       )}
@@ -364,24 +364,24 @@ function ClassFields({
       <Section title="Features">
         <div className="flex flex-col gap-2">
           {features.length === 0 && (
-            <p className="text-xs text-slate-700 italic">No features yet. Add one below.</p>
+            <p className="text-xs text-muted-foreground italic">No features yet. Add one below.</p>
           )}
           {features.map(f => (
-            <div key={f.id} className="flex gap-2 items-start bg-slate-900 border border-slate-800 rounded-xl p-3">
-              <GripVertical className="size-4 text-slate-700 mt-2 shrink-0" />
+            <div key={f.id} className="flex gap-2 items-start bg-card border border-border rounded-xl p-3">
+              <GripVertical className="size-4 text-muted-foreground mt-2 shrink-0" />
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex gap-2">
                   <div className="flex flex-col gap-1 w-20 shrink-0">
-                    <span className="text-[9px] uppercase text-slate-600">Level</span>
+                    <span className="text-[9px] uppercase text-muted-foreground">Level</span>
                     <input type="number" value={f.level} min={1} max={20}
                       onChange={e => updateFeature(f.id, { level: parseInt(e.target.value)||1 })}
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-center text-slate-100 outline-none focus:border-slate-600" />
+                      className="bg-muted border border-border rounded-lg px-2 py-1.5 text-sm text-center text-foreground outline-none focus:border-border" />
                   </div>
                   <div className="flex flex-col gap-1 flex-1 min-w-0">
-                    <span className="text-[9px] uppercase text-slate-600">Feature Name</span>
+                    <span className="text-[9px] uppercase text-muted-foreground">Feature Name</span>
                     <input value={f.name} onChange={e => updateFeature(f.id, { name: e.target.value })}
                       placeholder="Second Wind…"
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full" />
+                      className="bg-muted border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full" />
                   </div>
                 </div>
                 <MarkdownTextarea
@@ -389,16 +389,16 @@ function ClassFields({
                   onChange={v => updateFeature(f.id, { description: v })}
                   placeholder="Describe what this feature does…"
                   rows={2}
-                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-slate-600 placeholder:text-slate-700 resize-none w-full"
+                  className="bg-muted border border-border rounded-lg px-2 py-1.5 text-xs text-foreground outline-none focus:border-border placeholder:text-muted-foreground resize-none w-full"
                 />
               </div>
-              <button onClick={() => removeFeature(f.id)} className="size-7 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 mt-1">
+              <button onClick={() => removeFeature(f.id)} className="size-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 mt-1">
                 <Trash2 className="size-3.5" />
               </button>
             </div>
           ))}
           <button type="button" onClick={addFeature}
-            className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
             <Plus className="size-4" /> Add Feature
           </button>
         </div>
@@ -424,31 +424,31 @@ function TraitList({ traits, onChange }: { traits: Trait[]; onChange: (next: Tra
   }
   return (
     <div className="flex flex-col gap-2">
-      {traits.length === 0 && <p className="text-xs text-slate-700 italic">No traits yet.</p>}
+      {traits.length === 0 && <p className="text-xs text-muted-foreground italic">No traits yet.</p>}
       {traits.map(t => (
-        <div key={t.id} className="flex gap-2 items-start bg-slate-900 border border-slate-800 rounded-xl p-3">
+        <div key={t.id} className="flex gap-2 items-start bg-card border border-border rounded-xl p-3">
           <div className="flex-1 flex flex-col gap-2 min-w-0">
             <input
               value={t.name}
               onChange={e => update(t.id, { name: e.target.value })}
               placeholder="Trait name (e.g. Darkvision, Fey Ancestry…)"
-              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full"
+              className="bg-muted border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full"
             />
             <MarkdownTextarea
               value={t.description}
               onChange={v => update(t.id, { description: v })}
               placeholder="Describe what this trait does…"
               rows={2}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-slate-600 placeholder:text-slate-700 resize-none w-full"
+              className="bg-muted border border-border rounded-lg px-2 py-1.5 text-xs text-foreground outline-none focus:border-border placeholder:text-muted-foreground resize-none w-full"
             />
           </div>
-          <button onClick={() => remove(t.id)} className="size-7 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 mt-1">
+          <button onClick={() => remove(t.id)} className="size-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 mt-1">
             <Trash2 className="size-3.5" />
           </button>
         </div>
       ))}
       <button type="button" onClick={add}
-        className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
         <Plus className="size-4" /> Add Trait
       </button>
     </div>
@@ -480,18 +480,18 @@ function RaceFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
   return (
     <>
       <Section title="Racial Traits">
-        <p className="text-xs text-slate-600 -mt-2">Traits shared by all members of this race.</p>
+        <p className="text-xs text-muted-foreground -mt-2">Traits shared by all members of this race.</p>
         <TraitList traits={traits} onChange={next => set("traits", next)} />
       </Section>
 
       <Section title="Subraces">
-        <p className="text-xs text-slate-600 -mt-2">Optional. Each subrace inherits the traits above and adds its own.</p>
+        <p className="text-xs text-muted-foreground -mt-2">Optional. Each subrace inherits the traits above and adds its own.</p>
         <div className="flex flex-col gap-2">
           {subraces.length === 0 && (
-            <p className="text-xs text-slate-700 italic">No subraces yet.</p>
+            <p className="text-xs text-muted-foreground italic">No subraces yet.</p>
           )}
           {subraces.map(s => (
-            <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <div key={s.id} className="bg-card border border-border rounded-xl overflow-hidden">
               {/* Subrace header */}
               <div className="flex items-center gap-2 px-3 py-2.5">
                 <button
@@ -499,31 +499,31 @@ function RaceFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
                   onClick={() => setOpenSubrace(prev => prev === s.id ? null : s.id)}
                   className="flex-1 flex items-center gap-2 text-left"
                 >
-                  <span className="text-[10px] text-slate-500 select-none">{openSubrace === s.id ? "▼" : "▶"}</span>
-                  <span className="text-sm text-slate-200 font-medium">{s.name || <span className="text-slate-600 italic">Unnamed subrace</span>}</span>
+                  <span className="text-[10px] text-muted-foreground select-none">{openSubrace === s.id ? "▼" : "▶"}</span>
+                  <span className="text-sm text-foreground font-medium">{s.name || <span className="text-muted-foreground italic">Unnamed subrace</span>}</span>
                   {s.traits.length > 0 && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500">{s.traits.length} trait{s.traits.length !== 1 ? "s" : ""}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{s.traits.length} trait{s.traits.length !== 1 ? "s" : ""}</span>
                   )}
                 </button>
-                <button onClick={() => removeSubrace(s.id)} className="size-6 flex items-center justify-center rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0">
+                <button onClick={() => removeSubrace(s.id)} className="size-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0">
                   <Trash2 className="size-3.5" />
                 </button>
               </div>
 
               {/* Expanded subrace editor */}
               {openSubrace === s.id && (
-                <div className="border-t border-slate-800 px-3 pb-3 flex flex-col gap-3">
+                <div className="border-t border-border px-3 pb-3 flex flex-col gap-3">
                   <div className="mt-2">
-                    <span className="text-[9px] uppercase text-slate-600 font-semibold">Subrace Name</span>
+                    <span className="text-[9px] uppercase text-muted-foreground font-semibold">Subrace Name</span>
                     <input
                       value={s.name}
                       onChange={e => updateSubrace(s.id, { name: e.target.value })}
                       placeholder="High Elf, Wood Elf, Dark Elf…"
-                      className="mt-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-slate-600 placeholder:text-slate-700 w-full"
+                      className="mt-1 bg-muted border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full"
                     />
                   </div>
                   <div>
-                    <span className="text-[9px] uppercase text-slate-600 font-semibold block mb-2">Subrace Traits</span>
+                    <span className="text-[9px] uppercase text-muted-foreground font-semibold block mb-2">Subrace Traits</span>
                     <TraitList
                       traits={s.traits}
                       onChange={next => updateSubrace(s.id, { traits: next })}
@@ -534,7 +534,7 @@ function RaceFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
             </div>
           ))}
           <button type="button" onClick={addSubrace}
-            className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-400 transition-colors py-1">
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
             <Plus className="size-4" /> Add Subrace
           </button>
         </div>
@@ -552,9 +552,9 @@ function FeatFields({ d, set, isHomebrew }: { d: Record<string,any>; set: (k: st
         <Section title="Entry Type">
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={!!d.is_invocation} onChange={e => set("is_invocation", e.target.checked)} className="rounded accent-purple-500 size-4" />
-            <span className="text-sm text-slate-300">This is an Eldritch Invocation</span>
+            <span className="text-sm text-foreground">This is an Eldritch Invocation</span>
           </label>
-          <p className="text-[10px] text-slate-600 mt-1">Saves under Invocations instead of Feats, and autofills independently on the character sheet's Invocations tab.</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Saves under Invocations instead of Feats, and autofills independently on the character sheet's Invocations tab.</p>
         </Section>
       )}
 
@@ -586,19 +586,19 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
         <div className="grid grid-cols-2 gap-3">
           <Field label="Rarity">
             <select value={d.rarity ?? "common"} onChange={e => set("rarity", e.target.value)} className={sel}>
-              {["common","uncommon","rare","very rare","legendary","artifact"].map(r => <option key={r} value={r} className="bg-slate-900 text-slate-100">{r.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
+              {["common","uncommon","rare","very rare","legendary","artifact"].map(r => <option key={r} value={r} className="bg-card text-foreground">{r.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
             </select>
           </Field>
           <Field label="Item Type">
             <select value={d.item_type ?? "wondrous"} onChange={e => set("item_type", e.target.value)} className={sel}>
-              {["armor","potion","ring","rod","scroll","staff","wand","weapon","wondrous","other"].map(t => <option key={t} value={t} className="bg-slate-900 text-slate-100">{t.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
+              {["armor","potion","ring","rod","scroll","staff","wand","weapon","wondrous","other"].map(t => <option key={t} value={t} className="bg-card text-foreground">{t.replace(/\b\w/g,(c:string)=>c.toUpperCase())}</option>)}
             </select>
           </Field>
         </div>
         <Field label="Attunement">
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={!!d.requires_attunement} onChange={e => set("requires_attunement", e.target.checked)} className="rounded accent-purple-500 size-4" />
-            <span className="text-sm text-slate-300">Requires Attunement</span>
+            <span className="text-sm text-foreground">Requires Attunement</span>
           </label>
         </Field>
       </Section>
@@ -699,13 +699,13 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
     <div className="flex flex-col gap-6 max-w-2xl pb-8">
 
       {/* Back */}
-      <button onClick={onCancel} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors w-fit -mb-2">
+      <button onClick={onCancel} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit -mb-2">
         <ArrowLeft className="size-4" /> Back
       </button>
 
       {/* Heading */}
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-lg font-bold text-slate-100">
+        <h2 className="text-lg font-bold text-foreground">
           {initial ? "Edit" : "New"} {entryLabel}
         </h2>
         {isHomebrew ? (
@@ -744,13 +744,13 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
             <AlertTriangle className="size-4" />
             <span className="text-sm font-semibold">Delete "{name || entryLabel}"?</span>
           </div>
-          <p className="text-xs text-slate-500 leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             This will permanently remove the entry. Library users who added it will lose it from their collections.
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => setConfirmDelete(false)}
-              className="flex-1 py-2 rounded-lg text-sm text-slate-400 border border-slate-800 hover:border-slate-700 transition-colors"
+              className="flex-1 py-2 rounded-lg text-sm text-muted-foreground border border-border hover:border-border transition-colors"
             >
               Cancel
             </button>
@@ -774,7 +774,7 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
             <Trash2 className="size-4" /> Delete
           </button>
         )}
-        <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg text-sm text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-slate-200 transition-colors">
+        <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg text-sm text-muted-foreground border border-border hover:border-border hover:text-foreground transition-colors">
           Cancel
         </button>
         <button onClick={save} disabled={saving} className="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">

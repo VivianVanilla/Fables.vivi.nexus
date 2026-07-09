@@ -104,7 +104,7 @@ export function CampaignView({ campaign, onClose }: Props) {
           <button
             type="button"
             onClick={() => setExpandedId(null)}
-            className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 text-sm font-semibold text-white/70 hover:text-white hover:bg-white/5 shrink-0 bg-slate-900 transition-colors text-left w-full"
+            className="flex items-center gap-2 px-4 py-2.5 border-b border-foreground/10 text-sm font-semibold text-foreground/70 hover:text-foreground hover:bg-foreground/5 shrink-0 bg-card transition-colors text-left w-full"
           >
             <span className="text-base leading-none">←</span>
             <span>{campaign.name}</span>
@@ -118,27 +118,27 @@ export function CampaignView({ campaign, onClose }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 text-white bg-slate-900 rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 text-foreground bg-card rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-slate-900 shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-foreground/10 bg-card shrink-0">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold tracking-wide truncate">{campaign.name}</p>
-          <p className="text-[10px] text-white/40 uppercase tracking-widest">Campaign · DM</p>
+          <p className="text-[10px] text-foreground/40 uppercase tracking-widest">Campaign · DM</p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/50 hover:text-white shrink-0 transition-colors"
+          className="size-7 flex items-center justify-center rounded-md hover:bg-foreground/10 text-foreground/50 hover:text-foreground shrink-0 transition-colors"
         >
           ✕
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b border-white/10 bg-slate-900 shrink-0">
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-foreground/10 bg-card shrink-0">
         {(["overview", "initiative", "chat"] as CampaignTab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
+            className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-foreground/20 text-foreground" : "text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5"}`}>
             {tab === "overview" ? "Overview" : tab === "initiative" ? "Initiative" : "Party Chat"}
           </button>
         ))}
@@ -162,7 +162,7 @@ export function CampaignView({ campaign, onClose }: Props) {
         </div>
       )}
       {activeTab === "chat" && !partyCode && (
-        <div className="flex-1 flex items-center justify-center text-sm text-white/30 italic">
+        <div className="flex-1 flex items-center justify-center text-sm text-foreground/30 italic">
           No party code — re-create this campaign to enable chat.
         </div>
       )}
@@ -171,43 +171,43 @@ export function CampaignView({ campaign, onClose }: Props) {
       {activeTab === "overview" && <div className="flex flex-col gap-4 p-4 overflow-auto flex-1">
 
         {/* Party Code card */}
-        <div className="rounded-xl bg-slate-800 ring-1 ring-slate-700 p-4 flex flex-col gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Party Code</span>
+        <div className="rounded-xl bg-muted ring-1 ring-border p-4 flex flex-col gap-2">
+          <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">Party Code</span>
           {partyCode ? (
             <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold font-mono tracking-[0.3em] text-white select-all">{partyCode}</span>
+              <span className="text-2xl font-bold font-mono tracking-[0.3em] text-foreground select-all">{partyCode}</span>
               <button
                 type="button"
                 onClick={copyCode}
-                className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors"
+                className="text-[10px] px-2.5 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors"
                 title="Copy to clipboard"
               >
                 Copy
               </button>
             </div>
           ) : (
-            <p className="text-xs text-white/30 italic">No party code — re-create this campaign to generate one.</p>
+            <p className="text-xs text-foreground/30 italic">No party code — re-create this campaign to generate one.</p>
           )}
-          <p className="text-[10px] text-white/40">Share this code with your players. They enter it in the <span className="text-white/60">Info</span> tab of their character sheet to link to this campaign.</p>
+          <p className="text-[10px] text-foreground/40">Share this code with your players. They enter it in the <span className="text-foreground/60">Info</span> tab of their character sheet to link to this campaign.</p>
         </div>
 
         {/* Party members */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">
+            <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">
               Party Members
             </span>
-            <span className="text-[10px] text-white/30">{partyMembers.length} character{partyMembers.length !== 1 ? "s" : ""}</span>
+            <span className="text-[10px] text-foreground/30">{partyMembers.length} character{partyMembers.length !== 1 ? "s" : ""}</span>
           </div>
 
           {partyCode === "" && (
-            <p className="text-xs text-white/30 italic text-center py-6">This campaign has no party code.</p>
+            <p className="text-xs text-foreground/30 italic text-center py-6">This campaign has no party code.</p>
           )}
 
           {partyCode !== "" && partyMembers.length === 0 && (
-            <div className="rounded-xl bg-slate-800 ring-1 ring-slate-700 p-4 text-center">
-              <p className="text-xs text-white/40 italic">No characters have joined yet.</p>
-              <p className="text-[10px] text-white/30 mt-1">Share the party code above with your players.</p>
+            <div className="rounded-xl bg-muted ring-1 ring-border p-4 text-center">
+              <p className="text-xs text-foreground/40 italic">No characters have joined yet.</p>
+              <p className="text-[10px] text-foreground/30 mt-1">Share the party code above with your players.</p>
             </div>
           )}
 
@@ -228,12 +228,12 @@ export function CampaignView({ campaign, onClose }: Props) {
             return (
               <div
                 key={char.id}
-                className="rounded-xl bg-slate-800 ring-1 ring-slate-700 hover:ring-slate-500 transition-all cursor-pointer overflow-hidden"
+                className="rounded-xl bg-muted ring-1 ring-border hover:ring-border transition-all cursor-pointer overflow-hidden"
                 onClick={() => setExpandedId(char.id)}
               >
                 {/* Top row — portrait + name + arrow */}
                 <div className="p-3 flex items-center gap-3">
-                  <div className="size-10 rounded-full overflow-hidden bg-slate-700 shrink-0 flex items-center justify-center">
+                  <div className="size-10 rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center">
                     {charData.portrait ? (
                       <img src={charData.portrait} alt={char.name} className="w-full h-full object-cover" />
                     ) : (
@@ -242,25 +242,25 @@ export function CampaignView({ campaign, onClose }: Props) {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{char.name}</p>
-                    <p className="text-[10px] text-white/50 uppercase tracking-wider truncate">
+                    <p className="text-sm font-semibold text-foreground truncate">{char.name}</p>
+                    <p className="text-[10px] text-foreground/50 uppercase tracking-wider truncate">
                       {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}
                     </p>
                     {charData.maxHp ? (
                       <div className="mt-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
                           <div className={`h-full ${hpColor} transition-all`} style={{ width: `${hpPercent}%` }} />
                         </div>
-                        <span className="text-[9px] text-white/40 shrink-0">{charData.hp ?? 0}/{charData.maxHp} HP</span>
+                        <span className="text-[9px] text-foreground/40 shrink-0">{charData.hp ?? 0}/{charData.maxHp} HP</span>
                       </div>
                     ) : null}
                   </div>
 
-                  <span className="text-white/30 text-xs shrink-0">→</span>
+                  <span className="text-foreground/30 text-xs shrink-0">→</span>
                 </div>
 
                 {/* Stat row */}
-                <div className="grid grid-cols-5 border-t border-white/5 divide-x divide-white/5">
+                <div className="grid grid-cols-5 border-t border-foreground/5 divide-x divide-foreground/5">
                   <StatCell label="AC"      value={charData.ac   != null ? String(charData.ac)   : "—"} />
                   <StatCell label="Speed"   value={charData.speed != null ? `${charData.speed}ft` : "—"} />
                   <StatCell label="Perc"    value={String(pPassPerc)} />
@@ -270,7 +270,7 @@ export function CampaignView({ campaign, onClose }: Props) {
 
                 {/* Conditions row (only if any) */}
                 {conditions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 px-3 py-2 border-t border-white/5">
+                  <div className="flex flex-wrap gap-1 px-3 py-2 border-t border-foreground/5">
                     {conditions.map(c => (
                       <span key={c.id} className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-300/80 font-medium">{c.name}</span>
                     ))}
@@ -288,8 +288,8 @@ export function CampaignView({ campaign, onClose }: Props) {
 function StatCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col items-center py-2 gap-0.5">
-      <span className="text-[9px] text-white/30 uppercase tracking-widest">{label}</span>
-      <span className="text-xs font-semibold text-white tabular-nums">{value}</span>
+      <span className="text-[9px] text-foreground/30 uppercase tracking-widest">{label}</span>
+      <span className="text-xs font-semibold text-foreground tabular-nums">{value}</span>
     </div>
   )
 }

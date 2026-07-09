@@ -13,7 +13,7 @@ interface Props {
 export function SpellModal({ spell, onClose }: Props) {
   return (
     <Dialog open={!!spell} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-950 border-slate-800">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto bg-background border-border">
         {spell && (
           <>
             <DialogHeader>
@@ -24,15 +24,15 @@ export function SpellModal({ spell, onClose }: Props) {
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm mb-4">
-              <div><span className="text-slate-500">Casting Time</span><br /><span className="text-slate-200">{spell.casting_time}</span></div>
-              <div><span className="text-slate-500">Range</span><br /><span className="text-slate-200">{spell.range}</span></div>
-              <div><span className="text-slate-500">Duration</span><br /><span className="text-slate-200">{spell.duration}</span></div>
-              <div><span className="text-slate-500">Components</span><br /><span className="text-slate-200">{spell.components?.join(', ')}</span></div>
+              <div><span className="text-muted-foreground">Casting Time</span><br /><span className="text-foreground">{spell.casting_time}</span></div>
+              <div><span className="text-muted-foreground">Range</span><br /><span className="text-foreground">{spell.range}</span></div>
+              <div><span className="text-muted-foreground">Duration</span><br /><span className="text-foreground">{spell.duration}</span></div>
+              <div><span className="text-muted-foreground">Components</span><br /><span className="text-foreground">{spell.components?.join(', ')}</span></div>
             </div>
 
             {spell.materialComponents && spell.materials && (
-              <p className="text-xs text-slate-500 -mt-2 mb-3">
-                <span className="text-slate-400">Materials:</span> {spell.materials}
+              <p className="text-xs text-muted-foreground -mt-2 mb-3">
+                <span className="text-muted-foreground">Materials:</span> {spell.materials}
               </p>
             )}
 
@@ -42,29 +42,29 @@ export function SpellModal({ spell, onClose }: Props) {
               </span>
             )}
 
-            <div className="text-sm leading-relaxed border-t border-slate-800 pt-4">
+            <div className="text-sm leading-relaxed border-t border-border pt-4">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks]}
                 components={{
-                  p: ({ children }) => <p className="text-slate-300 mb-2.5 whitespace-pre-wrap">{children}</p>,
-                  ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-300">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-slate-300">{children}</ol>,
+                  p: ({ children }) => <p className="text-foreground mb-2.5 whitespace-pre-wrap">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-foreground">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-foreground">{children}</ol>,
                   li: ({ children }) => <li>{children}</li>,
                   table: ({ children }) => (
                     <div className="overflow-x-auto my-3">
-                      <table className="w-full border border-slate-700 text-xs rounded">{children}</table>
+                      <table className="w-full border border-border text-xs rounded">{children}</table>
                     </div>
                   ),
-                  th: ({ children }) => <th className="border border-slate-700 px-3 py-1.5 bg-slate-900 text-left text-slate-300 font-medium">{children}</th>,
-                  td: ({ children }) => <td className="border border-slate-800 px-3 py-1.5 text-slate-400">{children}</td>,
-                  code: ({ children }) => <code className="bg-slate-900 px-1 py-0.5 rounded text-purple-300 text-xs">{children}</code>,
+                  th: ({ children }) => <th className="border border-border px-3 py-1.5 bg-card text-left text-foreground font-medium">{children}</th>,
+                  td: ({ children }) => <td className="border border-border px-3 py-1.5 text-muted-foreground">{children}</td>,
+                  code: ({ children }) => <code className="bg-card px-1 py-0.5 rounded text-purple-300 text-xs">{children}</code>,
                 }}
               >
                 {Array.isArray(spell.desc) ? spell.desc.join('\n\n') : (spell.desc ?? '')}
               </ReactMarkdown>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-800">
+            <div className="flex flex-wrap gap-1.5 pt-3 border-t border-border">
               {spell.classes?.map((c) => {
                 const color = CLASS_COLORS[c.name] ?? '#6B7280'
                 return (

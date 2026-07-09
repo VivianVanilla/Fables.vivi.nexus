@@ -7,11 +7,16 @@
 // live in src/index.css as overrides of the same shadcn CSS variables
 // (--background, --sidebar, --card, --border, etc.) the app already uses,
 // so anything already styled with the semantic bg-background/bg-sidebar/
-// bg-card classes re-themes for free. Persisted to localStorage — no DB
-// round-trip needed for something this cheap to lose.
+// bg-card classes re-themes for free.
+//
+// Persisted twice: localStorage for an instant, offline-friendly first paint,
+// and Supabase auth's user_metadata (via supabase.auth.updateUser) so the
+// choice follows you across devices — no new table/RLS needed, it rides
+// along on the same auth user object supabase.auth.getUser() already returns.
 // ════════════════════════════════════════════════════════════════════════════
 
 import React, { createContext, useContext, useEffect, useState } from "react"
+import { supabase } from "../supabase"
 
 export type AppTheme = "abyss" | "midnight" | "light" | "rainbow"
 
@@ -32,10 +37,14 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | null>(null)
 
+function isAppTheme(v: unknown): v is AppTheme {
+  return v === "abyss" || v === "midnight" || v === "light" || v === "rainbow"
+}
+
 function readStoredTheme(): AppTheme {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw === "abyss" || raw === "midnight" || raw === "light" || raw === "rainbow") return raw
+    if (isAppTheme(raw)) return raw
   } catch { /* ignore */ }
   return DEFAULT_THEME
 }
@@ -47,9 +56,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute("data-app-theme", theme)
   }, [theme])
 
+  // Once we know who's logged in, prefer the theme saved on their account —
+  // this is what actually makes it follow you across devices instead of
+  // being stuck per-browser in localStorage.
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const remote = data.user?.user_metadata?.app_theme
+      if (isAppTheme(remote)) {
+        setThemeState(remote)
+        try { localStorage.setItem(STORAGE_KEY, remote) } catch { /* ignore */ }
+      }
+    }).catch(() => { /* not logged in yet / offline — local theme stands */ })
+  }, [])
+
   function setTheme(t: AppTheme) {
     setThemeState(t)
     try { localStorage.setItem(STORAGE_KEY, t) } catch { /* ignore */ }
+    supabase.auth.updateUser({ data: { app_theme: t } })
+      .catch(e => console.error("Failed to sync theme to account:", e))
   }
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>
