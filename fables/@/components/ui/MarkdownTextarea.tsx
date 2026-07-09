@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Bold, Italic, Code as CodeIcon, Table2, ImageIcon, Loader2, Link2 } from "lucide-react"
+import { Bold, Italic, Code as CodeIcon, Table2, ImageIcon, Loader2 } from "lucide-react"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "../imageGallery"
 import { PortraitModal } from "../character/modals/PortraitModal"
 
@@ -41,32 +41,6 @@ function toggleWrap(el: HTMLTextAreaElement, value: string, onChange: (v: string
     next = before + marker + selected + marker + after
     nextStart = start + marker.length
     nextEnd = end + marker.length
-  }
-  onChange(next)
-  requestAnimationFrame(() => { el.focus(); el.selectionStart = nextStart; el.selectionEnd = nextEnd })
-}
-
-// [[ ]] uses different open/close markers, so it can't reuse toggleWrap's
-// symmetric-marker assumption — wraps the selection, or with nothing
-// selected just opens `[[]]` and parks the cursor between the brackets so
-// you can type the note name straight away.
-function toggleWikilink(el: HTMLTextAreaElement, value: string, onChange: (v: string) => void) {
-  const start = el.selectionStart
-  const end = el.selectionEnd
-  const before = value.slice(0, start)
-  const selected = value.slice(start, end)
-  const after = value.slice(end)
-  const alreadyWrapped = before.endsWith("[[") && after.startsWith("]]")
-
-  let next: string, nextStart: number, nextEnd: number
-  if (alreadyWrapped) {
-    next = before.slice(0, -2) + selected + after.slice(2)
-    nextStart = start - 2
-    nextEnd = end - 2
-  } else {
-    next = before + "[[" + selected + "]]" + after
-    nextStart = start + 2
-    nextEnd = selected ? nextStart + selected.length : nextStart
   }
   onChange(next)
   requestAnimationFrame(() => { el.focus(); el.selectionStart = nextStart; el.selectionEnd = nextEnd })
@@ -159,7 +133,6 @@ export function MarkdownTextarea({
     if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleWrap(el, value, onChange, "**"); return }
     if (mod && e.key.toLowerCase() === "i") { e.preventDefault(); toggleWrap(el, value, onChange, "*"); return }
     if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); toggleWrap(el, value, onChange, "`"); return }
-    if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); toggleWikilink(el, value, onChange); return }
     if (e.key === "Enter") handleListEnter(el, value, onChange, e)
   }
 
@@ -184,10 +157,6 @@ export function MarkdownTextarea({
         </button>
         <button type="button" className={toolCls} title="Insert table" onClick={insertTable}>
           <Table2 className="size-3.5" />
-        </button>
-        <button type="button" className={toolCls} title="Link to another note (Ctrl/Cmd+K)"
-          onClick={() => innerRef.current && toggleWikilink(innerRef.current, value, onChange)}>
-          <Link2 className="size-3.5" />
         </button>
         {userId && (
           <>

@@ -1,7 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
-// NoteWebBoard.tsx — the shared Obsidian-style spiderweb board surface, used
-// both by PartyNotesCanvas (party-shared) and PersonalNoteWeb (personal,
-// non-shared). Note-kind nodes are LIVE links to a real note in `objects`:
+// NoteWebBoard.tsx — the Party Notes spiderweb board surface (PartyNotesCanvas).
+// Note-kind nodes are LIVE links to a real note in `objects`:
 // - Anyone with access to the board can move a node and draw/delete
 //   connections.
 // - Only the node's owner can edit its content or unlink/delete it — except
@@ -11,23 +10,18 @@
 //   no copy involved.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { FileText, Image as ImageIcon, Link2, Trash2 } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
-import { useNavigation } from "../../../src/contexts/NavigationContext"
 import { loadUserImages } from "../imageGallery"
 import { uniqueName } from "../character-utils"
 import { NOTE_DRAG_TYPE } from "./partyTypes"
 import { useCanvas, type BoardKey, type CanvasNode } from "./useCanvas"
 import { useCanvasPanZoom } from "./useCanvasPanZoom"
-import { extractWikilinkNames } from "./wikilinks"
 import { CanvasNodeViewer } from "./CanvasNodeViewer"
 
 const NODE_W = 176
 const NODE_H = 112
-const AUTO_PULL_COLS = 5
-const AUTO_PULL_SPACING_X = 220
-const AUTO_PULL_SPACING_Y = 150
 
 export function NoteWebBoard({
   boardKey, currentUserId, isDM = false, resolveOwnerName, title, leftAccessory,
@@ -40,35 +34,8 @@ export function NoteWebBoard({
   leftAccessory?: React.ReactNode
 }) {
   const { objects, createObject, updateObject } = useUserContext()
-  const { openObjectId } = useNavigation()
-  const { nodes, edges, linkedNotes, loaded, missingRefIds, patchLinkedNote, createNode, moveNode, deleteNode, createEdge, deleteEdge } = useCanvas(boardKey, currentUserId)
+  const { nodes, edges, linkedNotes, missingRefIds, patchLinkedNote, createNode, moveNode, deleteNode, createEdge, deleteEdge } = useCanvas(boardKey, currentUserId)
   const pz = useCanvasPanZoom()
-
-  function goToNote(name: string) {
-    const match = objects.find(o => o.type === "note" && o.name.toLowerCase() === name.toLowerCase())
-    if (match) openObjectId(match.id)
-  }
-
-  // Personal boards auto-pull every note you own onto the board — nothing
-  // to drag in manually. Party boards stay opt-in: linking a note there
-  // shares it with the whole party, so that only ever happens deliberately.
-  const autoPullInFlight = useRef<Set<string>>(new Set())
-  useEffect(() => {
-    if (boardKey.mode !== "personal" || !loaded) return
-    const linkedIds = new Set(nodes.filter(n => n.ref_object_id).map(n => n.ref_object_id as string))
-    const missing = objects.filter(o => o.type === "note" && !linkedIds.has(o.id) && !autoPullInFlight.current.has(o.id))
-    if (missing.length === 0) return
-    const startIndex = nodes.length
-    missing.forEach((note, i) => {
-      autoPullInFlight.current.add(note.id)
-      const idx = startIndex + i
-      const x = (idx % AUTO_PULL_COLS) * AUTO_PULL_SPACING_X + 40
-      const y = Math.floor(idx / AUTO_PULL_COLS) * AUTO_PULL_SPACING_Y + 40
-      createNode({ kind: "note", title: note.name, ref_object_id: note.id, x, y })
-        .finally(() => { autoPullInFlight.current.delete(note.id) })
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardKey.mode, loaded, objects, nodes])
 
   // A note deleted from the sidebar (or anywhere else) should disappear from
   // the board too — useCanvas flags its ref_object_id as missing the moment
@@ -104,34 +71,6 @@ export function NoteWebBoard({
     }
     return { name: node.title || "Untitled", content: node.content ?? "" }
   }
-
-  // Personal boards additionally show a dashed line wherever one linked
-  // note's content actually references another via [[Name]] — derived live
-  // from content, not something you draw, so it stays in sync automatically.
-  // Skipped if a manual connection already covers the same pair.
-  const dynamicEdges = useMemo(() => {
-    if (boardKey.mode !== "personal") return []
-    const nameToNodeId = new Map<string, string>()
-    nodes.forEach(n => {
-      if (n.kind === "note") nameToNodeId.set(noteDisplay(n).name.toLowerCase(), n.id)
-    })
-    const seen = new Set<string>()
-    const result: { a: string; b: string }[] = []
-    nodes.forEach(n => {
-      if (n.kind !== "note") return
-      for (const linkName of extractWikilinkNames(noteDisplay(n).content)) {
-        const targetId = nameToNodeId.get(linkName)
-        if (!targetId || targetId === n.id) continue
-        const key = [n.id, targetId].sort().join("~")
-        if (seen.has(key)) continue
-        if (edges.some(e => (e.from_node_id === n.id && e.to_node_id === targetId) || (e.from_node_id === targetId && e.to_node_id === n.id))) continue
-        seen.add(key)
-        result.push({ a: n.id, b: targetId })
-      }
-    })
-    return result
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardKey.mode, nodes, linkedNotes, edges])
 
   // ── Node drag / click ─────────────────────────────────────────────────────
   function onNodeMouseDown(e: React.MouseEvent, node: CanvasNode) {
@@ -286,16 +225,6 @@ export function NoteWebBoard({
         >
           {/* Edges */}
           <svg className="absolute overflow-visible pointer-events-none" style={{ left: 0, top: 0, width: 8000, height: 8000 }}>
-            {/* Auto-detected [[link]] connections — dashed, not deletable (they're derived, not stored) */}
-            {dynamicEdges.map(edge => {
-              const a = nodes.find(n => n.id === edge.a)
-              const b = nodes.find(n => n.id === edge.b)
-              if (!a || !b) return null
-              return (
-                <line key={`dyn-${edge.a}~${edge.b}`} x1={a.x + NODE_W / 2} y1={a.y + NODE_H / 2} x2={b.x + NODE_W / 2} y2={b.y + NODE_H / 2}
-                  stroke="var(--color-violet-400, #a78bfa)" strokeOpacity={0.4} strokeWidth={1.5} strokeDasharray="5 4" />
-              )
-            })}
             {edges.map(edge => {
               const a = nodes.find(n => n.id === edge.from_node_id)
               const b = nodes.find(n => n.id === edge.to_node_id)
@@ -387,7 +316,6 @@ export function NoteWebBoard({
           onSave={canModify(viewerNode) && viewerNode.ref_object_id
             ? patch => saveLinkedNote(viewerNode.ref_object_id as string, patch.content)
             : undefined}
-          onNoteLink={goToNote}
         />
       )}
 

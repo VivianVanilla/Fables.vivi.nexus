@@ -13,7 +13,6 @@
 import { useRef, useState } from "react"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import { useUserContext } from "../../src/contexts/UserContext"
-import { useNavigation } from "../../src/contexts/NavigationContext"
 import { safeParseJson } from "./character-utils"
 import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 import { Markdown } from "./ui/Markdown"
@@ -28,13 +27,7 @@ interface NoteViewProps {
 }
 
 export function NoteView({ note, onClose }: NoteViewProps) {
-  const { user, objects, updateObject } = useUserContext()
-  const { openObjectId } = useNavigation()
-
-  function goToNote(name: string) {
-    const match = objects.find(o => o.type === "note" && o.name.toLowerCase() === name.toLowerCase())
-    if (match) openObjectId(match.id)
-  }
+  const { user, updateObject } = useUserContext()
 
   const initialData = safeParseJson(note.data) as NoteData
   const [content, setContent] = useState(initialData.content ?? "")
@@ -97,7 +90,7 @@ export function NoteView({ note, onClose }: NoteViewProps) {
         ) : (
           <div className="max-w-prose cursor-pointer" onClick={() => setEditing(true)} title="Click to edit">
             {content.trim()
-              ? <Markdown text={content} tone="dark" size="sm" onNoteLink={goToNote} />
+              ? <Markdown text={content} tone="dark" size="sm" />
               : <p className="text-muted-foreground/60 italic text-sm">Empty note — click to start writing.</p>
             }
           </div>

@@ -1,7 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
-// useCanvasPanZoom.ts — shared pan/zoom/drag mechanics for the manual note
-// web (PartyNotesCanvas / PersonalNoteWeb) and the auto-generated
-// NoteGraphView.
+// useCanvasPanZoom.ts — pan/zoom/drag mechanics for the Party Notes board
+// (NoteWebBoard / PartyNotesCanvas).
 //
 // Perf note: pan and node-drag write DIRECTLY to the DOM (via contentRef /
 // per-node refs) on every move event instead of going through React state.

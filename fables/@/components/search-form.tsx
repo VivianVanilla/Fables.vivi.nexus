@@ -382,8 +382,7 @@ function SimpleForm({
     setSaving(true)
     setError(null)
     try {
-      // Notes are looked up by name for [[wikilinks]] — keep them unique so
-      // a link never resolves ambiguously.
+      // Avoid two notes silently sharing the same default name.
       const finalName = type === "note"
         ? uniqueName(name, objects.filter(o => o.type === "note").map(o => o.name))
         : name

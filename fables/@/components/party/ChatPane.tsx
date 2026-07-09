@@ -22,13 +22,11 @@ function avatarColor(seed: string) {
   return colors[h % colors.length]
 }
 
-function Row({ msg, showHeader, canDelete, onDelete, canAdd, partyCode }: {
+function Row({ msg, showHeader, canDelete, onDelete }: {
   msg: Message
   showHeader: boolean
   canDelete: boolean
   onDelete: () => void
-  canAdd: boolean
-  partyCode: string
 }) {
   const [hover, setHover] = useState(false)
   const name = msg.sender_name ?? "Unknown"
@@ -60,7 +58,7 @@ function Row({ msg, showHeader, canDelete, onDelete, canAdd, partyCode }: {
           </div>
         )}
         {msg.type === "share" && msg.payload ? (
-          <div className="mt-1"><ShareCard payload={msg.payload} canAdd={canAdd} partyCode={partyCode} /></div>
+          <div className="mt-1"><ShareCard payload={msg.payload} /></div>
         ) : (
           <>
             {msg.image_url && (
@@ -156,8 +154,6 @@ export function ChatPane({
               showHeader={showHeader}
               canDelete={canDelete(msg)}
               onDelete={() => onDelete(msg.id)}
-              canAdd={msg.sender_id !== currentUserId}
-              partyCode={partyCode}
             />
           )
         })}

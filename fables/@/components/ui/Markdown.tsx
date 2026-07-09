@@ -6,7 +6,7 @@
 // actually under our control.
 // ════════════════════════════════════════════════════════════════════════════
 
-import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
+import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 
@@ -17,16 +17,6 @@ import remarkBreaks from "remark-breaks"
 // item's text gets wrapped in its own <p> — which visually shoves the text
 // away from its bullet. Collapse blank lines that sit between two rows/items
 // of the same kind so both parse the way the user actually intended.
-// Obsidian-style `[[Note Name]]` links — rewritten into a normal markdown
-// link pointing at a synthetic `wikilink:` scheme so the `a` renderer below
-// can intercept it and open the note in-app instead of navigating.
-function normalizeWikiLinks(md: string): string {
-  return md.replace(/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g, (_m, target: string, label: string | undefined) => {
-    const name = target.trim()
-    return `[${(label ?? name).trim()}](wikilink:${encodeURIComponent(name)})`
-  })
-}
-
 function normalizeBlankLines(md: string): string {
   const isRow  = (l: string) => /\|/.test(l) && l.trim().length > 0
   const isItem = (l: string) => /^\s*([-*+]|\d+[.)])\s+/.test(l)
@@ -65,12 +55,9 @@ interface MarkdownProps {
   tone?: "dark" | "slate"
   size?: "sm" | "xs"
   className?: string
-  onNoteLink?: (name: string) => void
 }
 
-const WIKILINK_SCHEME = "wikilink:"
-
-export function Markdown({ text, tone = "dark", size = "sm", className = "", onNoteLink }: MarkdownProps) {
+export function Markdown({ text, tone = "dark", size = "sm", className = "" }: MarkdownProps) {
   const c = TONES[tone]
 
   return (
@@ -81,13 +68,6 @@ export function Markdown({ text, tone = "dark", size = "sm", className = "", onN
     <div className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${c.text} space-y-2 ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
-        // react-markdown's default sanitizer strips any URL scheme it
-        // doesn't recognize (including our synthetic `wikilink:` one),
-        // blanking the href before it ever reaches the `a` renderer below —
-        // that left wikilinks falling through to a real target="_blank"
-        // anchor with an empty href, which is what was popping a blank tab
-        // instead of navigating in-app. Let `wikilink:` through untouched.
-        urlTransform={(url) => url.startsWith(WIKILINK_SCHEME) ? url : defaultUrlTransform(url)}
         components={{
           p:  ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
           h1: ({ children }) => <h1 className={`text-lg font-bold ${c.heading}`}>{children}</h1>,
@@ -100,18 +80,7 @@ export function Markdown({ text, tone = "dark", size = "sm", className = "", onN
           hr: () => <hr className={c.border} />,
           code: ({ children }) => <code className={`px-1 py-0.5 rounded text-xs font-mono ${c.code}`}>{children}</code>,
           img: ({ src, alt }) => <img src={src} alt={alt ?? ""} className={`max-w-full rounded-lg border ${c.border}`} />,
-          a: ({ children, href }) => {
-            if (href?.startsWith(WIKILINK_SCHEME)) {
-              const name = decodeURIComponent(href.slice(WIKILINK_SCHEME.length))
-              return (
-                <button type="button" onClick={e => { e.stopPropagation(); onNoteLink?.(name) }}
-                  className="font-medium text-violet-400 hover:text-violet-300 underline decoration-dotted underline-offset-2">
-                  {children}
-                </button>
-              )
-            }
-            return <a href={href} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:opacity-80">{children}</a>
-          },
+          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:opacity-80">{children}</a>,
           table: ({ children }) => (
             <div className={`overflow-x-auto rounded-md border ${c.border}`}>
               <table className="w-full text-xs border-collapse">{children}</table>
@@ -122,7 +91,7 @@ export function Markdown({ text, tone = "dark", size = "sm", className = "", onN
           td: ({ children }) => <td className={`px-2.5 py-1.5 align-top border-b whitespace-pre-wrap ${c.border} ${c.muted}`}>{children}</td>,
         }}
       >
-        {normalizeBlankLines(normalizeWikiLinks(text))}
+        {normalizeBlankLines(text)}
       </ReactMarkdown>
     </div>
   )

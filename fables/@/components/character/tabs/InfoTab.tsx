@@ -9,7 +9,6 @@ import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteR
 import type { Theme } from "../../character-themes"
 import { nanoid, profBonus, safeParseJson, uniqueName } from "../../character-utils"
 import { useUserContext } from "../../../../src/contexts/UserContext"
-import { useNavigation } from "../../../../src/contexts/NavigationContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "../ui/PopTransition"
@@ -349,18 +348,12 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
   autoEdit?: boolean
   onAutoEditConsumed?: () => void
 }) {
-  const { objects, updateObject } = useUserContext()
-  const { openObjectId } = useNavigation()
+  const { updateObject } = useUserContext()
   const initialData = safeParseJson(note.data) as { content?: string }
 
   const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!!autoEdit)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  function goToNote(name: string) {
-    const match = objects.find(o => o.type === "note" && o.name.toLowerCase() === name.toLowerCase())
-    if (match) openObjectId(match.id)
-  }
 
   // Newly-created notes open straight into edit mode, once — mirrors the
   // auto-edit-on-add pattern used for newly added spells.
@@ -409,7 +402,7 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
             />
           ) : (
             content.trim()
-              ? <Markdown text={content} tone="dark" size="xs" onNoteLink={goToNote} />
+              ? <Markdown text={content} tone="dark" size="xs" />
               : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ✎ Edit to start writing."}</p>
           )}
         </div>

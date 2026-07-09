@@ -1,6 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search, Waypoints } from "lucide-react"
+import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -46,10 +46,9 @@ interface BgImage {
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSelectObject?: (obj: SidebarObject | null) => void
-  onOpenNoteWeb?: () => void
 }
 
-export function AppSidebar({ onSelectObject, onOpenNoteWeb, ...props }: AppSidebarProps) {
+export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
   const { user, objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -515,13 +514,6 @@ export function AppSidebar({ onSelectObject, onOpenNoteWeb, ...props }: AppSideb
       <SidebarHeader>
         <VersionSwitcher />
         <SearchForm />
-        {onOpenNoteWeb && (
-          <button type="button" onClick={onOpenNoteWeb}
-            className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
-            <Waypoints className="size-4" />
-            Note Web
-          </button>
-        )}
       </SidebarHeader>
       <SidebarContent>
         <div className="relative px-2 pt-2">

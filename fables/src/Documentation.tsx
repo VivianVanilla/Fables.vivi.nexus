@@ -53,7 +53,7 @@ export default function Documentation() {
 
   return (
     <SidebarProvider>
-      <AppSidebar onSelectObject={handleSelectObject} onOpenNoteWeb={() => navigate("/dashboard?noteweb=1")} />
+      <AppSidebar onSelectObject={handleSelectObject} />
       <SidebarInset className="overflow-hidden flex flex-col h-screen">
 
         {/* ── Top bar ─────────────────────────────────────────────────── */}

@@ -12,15 +12,12 @@ import { CharacterSheet } from "@/components/character";
 import { CampaignView } from "@/components/campaign-view";
 import { NoteView } from "@/components/NoteView";
 import { MonsterSheet } from "@/components/monster";
-import { PersonalNoteWeb } from "@/components/party/PersonalNoteWeb";
 import { useUserContext } from "./contexts/UserContext";
-import { NavigationProvider } from "./contexts/NavigationContext";
 import "./index.css";
 
 export default function Dashboard() {
   const { user, loading, objects } = useUserContext();
   const [selectedObject, setSelectedObject] = useState<SidebarObject | null>(null);
-  const [showNoteWeb, setShowNoteWeb] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Auto-open object specified via ?open=<id> (e.g. navigated from Documentation)
@@ -34,32 +31,14 @@ export default function Dashboard() {
     }
   }, [objects, searchParams]);
 
-  // Auto-open Note Web via ?noteweb=1 (e.g. navigated from Documentation,
-  // which has its own AppSidebar instance and can't hold this view's state)
-  useEffect(() => {
-    if (searchParams.get("noteweb") !== "1") return;
-    setShowNoteWeb(true);
-    setSelectedObject(null);
-    setSearchParams({}, { replace: true });
-  }, [searchParams]);
-
   // Always use the live version from UserContext so stale snapshots don't stick
   const liveSelected = selectedObject
     ? ((objects.find(o => o.id === selectedObject.id) as SidebarObject | undefined) ?? selectedObject)
     : null;
 
-  function openObjectId(id: string) {
-    const target = objects.find(o => o.id === id) as SidebarObject | undefined;
-    if (target) { setSelectedObject(target); setShowNoteWeb(false); }
-  }
-
   return (
     <SidebarProvider>
-      <NavigationProvider openObjectId={openObjectId}>
-      <AppSidebar
-        onSelectObject={(obj) => { setSelectedObject(obj); setShowNoteWeb(false); }}
-        onOpenNoteWeb={() => { setShowNoteWeb(true); setSelectedObject(null); }}
-      />
+      <AppSidebar onSelectObject={setSelectedObject} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
@@ -75,9 +54,7 @@ export default function Dashboard() {
             </div>
           ) : user ? (
             <div className="flex-1 min-h-0 rounded-xl bg-muted/50 overflow-auto">
-              {showNoteWeb ? (
-                <PersonalNoteWeb onClose={() => setShowNoteWeb(false)} />
-              ) : liveSelected?.type === "character" ? (
+              {liveSelected?.type === "character" ? (
                 <CharacterSheet
                   key={liveSelected.id}
                   character={liveSelected}
@@ -131,7 +108,6 @@ export default function Dashboard() {
           )}
         </div>
       </SidebarInset>
-      </NavigationProvider>
     </SidebarProvider>
   );
 }

@@ -9,13 +9,12 @@ import { Markdown } from "../ui/Markdown"
 import { MarkdownTextarea } from "../ui/MarkdownTextarea"
 import type { CanvasNode } from "./useCanvas"
 
-export function CanvasNodeViewer({ node, onClose, onSave, liveTitle, liveContent, onNoteLink }: {
+export function CanvasNodeViewer({ node, onClose, onSave, liveTitle, liveContent }: {
   node: CanvasNode
   onClose: () => void
   onSave?: (patch: { content: string }) => void
   liveTitle?: string
   liveContent?: string
-  onNoteLink?: (name: string) => void
 }) {
   const displayTitle = liveTitle ?? node.title
   const displayContent = liveContent ?? node.content ?? ""
@@ -100,7 +99,7 @@ export function CanvasNodeViewer({ node, onClose, onSave, liveTitle, liveContent
             </div>
           ) : (
             <div className="bg-zinc-900 rounded-xl p-6 max-h-[75vh] overflow-y-auto select-text">
-              {displayContent.trim() ? <Markdown text={displayContent} tone="dark" size="sm" onNoteLink={onNoteLink} /> : <p className="text-sm text-white/40 italic">Empty note.</p>}
+              {displayContent.trim() ? <Markdown text={displayContent} tone="dark" size="sm" /> : <p className="text-sm text-white/40 italic">Empty note.</p>}
             </div>
           )}
         </div>

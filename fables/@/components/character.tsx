@@ -31,7 +31,7 @@ import { SavesCard }             from "./character/panels/SavesCard"
 import { SkillsCard }            from "./character/panels/SkillsCard"
 import { SpellsEquipPanel }      from "./character/panels/SpellsEquipPanel"
 import { FavoritesPanel }        from "./character/panels/FavoritesPanel"
-import { FloatingPanel }         from "./character/ui/FloatingPanel"
+import { FloatingPanel, DEFAULT_WIDTH as POPOUT_W, DEFAULT_HEIGHT as POPOUT_H } from "./character/ui/FloatingPanel"
 import { FavoriteStar }          from "./character/ui/FavoriteStar"
 
 // Modals
@@ -407,7 +407,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         return rest
       }
       const count = Object.keys(prev).length
-      return { ...prev, [id]: { x: 96 + count * 28, y: 96 + count * 28 } }
+      // Center on the actual viewport (using the same clamped size
+      // FloatingPanel itself renders at) instead of a fixed x/y — a flat
+      // 96px offset looked centered on desktop but pushed the panel mostly
+      // off-screen on a narrow phone. Cascade additional popouts diagonally,
+      // clamped so they never open past the visible edge.
+      const w = Math.min(POPOUT_W, window.innerWidth - 16)
+      const h = Math.min(POPOUT_H, window.innerHeight - 16)
+      const baseX = Math.max(8, (window.innerWidth - w) / 2)
+      const baseY = Math.max(8, (window.innerHeight - h) / 2)
+      const x = Math.min(baseX + count * 28, Math.max(8, window.innerWidth - w - 8))
+      const y = Math.min(baseY + count * 28, Math.max(8, window.innerHeight - h - 8))
+      return { ...prev, [id]: { x, y } }
     })
   }
   function closePopout(id: string) {

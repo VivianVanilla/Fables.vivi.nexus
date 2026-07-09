@@ -21,8 +21,8 @@ interface FloatingPanelProps {
 
 const MIN_WIDTH  = 280
 const MIN_HEIGHT = 200
-const DEFAULT_WIDTH  = 420
-const DEFAULT_HEIGHT = 480
+export const DEFAULT_WIDTH  = 420
+export const DEFAULT_HEIGHT = 480
 
 export function FloatingPanel({ title, x, y, width, height, onMove, onResize, onClose, children }: FloatingPanelProps) {
   const dragState   = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
