@@ -44,12 +44,16 @@ export function PartyServer({
   // sidebar — there isn't room for both it and the chat at once on a phone.
   const [railOpen, setRailOpen] = useState(false)
 
-  // Player view: the roster is just the DM (players don't see each other's
-  // characters as DM targets unless they're also in `members`). DM view: the
-  // full player roster, already passed in from campaign-view.tsx.
-  const dmTargets: PartyMember[] = isDM
-    ? members.filter(m => m.userId !== currentUserId)
-    : dmUserId && dmUserId !== currentUserId ? [{ userId: dmUserId, name: "Dungeon Master" }] : []
+  // Everyone in the party can DM everyone else — the rest of the player
+  // roster (from `members`, minus yourself) plus the DM, unless you *are*
+  // the DM (in which case `dmUserId === currentUserId` and it's skipped) or
+  // the DM is already one of the party's own characters.
+  const dmTargets: PartyMember[] = [
+    ...members.filter(m => m.userId !== currentUserId),
+    ...(dmUserId && dmUserId !== currentUserId && !members.some(m => m.userId === dmUserId)
+      ? [{ userId: dmUserId, name: "Dungeon Master" }]
+      : []),
+  ]
 
   function selectChannel(id: string) {
     setActiveView({ type: "channel", id })

@@ -30,10 +30,11 @@ export function usePartyRoster(
       .select("*")
       .eq("type", "campaign")
       .filter("data->>partyCode", "eq", partyCode)
-      .maybeSingle()
+      .limit(1)
       .then(({ data, error }) => {
-        if (cancelled || error || !data) return
-        setFetchedCampaign(data as SidebarObject)
+        if (cancelled) return
+        if (error) { console.error("campaign fetch error:", error); return }
+        if (data?.[0]) setFetchedCampaign(data[0] as SidebarObject)
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,8 +49,9 @@ export function usePartyRoster(
       .eq("type", "character")
       .filter("data->>partyCode", "eq", partyCode)
       .then(({ data, error }) => {
-        if (cancelled || error || !data) return
-        const chars = data as SidebarObject[]
+        if (cancelled) return
+        if (error) { console.error("party roster fetch error:", error); return }
+        const chars = (data ?? []) as SidebarObject[]
         setFetchedMembers(chars.map(c => ({ userId: c.owner_id, name: c.name, characterId: c.id })))
       })
     return () => { cancelled = true }
@@ -124,7 +126,7 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
   }) {
     if (!currentUserId) return
     if (!input.body && !input.imageUrl && !input.payload) return
-    const { error } = await supabase.from("messages").insert({
+    const { data, error } = await supabase.from("messages").insert({
       party_code: partyCode,
       sender_id: currentUserId,
       sender_name: input.senderName,
@@ -134,8 +136,14 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
       channel: input.channel ?? null,
       type: input.type ?? "message",
       payload: input.payload ?? null,
-    })
-    if (error) console.error("send error:", error)
+    }).select().single()
+    if (error) { console.error("send error:", error); return }
+    // Don't rely solely on the realtime INSERT echo to show our own message —
+    // it can lag or (depending on the messages table's realtime RLS policy)
+    // never fire back to the sender at all. Append it locally now; the
+    // realtime handler above already dedupes by id if the echo does arrive.
+    const msg = data as Message
+    setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
   }
 
   async function deleteMessage(id: string) {
