@@ -9,6 +9,10 @@
 // collaborator who reloads, or opens the note later, sees it) DOES go through
 // Postgres and therefore DOES need a matching RLS policy — see the comment on
 // `saveShared` in NoteView.tsx.
+//
+// The same channel also carries Supabase Realtime *Presence* — each connected
+// client tracks its own {id, name, color, selStart, selEnd}, giving every
+// collaborator a distinct, named, colored cursor instead of one shared caret.
 // ════════════════════════════════════════════════════════════════════════════
 
 import * as Y from "yjs"
@@ -53,24 +57,124 @@ export function applyTextDiff(ytext: Y.Text, newText: string) {
   }, "local")
 }
 
-export function connectNoteChannel(noteId: string, doc: Y.Doc) {
-  const channel = supabase.channel(`note-${noteId}`, { config: { broadcast: { self: false } } })
+// ── Selection transform ──────────────────────────────────────────────────────
+//
+// When a remote edit lands, the textarea gets re-rendered with the merged
+// text, which resets the browser's native caret. To keep two people from
+// stomping on each other's cursor position while typing at once, we walk the
+// Y.Text change delta (Quill-style {retain,insert,delete} ops) and shift any
+// local selection offset by the same amount a remote edit would shift it.
+
+type Delta = Array<{ insert?: string | object; delete?: number; retain?: number }>
+
+function transformIndex(delta: Delta, index: number): number {
+  let oldPos = 0
+  let newPos = 0
+  for (const op of delta) {
+    if (oldPos >= index) break
+    if (op.retain != null) {
+      if (oldPos + op.retain > index) { newPos += index - oldPos; oldPos = index; break }
+      oldPos += op.retain
+      newPos += op.retain
+    } else if (typeof op.insert === "string") {
+      newPos += op.insert.length
+    } else if (op.insert != null) {
+      newPos += 1
+    } else if (op.delete != null) {
+      if (oldPos + op.delete > index) { oldPos = index; break }
+      oldPos += op.delete
+    }
+  }
+  newPos += Math.max(0, index - oldPos)
+  return newPos
+}
+
+export function adjustSelectionForDelta(delta: Delta, selStart: number, selEnd: number): { start: number; end: number } {
+  return { start: transformIndex(delta, selStart), end: transformIndex(delta, selEnd) }
+}
+
+// ── Presence ──────────────────────────────────────────────────────────────────
+
+export interface LocalPeer {
+  id: string
+  name: string
+  color: string
+}
+
+export interface PeerState extends LocalPeer {
+  selStart: number | null
+  selEnd: number | null
+}
+
+const SELECTION_THROTTLE_MS = 80
+
+export function connectNoteChannel(
+  noteId: string,
+  doc: Y.Doc,
+  localPeer: LocalPeer,
+  onRemoteDelta: (delta: Delta) => void,
+  onPeersChange: (peers: PeerState[]) => void,
+) {
+  const channel = supabase.channel(`note-${noteId}`, {
+    config: { broadcast: { self: false }, presence: { key: localPeer.id } },
+  })
 
   channel.on("broadcast", { event: "update" }, ({ payload }) => {
     try { applyEncodedState(doc, payload.update) }
     catch (e) { console.error("noteSync: failed to apply remote update", e) }
   })
 
-  channel.subscribe()
+  function syncPeers() {
+    const state = channel.presenceState<PeerState>()
+    const peers: PeerState[] = []
+    for (const key in state) {
+      if (key === localPeer.id) continue
+      const entries = state[key]
+      const latest = entries?.[entries.length - 1]
+      if (latest) peers.push(latest)
+    }
+    onPeersChange(peers)
+  }
+
+  channel.on("presence", { event: "sync" }, syncPeers)
+
+  channel.subscribe(status => {
+    if (status === "SUBSCRIBED") {
+      channel.track({ ...localPeer, selStart: null, selEnd: null } satisfies PeerState)
+    }
+  })
 
   const onUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin === "remote-snapshot") return  // don't echo back what we just received
+    if (origin === "remote-snapshot") return
     channel.send({ type: "broadcast", event: "update", payload: { update: uint8ToBase64(update) } })
   }
   doc.on("update", onUpdate)
 
-  return function disconnect() {
-    doc.off("update", onUpdate)
-    supabase.removeChannel(channel)
+  const textObserver = (event: Y.YTextEvent, transaction: Y.Transaction) => {
+    if (transaction.origin === "local") return
+    onRemoteDelta(event.changes.delta as Delta)
+  }
+  doc.getText("content").observe(textObserver)
+
+  let selectionTimer: ReturnType<typeof setTimeout> | null = null
+  let lastTrackAt = 0
+  function updateSelection(selStart: number, selEnd: number) {
+    const payload = { ...localPeer, selStart, selEnd } satisfies PeerState
+    const wait = Math.max(0, SELECTION_THROTTLE_MS - (Date.now() - lastTrackAt))
+    if (selectionTimer) clearTimeout(selectionTimer)
+    selectionTimer = setTimeout(() => {
+      lastTrackAt = Date.now()
+      channel.track(payload)
+    }, wait)
+  }
+
+  return {
+    updateSelection,
+    disconnect() {
+      doc.off("update", onUpdate)
+      doc.getText("content").unobserve(textObserver)
+      if (selectionTimer) clearTimeout(selectionTimer)
+      supabase.removeChannel(channel)
+    },
   }
 }

@@ -44,7 +44,7 @@ function Bubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
   return (
     <div className={`flex flex-col gap-0.5 ${isMe ? "items-start" : "items-end"}`}>
       <span className="text-[10px] text-white/35 px-1">{msg.sender_name ?? "Unknown"}</span>
-      <div className={`rounded-2xl px-3 py-2 max-w-[78%] break-words ${
+      <div className={`rounded-2xl px-3 py-2 max-w-[78%] wrap-breaks ${
         msg.recipient_id !== null
           ? "bg-purple-500/20 border border-purple-500/30 text-white"
           : isMe
@@ -154,7 +154,7 @@ export function PartyChat({
 
   const loadPickerImages = useCallback(async () => {
     setPickerLoading(true)
-    const { data } = await supabase.storage.from(BUCKET).list(currentUserId, { limit: 100 })
+    const { data } = await supabase.storage.from(BUCKET).list(currentUserId, { limit: 100, sortBy: { column: "created_at", order: "desc" } })
     if (data) {
       setPickerImages(
         data
@@ -216,7 +216,7 @@ export function PartyChat({
       {/* ── Party Chat tab ─────────────────────────────────────────────────── */}
       {chatTab === "party" && (
         <>
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden ">
             {partyMessages.length === 0 && (
               <p className="text-xs text-white/25 italic text-center mt-10">
                 No messages yet — say hello to your party!
@@ -260,7 +260,7 @@ export function PartyChat({
 
           {dmTarget ? (
             <>
-              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden ">
                 {getDmMessages(dmTarget.userId).length === 0 && (
                   <p className="text-xs text-white/25 italic text-center mt-10">No messages with {dmTarget.name} yet.</p>
                 )}
@@ -288,7 +288,7 @@ export function PartyChat({
       {/* ── DMs tab — player view ─────────────────────────────────────────── */}
       {chatTab === "dms" && !isDM && (
         <>
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden scrollbar-none">
             {allMyDms.length === 0 && (
               <p className="text-xs text-white/25 italic text-center mt-10">
                 No private messages yet.

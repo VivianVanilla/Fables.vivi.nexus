@@ -13,9 +13,10 @@ import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
   SpellSlot, FavoriteRef, Feature, FamiliarRef,
 } from "./character-types"
-import { SAVE_KEYS, SAVE_TO_ABILITY, SUPABASE_BUCKET, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
+import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
 import { profBonus, nanoid, safeParseJson } from "./character-utils"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "./character-themes"
+import { loadUserImages, uploadUserImage } from "./imageGallery"
 
 // UI primitives
 import { NumInput }              from "./character/ui/NumInput"
@@ -167,17 +168,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     setShowPortraitPicker(true)
     if (!user?.id) return
     setGalleryLoading(true)
-    const { data: files } = await supabase.storage.from(SUPABASE_BUCKET).list(`${user.id}`, { limit: 100 })
-    if (files) {
-      setGalleryImages(
-        files
-          .filter(f => f.name !== ".emptyFolderPlaceholder")
-          .map(f => ({
-            name: f.name,
-            publicUrl: supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(`${user.id}/${f.name}`).data.publicUrl,
-          }))
-      )
-    }
+    setGalleryImages(await loadUserImages(user.id))
     setGalleryLoading(false)
   }
 
@@ -185,13 +176,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     const file = e.target.files?.[0]
     if (!file || !user?.id) return
     setUploading(true)
-    const ext  = file.name.split(".").pop() ?? "png"
-    const path = `${user.id}/portrait_${character.id}.${ext}`
-    const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, file, { upsert: true })
-    if (!error) {
-      const { data: urlData } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path)
-      update({ portrait: urlData.publicUrl })
-    }
+    const url = await uploadUserImage(user.id, file, `portrait_${character.id}`)
+    if (url) update({ portrait: url })
     setUploading(false)
     setShowPortraitPicker(false)
     e.target.value = ""

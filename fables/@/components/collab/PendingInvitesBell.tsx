@@ -38,6 +38,8 @@ export function PendingInvitesBell() {
   const { user, updateSharedObject, refreshObjects } = useUserContext()
   const [open, setOpen] = useState(false)
   const [invites, setInvites] = useState<InviteRow[]>([])
+  const [errorId, setErrorId] = useState<string | null>(null)
+  const [respondingId, setRespondingId] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
@@ -78,16 +80,27 @@ export function PendingInvitesBell() {
   }
 
   async function respond(noteId: string, accept: boolean) {
+    setErrorId(null)
+    setRespondingId(noteId)
     const { data: row, error } = await supabase.from("objects").select("data").eq("id", noteId).maybeSingle()
-    if (error || !row || !myEmail) return
+    if (error || !row || !myEmail) { setRespondingId(null); setErrorId(noteId); return }
     const noteData = safeParseJson(row.data) as NoteData
     const pending = (noteData.pendingInviteEmails ?? []).filter(e => e !== myEmail)
     const collaborators = accept ? [...(noteData.collaboratorEmails ?? []), myEmail] : (noteData.collaboratorEmails ?? [])
     try {
       await updateSharedObject(noteId, { data: { ...noteData, pendingInviteEmails: pending, collaboratorEmails: collaborators } as unknown as JSON })
+      // Only drop it from the bell once the write is confirmed — clearing it
+      // optimistically meant a failed accept (e.g. RLS not yet granted)
+      // silently vanished, then reappeared on the next poll looking "stuck
+      // pending" even though the user had already clicked Accept.
+      setInvites(prev => prev.filter(i => i.id !== noteId))
       if (accept) await refreshObjects()
-    } catch (e) { console.error(e) }
-    setInvites(prev => prev.filter(i => i.id !== noteId))
+    } catch (e) {
+      console.error(e)
+      setErrorId(noteId)
+    } finally {
+      setRespondingId(null)
+    }
   }
 
   return (
@@ -116,15 +129,18 @@ export function PendingInvitesBell() {
                     You've been invited to collaborate on <span className="font-semibold">{inv.name}</span>
                   </p>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => respond(inv.id, true)}
-                      className="flex-1 text-[11px] py-1 rounded bg-purple-600/80 hover:bg-purple-600 text-white font-semibold transition-colors">
-                      Accept
+                    <button type="button" onClick={() => respond(inv.id, true)} disabled={respondingId === inv.id}
+                      className="flex-1 text-[11px] py-1 rounded bg-purple-600/80 hover:bg-purple-600 text-white font-semibold transition-colors disabled:opacity-50">
+                      {respondingId === inv.id ? "…" : "Accept"}
                     </button>
-                    <button type="button" onClick={() => respond(inv.id, false)}
-                      className="flex-1 text-[11px] py-1 rounded bg-white/10 hover:bg-white/20 text-white/60 transition-colors">
-                      Deny
+                    <button type="button" onClick={() => respond(inv.id, false)} disabled={respondingId === inv.id}
+                      className="flex-1 text-[11px] py-1 rounded bg-white/10 hover:bg-white/20 text-white/60 transition-colors disabled:opacity-50">
+                      {respondingId === inv.id ? "…" : "Deny"}
                     </button>
                   </div>
+                  {errorId === inv.id && (
+                    <p className="text-[10px] text-red-300">Couldn't reach the note — try again.</p>
+                  )}
                 </div>
               ))}
             </div>

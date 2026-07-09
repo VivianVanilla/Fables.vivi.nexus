@@ -23,22 +23,26 @@ import { useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { usePopoverPosition, useClickOutside } from "./usePortalMenu"
+import type { CollabRole } from "./useCollaborativeNote"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 interface ShareMenuProps {
   isOwner: boolean
+  ownerEmail?: string  // only knowable once the owner has saved at least once since this shipped — see useCollaborativeNote's mergeWrite
   collaboratorEmails: string[]
   pendingInviteEmails: string[]
+  collaboratorRoles?: Record<string, CollabRole>
   onInvite: (email: string) => void
   onRemoveCollaborator: (email: string) => void
   onCancelInvite: (email: string) => void
+  onSetRole?: (email: string, role: CollabRole) => void
   onUnlink?: () => void
   topSlot?: React.ReactNode  // e.g. an Edit/Preview toggle item, rendered above the sharing section
 }
 
 export function ShareMenu({
-  isOwner, collaboratorEmails, pendingInviteEmails, onInvite, onRemoveCollaborator, onCancelInvite, onUnlink, topSlot,
+  isOwner, ownerEmail, collaboratorEmails, pendingInviteEmails, collaboratorRoles, onInvite, onRemoveCollaborator, onCancelInvite, onSetRole, onUnlink, topSlot,
 }: ShareMenuProps) {
   const { user } = useUserContext()
   const [open, setOpen] = useState(false)
@@ -95,13 +99,23 @@ export function ShareMenu({
 
               {hasSharing && (
                 <div className="px-3 py-2 flex flex-col gap-1 max-h-28 overflow-y-auto border-t border-white/5">
-                  {collaboratorEmails.map(email => (
-                    <div key={email} className="flex items-center justify-between text-[11px] text-white/70">
-                      <span className="truncate">{email}</span>
-                      <button type="button" onClick={() => onRemoveCollaborator(email)}
-                        className="text-white/30 hover:text-red-400 transition-colors shrink-0 ml-2">Remove</button>
-                    </div>
-                  ))}
+                  {collaboratorEmails.map(email => {
+                    const role = collaboratorRoles?.[email] ?? "editor"
+                    return (
+                      <div key={email} className="flex items-center justify-between text-[11px] text-white/70 gap-1.5">
+                        <span className="truncate flex-1">{email}</span>
+                        {onSetRole && (
+                          <button type="button" onClick={() => onSetRole(email, role === "editor" ? "viewer" : "editor")}
+                            title="Toggle edit access"
+                            className={`text-[9px] px-1.5 py-0.5 rounded-full border shrink-0 transition-colors ${role === "editor" ? "border-purple-500/40 text-purple-300 hover:border-purple-400/60" : "border-white/15 text-white/40 hover:border-white/30"}`}>
+                            {role === "editor" ? "Can edit" : "View only"}
+                          </button>
+                        )}
+                        <button type="button" onClick={() => onRemoveCollaborator(email)}
+                          className="text-white/30 hover:text-red-400 transition-colors shrink-0">Remove</button>
+                      </div>
+                    )
+                  })}
                   {pendingInviteEmails.map(email => (
                     <div key={email} className="flex items-center justify-between text-[11px] text-amber-300/80">
                       <span className="truncate">{email} <span className="text-[9px] text-white/30">(pending)</span></span>
@@ -114,8 +128,17 @@ export function ShareMenu({
             </div>
           )}
 
-          {!isOwner && collaboratorEmails.length > 0 && (
-            <p className="px-3 py-2 text-[10px] text-purple-300/70 border-t border-white/10">You're collaborating on this note</p>
+          {!isOwner && (
+            <div className="px-3 py-2 flex flex-col gap-1 border-t border-white/10">
+              <p className="text-[10px] text-purple-300/70">
+                {ownerEmail ? <>Owned by <span className="font-semibold">{ownerEmail}</span></> : "You're collaborating on this note"}
+              </p>
+              {collaboratorEmails.filter(e => e !== user?.email?.toLowerCase()).length > 0 && (
+                <p className="text-[9px] text-white/30 truncate">
+                  Also with: {collaboratorEmails.filter(e => e !== user?.email?.toLowerCase()).join(", ")}
+                </p>
+              )}
+            </div>
           )}
 
           {onUnlink && (

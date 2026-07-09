@@ -16,14 +16,13 @@ import React, { useRef, useState } from "react"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import type { userInfo } from "@/types/userInfo"
 import { useUserContext } from "../../src/contexts/UserContext"
-import { supabase } from "../../src/supabase"
 
 import type { MonsterData, MonsterAction, ActionCategory } from "./monster-types"
 import type { SpellItem, SpellSlot } from "./character-types"
 import type { Theme } from "./character-themes"
-import { SUPABASE_BUCKET } from "./character-constants"
 import { nanoid, safeParseJson } from "./character-utils"
 import { slotLevelColor } from "./character-themes"
+import { loadUserImages, uploadUserImage, type GalleryImage } from "./imageGallery"
 
 import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 import { Markdown } from "./ui/Markdown"
@@ -32,6 +31,7 @@ import { NumInput } from "./character/ui/NumInput"
 import { Modal } from "./character/ui/Modal"
 import { PopTransition } from "./character/ui/PopTransition"
 import { SpeedDisplay } from "./character/ui/SpeedDisplay"
+import { PortraitModal } from "./character/modals/PortraitModal"
 
 import { ActionEntry } from "./character/entries/ActionEntry"
 import { SpellEntry } from "./character/entries/SpellEntry"
@@ -688,6 +688,9 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
   const [uploading, setUploading] = useState(false)
   const [showLighting, setShowLighting] = useState(false)
   const [name, setName] = useState(monster.name)
+  const [showPortraitPicker, setShowPortraitPicker] = useState(false)
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
 
   const nameTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const portraitRef = useRef<HTMLInputElement>(null)
@@ -702,18 +705,22 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
     }, 700)
   }
 
+  async function openPortraitPicker() {
+    setShowPortraitPicker(true)
+    if (!user?.id) return
+    setGalleryLoading(true)
+    setGalleryImages(await loadUserImages(user.id))
+    setGalleryLoading(false)
+  }
+
   async function uploadPortrait(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user?.id) return
     setUploading(true)
-    const ext  = file.name.split(".").pop() ?? "png"
-    const path = `${user.id}/monster_${monster.id}.${ext}`
-    const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, file, { upsert: true })
-    if (!error) {
-      const { data: urlData } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path)
-      update({ portrait: urlData.publicUrl })
-    }
+    const url = await uploadUserImage(user.id, file, `monster_${monster.id}`)
+    if (url) update({ portrait: url })
     setUploading(false)
+    setShowPortraitPicker(false)
     e.target.value = ""
   }
 
@@ -773,9 +780,9 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
                   <button type="button" onClick={() => setShowLighting(v => !v)}
                     className="size-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white text-xs backdrop-blur-sm transition-colors"
                     title="Lighting adjustments">☀</button>
-                  <button type="button" onClick={() => portraitRef.current?.click()}
+                  <button type="button" onClick={openPortraitPicker}
                     className="size-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white text-xs backdrop-blur-sm transition-colors"
-                    title="Upload image">
+                    title="Choose image">
                     {uploading ? "…" : "↑"}
                   </button>
                 </div>
@@ -801,6 +808,17 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
         </div>
 
         <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={uploadPortrait} />
+
+        {showPortraitPicker && (
+          <PortraitModal
+            currentPortrait={data.portrait}
+            galleryImages={galleryImages}
+            galleryLoading={galleryLoading}
+            onChoose={url => { update({ portrait: url }); setShowPortraitPicker(false) }}
+            onUploadClick={() => portraitRef.current?.click()}
+            onClose={() => setShowPortraitPicker(false)}
+          />
+        )}
 
         <MonsterStatBlock data={data} onUpdate={update} readOnly={readOnly} />
       </div>

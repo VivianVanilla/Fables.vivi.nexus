@@ -10,7 +10,9 @@ import {
 } from "@/components/ui/dialog"
 import { supabase } from "../../src/supabase"
 import { useHomebrewFilter, setHomebrewFilterValue } from "../../src/hooks/useHomebrewFilter"
+import { useAppTheme, APP_THEMES } from "../../src/contexts/ThemeContext"
 import { SpelldleModal } from "./spelldle/SpelldleModal"
+import { loadUserImages, type GalleryImage } from "./imageGallery"
 
 const BUCKET = "fableimages"
 const SPELLDLE_EMAILS = ["spaghettiloverjake@gmail.com", "vivian.bonilla@outlook.com", "liamlillico06@gmail.com"]
@@ -21,16 +23,12 @@ interface Props {
   user: any
 }
 
-interface StorageImage {
-  name: string
-  publicUrl: string
-}
-
 export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
-  const [images, setImages] = React.useState<StorageImage[]>([])
+  const [images, setImages] = React.useState<GalleryImage[]>([])
   const [uploading, setUploading] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const hideHomebrew = useHomebrewFilter()
+  const { theme: appTheme, setTheme: setAppTheme } = useAppTheme()
 
   const [showSpelldle, setShowSpelldle] = React.useState(false)
 
@@ -47,19 +45,7 @@ export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
 
   async function loadImages() {
     if (!userId) return
-    const { data, error } = await supabase.storage
-      .from(BUCKET)
-      .list(`${userId}`, { limit: 100 })
-    if (error || !data) return
-    const loaded = data
-      .filter((f) => f.name !== ".emptyFolderPlaceholder")
-      .map((f) => ({
-        name: f.name,
-        publicUrl: supabase.storage
-          .from(BUCKET)
-          .getPublicUrl(`${userId}/${f.name}`).data.publicUrl,
-      }))
-    setImages(loaded)
+    setImages(await loadUserImages(userId))
   }
 
   React.useEffect(() => {
@@ -192,6 +178,31 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
             </div>
           </>
         )}
+
+        <div className="border-t border-border" />
+
+        {/* App theme */}
+        <div className="flex flex-col gap-2">
+          <div>
+            <div className="text-sm font-medium">App Theme</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Sidebar, notes, and docs — not the character sheet, which has its own per-class theme.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {APP_THEMES.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setAppTheme(t.id)}
+                title={t.label}
+                className={`size-8 rounded-full border-2 transition-all ${appTheme === t.id ? "border-primary scale-110" : "border-border hover:border-muted-foreground"}`}
+                style={{ background: t.swatch }}
+              />
+            ))}
+            <span className="text-xs text-muted-foreground ml-1">{APP_THEMES.find(t => t.id === appTheme)?.label}</span>
+          </div>
+        </div>
 
         <div className="border-t border-border" />
 

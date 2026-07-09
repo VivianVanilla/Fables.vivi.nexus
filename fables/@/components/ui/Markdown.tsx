@@ -79,6 +79,8 @@ export function Markdown({ text, tone = "dark", size = "sm", className = "" }: M
           strong: ({ children }) => <strong className={`font-semibold ${c.heading}`}>{children}</strong>,
           hr: () => <hr className={c.border} />,
           code: ({ children }) => <code className={`px-1 py-0.5 rounded text-xs font-mono ${c.code}`}>{children}</code>,
+          img: ({ src, alt }) => <img src={src} alt={alt ?? ""} className={`max-w-full rounded-lg border ${c.border}`} />,
+          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:opacity-80">{children}</a>,
           table: ({ children }) => (
             <div className={`overflow-x-auto rounded-md border ${c.border}`}>
               <table className="w-full text-xs border-collapse">{children}</table>

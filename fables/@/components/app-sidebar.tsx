@@ -11,6 +11,7 @@ import type { userInfo } from "../types/userInfo"
 import { buildObjectTree, applyDrop, moveToRoot, isNoNesting, isPinned } from "@/components/sidebar-utils"
 import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
 import { supabase } from "../../src/supabase"
+import { mergeObjectData } from "@/components/collab/mergeObjectData"
 
 const BUCKET = "fableimages"
 
@@ -82,8 +83,8 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
   }, [contextMenu])
 
   const tree = React.useMemo(
-    () => buildObjectTree(items.filter(o => !o.type?.startsWith("doc_"))),
-    [items]
+    () => buildObjectTree(items.filter(o => !o.type?.startsWith("doc_")), user?.id),
+    [items, user?.id]
   )
   const toggleGroup = (id: string) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
 
@@ -130,26 +131,55 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
 
   const commitDrop = async (activeId: string, target: DropTarget | null, toRoot: boolean) => {
     if (toRoot) {
-      const newItems = moveToRoot(items, activeId)
+      const newItems = moveToRoot(items, activeId, user?.id)
       if (newItems !== items) await persistChanges(newItems)
       return
     }
     if (!target) return
-    const newItems = applyDrop(items, activeId, target)
+    const newItems = applyDrop(items, activeId, target, user?.id)
     if (newItems !== items) await persistChanges(newItems)
   }
 
+  // A reorder reindexes every sibling at that level, and the sidebar's own
+  // `items` list also includes notes shared with (not owned by) the current
+  // user. Those can't be reordered by writing the real position/parent_id
+  // columns (you don't own the row) — sidebar-utils.tsx's applyDrop/moveToRoot
+  // already know this and stash a per-viewer override in
+  // data.viewerPositions instead, so here we just split the batch: owned
+  // items go through the normal column update, foreign items go through the
+  // merge_object_data RPC to patch just that jsonb key.
   const persistChanges = async (newItems: userInfo.Objects[]) => {
     const previousItems = items
     setItems(newItems)
-    const changed = newItems
-      .filter((item) => {
-        const original = previousItems.find((o) => o.id === item.id)
-        return original && (original.parent_id !== item.parent_id || original.position !== item.position)
-      })
-      .map((item) => ({ id: item.id, parent_id: item.parent_id ?? null, position: item.position ?? 0 }))
+
+    const ownedChanges: Array<{ id: string; parent_id: string | null; position: number }> = []
+    const foreignChanges: Array<{ id: string; viewerPositions: Record<string, number> }> = []
+
+    for (const item of newItems) {
+      const original = previousItems.find((o) => o.id === item.id)
+      if (!original) continue
+
+      if (item.owner_id === user?.id) {
+        if (original.parent_id !== item.parent_id || original.position !== item.position) {
+          ownedChanges.push({ id: item.id, parent_id: item.parent_id ?? null, position: item.position ?? 0 })
+        }
+        continue
+      }
+
+      const origData: any = typeof original.data === "string" ? JSON.parse(original.data || "{}") : (original.data ?? {})
+      const nextData: any = typeof item.data === "string" ? JSON.parse(item.data || "{}") : (item.data ?? {})
+      const uid = user?.id ?? ""
+      if (origData?.viewerPositions?.[uid] !== nextData?.viewerPositions?.[uid] && nextData?.viewerPositions) {
+        foreignChanges.push({ id: item.id, viewerPositions: nextData.viewerPositions })
+      }
+    }
+
+    if (ownedChanges.length === 0 && foreignChanges.length === 0) return
     try {
-      await batchUpdateObjects(changed)
+      if (ownedChanges.length > 0) await batchUpdateObjects(ownedChanges)
+      for (const change of foreignChanges) {
+        await mergeObjectData(change.id, { viewerPositions: change.viewerPositions })
+      }
     } catch (error) {
       console.error("Error saving reorder:", error)
       setItems(previousItems)
@@ -315,6 +345,24 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
 
   const handleDelete = async (item: SidebarObject) => {
     setContextMenu(null)
+
+    // A note someone else shared with you can't be deleted (you don't own
+    // the row) — "deleting" it here means leaving the collaboration instead.
+    // That's a real write (removes your email from collaboratorEmails), so
+    // the owner and anyone else on the note see you leave immediately, and
+    // you'd need a fresh invite to get back in.
+    if (item.owner_id !== user?.id) {
+      const myEmail = user?.email?.toLowerCase()
+      if (!myEmail) return
+      if (!window.confirm(`Leave "${item.name}"? You'll need to be invited again to rejoin.`)) return
+      const itemData: any = typeof item.data === "string" ? JSON.parse(item.data || "{}") : (item.data ?? {})
+      const nextCollaborators = ((itemData.collaboratorEmails ?? []) as string[]).filter((e) => e !== myEmail)
+      const previousItems = items
+      setItems((prev) => prev.filter((entry) => entry.id !== item.id))
+      try { await mergeObjectData(item.id, { collaboratorEmails: nextCollaborators }) } catch { setItems(previousItems) }
+      return
+    }
+
     const confirmation = window.prompt(`Type DELETE to confirm deleting "${item.name}"`, "")
     if (confirmation !== "DELETE") return
     const previousItems = items
@@ -426,7 +474,8 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
               )}
 
               {isSharedWithMe && (
-                <span className="rounded px-1 bg-purple-500/20 text-purple-300 tracking-normal normal-case" title="Someone shared this note with you">
+                <span className="rounded px-1 bg-purple-500/20 text-purple-300 tracking-normal normal-case"
+                  title={nodeData?.ownerEmail ? `Shared by ${nodeData.ownerEmail}` : "Someone shared this note with you"}>
                   shared
                 </span>
               )}
@@ -535,7 +584,7 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
           </button>
           <button type="button" onClick={() => handleDelete(contextMenu.item)}
             className="block w-full rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
-            Delete
+            {contextMenu.item.owner_id !== user?.id ? "Leave" : "Delete"}
           </button>
           {contextMenu.item.type === "folder" && (
             <>

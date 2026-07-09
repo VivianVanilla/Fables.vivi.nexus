@@ -5,10 +5,16 @@ import { supabase } from "../supabase"
 import type { userInfo } from "@/types/userInfo"
 
 export async function getObjectsForUser(userId: string, email?: string | null) {
+  // Ordered explicitly — a shared note carries its *owner's* position value
+  // (meaningless in this viewer's own tree, see sidebar sort below), so ties
+  // are common. Without an explicit order Postgres may return rows in a
+  // different sequence each fetch, and since the sidebar's sort is stable,
+  // that made tied items appear to shuffle themselves on reload.
   const { data, error } = await supabase
     .from("objects")
     .select("*")
     .eq("owner_id", userId)
+    .order("position", { ascending: true })
 
   if (error) throw error
 
@@ -25,6 +31,7 @@ export async function getObjectsForUser(userId: string, email?: string | null) {
       .eq("type", "note")
       .neq("owner_id", userId)
       .filter("data->collaboratorEmails", "cs", JSON.stringify([email.toLowerCase()]))
+      .order("created_date", { ascending: true })
 
     if (sharedError) console.error("Error loading shared notes:", sharedError)
     else shared = (sharedRows ?? []) as userInfo.Objects[]
@@ -43,6 +50,7 @@ interface UserContextType {
   createObject: (payload: { name: string; type: string; parent_id?: string | null; data?: Record<string, unknown> }) => Promise<userInfo.Objects>
   updateObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
   updateSharedObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
+  patchLocalObject: (id: string, data: JSON) => void
   deleteObject: (id: string) => Promise<void>
   batchUpdateObjects: (changes: Array<userInfo.ObjectsUpdate & { id: string }>) => Promise<userInfo.Objects[]>
 }
@@ -171,6 +179,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     return updated
   }
 
+  // Patches the local `objects` cache in place without touching the DB —
+  // for callers (like the collaborative note hook) that already wrote via
+  // their own atomic RPC and just need the sidebar/context copy to catch up
+  // immediately instead of waiting on a full refreshObjects().
+  function patchLocalObject(id: string, data: JSON) {
+    setObjects((prev) => prev.map((item) => (item.id === id ? { ...item, data } : item)))
+  }
+
   async function deleteObject(id: string) {
     if (!user?.id) throw new Error("No authenticated user")
 
@@ -228,6 +244,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         createObject,
         updateObject,
         updateSharedObject,
+        patchLocalObject,
         deleteObject,
         batchUpdateObjects,
       }}

@@ -6,6 +6,7 @@ interface GalleryImage {
 }
 
 interface Props {
+  title?: string
   currentPortrait?: string
   galleryImages: GalleryImage[]
   galleryLoading: boolean
@@ -14,12 +15,12 @@ interface Props {
   onClose: () => void
 }
 
-export function PortraitModal({ currentPortrait, galleryImages, galleryLoading, onChoose, onUploadClick, onClose }: Props) {
+export function PortraitModal({ title = "Choose Portrait", currentPortrait, galleryImages, galleryLoading, onChoose, onUploadClick, onClose }: Props) {
   return (
     <Modal onClose={onClose}>
       <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 max-h-[80vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-          <span className="text-base font-bold text-white">Choose Portrait</span>
+          <span className="text-base font-bold text-white">{title}</span>
           <button type="button" onClick={onClose}
             className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white">✕</button>
         </div>

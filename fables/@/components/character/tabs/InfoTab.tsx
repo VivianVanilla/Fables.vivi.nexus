@@ -2,9 +2,8 @@
 // InfoTab.tsx — Info tab with Notes / Traits / Feats / Features / Armor & Items / Profs
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import * as Y from "yjs"
 import type { userInfo } from "@/types/userInfo"
 import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
@@ -14,8 +13,9 @@ import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "../ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
-import { connectNoteChannel, applyTextDiff, encodeDocState, applyEncodedState } from "../../collab/noteSync"
 import { ShareMenu } from "../../collab/ShareMenu"
+import { CollabCursorOverlay } from "../../collab/CollabCursorOverlay"
+import { useCollaborativeNote } from "../../collab/useCollaborativeNote"
 import { usePopoverPosition, useClickOutside } from "../../collab/usePortalMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -351,24 +351,14 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
   autoEdit?: boolean
   onAutoEditConsumed?: () => void
 }) {
-  const { user, updateObject, updateSharedObject } = useUserContext()
-  const initialData = safeParseJson(note.data) as { content?: string; ydocState?: string; collaboratorEmails?: string[]; pendingInviteEmails?: string[] }
-  const isOwner = note.owner_id === user?.id
+  const {
+    isOwner, canEdit, userId, ownerEmail, content, handleChange,
+    collaboratorEmails, pendingInviteEmails, collaboratorRoles,
+    handleInvite, handleCancelInvite, handleRemoveCollaborator, handleSetRole,
+    textareaRef, peers, handleSelectionChange,
+  } = useCollaborativeNote(note, expanded)  // only holds a live connection while actually visible
 
-  const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!!autoEdit)
-  const [collaboratorEmails, setCollaboratorEmails]   = useState(initialData.collaboratorEmails ?? [])
-  const [pendingInviteEmails, setPendingInviteEmails] = useState(initialData.pendingInviteEmails ?? [])
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const ydoc = useMemo(() => {
-    const doc = new Y.Doc()
-    if (initialData.ydocState) applyEncodedState(doc, initialData.ydocState)
-    else if (initialData.content) doc.getText("content").insert(0, initialData.content)
-    return doc
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.id])
-  const ytext = ydoc.getText("content")
 
   // Newly-created notes open straight into edit mode, once — mirrors the
   // auto-edit-on-add pattern used for newly added spells.
@@ -376,50 +366,6 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
     if (autoEdit) onAutoEditConsumed?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  useEffect(() => {
-    setContent(ytext.toString())
-    const observer = () => setContent(ytext.toString())
-    ytext.observe(observer)
-    const disconnect = connectNoteChannel(note.id, ydoc)
-    return () => { ytext.unobserve(observer); disconnect() }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.id])
-
-  function scheduleSave() {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      const patch = { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorEmails, pendingInviteEmails }
-      try {
-        if (isOwner) await updateObject(note.id, { data: patch as unknown as JSON })
-        else await updateSharedObject(note.id, { data: patch as unknown as JSON })
-      } catch (e) { console.error(e) }
-    }, 700)
-  }
-
-  function handleChange(next: string) {
-    applyTextDiff(ytext, next)  // triggers the observer above, which sets `content`
-    scheduleSave()
-  }
-
-  function persistSharing(nextCollaboratorEmails: string[], nextPendingInviteEmails: string[]) {
-    setCollaboratorEmails(nextCollaboratorEmails)
-    setPendingInviteEmails(nextPendingInviteEmails)
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    updateObject(note.id, { data: { content: ytext.toString(), ydocState: encodeDocState(ydoc), collaboratorEmails: nextCollaboratorEmails, pendingInviteEmails: nextPendingInviteEmails } as unknown as JSON })
-      .catch(e => console.error(e))
-  }
-
-  function handleInvite(email: string) {
-    if (collaboratorEmails.includes(email) || pendingInviteEmails.includes(email)) return
-    persistSharing(collaboratorEmails, [...pendingInviteEmails, email])
-  }
-  function handleCancelInvite(email: string) {
-    persistSharing(collaboratorEmails, pendingInviteEmails.filter(e => e !== email))
-  }
-  function handleRemoveCollaborator(email: string) {
-    persistSharing(collaboratorEmails.filter(e => e !== email), pendingInviteEmails)
-  }
 
   function handleEditClick() {
     if (!expanded) onToggle()
@@ -431,15 +377,28 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
       <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors" onClick={onToggle}>
         <span className="text-[10px] text-white/30 w-3 shrink-0">{expanded ? "▼" : "▶"}</span>
         <span className="text-xs text-white/70 flex-1 min-w-0 truncate">{note.name}</span>
+        {peers.length > 0 && (
+          <div className="flex items-center -space-x-1 shrink-0" title={peers.map(p => p.name).join(", ")}>
+            {peers.map(p => (
+              <span key={p.id} className="size-4 rounded-full ring-2 ring-slate-900 flex items-center justify-center text-[8px] font-bold text-white"
+                style={{ backgroundColor: p.color }}>
+                {p.name.charAt(0).toUpperCase()}
+              </span>
+            ))}
+          </div>
+        )}
         <ShareMenu
           isOwner={isOwner}
+          ownerEmail={ownerEmail}
           collaboratorEmails={collaboratorEmails}
           pendingInviteEmails={pendingInviteEmails}
+          collaboratorRoles={collaboratorRoles}
           onInvite={handleInvite}
           onCancelInvite={handleCancelInvite}
           onRemoveCollaborator={handleRemoveCollaborator}
+          onSetRole={handleSetRole}
           onUnlink={onRemove}
-          topSlot={!readOnly ? (
+          topSlot={!readOnly && canEdit ? (
             <button type="button" onClick={handleEditClick}
               className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors">
               {expanded && editing ? "👁 Preview" : "✎ Edit"}
@@ -449,12 +408,19 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
       </div>
       {expanded && (
         <div className="px-3 pb-2 max-h-64 overflow-y-auto">
-          {editing && !readOnly ? (
+          {!canEdit && (
+            <p className="text-[9px] text-white/25 italic mb-1.5">👁 View only</p>
+          )}
+          {editing && !readOnly && canEdit ? (
             <MarkdownTextarea
               value={content}
               onChange={handleChange}
+              onSelectionChange={handleSelectionChange}
+              textareaRef={textareaRef}
+              userId={userId}
+              overlay={<CollabCursorOverlay textareaRef={textareaRef} peers={peers} text={content} />}
               autoFocus
-              placeholder={`# Note title\n\nStart writing… Supports **bold**, *italic*, \`code\`, and - lists.`}
+              placeholder={`# Note title\n\nStart writing… Supports **bold**, *italic*, \`code\`, and - lists. Ctrl/Cmd+B/I/E for quick formatting.`}
               className="w-full min-h-32 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 resize-none leading-relaxed font-mono"
               wrapperClassName="flex flex-col gap-1"
               variant="light"
@@ -464,11 +430,6 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
               ? <Markdown text={content} tone="dark" size="xs" />
               : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ⋮ then Edit to start writing."}</p>
           )}
-        </div>
-      )}
-      {collaboratorEmails.length > 0 && (
-        <div className="px-3 pb-1.5 -mt-0.5">
-          <span className="text-[9px] text-purple-300/60">Live-syncing with {collaboratorEmails.length} collaborator{collaboratorEmails.length === 1 ? "" : "s"}</span>
         </div>
       )}
     </div>

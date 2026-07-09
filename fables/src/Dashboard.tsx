@@ -47,7 +47,7 @@ export default function Dashboard() {
             className="mr-2 data-[orientation=vertical]:h-4"
           />
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 bg-slate-950 overflow-hidden min-h-0">
+        <div className="flex flex-1 flex-col gap-4 p-4 bg-background overflow-hidden min-h-0">
           {loading ? (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground/40 select-none">
               Loading…
