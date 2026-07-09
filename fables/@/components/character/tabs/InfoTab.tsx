@@ -38,6 +38,7 @@ interface InfoTabProps {
   equipmentLinkedIds: Set<string>
   subTab: InfoSubTab
   onSubTabChange: (tab: InfoSubTab) => void
+  isWarlock: boolean
 }
 
 // ── Sub-component: FeatureList ────────────────────────────────────────────────
@@ -62,12 +63,20 @@ interface FeatureListProps {
   equipmentLinkedIds?: Set<string>
   showAttunement?: boolean
   showItemExtras?: boolean
+  sortable?: boolean
 }
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, sortable }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
+  const [sortBy, setSortBy] = useState<"class" | "level">("class")
+
+  const displayedItems = sortable
+    ? items.slice().sort((a, b) => sortBy === "level"
+        ? (a.level ?? 0) - (b.level ?? 0) || (a.source ?? "").localeCompare(b.source ?? "")
+        : (a.source ?? "").localeCompare(b.source ?? "") || (a.level ?? 0) - (b.level ?? 0))
+    : items
 
   return (
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
@@ -80,9 +89,21 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             Attuned {attunedCount}/{MAX_ATTUNEMENTS}
           </span>
         )}
+        {sortable && (
+          <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0 ml-auto">
+            <button type="button" onClick={() => setSortBy("class")}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${sortBy === "class" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+              Sort: Class
+            </button>
+            <button type="button" onClick={() => setSortBy("level")}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${sortBy === "level" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+              Sort: Level
+            </button>
+          </div>
+        )}
         {!readOnly && (
           <button type="button" onClick={onAdd}
-            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ml-auto">
+            className={`text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ${sortable ? "shrink-0" : "ml-auto"}`}>
             + Add
           </button>
         )}
@@ -93,7 +114,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        {items.map(f => (
+        {displayedItems.map(f => (
           <FeatureEntry
             key={f.id}
             feature={f}
@@ -539,7 +560,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",      "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange, isWarlock }: InfoTabProps) {
 
   const pb = profBonus(data.level ?? 1)
 
@@ -640,7 +661,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
       {/* ── Race & Feats (tiled, side-by-side) ───────────────────────────────── */}
 
       {subTab === "raceFeats" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 min-h-0">
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${isWarlock ? "lg:grid-cols-3" : ""} gap-3 flex-1 min-h-0`}>
           <FeatureList
             items={data.racialTraits ?? []} allFeatures={allFeatures} label="Racial Traits"
             onAdd={() => addFeature("racialTraits")}
@@ -661,16 +682,18 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             suggestionSource="feat" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
           />
-          <FeatureList
-            items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
-            onAdd={() => addFeature("invocations")}
-            onChange={onChangeFeature}
-            onRemove={onRemoveFeature}
-            onLinkToggle={onLinkToggle}
-            theme={theme} card={card} readOnly={readOnly} pb={pb}
-            suggestionSource="invocation" userId={userId}
-            favorites={favorites} onToggleFavorite={onToggleFavorite}
-          />
+          {isWarlock && (
+            <FeatureList
+              items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
+              onAdd={() => addFeature("invocations")}
+              onChange={onChangeFeature}
+              onRemove={onRemoveFeature}
+              onLinkToggle={onLinkToggle}
+              theme={theme} card={card} readOnly={readOnly} pb={pb}
+              suggestionSource="invocation" userId={userId}
+              favorites={favorites} onToggleFavorite={onToggleFavorite}
+            />
+          )}
         </div>
       )}
 
@@ -686,6 +709,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           suggestionSource="class" userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
+          sortable
         />
       )}
 

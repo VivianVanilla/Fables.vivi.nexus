@@ -48,7 +48,7 @@ import { PortraitModal }         from "./character/modals/PortraitModal"
 import { SpeedDisplay }          from "./character/ui/SpeedDisplay"
 
 // Tabs / other
-import { InfoTab, FeatureList, type InfoSubTab } from "./character/tabs/InfoTab"
+import { InfoTab, type InfoSubTab } from "./character/tabs/InfoTab"
 import { FamiliarsTab }          from "./character/tabs/FamiliarsTab"
 import { FamiliarMonsterView }   from "./monster"
 import { PartyServer }           from "./party/PartyServer"
@@ -65,7 +65,7 @@ interface Props {
   readOnly?: boolean
 }
 
-type Tab = "main" | "details" | "invocations" | "familiars" | "chat"
+type Tab = "main" | "details" | "familiars" | "chat"
 
 // ════════════════════════════════════════════════════════════════════════════
 // CharacterSheet
@@ -254,6 +254,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
   function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
+  function importSpells(items: SpellItem[])                   { update({ spellItems: [...spellItems, ...items] }) }
 
   function addEquip()                                          { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
@@ -668,12 +669,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const isWarlock = availableClasses.some(c => c.toLowerCase() === "warlock")
 
-  useEffect(() => {
-    if (activeTab === "invocations" && !isWarlock) setActiveTab("main")
-  }, [activeTab, isWarlock])
-
-  function addInvocation() { update({ invocations: [...(data.invocations ?? []), { id: nanoid(), name: "" }] }) }
-
   const favPanelProps = {
     favorites, spellItems, equipItems, features: allFeatures, familiars, monsters,
     poppedOutIds: new Set(Object.keys(openPopouts)),
@@ -959,7 +954,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           activeSubTab={spellsSubTab} onChangeSubTab={setSpellsSubTab}
           onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
           onChangeSlot={changeSlot}
-          onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
+          onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell} onImportSpells={importSpells}
           pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
         />
@@ -1214,10 +1209,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
-        {(["main", "details", ...(isWarlock ? ["invocations"] : []), "familiars", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
+        {(["main", "details", "familiars", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "invocations" ? "Invocations" : tab === "familiars" ? "Familiars" : "Chat"}
+            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "familiars" ? "Familiars" : "Chat"}
             {tab === "chat" && partyChatUnread && (
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
             )}
@@ -1235,19 +1230,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment}
-            equipmentLinkedIds={equipmentLinkedIds} />
-        )}
-        {activeTab === "invocations" && (
-          <FeatureList
-            items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
-            onAdd={addInvocation}
-            onChange={patchFeature}
-            onRemove={removeFeatureGlobal}
-            onLinkToggle={toggleFeatureLink}
-            theme={theme} card={card} readOnly={readOnly} pb={pb}
-            suggestionSource="invocation" userId={user?.id ?? null}
-            favorites={favorites} onToggleFavorite={toggleFeatureFavorite}
-          />
+            equipmentLinkedIds={equipmentLinkedIds} isWarlock={isWarlock} />
         )}
         {activeTab === "familiars" && (
           <FamiliarsTab

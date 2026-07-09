@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { HitDicePool } from "../../character-types"
+import { PopTransition } from "../ui/PopTransition"
 
 interface Props {
   card: string
@@ -77,49 +78,52 @@ export function HitDice({ card, pools, readOnly, onUpdate, onRemove, onAdd }: Pr
       {editing && !readOnly && (
         <div className="flex flex-col gap-2">
           {pools.map(pool => (
-            <div key={pool.id} className="flex items-center gap-2">
+            <div key={pool.id} className="flex items-center gap-1.5 flex-wrap rounded-lg bg-white/5 p-1.5">
               <select value={pool.dieType} onChange={e => onUpdate(pool.id, { dieType: e.target.value })}
-                className="bg-zinc-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
+                className="bg-zinc-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-14 shrink-0">
                 {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d} className="bg-zinc-800 text-white">{d}</option>)}
               </select>
-              <div className="flex items-center gap-1.5 flex-1">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button type="button"
                   onClick={() => onUpdate(pool.id, { total: Math.max(1, pool.total - 1), used: Math.min(pool.used, pool.total - 1) })}
-                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">−</button>
-                <span className="text-sm text-white w-6 text-center">{pool.total}</span>
+                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center shrink-0">−</button>
+                <span className="text-sm text-white w-6 text-center shrink-0">{pool.total}</span>
                 <button type="button"
                   onClick={() => onUpdate(pool.id, { total: pool.total + 1 })}
-                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">+</button>
+                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center shrink-0">+</button>
               </div>
               <button type="button" onClick={() => onRemove(pool.id)}
-                className="size-7 flex items-center justify-center rounded-lg text-white/30 hover:text-red-400 hover:bg-red-900/30 text-sm transition-colors">✕</button>
+                className="size-7 flex items-center justify-center rounded-lg text-white/30 hover:text-red-400 hover:bg-red-900/30 text-sm transition-colors shrink-0 ml-auto">✕</button>
             </div>
           ))}
 
-          {!showAdd ? (
+          <PopTransition show={!showAdd}>
             <button type="button" onClick={() => setShowAdd(true)}
-              className="text-sm border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 text-white/40 hover:text-white transition-colors">
+              className="w-full text-sm border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 text-white/40 hover:text-white transition-colors">
               + Add pool
             </button>
-          ) : (
-            <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2">
+          </PopTransition>
+          <PopTransition show={showAdd}>
+            <div className="flex items-center gap-1.5 flex-wrap rounded-xl border border-white/15 bg-white/5 px-3 py-2">
               <select value={newDie} onChange={e => setNewDie(e.target.value)}
-                className="bg-zinc-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-16">
+                className="bg-zinc-800 rounded-lg px-2 py-1.5 text-xs text-white outline-none w-14 shrink-0">
                 {["d4","d6","d8","d10","d12"].map(d => <option key={d} value={d} className="bg-zinc-800 text-white">{d}</option>)}
               </select>
-              <div className="flex items-center gap-1.5 flex-1">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button type="button" onClick={() => setNewCount(c => Math.max(1, c - 1))}
-                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">−</button>
-                <span className="text-sm text-white w-6 text-center">{newCount}</span>
+                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center shrink-0">−</button>
+                <span className="text-sm text-white w-6 text-center shrink-0">{newCount}</span>
                 <button type="button" onClick={() => setNewCount(c => c + 1)}
-                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center">+</button>
+                  className="size-6 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm flex items-center justify-center shrink-0">+</button>
               </div>
-              <button type="button" onClick={commitAdd}
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors">Add</button>
-              <button type="button" onClick={() => setShowAdd(false)}
-                className="size-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white text-sm transition-colors">✕</button>
+              <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                <button type="button" onClick={commitAdd}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors shrink-0">Add</button>
+                <button type="button" onClick={() => setShowAdd(false)}
+                  className="size-7 flex items-center justify-center rounded-lg text-white/30 hover:text-white text-sm transition-colors shrink-0">✕</button>
+              </div>
             </div>
-          )}
+          </PopTransition>
         </div>
       )}
     </div>

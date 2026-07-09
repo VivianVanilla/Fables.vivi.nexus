@@ -34,7 +34,7 @@ const SAVE_NAMES: Record<string, string> = {
   intelligence: "INT", wisdom: "WIS", charisma: "CHA",
 }
 
-function parseSpellCombat(desc: string | string[]): { damage?: string; saveAttr?: string; attackRoll?: boolean } {
+export function parseSpellCombat(desc: string | string[]): { damage?: string; saveAttr?: string; attackRoll?: boolean } {
   const text = (Array.isArray(desc) ? desc.join(" ") : desc).toLowerCase()
 
   const attackRoll = /(?:ranged|melee)\s+spell\s+attack|spell\s+attack\s+roll/.test(text) || undefined
@@ -428,7 +428,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
       <div
         {...dragAttrs}
         onClick={() => setShowDetail(true)}
-        className={`rounded-lg ${theme.box} border border-white/10 px-3 py-2.5 flex items-center gap-2 min-h-11 cursor-pointer hover:border-white/20 transition-colors`}
+        className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors`}
       >
         {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells and cantrips have no mark at all */}
         {showPrepToggle && !spell.alwaysPrepared && spell.level !== 0 && (
@@ -437,7 +437,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             disabled={readOnly}
             onClick={togglePrepared}
             title={spell.prepared ? "Prepared — click to unprepare" : "Unprepared — click to prepare"}
-            className={`size-5 rounded shrink-0 transition-all text-[9px] font-bold flex items-center justify-center border ${
+            className={`size-4 rounded shrink-0 transition-all text-[8px] font-bold flex items-center justify-center border ${
               spell.prepared
                 ? "bg-primary border-primary text-white"
                 : "border-white/20 bg-transparent text-white/20 hover:border-white/40 hover:text-white/40"
@@ -449,8 +449,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
 
         {/* Name + tags */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm font-semibold text-white truncate">
+          <div className="flex items-center gap-1">
+            <p className="text-xs font-semibold text-white truncate">
               {spell.name || <span className="text-white/30 italic">Unnamed</span>}
             </p>
             {spell.sourceClass && (
@@ -473,28 +473,28 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
               </span>
             )}
           </div>
-          <div className="flex gap-1 mt-0.5 flex-wrap">
+          <div className="flex gap-0.5 mt-0.5 flex-wrap">
             {spell.level !== undefined && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">Lv {spell.level}</span>
+              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/60">Lv {spell.level}</span>
             )}
             {spell.school && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
+              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
             )}
             {(spell.saveAttr || spell.saveType) && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">
+              <span className="text-[12px] px-1 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">
                 Save {spell.saveAttr || spell.saveType}
               </span>
             )}
             {spell.toHit && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">{spell.toHit} atk</span>
+              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/60">{spell.toHit} atk</span>
             )}
             {spell.damage && (
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${damageTypeClasses(spell.damageType)}`}>
+              <span className={`text-[12px] px-1 py-0.5 rounded-full ${damageTypeClasses(spell.damageType)}`}>
                 {spell.damage}{spell.damageType ? ` ${spell.damageType}` : ""}
               </span>
             )}
             {spell.castTime && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45">{spell.castTime}</span>
+              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/45">{spell.castTime}</span>
             )}
           </div>
         </div>

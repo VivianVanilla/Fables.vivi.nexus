@@ -577,6 +577,12 @@ export function FeatureEntry({
             {feature.name || <span className="text-white/30 italic">{unnamedLabel}</span>}
           </span>
 
+          {!showItemExtras && feature.source && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 truncate max-w-24 shrink-0" title={feature.source}>
+              {feature.source}
+            </span>
+          )}
+
           {!showItemExtras && feature.level != null && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">Lv {feature.level}</span>
           )}
@@ -640,14 +646,9 @@ export function FeatureEntry({
       </div>
 
       {/* Expanded content */}
-      {expanded && (
+      <PopTransition show={expanded}>
         <div className="px-4 pb-3 border-t border-white/5 flex flex-col gap-3">
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {feature.source && hasUses && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 truncate">
-                {feature.source}
-              </span>
-            )}
             {showItemExtras && (feature.equipKind ?? "armor") === "armor" && !!feature.itemMeta?.acBonus && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">+{feature.itemMeta.acBonus} AC</span>
             )}
@@ -703,7 +704,7 @@ export function FeatureEntry({
             <p className="text-xs text-white/20 italic">No description — click ✎ to add one.</p>
           ) : null}
         </div>
-      )}
+      </PopTransition>
     </div>
   )
 }

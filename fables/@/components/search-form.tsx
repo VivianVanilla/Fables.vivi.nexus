@@ -25,11 +25,55 @@ import { Link } from "react-router-dom"
 
 
 
-// ── Test Data ────────────────────────────────────────────────────────────
-const RACES = [
-  "Human", "Elf", "Dwarf", "Halfling", "Gnome", "Half-Elf",
-  "Half-Orc", "Tiefling", "Dragonborn", "Aasimar", "Tabaxi", "Other",
-]
+// ── Race data (fetched from documentation — see useRaceEntries below) ─────────
+interface RaceEntry { name: string }
+
+function useRaceEntries(userId?: string | null) {
+  const [raceEntries, setRaceEntries] = useState<RaceEntry[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: coreRows } = await supabase
+        .from("documentation").select("name")
+        .eq("type", "race").eq("is_homebrew", false)
+
+      let extraRows: any[] = []
+      if (userId) {
+        const { data: ownRows } = await supabase
+          .from("documentation").select("name")
+          .eq("type", "race").eq("is_homebrew", true).eq("owner_id", userId)
+
+        const { data: libObjs } = await supabase
+          .from("objects").select("data")
+          .eq("type", "doc_race").eq("owner_id", userId)
+        const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
+        let libRows: any[] = []
+        if (libIds.length) {
+          const { data: lr } = await supabase
+            .from("documentation").select("name").in("id", libIds)
+          libRows = lr ?? []
+        }
+        extraRows = [...(ownRows ?? []), ...libRows]
+      }
+
+      const seen = new Set<string>()
+      const entries: RaceEntry[] = []
+      for (const r of [...(coreRows ?? []), ...extraRows]) {
+        if (seen.has(r.name)) continue
+        seen.add(r.name)
+        entries.push({ name: r.name })
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name))
+      entries.push({ name: "Other" })
+      if (!cancelled) setRaceEntries(entries)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  return raceEntries
+}
 
 const CLASSES = [
   "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
@@ -95,15 +139,20 @@ function FolderForm({ onCreated }: { onCreated: () => void }) {
 }
 
 function CharacterForm({ onCreated }: { onCreated: () => void }) {
-  const { createObject } = useUserContext()
+  const { createObject, user } = useUserContext()
+  const raceEntries = useRaceEntries(user?.id)
   const [name, setName] = useState("New Character")
-  const [race, setRace] = useState(RACES[0])
+  const [race, setRace] = useState("")
   const [multiclass, setMulticlass] = useState(false)
   const [classes, setClasses] = useState<ClassEntry[]>([{ cls: CLASSES[0], level: 1 }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const totalLevel = classes.reduce((sum, c) => sum + c.level, 0)
+
+  useEffect(() => {
+    if (!race && raceEntries.length > 0) setRace(raceEntries[0].name)
+  }, [raceEntries, race])
 
   function setClassEntry(index: number, field: keyof ClassEntry, value: string | number) {
     setClasses((prev) =>
@@ -171,9 +220,11 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
             id="char-race"
             value={race}
             onChange={(e) => setRace(e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            disabled={raceEntries.length === 0}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
           >
-            {RACES.map((r) => <option key={r} className="bg-zinc-800 text-white">{r}</option>)}
+            {raceEntries.length === 0 && <option>Loading…</option>}
+            {raceEntries.map((r) => <option key={r.name} className="bg-zinc-800 text-white">{r.name}</option>)}
           </select>
         </Field>
 
