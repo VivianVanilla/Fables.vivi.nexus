@@ -474,27 +474,25 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             )}
           </div>
           <div className="flex gap-0.5 mt-0.5 flex-wrap">
-            {spell.level !== undefined && (
-              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/60">Lv {spell.level}</span>
-            )}
+            
             {spell.school && (
-              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
+              <span className="text-[10px] px-1 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
             )}
             {(spell.saveAttr || spell.saveType) && (
-              <span className="text-[12px] px-1 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">
+              <span className="text-[10px] px-1 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">
                 Save {spell.saveAttr || spell.saveType}
               </span>
             )}
             {spell.toHit && (
-              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/60">{spell.toHit} atk</span>
+              <span className="text-[10px] px-1 py-0.5 rounded-full bg-white/10 text-white/60">{spell.toHit} atk</span>
             )}
             {spell.damage && (
-              <span className={`text-[12px] px-1 py-0.5 rounded-full ${damageTypeClasses(spell.damageType)}`}>
+              <span className={`text-[10px] px-1 py-0.5 rounded-full ${damageTypeClasses(spell.damageType)}`}>
                 {spell.damage}{spell.damageType ? ` ${spell.damageType}` : ""}
               </span>
             )}
             {spell.castTime && (
-              <span className="text-[12px] px-1 py-0.5 rounded-full bg-white/10 text-white/45">{spell.castTime}</span>
+              <span className="text-[10px] px-1 py-0.5 rounded-full bg-white/10 text-white/45">{spell.castTime}</span>
             )}
           </div>
         </div>
