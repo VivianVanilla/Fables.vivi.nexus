@@ -7,14 +7,13 @@ import { createPortal } from "react-dom"
 import type { userInfo } from "@/types/userInfo"
 import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
-import { nanoid, profBonus } from "../../character-utils"
+import { nanoid, profBonus, safeParseJson, uniqueName } from "../../character-utils"
+import { useUserContext } from "../../../../src/contexts/UserContext"
+import { useNavigation } from "../../../../src/contexts/NavigationContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "../ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
-import { ShareMenu } from "../../collab/ShareMenu"
-import { CollabCursorOverlay } from "../../collab/CollabCursorOverlay"
-import { useCollaborativeNote } from "../../collab/useCollaborativeNote"
 import { usePopoverPosition, useClickOutside } from "../../collab/usePortalMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -337,10 +336,10 @@ function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: st
   )
 }
 
-// Full live-collaborative note editor, embedded inline in the character sheet.
-// Backed by the same Yjs CRDT + Supabase broadcast relay as the standalone
-// NoteView page (see ./collab/noteSync.ts) — a linked note behaves identically
-// whether you open it here or from the sidebar.
+// Note editor embedded inline in the character sheet — a linked note is a
+// plain single-owner note, same model as the standalone NoteView page. Party-
+// wide note sharing now lives in the Party Server's Party Notes canvas
+// instead of per-note invites (see @/components/party/PartyNotesCanvas.tsx).
 function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, onAutoEditConsumed }: {
   note: userInfo.Objects
   expanded: boolean
@@ -350,14 +349,18 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
   autoEdit?: boolean
   onAutoEditConsumed?: () => void
 }) {
-  const {
-    isOwner, canEdit, userId, ownerEmail, content, handleChange,
-    collaboratorEmails, pendingInviteEmails, collaboratorRoles,
-    handleInvite, handleCancelInvite, handleRemoveCollaborator, handleSetRole,
-    textareaRef, peers, handleSelectionChange,
-  } = useCollaborativeNote(note, expanded)  // only holds a live connection while actually visible
+  const { objects, updateObject } = useUserContext()
+  const { openObjectId } = useNavigation()
+  const initialData = safeParseJson(note.data) as { content?: string }
 
+  const [content, setContent] = useState(initialData.content ?? "")
   const [editing, setEditing] = useState(!!autoEdit)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function goToNote(name: string) {
+    const match = objects.find(o => o.type === "note" && o.name.toLowerCase() === name.toLowerCase())
+    if (match) openObjectId(match.id)
+  }
 
   // Newly-created notes open straight into edit mode, once — mirrors the
   // auto-edit-on-add pattern used for newly added spells.
@@ -365,6 +368,14 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
     if (autoEdit) onAutoEditConsumed?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function handleChange(next: string) {
+    setContent(next)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      updateObject(note.id, { data: { content: next } as unknown as JSON }).catch(e => console.error(e))
+    }, 700)
+  }
 
   function handleEditClick() {
     if (!expanded) onToggle()
@@ -376,48 +387,20 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
       <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors" onClick={onToggle}>
         <span className="text-[10px] text-white/30 w-3 shrink-0">{expanded ? "▼" : "▶"}</span>
         <span className="text-xs text-white/70 flex-1 min-w-0 truncate">{note.name}</span>
-        {peers.length > 0 && (
-          <div className="flex items-center -space-x-1 shrink-0" title={peers.map(p => p.name).join(", ")}>
-            {peers.map(p => (
-              <span key={p.id} className="size-4 rounded-full ring-2 ring-slate-900 flex items-center justify-center text-[8px] font-bold text-white"
-                style={{ backgroundColor: p.color }}>
-                {p.name.charAt(0).toUpperCase()}
-              </span>
-            ))}
-          </div>
+        {!readOnly && (
+          <button type="button" onClick={e => { e.stopPropagation(); handleEditClick() }}
+            className="text-[10px] px-2 py-0.5 rounded-full transition-colors shrink-0 bg-white/10 hover:bg-white/20 text-white/60 hover:text-white">
+            {expanded && editing ? "👁 Preview" : "✎ Edit"}
+          </button>
         )}
-        <ShareMenu
-          isOwner={isOwner}
-          ownerEmail={ownerEmail}
-          collaboratorEmails={collaboratorEmails}
-          pendingInviteEmails={pendingInviteEmails}
-          collaboratorRoles={collaboratorRoles}
-          onInvite={handleInvite}
-          onCancelInvite={handleCancelInvite}
-          onRemoveCollaborator={handleRemoveCollaborator}
-          onSetRole={handleSetRole}
-          onUnlink={onRemove}
-          topSlot={!readOnly && canEdit ? (
-            <button type="button" onClick={handleEditClick}
-              className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition-colors">
-              {expanded && editing ? "👁 Preview" : "✎ Edit"}
-            </button>
-          ) : undefined}
-        />
+        {onRemove && <LinkMenu onUnlink={onRemove} itemLabel="note" />}
       </div>
       {expanded && (
         <div className="px-3 pb-2 max-h-64 overflow-y-auto">
-          {!canEdit && (
-            <p className="text-[9px] text-white/25 italic mb-1.5">👁 View only</p>
-          )}
-          {editing && !readOnly && canEdit ? (
+          {editing && !readOnly ? (
             <MarkdownTextarea
               value={content}
               onChange={handleChange}
-              onSelectionChange={handleSelectionChange}
-              textareaRef={textareaRef}
-              userId={userId}
-              overlay={<CollabCursorOverlay textareaRef={textareaRef} peers={peers} text={content} />}
               autoFocus
               placeholder={`# Note title\n\nStart writing… Supports **bold**, *italic*, \`code\`, and - lists. Ctrl/Cmd+B/I/E for quick formatting.`}
               className="w-full min-h-32 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 resize-none leading-relaxed font-mono"
@@ -426,8 +409,8 @@ function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, on
             />
           ) : (
             content.trim()
-              ? <Markdown text={content} tone="dark" size="xs" />
-              : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ⋮ then Edit to start writing."}</p>
+              ? <Markdown text={content} tone="dark" size="xs" onNoteLink={goToNote} />
+              : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ✎ Edit to start writing."}</p>
           )}
         </div>
       )}
@@ -587,7 +570,8 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
   // ── Linked Notes helpers — create a real sidebar Note object and link it ──
 
   async function handleCreateNote(): Promise<string> {
-    const note = await createObject({ name: "New Note", type: "note" })
+    const name = uniqueName("New Note", objects.filter(o => o.type === "note").map(o => o.name))
+    const note = await createObject({ name, type: "note" })
     update({ linkedNoteRefs: [...(data.linkedNoteRefs ?? []), { id: note.id, type: "note" }] })
     return note.id
   }

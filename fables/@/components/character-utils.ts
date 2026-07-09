@@ -27,3 +27,15 @@ export function safeParseJson(value: unknown): Record<string, unknown> {
     return {}
   }
 }
+
+// Notes are looked up by name for [[wikilinks]], so two notes sharing a name
+// would make a link ambiguous. Appends " 2", " 3", etc. until the name is
+// free — same pattern as "Untitled (2)" in most desktop file managers.
+export function uniqueName(baseName: string, existingNames: string[]): string {
+  const taken = new Set(existingNames.map(n => n.trim().toLowerCase()))
+  const base = baseName.trim()
+  if (!taken.has(base.toLowerCase())) return base
+  let i = 2
+  while (taken.has(`${base} ${i}`.toLowerCase())) i++
+  return `${base} ${i}`
+}

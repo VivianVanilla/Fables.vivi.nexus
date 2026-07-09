@@ -4,12 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "../supabase"
 import type { userInfo } from "@/types/userInfo"
 
-export async function getObjectsForUser(userId: string, email?: string | null) {
-  // Ordered explicitly — a shared note carries its *owner's* position value
-  // (meaningless in this viewer's own tree, see sidebar sort below), so ties
-  // are common. Without an explicit order Postgres may return rows in a
-  // different sequence each fetch, and since the sidebar's sort is stable,
-  // that made tied items appear to shuffle themselves on reload.
+export async function getObjectsForUser(userId: string) {
   const { data, error } = await supabase
     .from("objects")
     .select("*")
@@ -18,26 +13,7 @@ export async function getObjectsForUser(userId: string, email?: string | null) {
 
   if (error) throw error
 
-  let shared: userInfo.Objects[] = []
-  if (email) {
-    // Notes someone else owns but has invited this user to collaborate on
-    // (data.collaboratorEmails contains our email — identity here is by email,
-    // not a separate profiles table). Requires an RLS policy allowing SELECT
-    // on `objects` when the caller's email appears in data->collaboratorEmails
-    // — without it this simply returns nothing, same as before.
-    const { data: sharedRows, error: sharedError } = await supabase
-      .from("objects")
-      .select("*")
-      .eq("type", "note")
-      .neq("owner_id", userId)
-      .filter("data->collaboratorEmails", "cs", JSON.stringify([email.toLowerCase()]))
-      .order("created_date", { ascending: true })
-
-    if (sharedError) console.error("Error loading shared notes:", sharedError)
-    else shared = (sharedRows ?? []) as userInfo.Objects[]
-  }
-
-  return [...(data as userInfo.Objects[]), ...shared]
+  return data as userInfo.Objects[]
 }
 
 type User = any
@@ -71,7 +47,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user?.id) {
         try {
-          const objs = await getObjectsForUser(data.user.id, data.user.email)
+          const objs = await getObjectsForUser(data.user.id)
           setObjects(objs)
         } catch (err) {
           console.error("Error calling getObjectsForUser:", err)
@@ -92,7 +68,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const objs = await getObjectsForUser(user.id, user.email)
+      const objs = await getObjectsForUser(user.id)
       setObjects(objs)
     } catch (err) {
       console.error("Error refreshing objects:", err)

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Bold, Italic, Code as CodeIcon, Table2, ImageIcon, Loader2 } from "lucide-react"
+import { Bold, Italic, Code as CodeIcon, Table2, ImageIcon, Loader2, Link2 } from "lucide-react"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "../imageGallery"
 import { PortraitModal } from "../character/modals/PortraitModal"
 
@@ -17,9 +17,6 @@ interface MarkdownTextareaProps {
   wrapperClassName?: string
   autoFocus?: boolean
   variant?: "docs" | "light"
-  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
-  overlay?: React.ReactNode
-  onSelectionChange?: (start: number, end: number) => void
   userId?: string | null  // when set, shows an image-upload toolbar button (uploads to the shared "fableimages" bucket)
 }
 
@@ -44,6 +41,32 @@ function toggleWrap(el: HTMLTextAreaElement, value: string, onChange: (v: string
     next = before + marker + selected + marker + after
     nextStart = start + marker.length
     nextEnd = end + marker.length
+  }
+  onChange(next)
+  requestAnimationFrame(() => { el.focus(); el.selectionStart = nextStart; el.selectionEnd = nextEnd })
+}
+
+// [[ ]] uses different open/close markers, so it can't reuse toggleWrap's
+// symmetric-marker assumption — wraps the selection, or with nothing
+// selected just opens `[[]]` and parks the cursor between the brackets so
+// you can type the note name straight away.
+function toggleWikilink(el: HTMLTextAreaElement, value: string, onChange: (v: string) => void) {
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  const before = value.slice(0, start)
+  const selected = value.slice(start, end)
+  const after = value.slice(end)
+  const alreadyWrapped = before.endsWith("[[") && after.startsWith("]]")
+
+  let next: string, nextStart: number, nextEnd: number
+  if (alreadyWrapped) {
+    next = before.slice(0, -2) + selected + after.slice(2)
+    nextStart = start - 2
+    nextEnd = end - 2
+  } else {
+    next = before + "[[" + selected + "]]" + after
+    nextStart = start + 2
+    nextEnd = selected ? nextStart + selected.length : nextStart
   }
   onChange(next)
   requestAnimationFrame(() => { el.focus(); el.selectionStart = nextStart; el.selectionEnd = nextEnd })
@@ -90,7 +113,7 @@ function handleListEnter(el: HTMLTextAreaElement, value: string, onChange: (v: s
 export function MarkdownTextarea({
   value, onChange, placeholder, rows = 4,
   className = "", wrapperClassName, autoFocus, variant = "docs",
-  textareaRef, overlay, onSelectionChange, userId,
+  userId,
 }: MarkdownTextareaProps) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -98,11 +121,6 @@ export function MarkdownTextarea({
   const [showImagePicker, setShowImagePicker] = useState(false)
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
-
-  function setRef(el: HTMLTextAreaElement | null) {
-    innerRef.current = el
-    if (textareaRef) textareaRef.current = el
-  }
 
   function insertTable() {
     const prefix = value && !value.endsWith("\n") ? "\n\n" : value ? "\n" : ""
@@ -141,16 +159,12 @@ export function MarkdownTextarea({
     if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleWrap(el, value, onChange, "**"); return }
     if (mod && e.key.toLowerCase() === "i") { e.preventDefault(); toggleWrap(el, value, onChange, "*"); return }
     if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); toggleWrap(el, value, onChange, "`"); return }
+    if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); toggleWikilink(el, value, onChange); return }
     if (e.key === "Enter") handleListEnter(el, value, onChange, e)
   }
 
-  function reportSelection() {
-    const el = innerRef.current
-    if (el && onSelectionChange) onSelectionChange(el.selectionStart, el.selectionEnd)
-  }
-
   const toolCls = variant === "docs"
-    ? "size-6 flex items-center justify-center rounded border border-slate-700 text-slate-500 hover:text-slate-200 hover:border-slate-600 transition-colors disabled:opacity-40"
+    ? "size-6 flex items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground hover:border-border transition-colors disabled:opacity-40"
     : "size-6 flex items-center justify-center rounded border border-white/15 text-white/40 hover:text-white/80 hover:border-white/30 transition-colors disabled:opacity-40"
 
   return (
@@ -170,6 +184,10 @@ export function MarkdownTextarea({
         </button>
         <button type="button" className={toolCls} title="Insert table" onClick={insertTable}>
           <Table2 className="size-3.5" />
+        </button>
+        <button type="button" className={toolCls} title="Link to another note (Ctrl/Cmd+K)"
+          onClick={() => innerRef.current && toggleWikilink(innerRef.current, value, onChange)}>
+          <Link2 className="size-3.5" />
         </button>
         {userId && (
           <>
@@ -192,43 +210,16 @@ export function MarkdownTextarea({
           onClose={() => setShowImagePicker(false)}
         />
       )}
-      {overlay ? (
-        // Only wrap in a positioning container when there's an overlay to
-        // anchor (the live collaborative note editor) — every other
-        // MarkdownTextarea usage (spells, feats, actions, docs…) keeps the
-        // textarea as a direct flex child so its own sizing classes
-        // (flex-1/rows/etc.) behave exactly as before.
-        <div className="relative flex-1 min-h-0 flex">
-          <textarea
-            ref={setRef}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onSelect={reportSelection}
-            onClick={reportSelection}
-            onKeyUp={reportSelection}
-            placeholder={placeholder}
-            rows={rows}
-            className={className}
-            autoFocus={autoFocus}
-          />
-          {overlay}
-        </div>
-      ) : (
-        <textarea
-          ref={setRef}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onSelect={reportSelection}
-          onClick={reportSelection}
-          onKeyUp={reportSelection}
-          placeholder={placeholder}
-          rows={rows}
-          className={className}
-          autoFocus={autoFocus}
-        />
-      )}
+      <textarea
+        ref={innerRef}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        rows={rows}
+        className={className}
+        autoFocus={autoFocus}
+      />
     </div>
   )
 }

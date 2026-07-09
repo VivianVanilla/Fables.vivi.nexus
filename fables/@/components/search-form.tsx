@@ -19,8 +19,8 @@ import {
 import { Field, FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useUserContext } from "../../src/contexts/UserContext"
+import { uniqueName } from "./character-utils"
 import { supabase } from "../../src/supabase"
-import { PendingInvitesBell } from "@/components/collab/PendingInvitesBell"
 import { Link } from "react-router-dom"
 
 
@@ -373,7 +373,7 @@ function SimpleForm({
   defaultName: string
   onCreated: () => void
 }) {
-  const { createObject } = useUserContext()
+  const { createObject, objects } = useUserContext()
   const [name, setName] = useState(defaultName)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -382,7 +382,12 @@ function SimpleForm({
     setSaving(true)
     setError(null)
     try {
-      await createObject({ name, type, data: {} })
+      // Notes are looked up by name for [[wikilinks]] — keep them unique so
+      // a link never resolves ambiguously.
+      const finalName = type === "note"
+        ? uniqueName(name, objects.filter(o => o.type === "note").map(o => o.name))
+        : name
+      await createObject({ name: finalName, type, data: {} })
       onCreated()
     } catch (e: any) {
       setError(e.message ?? "Failed to create")
@@ -443,8 +448,6 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
 
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <PendingInvitesBell />
 
         <Button
           variant="outline"

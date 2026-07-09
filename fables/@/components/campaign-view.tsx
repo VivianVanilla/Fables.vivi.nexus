@@ -2,7 +2,8 @@ import { useState, useEffect } from "react"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import { safeParseJson } from "./character-utils"
 import { CharacterSheet } from "./character"
-import { PartyChat } from "./PartyChat"
+import { PartyServer } from "./party/PartyServer"
+import { usePartyLatestMessageAt, isPartyUnread } from "./party/unread"
 import { InitiativeTracker } from "./campaign/InitiativeTracker"
 import { useUserContext } from "../../src/contexts/UserContext"
 import { supabase } from "../../src/supabase"
@@ -64,6 +65,9 @@ export function CampaignView({ campaign, onClose }: Props) {
 
   const campaignData = safeParseJson(campaign.data) as CampaignData
   const partyCode = campaignData.partyCode ?? ""
+
+  const chatLatestMessageAt = usePartyLatestMessageAt(partyCode, user?.id ?? "")
+  const chatUnread = !!partyCode && !!user?.id && isPartyUnread(user.id, partyCode, chatLatestMessageAt)
 
   useEffect(() => {
     if (!partyCode) return
@@ -138,8 +142,11 @@ export function CampaignView({ campaign, onClose }: Props) {
       <div className="flex items-center gap-1 px-4 py-2 border-b border-foreground/10 bg-card shrink-0">
         {(["overview", "initiative", "chat"] as CampaignTab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-foreground/20 text-foreground" : "text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5"}`}>
+            className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-foreground/20 text-foreground" : "text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5"}`}>
             {tab === "overview" ? "Overview" : tab === "initiative" ? "Initiative" : "Party Chat"}
+            {tab === "chat" && chatUnread && (
+              <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
+            )}
           </button>
         ))}
       </div>
@@ -152,12 +159,13 @@ export function CampaignView({ campaign, onClose }: Props) {
       {/* Chat panel */}
       {activeTab === "chat" && partyCode && (
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <PartyChat
+          <PartyServer
             partyCode={partyCode}
             currentUserId={user?.id ?? ""}
-            currentUserName="DM"
+            currentUserName="Dungeon Master"
             isDM={true}
-            partyMembers={partyMembers.map(c => ({ userId: c.owner_id, name: c.name }))}
+            campaign={campaign}
+            partyMembers={partyMembers.map(c => ({ userId: c.owner_id, name: c.name, characterId: c.id }))}
           />
         </div>
       )}

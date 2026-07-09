@@ -243,6 +243,12 @@
   from { background-position: 0% 50%; }
   to   { background-position: 200% 50%; }
 }
+/* Note-web connection lines draw themselves in when a new link is made,
+   instead of just popping into existence — see NoteWebBoard.tsx. */
+@keyframes party-edge-draw {
+  from { stroke-dashoffset: 400; }
+  to   { stroke-dashoffset: 0; }
+}
 /* Blended (not raw) rainbow — soft-light against the dark base color mutes
    it into a slow moving tint instead of a blinding neon wash, so it's still
    readable as an actual UI and not just a joke you have to squint through.

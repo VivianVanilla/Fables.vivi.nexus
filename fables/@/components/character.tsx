@@ -7,7 +7,6 @@ import { Shield } from "lucide-react"
 
 import type { SidebarObject } from "@/components/sidebar-utils"
 import { useUserContext } from "../../src/contexts/UserContext"
-import { supabase } from "../../src/supabase"
 
 import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
@@ -52,7 +51,8 @@ import { SpeedDisplay }          from "./character/ui/SpeedDisplay"
 import { InfoTab, FeatureList, type InfoSubTab } from "./character/tabs/InfoTab"
 import { FamiliarsTab }          from "./character/tabs/FamiliarsTab"
 import { FamiliarMonsterView }   from "./monster"
-import { PartyChat }             from "./PartyChat"
+import { PartyServer }           from "./party/PartyServer"
+import { usePartyLatestMessageAt, isPartyUnread } from "./party/unread"
 import { ClassPickerModal }      from "./character/modals/ClassPickerModal"
 import { RacePickerModal }       from "./character/modals/RacePickerModal"
 import { Modal }                 from "./character/ui/Modal"
@@ -123,24 +123,15 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // Newly-added spell — opens its edit modal automatically, once
   const [pendingSpellId, setPendingSpellId] = useState<string | null>(null)
 
-  const [dmUserId, setDmUserId] = useState<string | null>(null)
-
   const portraitRef = useRef<HTMLInputElement>(null)
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [data, setData] = useState<CharacterData>(() => safeParseJson(character.data) as CharacterData)
 
-  // Fetch the DM's userId so players can initiate DMs
-  useEffect(() => {
-    if (!data.partyCode) return
-    supabase
-      .from("objects")
-      .select("owner_id")
-      .eq("type", "campaign")
-      .filter("data->>partyCode", "eq", data.partyCode)
-      .maybeSingle()
-      .then(({ data: row }) => { if (row?.owner_id) setDmUserId(row.owner_id) })
-  }, [data.partyCode])
+  // No chat access at all in read-only mode (DM peeking at a party member's
+  // sheet) — skip the subscription entirely rather than just hiding the badge.
+  const partyLatestMessageAt = usePartyLatestMessageAt(readOnly ? "" : (data.partyCode ?? ""), user?.id ?? "")
+  const partyChatUnread = !readOnly && !!data.partyCode && !!user?.id && isPartyUnread(user.id, data.partyCode, partyLatestMessageAt)
 
   // ── SAVE ──────────────────────────────────────────────────────────────────
 
@@ -1212,10 +1203,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
-        {(["main", "details", ...(isWarlock ? ["invocations"] : []), "familiars", ...(data.partyCode ? ["chat"] : [])] as Tab[]).map(tab => (
+        {(["main", "details", ...(isWarlock ? ["invocations"] : []), "familiars", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
+            className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
             {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "invocations" ? "Invocations" : tab === "familiars" ? "Familiars" : "Chat"}
+            {tab === "chat" && partyChatUnread && (
+              <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
+            )}
           </button>
         ))}
         <div className="w-full sm:w-auto sm:ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
@@ -1259,12 +1253,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             onPopOut={togglePopout}
           />
         )}
-        {activeTab === "chat" && data.partyCode && (
-          <PartyChat
+        {activeTab === "chat" && data.partyCode && !readOnly && (
+          <PartyServer
             partyCode={data.partyCode}
             currentUserId={user?.id ?? ""}
             currentUserName={character.name || "Adventurer"}
-            dmUserId={dmUserId ?? undefined}
+            isDM={false}
           />
         )}
       </div>

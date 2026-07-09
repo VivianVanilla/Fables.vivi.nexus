@@ -1,6 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import { GripVertical, ImageIcon, Pin, XIcon } from "lucide-react"
+import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search, Waypoints } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -11,7 +11,7 @@ import type { userInfo } from "../types/userInfo"
 import { buildObjectTree, applyDrop, moveToRoot, isNoNesting, isPinned } from "@/components/sidebar-utils"
 import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
 import { supabase } from "../../src/supabase"
-import { mergeObjectData } from "@/components/collab/mergeObjectData"
+import { NOTE_DRAG_TYPE } from "@/components/party/partyTypes"
 
 const BUCKET = "fableimages"
 
@@ -26,6 +26,16 @@ const typeMeta: Record<ObjectType, { label: string }> = {
   campaign: { label: "Campaign" },
 }
 
+// Tag-style color per object type — shown as a small colored pill next to
+// every sidebar item instead of plain uppercase text.
+const typeColors: Record<ObjectType, string> = {
+  folder: "bg-amber-500/15 text-amber-400",
+  note: "bg-emerald-500/15 text-emerald-400",
+  character: "bg-violet-500/15 text-violet-400",
+  monster: "bg-red-500/15 text-red-400",
+  campaign: "bg-sky-500/15 text-sky-400",
+}
+
 const LONG_PRESS_MS = 500
 
 // ----- Component -----
@@ -36,11 +46,13 @@ interface BgImage {
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSelectObject?: (obj: SidebarObject | null) => void
+  onOpenNoteWeb?: () => void
 }
 
-export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
+export function AppSidebar({ onSelectObject, onOpenNoteWeb, ...props }: AppSidebarProps) {
   const { user, objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
+  const [searchQuery, setSearchQuery] = React.useState("")
 
   // Background image picker state
   const [bgPickerItem, setBgPickerItem] = React.useState<SidebarObject | null>(null)
@@ -83,10 +95,32 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
   }, [contextMenu])
 
   const tree = React.useMemo(
-    () => buildObjectTree(items.filter(o => !o.type?.startsWith("doc_")), user?.id),
-    [items, user?.id]
+    () => buildObjectTree(items.filter(o => !o.type?.startsWith("doc_"))),
+    [items]
   )
   const toggleGroup = (id: string) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
+
+  // Search filters the flat list by name, then keeps every ancestor folder of
+  // a match too — so a hit three folders deep is still reachable — and the
+  // matched folders are force-expanded below instead of needing a manual click.
+  const searchActive = searchQuery.trim().length > 0
+  const visibleTree = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return tree
+    const idMap = new Map(items.map(o => [o.id, o]))
+    const keep = new Set<string>()
+    items.filter(o => o.name.toLowerCase().includes(q)).forEach(match => {
+      let cur: userInfo.Objects | undefined = match
+      // A corrupted/circular parent_id chain (A's parent is B, B's parent is
+      // A) would otherwise spin this loop forever and hang the tab — bail
+      // out the moment we revisit an id we've already walked through.
+      while (cur && !keep.has(cur.id)) {
+        keep.add(cur.id)
+        cur = cur.parent_id ? idMap.get(cur.parent_id) : undefined
+      }
+    })
+    return buildObjectTree(items.filter(o => keep.has(o.id) && !o.type?.startsWith("doc_")))
+  }, [items, searchQuery, tree])
 
   // ── Background image helpers ──────────────────────────────────────────────
 
@@ -131,55 +165,28 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
 
   const commitDrop = async (activeId: string, target: DropTarget | null, toRoot: boolean) => {
     if (toRoot) {
-      const newItems = moveToRoot(items, activeId, user?.id)
+      const newItems = moveToRoot(items, activeId)
       if (newItems !== items) await persistChanges(newItems)
       return
     }
     if (!target) return
-    const newItems = applyDrop(items, activeId, target, user?.id)
+    const newItems = applyDrop(items, activeId, target)
     if (newItems !== items) await persistChanges(newItems)
   }
 
-  // A reorder reindexes every sibling at that level, and the sidebar's own
-  // `items` list also includes notes shared with (not owned by) the current
-  // user. Those can't be reordered by writing the real position/parent_id
-  // columns (you don't own the row) — sidebar-utils.tsx's applyDrop/moveToRoot
-  // already know this and stash a per-viewer override in
-  // data.viewerPositions instead, so here we just split the batch: owned
-  // items go through the normal column update, foreign items go through the
-  // merge_object_data RPC to patch just that jsonb key.
+  // A reorder reindexes every sibling at that level.
   const persistChanges = async (newItems: userInfo.Objects[]) => {
     const previousItems = items
     setItems(newItems)
-
-    const ownedChanges: Array<{ id: string; parent_id: string | null; position: number }> = []
-    const foreignChanges: Array<{ id: string; viewerPositions: Record<string, number> }> = []
-
-    for (const item of newItems) {
-      const original = previousItems.find((o) => o.id === item.id)
-      if (!original) continue
-
-      if (item.owner_id === user?.id) {
-        if (original.parent_id !== item.parent_id || original.position !== item.position) {
-          ownedChanges.push({ id: item.id, parent_id: item.parent_id ?? null, position: item.position ?? 0 })
-        }
-        continue
-      }
-
-      const origData: any = typeof original.data === "string" ? JSON.parse(original.data || "{}") : (original.data ?? {})
-      const nextData: any = typeof item.data === "string" ? JSON.parse(item.data || "{}") : (item.data ?? {})
-      const uid = user?.id ?? ""
-      if (origData?.viewerPositions?.[uid] !== nextData?.viewerPositions?.[uid] && nextData?.viewerPositions) {
-        foreignChanges.push({ id: item.id, viewerPositions: nextData.viewerPositions })
-      }
-    }
-
-    if (ownedChanges.length === 0 && foreignChanges.length === 0) return
+    const changed = newItems
+      .filter((item) => {
+        const original = previousItems.find((o) => o.id === item.id)
+        return original && (original.parent_id !== item.parent_id || original.position !== item.position)
+      })
+      .map((item) => ({ id: item.id, parent_id: item.parent_id ?? null, position: item.position ?? 0 }))
+    if (changed.length === 0) return
     try {
-      if (ownedChanges.length > 0) await batchUpdateObjects(ownedChanges)
-      for (const change of foreignChanges) {
-        await mergeObjectData(change.id, { viewerPositions: change.viewerPositions })
-      }
+      await batchUpdateObjects(changed)
     } catch (error) {
       console.error("Error saving reorder:", error)
       setItems(previousItems)
@@ -345,24 +352,6 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
 
   const handleDelete = async (item: SidebarObject) => {
     setContextMenu(null)
-
-    // A note someone else shared with you can't be deleted (you don't own
-    // the row) — "deleting" it here means leaving the collaboration instead.
-    // That's a real write (removes your email from collaboratorEmails), so
-    // the owner and anyone else on the note see you leave immediately, and
-    // you'd need a fresh invite to get back in.
-    if (item.owner_id !== user?.id) {
-      const myEmail = user?.email?.toLowerCase()
-      if (!myEmail) return
-      if (!window.confirm(`Leave "${item.name}"? You'll need to be invited again to rejoin.`)) return
-      const itemData: any = typeof item.data === "string" ? JSON.parse(item.data || "{}") : (item.data ?? {})
-      const nextCollaborators = ((itemData.collaboratorEmails ?? []) as string[]).filter((e) => e !== myEmail)
-      const previousItems = items
-      setItems((prev) => prev.filter((entry) => entry.id !== item.id))
-      try { await mergeObjectData(item.id, { collaboratorEmails: nextCollaborators }) } catch { setItems(previousItems) }
-      return
-    }
-
     const confirmation = window.prompt(`Type DELETE to confirm deleting "${item.name}"`, "")
     if (confirmation !== "DELETE") return
     const previousItems = items
@@ -408,16 +397,15 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
 
   const renderItem = (node: SidebarObject, level = 0) => {
     const meta = typeMeta[(node.type as ObjectType) ?? "note"] || typeMeta.note
+    const colorCls = typeColors[(node.type as ObjectType) ?? "note"] || typeColors.note
     const isFolder = node.type === "folder"
-    const isOpen = openGroups[node.id] ?? false
+    const isOpen = searchActive ? true : (openGroups[node.id] ?? false)
     const isDragging = activeDragId === node.id
     const isDropBefore = activeDropTarget?.id === node.id && activeDropTarget.position === "before"
     const isDropAfter  = activeDropTarget?.id === node.id && activeDropTarget.position === "after"
     const isDropInside = activeDropTarget?.id === node.id && activeDropTarget.position === "inside"
     const nodeData: any = typeof node.data === "string" ? JSON.parse((node.data as string) ?? "{}") : (node.data ?? {})
     const bgImage: string | undefined = nodeData?.backgroundImage
-    const myEmail = user?.email?.toLowerCase()
-    const isSharedWithMe = node.type === "note" && node.owner_id !== user?.id && !!myEmail && !!nodeData?.collaboratorEmails?.includes(myEmail)
 
     return (
       <div key={node.id} className="relative">
@@ -425,9 +413,19 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
 
         <div
           ref={(el) => { if (el) itemRefs.current.set(node.id, el); else itemRefs.current.delete(node.id) }}
-          // Desktop drag — only active when grip was mousedown'd
-          draggable={draggableId === node.id}
-          onDragStart={(e) => { if (draggableId !== node.id) { e.preventDefault(); return } setDraggedId(node.id) }}
+          // Desktop drag — reorder is only active when the grip was mousedown'd;
+          // notes are additionally always draggable so they can be dragged out
+          // onto the Party Notes canvas (see PartyNotesCanvas.tsx) without the grip.
+          draggable={draggableId === node.id || node.type === "note"}
+          onDragStart={(e) => {
+            if (draggableId === node.id) { setDraggedId(node.id); return }
+            if (node.type === "note") {
+              e.dataTransfer.setData(NOTE_DRAG_TYPE, JSON.stringify({ objectId: node.id, name: node.name }))
+              e.dataTransfer.effectAllowed = "copy"
+              return
+            }
+            e.preventDefault()
+          }}
           onDragEnd={() => { isDraggable.current = false; setDraggableId(null); setDraggedId(null); setDropTarget(null) }}
           onDragOver={(e) => handleDragOver(e, node)}
           onDrop={handleDrop}
@@ -447,47 +445,34 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
              ${isFolder && isOpen && !bgImage ? "bg-sidebar-accent/60 rounded-md" : ""}
           `}
         >
-          {/* Grip — desktop mousedown gates drag; mobile touch starts drag */}
-        
-
           {/* Text area — long-press here opens context menu on mobile */}
-        <div
-  className={`min-w-0 flex-1 text-left p-1`}
-  onTouchStart={(e) => handleTextTouchStart(e, node)}
-  onTouchMove={handleTextTouchMove}
-  onTouchEnd={handleTextTouchEnd}
-  onClick={isFolder ? () => toggleGroup(node.id) : () => onSelectObject?.(node)}
->
-
+          <div
+            className={`min-w-0 flex-1 text-left p-1`}
+            onTouchStart={(e) => handleTextTouchStart(e, node)}
+            onTouchMove={handleTextTouchMove}
+            onTouchEnd={handleTextTouchEnd}
+            onClick={isFolder ? () => toggleGroup(node.id) : () => onSelectObject?.(node)}
+          >
             <div className="flex items-center gap-1.5 truncate">
+              {isFolder && (
+                <ChevronRight className={`size-3 shrink-0 text-sidebar-foreground/40 transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`} />
+              )}
               {isPinned(node) && <Pin className="size-2.5 shrink-0 text-primary/70" />}
               <span className="truncate text-sm font-medium leading-tight">{node.name}</span>
             </div>
 
-            <div className="flex items-center gap-2 text-[9px] uppercase tracking-widest text-sidebar-foreground/40 leading-tight">
-              <span>{meta.label}</span>
+            <div className="flex items-center gap-1.5 text-[9px] tracking-widest leading-tight mt-0.5">
+              <span className={`px-1.5 py-0.5 rounded-full font-semibold uppercase ${colorCls}`}>{meta.label}</span>
 
               {isFolder && isNoNesting(node) && (
-                <span className="rounded px-1 bg-sidebar-foreground/10 text-sidebar-foreground/50 tracking-normal normal-case">
+                <span className="rounded px-1 py-0.5 bg-sidebar-foreground/10 text-sidebar-foreground/50 tracking-normal normal-case">
                   no-nest
                 </span>
               )}
-
-              {isSharedWithMe && (
-                <span className="rounded px-1 bg-purple-500/20 text-purple-300 tracking-normal normal-case"
-                  title={nodeData?.ownerEmail ? `Shared by ${nodeData.ownerEmail}` : "Someone shared this note with you"}>
-                  shared
-                </span>
-              )}
             </div>
-
           </div>
 
-         
-
-         
-
-            <div
+          <div
             onMouseDown={() => { isDraggable.current = true; setDraggableId(node.id) }}
             onMouseUp={() => { isDraggable.current = false; setDraggableId(null) }}
             onTouchStart={(e) => handleGripTouchStart(e, node)}
@@ -530,8 +515,24 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
       <SidebarHeader>
         <VersionSwitcher />
         <SearchForm />
+        {onOpenNoteWeb && (
+          <button type="button" onClick={onOpenNoteWeb}
+            className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <Waypoints className="size-4" />
+            Note Web
+          </button>
+        )}
       </SidebarHeader>
       <SidebarContent>
+        <div className="relative px-2 pt-2">
+          <Search className="absolute left-4.5 top-1/2 -translate-y-1/2 size-3.5 text-sidebar-foreground/35 pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search your objects…"
+            className="w-full rounded-md bg-sidebar-accent/40 pl-8 pr-2 py-1.5 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground/35 outline-none focus:bg-sidebar-accent/70 transition-colors"
+          />
+        </div>
         <div
           className="space-y-0 px-2 py-2"
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null) }}
@@ -540,8 +541,10 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
             <div className="text-xs text-sidebar-foreground/70">Loading items…</div>
           ) : tree.length === 0 ? (
             <div className="text-xs text-sidebar-foreground/70">No objects found for this user.</div>
+          ) : visibleTree.length === 0 ? (
+            <div className="text-xs text-sidebar-foreground/50 italic">No matches for "{searchQuery.trim()}".</div>
           ) : (
-            tree.map((item) => renderItem(item))
+            visibleTree.map((item) => renderItem(item))
           )}
         </div>
 
@@ -584,7 +587,7 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
           </button>
           <button type="button" onClick={() => handleDelete(contextMenu.item)}
             className="block w-full rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
-            {contextMenu.item.owner_id !== user?.id ? "Leave" : "Delete"}
+            Delete
           </button>
           {contextMenu.item.type === "folder" && (
             <>

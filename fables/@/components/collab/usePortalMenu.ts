@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
-// usePortalMenu.ts — shared helpers for portaled dropdown menus (ShareMenu,
-// LinkMenu, ...): where to draw them, and when to close them.
+// usePortalMenu.ts — shared helpers for portaled dropdown menus (LinkMenu,
+// ...): where to draw them, and when to close them.
 //
 // Closing used to rely on the trigger's onBlur plus onMouseDown{preventDefault}
 // on the dropdown to stop that blur from firing when clicking a menu button.
