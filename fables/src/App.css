@@ -244,10 +244,14 @@
   to   { background-position: 200% 50%; }
 }
 [data-app-theme="rainbow"] body,
-[data-app-theme="rainbow"] [data-slot="sidebar-inner"] {
+[data-app-theme="rainbow"] [data-slot="sidebar-inner"],
+[data-app-theme="rainbow"] [data-slot="sidebar-inset"],
+[data-app-theme="rainbow"] .bg-background {
+  background-color: var(--background);
   background-image: linear-gradient(90deg, #ff0000, #ff9900, #33cc33, #0066ff, #9900cc, #ff0000);
+  background-blend-mode: soft-light;
   background-size: 200% 100%;
-  animation: fables-app-rainbow 12s linear infinite;
+  animation: fables-app-rainbow 24s linear infinite;
 }
 
 @layer base {

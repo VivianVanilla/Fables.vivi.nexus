@@ -444,7 +444,7 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
             hover:bg-sidebar-accent select-none
             ${isDragging ? "opacity-40" : "opacity-100"}
             ${isDropInside ? "ring-1 ring-primary bg-sidebar-accent" : ""}
-             ${isFolder && isOpen && !bgImage ? "bg-slate-800 rounded-md" : ""}
+             ${isFolder && isOpen && !bgImage ? "bg-sidebar-accent/60 rounded-md" : ""}
           `}
         >
           {/* Grip — desktop mousedown gates drag; mobile touch starts drag */}

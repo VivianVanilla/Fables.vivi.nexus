@@ -4,10 +4,9 @@
 // Lives in the sidebar header (next to the "+ Create" button). Polls for
 // objects of type "note" where our own email is listed in data.pendingInviteEmails.
 // Accept moves you from pendingInviteEmails into collaboratorEmails (and the
-// note shows up under "Shared With You" on any character, and in your own
-// sidebar once the RLS policy is in place). Deny just drops the pending entry
-// — there's no persistent "denied" record, so the owner has to invite you
-// again to retry.
+// note shows up in your own sidebar, linkable to any character the same way
+// as any other note). Deny just drops the pending entry — there's no
+// persistent "denied" record, so the owner has to invite you again to retry.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"

@@ -243,11 +243,20 @@
   from { background-position: 0% 50%; }
   to   { background-position: 200% 50%; }
 }
+/* Blended (not raw) rainbow — soft-light against the dark base color mutes
+   it into a slow moving tint instead of a blinding neon wash, so it's still
+   readable as an actual UI and not just a joke you have to squint through.
+   Covers the sidebar, the main dashboard content area, and any plain page
+   background (login screen etc). */
 [data-app-theme="rainbow"] body,
-[data-app-theme="rainbow"] [data-slot="sidebar-inner"] {
+[data-app-theme="rainbow"] [data-slot="sidebar-inner"],
+[data-app-theme="rainbow"] [data-slot="sidebar-inset"],
+[data-app-theme="rainbow"] .bg-background {
+  background-color: var(--background);
   background-image: linear-gradient(90deg, #ff0000, #ff9900, #33cc33, #0066ff, #9900cc, #ff0000);
+  background-blend-mode: soft-light;
   background-size: 200% 100%;
-  animation: fables-app-rainbow 12s linear infinite;
+  animation: fables-app-rainbow 24s linear infinite;
 }
 
 @layer base {

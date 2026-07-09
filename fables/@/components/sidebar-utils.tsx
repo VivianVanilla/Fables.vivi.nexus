@@ -17,16 +17,22 @@ function getItemData(item: userInfo.Objects): any {
 }
 
 // A note someone else shared with you carries *their* `position` column —
-// meaningful in their tree, not yours. Reordering it in your own sidebar
-// can't write to a row you don't own, so that reorder is stored as a
-// per-viewer override inside the note's own `data.viewerPositions[viewerId]`
-// (an owned collaborator is still allowed to patch `data` under RLS) instead
-// of the real `position` column. `viewerId` is who's currently looking —
+// meaningful in their tree, not yours, and free to collide with your own
+// numbering (each owner numbers their own items from 0). Reordering it in
+// your own sidebar can't write to a row you don't own either, so your
+// reorder is stored as a per-viewer override inside the note's own
+// `data.viewerPositions[viewerId]` (a collaborator is still allowed to patch
+// `data` under RLS) instead of the real `position` column. Until you've
+// dragged it at least once, a foreign-owned item ALWAYS falls back to the
+// end of your list (never the owner's raw column) — the query that fetches
+// shared notes orders them by created_date, so untouched ones stay stably
+// sorted amongst themselves instead of jumping around based on whatever
+// number the owner happens to have. `viewerId` is who's currently looking —
 // omit it to just use the raw column (unauthenticated/owner-only contexts).
 export function effectivePosition(item: userInfo.Objects, viewerId?: string): number {
   if (viewerId && item.owner_id !== viewerId) {
     const override = getItemData(item)?.viewerPositions?.[viewerId]
-    if (typeof override === "number") return override
+    return typeof override === "number" ? override : Number.MAX_SAFE_INTEGER
   }
   return item.position ?? 0
 }
