@@ -1,13 +1,12 @@
 import { useState } from "react"
 import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "../../character-types"
-import { SpellEntry, parseSpellCombat } from "../entries/SpellEntry"
+import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
 import { slotLevelColor } from "../../character-themes"
 import type { Theme }     from "../../character-themes"
-import { profBonus, nanoid, maxSpellLevelForClass } from "../../character-utils"
+import { profBonus } from "../../character-utils"
 import { SAVE_TO_ABILITY } from "../../character-constants"
-import { getSpells }      from "../../../../src/spells/spellCache"
 
 interface Props {
   card: string
@@ -27,7 +26,6 @@ interface Props {
   onAddSpell: () => void
   onChangeSpell: (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell: (id: string) => void
-  onImportSpells: (items: SpellItem[]) => void
   pendingSpellId?: string | null
   onAutoEditConsumed?: () => void
   onAddEquip: () => void
@@ -40,12 +38,11 @@ export function SpellsEquipPanel({
   spellItems, equipItems, spellSlots, slotAccent, characterId,
   activeSubTab, onChangeSubTab,
   onShowSpellcastingModal, onChangeSlot,
-  onAddSpell, onChangeSpell, onRemoveSpell, onImportSpells,
+  onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
   pendingSpellId, onAutoEditConsumed,
 }: Props) {
   const showSpells = activeSubTab === "spells"
-  const [importing, setImporting]   = useState(false)
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
@@ -90,64 +87,6 @@ export function SpellsEquipPanel({
   const availableClasses = data.multiclass && data.classes?.length
     ? data.classes.map(c => c.cls).filter(Boolean)
     : (data.class ? [data.class] : [])
-
-  // Classes whose full spell list can be bulk-imported, capped by max preparable
-  // level at the character's current level in that class (prepared casters like
-  // Cleric/Druid choose from their whole class list rather than a small "known" set).
-  const classLevels = data.multiclass && data.classes?.length
-    ? data.classes.filter(c => c.cls)
-    : (data.class ? [{ cls: data.class, level: data.level ?? 1 }] : [])
-  const importableClasses = classLevels
-    .map(c => ({ cls: c.cls, maxLevel: maxSpellLevelForClass(c.cls, c.level) }))
-    .filter(c => c.maxLevel > 0)
-
-  // One click imports every importable class's spell list at once — no
-  // per-class picker needed, since the character's classes/levels are
-  // already known.
-  async function importClassSpells() {
-    setImporting(true)
-    try {
-      const all = await getSpells()
-      const existingNames = new Set(spellItems.map(s => s.name.trim().toLowerCase()))
-      const newItems: SpellItem[] = []
-      for (const { cls, maxLevel } of importableClasses) {
-        // Cantrips are known individually (a small fixed number, tracked separately),
-        // not chosen from the whole class list like leveled spells — bulk-importing
-        // them would dump every cantrip the class has, not just the ones known.
-        const matches = all.filter(s =>
-          s.classes?.some(c => c.name.toLowerCase() === cls.toLowerCase()) &&
-          (s.level ?? 0) > 0 && (s.level ?? 0) <= maxLevel &&
-          !existingNames.has(s.name.trim().toLowerCase())
-        )
-        for (const s of matches) {
-          existingNames.add(s.name.trim().toLowerCase())  // a spell shared across two of the character's classes is only imported once
-          const parsed = parseSpellCombat(s.desc ?? "")
-          const dur = s.duration ?? ""
-          newItems.push({
-            id: nanoid(),
-            name: s.name,
-            level: s.level,
-            school: s.school?.name ?? "",
-            castTime: s.casting_time ?? "",
-            range: s.range ?? "",
-            duration: dur,
-            components: s.components?.join(", ") ?? "",
-            materialComponents: s.materialComponents ? (s.materials ?? "") : "",
-            ritual: s.ritual ?? false,
-            concentration: dur.toLowerCase().includes("concentration"),
-            damage: s.damage ?? parsed.damage ?? "",
-            damageType: s.damageType !== "None" ? s.damageType : "",
-            saveAttr: s.saveAttr ?? parsed.saveAttr ?? "",
-            notes: Array.isArray(s.desc) ? s.desc.join("\n\n") : (s.desc ?? ""),
-            sourceClass: cls,
-          })
-        }
-      }
-      if (newItems.length) onImportSpells(newItems)
-    } finally {
-      setImporting(false)
-    }
-  }
 
   return (
     <div className={`${card} p-4 flex flex-col gap-3`}>
@@ -351,19 +290,10 @@ export function SpellsEquipPanel({
               )
             })()}
             {!readOnly && (
-              <div className="flex items-center gap-2 shrink-0">
-                <button type="button" onClick={onAddSpell}
-                  className="flex-1 text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors">
-                  + Add Spell
-                </button>
-                {importableClasses.length > 0 && (
-                  <button type="button" onClick={importClassSpells} disabled={importing}
-                    title={importableClasses.map(c => `${c.cls} (up to Lv ${c.maxLevel})`).join(", ")}
-                    className="shrink-0 text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 px-3 transition-colors disabled:opacity-40 whitespace-nowrap">
-                    {importing ? "Importing…" : "⤓ Import Class Spells"}
-                  </button>
-                )}
-              </div>
+              <button type="button" onClick={onAddSpell}
+                className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors shrink-0">
+                + Add Spell
+              </button>
             )}
           </>
         ) : (

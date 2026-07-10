@@ -251,7 +251,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
   function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
-  function importSpells(items: SpellItem[])                   { update({ spellItems: [...spellItems, ...items] }) }
 
   function addEquip()                                          { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
@@ -953,7 +952,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           activeSubTab={spellsSubTab} onChangeSubTab={setSpellsSubTab}
           onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
           onChangeSlot={changeSlot}
-          onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell} onImportSpells={importSpells}
+          onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
           pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
         />

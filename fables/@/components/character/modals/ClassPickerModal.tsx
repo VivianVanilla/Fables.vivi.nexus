@@ -6,6 +6,7 @@ import { getSpells } from "../../../../src/spells/spellCache"
 import { SCHOOLS } from "../../../../src/spells/constants"
 import type { Feature, SpellItem } from "../../character-types"
 import { nanoid, maxSpellLevelForClass } from "../../character-utils"
+import { parseSpellCombat } from "../entries/SpellEntry"
 
 interface ClassEntry {
   cls: string
@@ -245,12 +246,28 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], exist
         // leveled spells. "Cantrips only" is an explicit choice, so it's exempt.
         return spellLevelChoice === "upto" ? (lvl > 0 && lvl <= capLevel) : lvl === capLevel
       })
-      const newSpells: SpellItem[] = matches.map(s => ({
-        id:          nanoid(),
-        name:        s.name,
-        level:       s.level,
-        sourceClass: entry.cls,
-      }))
+      const newSpells: SpellItem[] = matches.map(s => {
+        const parsed = parseSpellCombat(s.desc ?? "")
+        const dur = s.duration ?? ""
+        return {
+          id:                 nanoid(),
+          name:               s.name,
+          level:              s.level,
+          school:             s.school?.name ?? "",
+          castTime:           s.casting_time ?? "",
+          range:              s.range ?? "",
+          duration:           dur,
+          components:         s.components?.join(", ") ?? "",
+          materialComponents: s.materialComponents ? (s.materials ?? "") : "",
+          ritual:             s.ritual ?? false,
+          concentration:      dur.toLowerCase().includes("concentration"),
+          damage:             s.damage ?? parsed.damage ?? "",
+          damageType:         s.damageType !== "None" ? s.damageType : "",
+          saveAttr:           s.saveAttr ?? parsed.saveAttr ?? "",
+          notes:              Array.isArray(s.desc) ? s.desc.join("\n\n") : (s.desc ?? ""),
+          sourceClass:        entry.cls,
+        }
+      })
       if (newSpells.length) onImport({ spellItems: newSpells })
       setSpellsImportedMsg(newSpells.length ? `Imported ${newSpells.length} spell${newSpells.length === 1 ? "" : "s"}.` : "No new spells matched.")
     } finally {
