@@ -47,4 +47,4 @@ export const THEME_UNLOCKS: ShopTheme[] = [
   { id: "gold",      label: "High Roller",  cost: 500 },
 ]
 
-export const TWO048_COST = 250
+export const TWO048_COST = 950
