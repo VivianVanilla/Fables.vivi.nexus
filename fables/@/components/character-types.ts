@@ -165,6 +165,9 @@ export interface CharacterData {
   spellsKnown?: number
   invocationsKnown?: number   // Eldritch Invocations known (Warlock)
   spellSlotDisplay?: "integrated" | "classic"   // integrated = slot sliders next to level headers; classic = standalone block at the top
+  spellsDisplay?: "list" | "bubbles"            // list = one spell per row; bubbles = spells size to their content and wrap to pack multiple per line
+  hideDiceRoller?: boolean       // true = hide the dice roller panel on the Combat tab
+  hideJumpCalculator?: boolean   // true = hide the jump distance calculator on the Combat tab
   notes?: string
   backgroundImage?: string
   theme?: string

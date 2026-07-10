@@ -43,7 +43,7 @@ import { SkillModal }            from "./character/modals/SkillModal"
 import { InitiativeModal }       from "./character/modals/InitiativeModal"
 import { SpeedModal }            from "./character/modals/SpeedModal"
 import { ConditionPickerModal }  from "./character/modals/ConditionPickerModal"
-import { ThemeModal }            from "./character/modals/ThemeModal"
+import { SettingsModal }         from "./character/modals/SettingsModal"
 import { PortraitModal }         from "./character/modals/PortraitModal"
 import { SpeedDisplay }          from "./character/ui/SpeedDisplay"
 
@@ -82,7 +82,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Modal visibility
   const [showMaxMenu,           setShowMaxMenu]           = useState(false)
-  const [showThemePicker,       setShowThemePicker]       = useState(false)
+  const [showSettingsModal,     setShowSettingsModal]     = useState(false)
   const [showRestModal,         setShowRestModal]          = useState(false)
   const [showConditionPicker,   setShowConditionPicker]   = useState(false)
   const [showPortraitPicker,    setShowPortraitPicker]    = useState(false)
@@ -239,9 +239,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const totalWeight =
     (data.items ?? []).reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0) +
     (data.equipmentItems ?? []).reduce((sum, i) => sum + (i.sourceFeatureId ? 0 : (i.weight ?? 0)), 0)
-
-  // Total carried value (gp) — Items tab entries only, × amount for stacked generics
-  const totalValue = (data.items ?? []).reduce((sum, i) => sum + (i.value ?? 0) * (i.amount ?? 1), 0)
 
   // Carrying capacity (PHB) — STR score × 15 lb
   const carryCapacity = (data.strength ?? 10) * 15
@@ -918,7 +915,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               onRemove={removeCondition}
               onUpdateLevel={updateConditionLevel}
             />
-            <DiceRoller card={card} />
+            {!data.hideDiceRoller && <DiceRoller card={card} />}
             <CurrencyTracker card={card} data={data} readOnly={readOnly} update={update} />
           </div>
 
@@ -927,17 +924,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <AbilitiesCard card={card} data={data} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} />
             <SavesCard card={card} data={data} readOnly={readOnly} getSaveMod={getSaveMod} onShowModal={() => setShowSavesModal(true)} />
             <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} />
-            <div className={`${card} p-3 flex items-center justify-around gap-2`} title="Running jump distances — PHB: Long Jump = STR score (ft), High Jump = 3 + STR mod (ft)">
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">High Jump</span>
-                <span className="text-lg font-mono font-semibold text-white">{Math.max(0, 3 + statMods.str)} ft</span>
+            {!data.hideJumpCalculator && (
+              <div className={`${card} p-3 flex items-center justify-around gap-2`} title="Running jump distances — PHB: Long Jump = STR score (ft), High Jump = 3 + STR mod (ft)">
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">High Jump</span>
+                  <span className="text-lg font-mono font-semibold text-white">{Math.max(0, 3 + statMods.str)} ft</span>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Long Jump</span>
+                  <span className="text-lg font-mono font-semibold text-white">{Math.max(0, data.strength ?? 10)} ft</span>
+                </div>
               </div>
-              <div className="w-px h-8 bg-white/10" />
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Long Jump</span>
-                <span className="text-lg font-mono font-semibold text-white">{Math.max(0, data.strength ?? 10)} ft</span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Col 3: Favorites */}
@@ -1020,8 +1019,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           conditions={conditions} onAdd={addCondition} onClose={() => setShowConditionPicker(false)}
         />
       )}
-      {showThemePicker && (
-        <ThemeModal data={data} onUpdate={update} onClose={() => setShowThemePicker(false)} />
+      {showSettingsModal && (
+        <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)} />
       )}
 
       {showRestModal && (
@@ -1073,6 +1072,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           initial={data.classes ?? (data.class ? [{ cls: data.class, level: data.level ?? 1 }] : [])}
           userId={user?.id ?? null}
           existingFeatures={data.classFeatures ?? []}
+          existingSpells={data.spellItems ?? []}
           onConfirm={classes => {
             const total = classes.reduce((s, c) => s + c.level, 0)
             update({
@@ -1122,11 +1122,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 ⚖ {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} / {carryCapacity} lb
               </span>
             )}
-            {totalValue > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 shrink-0" title="Total value of carried items">
-                {totalValue % 1 === 0 ? totalValue : totalValue.toFixed(2)} gp
-              </span>
-            )}
+           
             {readOnly && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 uppercase tracking-widest shrink-0">
                 View Only
@@ -1150,7 +1146,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <button
               type="button"
               onClick={() => { if (!readOnly) setShowClassPicker(true) }}
-              className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors truncate max-w-[140px] ${
+              className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors truncate max-w-35 ${
                 readOnly ? "cursor-default" : "cursor-pointer hover:border-white/20 hover:bg-white/15"
               } ${(data.classes && data.classes.length > 0) || data.class
                 ? "bg-white/10 border-white/10 text-white/70"
@@ -1199,9 +1195,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               Rest
             </button>
             <button type="button"
-              onClick={() => setShowThemePicker(true)}
+              onClick={() => setShowSettingsModal(true)}
               className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
-              Theme
+              Settings
             </button>
           </div>
         )}

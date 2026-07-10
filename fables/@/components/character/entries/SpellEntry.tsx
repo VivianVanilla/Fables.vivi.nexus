@@ -10,6 +10,7 @@ import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
 import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 import { PopTransition } from "../ui/PopTransition"
+import { FavoriteStar } from "../ui/FavoriteStar"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 
@@ -22,9 +23,12 @@ interface SpellEntryProps {
   theme: Theme
   readOnly?: boolean
   showPrepToggle?: boolean
+  compact?: boolean     // "bubbles" display — sizes to content and wraps instead of filling the row
   classes?: string[]   // character's class(es) — lets a spell be tagged as known/prepared from a specific one
   autoEdit?: boolean            // open the edit modal immediately (newly-added spell)
   onAutoEditConsumed?: () => void
+  isFavorite?: boolean
+  onToggleFavorite?: () => void  // omit to hide the star
 }
 
 // ── Parse spell description for combat data ───────────────────────────────────
@@ -138,7 +142,10 @@ function Pill({ label, value, color = "bg-white/10 text-white/60" }: { label: st
 
 // ── Spell detail modal (shows SpellItem's own stored data) ────────────────────
 
-function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellItem; onClose: () => void; onEdit: () => void; readOnly: boolean }) {
+function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onToggleFavorite }: {
+  spell: SpellItem; onClose: () => void; onEdit: () => void; readOnly: boolean
+  isFavorite?: boolean; onToggleFavorite?: () => void
+}) {
   return (
     <Modal onClose={onClose}>
       <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(760px,calc(100vw-2rem))] max-h-[88vh] flex flex-col overflow-hidden">
@@ -159,6 +166,9 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
             <div className="flex items-center gap-2 shrink-0 mt-0.5">
               {!spell.alwaysPrepared && spell.prepared && (
                 <span className="text-[10px] sm:text-xs border border-primary/50 text-primary rounded-full px-2 py-0.5 font-semibold tracking-wide">Prepared</span>
+              )}
+              {onToggleFavorite && (
+                <FavoriteStar isFavorite={!!isFavorite} onToggle={onToggleFavorite} />
               )}
               {!readOnly && (
                 <button type="button" onClick={onEdit}
@@ -208,7 +218,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly }: { spell: SpellIt
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], autoEdit = false, onAutoEditConsumed }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite }: SpellEntryProps) {
   const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -265,7 +275,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
       {/* ── Detail modal (shows this spell's own stored data) ──────────── */}
       {showDetail && (
         <SpellDetailModal spell={spell} readOnly={readOnly} onClose={() => setShowDetail(false)}
-          onEdit={() => { setShowDetail(false); setEditing(true) }} />
+          onEdit={() => { setShowDetail(false); setEditing(true) }}
+          isFavorite={isFavorite} onToggleFavorite={onToggleFavorite} />
       )}
 
       {/* ── Edit form modal ─────────────────────────────────────────────── */}
@@ -428,7 +439,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
       <div
         {...dragAttrs}
         onClick={() => setShowDetail(true)}
-        className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors`}
+        className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors ${compact ? "w-auto max-w-72 shrink-0" : ""}`}
       >
         {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells and cantrips have no mark at all */}
         {showPrepToggle && !spell.alwaysPrepared && spell.level !== 0 && (
@@ -474,10 +485,6 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             )}
           </div>
           <div className="flex gap-0.5 mt-0.5 flex-wrap">
-            
-            {spell.school && (
-              <span className="text-[10px] px-1 py-0.5 rounded-full bg-white/10 text-white/45 italic">{spell.school}</span>
-            )}
             {(spell.saveAttr || spell.saveType) && (
               <span className="text-[10px] px-1 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300/80">
                 Save {spell.saveAttr || spell.saveType}

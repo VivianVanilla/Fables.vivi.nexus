@@ -17,6 +17,7 @@ import { PopTransition } from "../ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 import { ITEM_RARITIES, RARITY_COLORS } from "../../character-constants"
+import { classColorClasses } from "../../character-class-colors"
 import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
@@ -153,7 +154,7 @@ interface FeatureEntryProps {
   suggestionSource?: SuggestionSource  // which doc type to autocomplete from
   userId?:          string | null
   isFavorite?:       boolean
-  onToggleFavorite?: () => void        // omit to hide the star (e.g. inside FavoritesPanel, which has its own)
+  onToggleFavorite?: () => void        // omit to hide the star
   onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab — toggles into/out of Martial
   inEquipment?:      boolean            // whether this feature already has a linked copy in the Martial list
   showAttunement?:   boolean            // only true for the Items tab — shows an "Attuned" toggle
@@ -578,7 +579,7 @@ export function FeatureEntry({
           </span>
 
           {!showItemExtras && feature.source && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 truncate max-w-24 shrink-0" title={feature.source}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${classColorClasses(feature.source)}`} title={feature.source}>
               {feature.source}
             </span>
           )}

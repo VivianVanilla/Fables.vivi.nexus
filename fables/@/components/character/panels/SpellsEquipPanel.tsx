@@ -5,23 +5,9 @@ import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
 import { slotLevelColor } from "../../character-themes"
 import type { Theme }     from "../../character-themes"
-import { profBonus, nanoid } from "../../character-utils"
+import { profBonus, nanoid, maxSpellLevelForClass } from "../../character-utils"
 import { SAVE_TO_ABILITY } from "../../character-constants"
 import { getSpells }      from "../../../../src/spells/spellCache"
-
-// ── Prepared-caster max spell level, by character level in that class ─────────
-// (standard 5e slot progression — full/half/pact casters only; other classes
-// have no innate spell list to import from)
-const FULL_CASTERS = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"])
-const HALF_CASTERS = new Set(["paladin", "ranger"])
-
-function maxSpellLevelForClass(cls: string, level: number): number {
-  const c = cls.toLowerCase()
-  if (FULL_CASTERS.has(c)) return Math.min(9, Math.ceil(level / 2))
-  if (HALF_CASTERS.has(c)) return level < 2 ? 0 : Math.min(5, Math.floor((level - 1) / 4) + 1)
-  if (c === "warlock")     return Math.min(5, Math.ceil(level / 2))
-  return 0
-}
 
 interface Props {
   card: string
@@ -59,7 +45,6 @@ export function SpellsEquipPanel({
   pendingSpellId, onAutoEditConsumed,
 }: Props) {
   const showSpells = activeSubTab === "spells"
-  const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting]   = useState(false)
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
@@ -72,6 +57,7 @@ export function SpellsEquipPanel({
   })
 
   const slotDisplay    = data.spellSlotDisplay ?? "integrated"
+  const spellsDisplay  = data.spellsDisplay ?? "list"
   // Cantrips are always considered prepared/available — they don't count
   // against the Prepared total (that's leveled spells only) or Known either.
   const preparedCount  = spellItems.filter(s => s.prepared && !s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
@@ -115,42 +101,51 @@ export function SpellsEquipPanel({
     .map(c => ({ cls: c.cls, maxLevel: maxSpellLevelForClass(c.cls, c.level) }))
     .filter(c => c.maxLevel > 0)
 
-  async function importClassSpells(cls: string, maxLevel: number) {
+  // One click imports every importable class's spell list at once — no
+  // per-class picker needed, since the character's classes/levels are
+  // already known.
+  async function importClassSpells() {
     setImporting(true)
     try {
       const all = await getSpells()
       const existingNames = new Set(spellItems.map(s => s.name.trim().toLowerCase()))
-      const matches = all.filter(s =>
-        s.classes?.some(c => c.name.toLowerCase() === cls.toLowerCase()) &&
-        (s.level ?? 0) <= maxLevel &&
-        !existingNames.has(s.name.trim().toLowerCase())
-      )
-      const newItems: SpellItem[] = matches.map(s => {
-        const parsed = parseSpellCombat(s.desc ?? "")
-        const dur = s.duration ?? ""
-        return {
-          id: nanoid(),
-          name: s.name,
-          level: s.level,
-          school: s.school?.name ?? "",
-          castTime: s.casting_time ?? "",
-          range: s.range ?? "",
-          duration: dur,
-          components: s.components?.join(", ") ?? "",
-          materialComponents: s.materialComponents ? (s.materials ?? "") : "",
-          ritual: s.ritual ?? false,
-          concentration: dur.toLowerCase().includes("concentration"),
-          damage: s.damage ?? parsed.damage ?? "",
-          damageType: s.damageType !== "None" ? s.damageType : "",
-          saveAttr: s.saveAttr ?? parsed.saveAttr ?? "",
-          notes: Array.isArray(s.desc) ? s.desc.join("\n\n") : (s.desc ?? ""),
-          sourceClass: cls,
+      const newItems: SpellItem[] = []
+      for (const { cls, maxLevel } of importableClasses) {
+        // Cantrips are known individually (a small fixed number, tracked separately),
+        // not chosen from the whole class list like leveled spells — bulk-importing
+        // them would dump every cantrip the class has, not just the ones known.
+        const matches = all.filter(s =>
+          s.classes?.some(c => c.name.toLowerCase() === cls.toLowerCase()) &&
+          (s.level ?? 0) > 0 && (s.level ?? 0) <= maxLevel &&
+          !existingNames.has(s.name.trim().toLowerCase())
+        )
+        for (const s of matches) {
+          existingNames.add(s.name.trim().toLowerCase())  // a spell shared across two of the character's classes is only imported once
+          const parsed = parseSpellCombat(s.desc ?? "")
+          const dur = s.duration ?? ""
+          newItems.push({
+            id: nanoid(),
+            name: s.name,
+            level: s.level,
+            school: s.school?.name ?? "",
+            castTime: s.casting_time ?? "",
+            range: s.range ?? "",
+            duration: dur,
+            components: s.components?.join(", ") ?? "",
+            materialComponents: s.materialComponents ? (s.materials ?? "") : "",
+            ritual: s.ritual ?? false,
+            concentration: dur.toLowerCase().includes("concentration"),
+            damage: s.damage ?? parsed.damage ?? "",
+            damageType: s.damageType !== "None" ? s.damageType : "",
+            saveAttr: s.saveAttr ?? parsed.saveAttr ?? "",
+            notes: Array.isArray(s.desc) ? s.desc.join("\n\n") : (s.desc ?? ""),
+            sourceClass: cls,
+          })
         }
-      })
+      }
       if (newItems.length) onImportSpells(newItems)
     } finally {
       setImporting(false)
-      setImportOpen(false)
     }
   }
 
@@ -297,14 +292,14 @@ export function SpellsEquipPanel({
               // within the same parent instead of unmounting/remounting it (which would lose
               // the spell's own open edit/detail modal state).
               return (
-                <div className="flex flex-col gap-1">
+                <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"}`}>
                   {levels.flatMap(lvl => {
                     const spells       = grouped.get(lvl)!
                     const isOpen       = !collapsedLevels.has(lvl)
                     const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
                     const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
                     const nodes: React.ReactNode[] = [
-                      <div key={`header-${lvl}`} className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
+                      <div key={`header-${lvl}`} className="w-full flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
                         <button type="button"
                           onClick={() => setCollapsedLevels(prev => {
                             const next = new Set(prev)
@@ -344,6 +339,7 @@ export function SpellsEquipPanel({
                       for (const spell of spells) {
                         nodes.push(
                           <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
+                            compact={spellsDisplay === "bubbles"}
                             autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
                             onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
                         )
@@ -361,29 +357,11 @@ export function SpellsEquipPanel({
                   + Add Spell
                 </button>
                 {importableClasses.length > 0 && (
-                  <div className="relative shrink-0">
-                    <button type="button"
-                      onClick={() => importableClasses.length === 1
-                        ? importClassSpells(importableClasses[0].cls, importableClasses[0].maxLevel)
-                        : setImportOpen(v => !v)}
-                      disabled={importing}
-                      className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 px-3 transition-colors disabled:opacity-40 whitespace-nowrap">
-                      {importing ? "Importing…" : "⤓ Import Class Spells"}
-                    </button>
-                    {importOpen && importableClasses.length > 1 && (
-                      <>
-                        <div className="fixed inset-0 z-0" onClick={() => setImportOpen(false)} />
-                        <div className="absolute bottom-full right-0 mb-1 w-52 rounded-xl border border-white/15 bg-zinc-900 shadow-xl overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150">
-                          {importableClasses.map(c => (
-                            <button key={c.cls} type="button" onClick={() => importClassSpells(c.cls, c.maxLevel)}
-                              className="w-full text-left px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors">
-                              {c.cls} <span className="text-white/30 text-xs">(up to Lv {c.maxLevel})</span>
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  <button type="button" onClick={importClassSpells} disabled={importing}
+                    title={importableClasses.map(c => `${c.cls} (up to Lv ${c.maxLevel})`).join(", ")}
+                    className="shrink-0 text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 px-3 transition-colors disabled:opacity-40 whitespace-nowrap">
+                    {importing ? "Importing…" : "⤓ Import Class Spells"}
+                  </button>
                 )}
               </div>
             )}

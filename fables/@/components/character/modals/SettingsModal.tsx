@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void
 }
 
-export function ThemeModal({ data, onUpdate, onClose }: Props) {
+export function SettingsModal({ data, onUpdate, onClose }: Props) {
   const activeThemeKey = data.theme     ?? DEFAULT_THEME
   const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
   const activeBgKey    = data.themeBg   ?? "default"
@@ -19,7 +19,7 @@ export function ThemeModal({ data, onUpdate, onClose }: Props) {
       <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(520px,92vw)] max-h-[88vh] flex flex-col overflow-hidden">
 
         <div className="px-5 py-3 border-b border-white/10 shrink-0 flex items-center justify-between gap-3">
-          <p className="text-base font-bold text-white">Theme</p>
+          <p className="text-base font-bold text-white">Settings</p>
           <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
             <button type="button" onClick={() => onUpdate({ themeMode: "dark" })}
               className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "dark" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
@@ -93,14 +93,26 @@ export function ThemeModal({ data, onUpdate, onClose }: Props) {
             </div>
           </div>
 
-          {/* Settings */}
+          {/* Interface options */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Settings</p>
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Options</p>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={!(data.plainSkills ?? false)}
                 onChange={e => onUpdate({ plainSkills: !e.target.checked })}
                 className="accent-primary size-4 rounded" />
               <span className="text-sm text-white/70">Color-code skills by ability</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.hideDiceRoller ?? false}
+                onChange={e => onUpdate({ hideDiceRoller: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Remove dice roller</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.hideJumpCalculator ?? false}
+                onChange={e => onUpdate({ hideJumpCalculator: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Remove jump calculator</span>
             </label>
           </div>
 

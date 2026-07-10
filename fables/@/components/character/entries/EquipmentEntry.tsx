@@ -9,6 +9,7 @@ import { Modal } from "../ui/Modal"
 import { Markdown } from "../../ui/Markdown"
 import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 import { PopTransition } from "../ui/PopTransition"
+import { FavoriteStar } from "../ui/FavoriteStar"
 import { getSuggestions, type Suggestion } from "./FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,6 +23,8 @@ interface EquipmentEntryProps {
   statMods?: Record<string, number>
   pb?: number
   userId?: string | null
+  isFavorite?: boolean
+  onToggleFavorite?: () => void  // omit to hide the star
 }
 
 const STAT_OPTIONS = [
@@ -77,7 +80,7 @@ function computeDamage(
 
 export function EquipmentEntry({
   item, onChange, onRemove, theme, readOnly = false,
-  statMods = {}, pb = 2, userId,
+  statMods = {}, pb = 2, userId, isFavorite, onToggleFavorite,
 }: EquipmentEntryProps) {
   const [editing,    setEditing]    = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -399,12 +402,17 @@ export function EquipmentEntry({
               {item.attackStat && toHit && (
                 <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
               )}
-              {!readOnly && (
-                <button type="button" onClick={() => setEditing(true)}
-                  className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors ml-auto">
-                  ✎
-                </button>
-              )}
+              <div className="flex items-center gap-1 ml-auto">
+                {onToggleFavorite && (
+                  <FavoriteStar isFavorite={!!isFavorite} onToggle={onToggleFavorite} />
+                )}
+                {!readOnly && (
+                  <button type="button" onClick={() => setEditing(true)}
+                    className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/70 hover:text-white text-sm shrink-0 transition-colors">
+                    ✎
+                  </button>
+                )}
+              </div>
             </div>
             {/* Notes */}
             {item.notes

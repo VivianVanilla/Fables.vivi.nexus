@@ -39,3 +39,18 @@ export function uniqueName(baseName: string, existingNames: string[]): string {
   while (taken.has(`${base} ${i}`.toLowerCase())) i++
   return `${base} ${i}`
 }
+
+// ── Prepared-caster max spell level, by character level in that class ─────────
+// (standard 5e slot progression — full/half/pact casters only; other classes
+// have no innate spell list to import from)
+const FULL_CASTERS = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"])
+const HALF_CASTERS = new Set(["paladin", "ranger"])
+
+/** Returns the highest spell level a class can prepare/know at a given character level (0 if it's not a spellcasting class). */
+export function maxSpellLevelForClass(cls: string, level: number): number {
+  const c = cls.toLowerCase()
+  if (FULL_CASTERS.has(c)) return Math.min(9, Math.ceil(level / 2))
+  if (HALF_CASTERS.has(c)) return level < 2 ? 0 : Math.min(5, Math.floor((level - 1) / 4) + 1)
+  if (c === "warlock")     return Math.min(5, Math.ceil(level / 2))
+  return 0
+}

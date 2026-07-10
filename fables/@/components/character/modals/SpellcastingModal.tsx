@@ -35,7 +35,7 @@ export function SpellcastingModal({
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-125 max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(500px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
           <p className="text-base font-bold text-white">Spellcasting</p>
           <button type="button" onClick={onClose}
@@ -114,6 +114,26 @@ export function SpellcastingModal({
               {(data.spellSlotDisplay ?? "integrated") === "integrated"
                 ? "Slot sliders sit next to each spell level's header."
                 : "Slot sliders sit together at the top of the panel."}
+            </p>
+          </div>
+
+          {/* Spells display */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spells Display</p>
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 self-start">
+              <button type="button" disabled={readOnly} onClick={() => onUpdate({ spellsDisplay: "list" })}
+                className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-colors disabled:cursor-default ${(data.spellsDisplay ?? "list") === "list" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                List
+              </button>
+              <button type="button" disabled={readOnly} onClick={() => onUpdate({ spellsDisplay: "bubbles" })}
+                className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-colors disabled:cursor-default ${data.spellsDisplay === "bubbles" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Bubbles
+              </button>
+            </div>
+            <p className="text-[11px] text-white/30">
+              {(data.spellsDisplay ?? "list") === "list"
+                ? "Each spell takes its own full-width row."
+                : "Spells shrink to fit their content, packing multiple per line."}
             </p>
           </div>
 

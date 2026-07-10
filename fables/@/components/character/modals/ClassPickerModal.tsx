@@ -2,8 +2,10 @@ import { useEffect, useState } from "react"
 import { Modal } from "../ui/Modal"
 import { Minus, Plus, X, ChevronDown } from "lucide-react"
 import { supabase } from "../../../../src/supabase"
+import { getSpells } from "../../../../src/spells/spellCache"
+import { SCHOOLS } from "../../../../src/spells/constants"
 import type { Feature, SpellItem } from "../../character-types"
-import { nanoid } from "../../character-utils"
+import { nanoid, maxSpellLevelForClass } from "../../character-utils"
 
 interface ClassEntry {
   cls: string
@@ -14,19 +16,23 @@ interface Props {
   initial: ClassEntry[]
   userId?: string | null
   existingFeatures?: Feature[]  // current data.classFeatures — used to warn before duplicate imports
+  existingSpells?: SpellItem[]  // current data.spellItems — used to skip re-importing spells already known
   onConfirm: (classes: ClassEntry[]) => void
   onImport?: (payload: { classFeatures?: Feature[]; spellItems?: SpellItem[] }) => void
   onClose: () => void
 }
 
-export function ClassPickerModal({ initial, userId, existingFeatures = [], onConfirm, onImport, onClose }: Props) {
+export function ClassPickerModal({ initial, userId, existingFeatures = [], existingSpells = [], onConfirm, onImport, onClose }: Props) {
   const [entries,          setEntries]          = useState<ClassEntry[]>(initial.length > 0 ? initial : [])
   const [search,           setSearch]           = useState("")
   const [allClasses,       setAllClasses]       = useState<string[]>([])
   const [subclassOptions,  setSubclassOptions]  = useState<Record<string, string[]>>({})
   const [selectedSubclass, setSelectedSubclass] = useState<Record<string, string>>({})
-  const [importUpTo,       setImportUpTo]       = useState(1)
   const [duplicateWarning, setDuplicateWarning] = useState<string[] | null>(null)
+  const [spellImportClass, setSpellImportClass] = useState("")           // "" = default to entries[0]
+  const [spellLevelChoice, setSpellLevelChoice] = useState("upto")       // "upto" | "0".."9"
+  const [spellSchoolChoice, setSpellSchoolChoice] = useState("")         // "" = any school
+  const [spellsImportedMsg, setSpellsImportedMsg] = useState<string | null>(null)
 
   // Load core + homebrew + library classes from the DB
   useEffect(() => {
@@ -188,7 +194,7 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], onCon
       if (classData) {
         const features: any[] = classData.features ?? []
         features
-          .filter(f => (f.level ?? 0) <= importUpTo)
+          .filter(f => (f.level ?? 0) <= entry.level)
           .forEach(f => allFeatures.push({
             id:          nanoid(),
             name:        f.name,
@@ -201,7 +207,7 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], onCon
         const subFeatures: any[] = subData.features ?? []
         const subName = selectedSubclass[entry.cls]
         subFeatures
-          .filter(f => (f.level ?? 0) <= importUpTo)
+          .filter(f => (f.level ?? 0) <= entry.level)
           .forEach(f => allFeatures.push({
             id:          nanoid(),
             name:        f.name,
@@ -217,32 +223,39 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], onCon
     onClose()
   }
 
+  // Pulls from the full spell database (not just subclass-granted freebies) —
+  // covers prepared casters like Cleric/Druid who need their whole class list
+  // available to choose "prepared" spells from, not just a few known ones.
   async function handleImportSpells() {
     if (!onImport || !entries.length) return
+    const entry = entries.find(e => e.cls === spellImportClass) ?? entries[0]
     setImportingSpells(true)
-    const rows = await loadClassAndSubData()
-    const allSpells: SpellItem[] = []
-
-    for (const { entry, subData } of rows) {
-      if (subData) {
-        const domainSpells: any[] = subData.domain_spells ?? []
-        domainSpells
-          .filter(row => (row.level ?? 0) <= importUpTo)
-          .forEach(row => {
-            const names = (row.spells ?? "").split(",").map((s: string) => s.trim()).filter(Boolean)
-            names.forEach((spellName: string) => allSpells.push({
-              id:             nanoid(),
-              name:           spellName,
-              alwaysPrepared: true,
-              sourceClass:    entry.cls,
-            }))
-          })
-      }
+    setSpellsImportedMsg(null)
+    try {
+      const all = await getSpells()
+      const existingNames = new Set(existingSpells.map(s => s.name.trim().toLowerCase()))
+      const capLevel = spellLevelChoice === "upto" ? maxSpellLevelForClass(entry.cls, entry.level) : parseInt(spellLevelChoice, 10)
+      const matches = all.filter(s => {
+        if (!s.classes?.some(c => c.name.toLowerCase() === entry.cls.toLowerCase())) return false
+        if (existingNames.has(s.name.trim().toLowerCase())) return false
+        if (spellSchoolChoice && (s.school?.name ?? "").toLowerCase() !== spellSchoolChoice.toLowerCase()) return false
+        const lvl = s.level ?? 0
+        // "Up to class level" skips cantrips — those are known individually
+        // (a small fixed number), not chosen from the whole class list like
+        // leveled spells. "Cantrips only" is an explicit choice, so it's exempt.
+        return spellLevelChoice === "upto" ? (lvl > 0 && lvl <= capLevel) : lvl === capLevel
+      })
+      const newSpells: SpellItem[] = matches.map(s => ({
+        id:          nanoid(),
+        name:        s.name,
+        level:       s.level,
+        sourceClass: entry.cls,
+      }))
+      if (newSpells.length) onImport({ spellItems: newSpells })
+      setSpellsImportedMsg(newSpells.length ? `Imported ${newSpells.length} spell${newSpells.length === 1 ? "" : "s"}.` : "No new spells matched.")
+    } finally {
+      setImportingSpells(false)
     }
-
-    onImport({ spellItems: allSpells })
-    setImportingSpells(false)
-    onClose()
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -358,16 +371,8 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], onCon
             <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
               <p className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Import from Docs</p>
               <p className="text-xs text-white/30 leading-relaxed">
-                Pulls class features and subclass spells from the documentation library up to the chosen level.
+                Pulls class & subclass features from the documentation library, up to each class's own level above.
               </p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-white/50 shrink-0">Up to level</span>
-                <input
-                  type="number" min={1} max={20} value={importUpTo}
-                  onChange={e => setImportUpTo(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
-                  className="w-14 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-sm text-white text-center outline-none focus:border-white/30"
-                />
-              </div>
               {duplicateWarning && (
                 <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                   <p className="text-xs text-amber-300 leading-relaxed">
@@ -392,13 +397,46 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], onCon
               >
                 {importingFeatures ? "Importing…" : "Import Class & Subclass Features"}
               </button>
-              <button
-                onClick={handleImportSpells}
-                disabled={importingSpells}
-                className="w-full py-2 rounded-lg text-sm font-semibold bg-violet-600/20 border border-violet-500/30 text-violet-300 hover:bg-violet-600/30 transition-colors disabled:opacity-40"
-              >
-                {importingSpells ? "Importing…" : "Import Subclass Spell List"}
-              </button>
+
+              <div className="flex flex-col gap-2 border-t border-white/5 pt-3">
+                <p className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">Import Spells</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {entries.length > 1 && (
+                    <label className="flex flex-col gap-1 col-span-2">
+                      <span className="text-[10px] text-white/40">Class</span>
+                      <select value={spellImportClass || entries[0].cls} onChange={e => setSpellImportClass(e.target.value)}
+                        className="bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-white/30">
+                        {entries.map(e => <option key={e.cls} value={e.cls} className="bg-zinc-800 text-white">{e.cls}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/40">Level</span>
+                    <select value={spellLevelChoice} onChange={e => setSpellLevelChoice(e.target.value)}
+                      className="bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-white/30">
+                      <option value="upto" className="bg-zinc-800 text-white">Up to class level</option>
+                      <option value="0" className="bg-zinc-800 text-white">Cantrips only</option>
+                      {[1,2,3,4,5,6,7,8,9].map(l => <option key={l} value={l} className="bg-zinc-800 text-white">Level {l} only</option>)}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/40">School</span>
+                    <select value={spellSchoolChoice} onChange={e => setSpellSchoolChoice(e.target.value)}
+                      className="bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-white/30">
+                      <option value="" className="bg-zinc-800 text-white">Any school</option>
+                      {SCHOOLS.map(s => <option key={s} value={s} className="bg-zinc-800 text-white">{s}</option>)}
+                    </select>
+                  </label>
+                </div>
+                {spellsImportedMsg && <p className="text-[11px] text-emerald-300/80">{spellsImportedMsg}</p>}
+                <button
+                  onClick={handleImportSpells}
+                  disabled={importingSpells}
+                  className="w-full py-2 rounded-lg text-sm font-semibold bg-violet-600/20 border border-violet-500/30 text-violet-300 hover:bg-violet-600/30 transition-colors disabled:opacity-40"
+                >
+                  {importingSpells ? "Importing…" : "Import Spells"}
+                </button>
+              </div>
             </div>
           )}
         </div>

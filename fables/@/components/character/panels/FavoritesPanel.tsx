@@ -22,8 +22,11 @@ import type { Theme } from "../../character-themes"
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 
 function FamiliarFavoriteEntry({
-  fam, monster, poppedOut, onPopOut,
-}: { fam: FamiliarRef; monster: userInfo.Objects; poppedOut: boolean; onPopOut: () => void }) {
+  fam, monster, poppedOut, onPopOut, isFavorite, onToggleFavorite,
+}: {
+  fam: FamiliarRef; monster: userInfo.Objects; poppedOut: boolean; onPopOut: () => void
+  isFavorite?: boolean; onToggleFavorite?: () => void
+}) {
   const mData = safeParseJson(monster.data) as MonsterData
   return (
     <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 flex items-center gap-2.5 min-h-11">
@@ -36,6 +39,9 @@ function FamiliarFavoriteEntry({
         <p className="text-sm font-semibold text-white truncate">{fam.nickname || monster.name}</p>
         <p className="text-[10px] text-white/40 uppercase tracking-wider">Familiar</p>
       </div>
+      {onToggleFavorite && (
+        <FavoriteStar isFavorite={!!isFavorite} onToggle={onToggleFavorite} />
+      )}
       <button type="button" onClick={onPopOut} title={poppedOut ? "Already popped out" : "Pop out"}
         className={`size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-sm shrink-0 transition-colors ${poppedOut ? "text-primary" : "text-white/50 hover:text-white"}`}>
         ⧉
@@ -159,12 +165,17 @@ export function FavoritesPanel({
           {favorites.map((fav, idx) => {
             const isReorderTarget = reorderOverIdx === idx && reorderDragIdx !== idx
 
+            // Star toggle removes the item from favorites — each entry type shows it
+            // next to its own edit affordance instead of a separate side column.
+            const onToggleFavorite = readOnly ? undefined : () => onRemove(fav.refId)
+
             // Resolve the entry to render — falls through to a "not found" row
             let entry: React.ReactNode
             if (fav.refType === "spell") {
               const spell = resolveSpell(fav.refId)
               entry = spell
                 ? <SpellEntry spell={spell} theme={theme} readOnly={readOnly} showPrepToggle={false} classes={classes}
+                    isFavorite onToggleFavorite={onToggleFavorite}
                     onChange={p => onChangeSpell(fav.refId, p)}
                     onRemove={() => onRemoveSpell(fav.refId)} />
                 : <p className="text-sm text-white/30 italic px-3 py-2.5">Spell not found.</p>
@@ -172,6 +183,7 @@ export function FavoritesPanel({
               const item = resolveEquip(fav.refId)
               entry = item
                 ? <EquipmentEntry item={item} theme={theme} readOnly={readOnly} statMods={statMods} pb={pb}
+                    isFavorite onToggleFavorite={onToggleFavorite}
                     onChange={p => onChangeEquip(fav.refId, p)}
                     onRemove={() => onRemoveEquip(fav.refId)} />
                 : <p className="text-sm text-white/30 italic px-3 py-2.5">Item not found.</p>
@@ -181,7 +193,8 @@ export function FavoritesPanel({
               entry = fam && monster
                 ? <FamiliarFavoriteEntry fam={fam} monster={monster}
                     poppedOut={poppedOutIds.has(fam.id)}
-                    onPopOut={() => onPopOutFamiliar(fam.id)} />
+                    onPopOut={() => onPopOutFamiliar(fam.id)}
+                    isFavorite onToggleFavorite={onToggleFavorite} />
                 : <p className="text-sm text-white/30 italic px-3 py-2.5">Familiar not found.</p>
             } else {
               const feat = resolveFeature(fav.refId)
@@ -192,6 +205,7 @@ export function FavoritesPanel({
                     theme={theme}
                     readOnly={readOnly}
                     pb={pb}
+                    isFavorite onToggleFavorite={onToggleFavorite}
                     onChange={patch => onUpdateFeature(fav.refId, patch)}
                     onRemove={() => onRemoveFeature(fav.refId)}
                     onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}
@@ -217,10 +231,6 @@ export function FavoritesPanel({
                 )}
 
                 <div className="flex-1 min-w-0">{entry}</div>
-
-                {!readOnly && (
-                  <FavoriteStar isFavorite onToggle={() => onRemove(fav.refId)} />
-                )}
               </div>
             )
           })}
