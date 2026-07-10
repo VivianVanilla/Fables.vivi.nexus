@@ -265,6 +265,88 @@
   animation: fables-app-rainbow 24s linear infinite;
 }
 
+/* gamVIVIling shop unlock — same animated-gradient technique as rainbow,
+   but faster and more saturated (neon magenta/cyan/yellow). */
+[data-app-theme="trippy"] {
+  --background: #0a0014;
+  --foreground: #ffffff;
+  --card: #170022;
+  --card-foreground: #ffffff;
+  --popover: #170022;
+  --popover-foreground: #ffffff;
+  --primary: #ff00cc;
+  --primary-foreground: #0a0014;
+  --secondary: #00ffea;
+  --secondary-foreground: #0a0014;
+  --muted: #1f0530;
+  --muted-foreground: #e9b8ff;
+  --accent: #fffb00;
+  --accent-foreground: #0a0014;
+  --border: rgba(255, 0, 204, 0.25);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ff00cc;
+  --sidebar: #0a0014;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ff00cc;
+  --sidebar-primary-foreground: #0a0014;
+  --sidebar-accent: #00ffea;
+  --sidebar-accent-foreground: #0a0014;
+  --sidebar-border: rgba(255, 0, 204, 0.25);
+  --sidebar-ring: #ff00cc;
+}
+@keyframes fables-app-trippy {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+[data-app-theme="trippy"] body,
+[data-app-theme="trippy"] [data-slot="sidebar-inner"],
+[data-app-theme="trippy"] [data-slot="sidebar-inset"],
+[data-app-theme="trippy"] .bg-background {
+  background-color: var(--background);
+  background-image: linear-gradient(90deg, #ff00cc, #00ffea, #fffb00, #ff00cc);
+  background-blend-mode: soft-light;
+  background-size: 200% 100%;
+  animation: fables-app-trippy 6s linear infinite;
+}
+
+/* gamVIVIling shop unlock — static pastel gradient, no animation. */
+[data-app-theme="vaporwave"] {
+  --background: #1a0b2e;
+  --foreground: #ffe3fb;
+  --card: #2a1250;
+  --card-foreground: #ffe3fb;
+  --popover: #2a1250;
+  --popover-foreground: #ffe3fb;
+  --primary: #ff71ce;
+  --primary-foreground: #1a0b2e;
+  --secondary: #01cdfe;
+  --secondary-foreground: #1a0b2e;
+  --muted: #3a1c5e;
+  --muted-foreground: #d9b8ff;
+  --accent: #b967ff;
+  --accent-foreground: #1a0b2e;
+  --border: rgba(255, 113, 206, 0.25);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ff71ce;
+  --sidebar: #1a0b2e;
+  --sidebar-foreground: #ffe3fb;
+  --sidebar-primary: #ff71ce;
+  --sidebar-primary-foreground: #1a0b2e;
+  --sidebar-accent: #01cdfe;
+  --sidebar-accent-foreground: #1a0b2e;
+  --sidebar-border: rgba(255, 113, 206, 0.25);
+  --sidebar-ring: #ff71ce;
+}
+[data-app-theme="vaporwave"] body,
+[data-app-theme="vaporwave"] [data-slot="sidebar-inner"],
+[data-app-theme="vaporwave"] [data-slot="sidebar-inset"],
+[data-app-theme="vaporwave"] .bg-background {
+  background-color: var(--background);
+  background-image: linear-gradient(135deg, #ff71ce, #b967ff, #01cdfe);
+  background-blend-mode: soft-light;
+  background-size: 100% 100%;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

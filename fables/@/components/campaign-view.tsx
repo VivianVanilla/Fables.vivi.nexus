@@ -31,6 +31,7 @@ interface CharData {
   skillProfs?: Record<string, "half" | "prof" | "exp">
   skillBonuses?: Record<string, number>
   conditions?: Array<{ id: string; name: string }>
+  partyCode?: string
 }
 
 interface Props {
@@ -62,6 +63,8 @@ export function CampaignView({ campaign, onClose }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [partyMembers, setPartyMembers] = useState<SidebarObject[]>([])
   const [activeTab, setActiveTab] = useState<CampaignTab>("overview")
+  const [kickConfirmId, setKickConfirmId] = useState<string | null>(null)
+  const [kicking, setKicking] = useState(false)
 
   const campaignData = safeParseJson(campaign.data) as CampaignData
   const partyCode = campaignData.partyCode ?? ""
@@ -98,6 +101,25 @@ export function CampaignView({ campaign, onClose }: Props) {
 
   function copyCode() {
     if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
+  }
+
+  // Kicking just clears the party code on the player's own character — same
+  // as if they'd left voluntarily from their Info tab. Uses the same
+  // DM-write-through path (and RLS policy) as updatePartyMemberHp above.
+  async function kickMember(characterId: string) {
+    const char = partyMembers.find(c => c.id === characterId)
+    if (!char) return
+    const charData = safeParseJson(char.data) as CharData
+    setKicking(true)
+    try {
+      await updateSharedObject(characterId, { data: { ...charData, partyCode: "" } as unknown as JSON })
+      setPartyMembers(prev => prev.filter(c => c.id !== characterId))
+    } catch (e) {
+      console.error("kick failed:", e)
+    } finally {
+      setKicking(false)
+      setKickConfirmId(null)
+    }
   }
 
   if (expandedId) {
@@ -263,6 +285,36 @@ export function CampaignView({ campaign, onClose }: Props) {
                       </div>
                     ) : null}
                   </div>
+
+                  {kickConfirmId === char.id ? (
+                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        disabled={kicking}
+                        onClick={() => kickMember(char.id)}
+                        className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+                      >
+                        {kicking ? "Kicking…" : "Confirm kick"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={kicking}
+                        onClick={() => setKickConfirmId(null)}
+                        className="text-[10px] px-2 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setKickConfirmId(char.id) }}
+                      title="Remove from party"
+                      className="text-[10px] px-2 py-1 rounded-full bg-foreground/5 hover:bg-red-500/20 text-foreground/40 hover:text-red-300 transition-colors shrink-0"
+                    >
+                      Kick
+                    </button>
+                  )}
 
                   <span className="text-foreground/30 text-xs shrink-0">→</span>
                 </div>

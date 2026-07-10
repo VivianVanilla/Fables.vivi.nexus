@@ -17,6 +17,7 @@ import type { Spell } from "../../../src/spells/types"
 
 interface Props {
   onClose: () => void
+  onWin?: () => void
 }
 
 const STATUS_STYLES: Record<AttributeResult["status"], string> = {
@@ -44,7 +45,7 @@ function AttrCell({ result }: { result: AttributeResult }) {
   )
 }
 
-export function SpelldleModal({ onClose }: Props) {
+export function SpelldleModal({ onClose, onWin }: Props) {
   const [save, setSave] = useState<SpelldleSave | null>(null)
   const [allSpells, setAllSpells] = useState<Spell[]>([])
   const [input, setInput] = useState("")
@@ -94,6 +95,7 @@ export function SpelldleModal({ onClose }: Props) {
     setShowSuggestions(false)
     if (won) {
       setJustWon(true)
+      onWin?.()
       setTimeout(() => setJustWon(false), 3200)
     }
   }

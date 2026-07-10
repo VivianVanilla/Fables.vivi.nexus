@@ -10,12 +10,15 @@ import {
 } from "@/components/ui/dialog"
 import { supabase } from "../../src/supabase"
 import { useHomebrewFilter, setHomebrewFilterValue } from "../../src/hooks/useHomebrewFilter"
-import { useAppTheme, APP_THEMES } from "../../src/contexts/ThemeContext"
+import { useAppTheme, APP_THEMES, FREE_THEMES } from "../../src/contexts/ThemeContext"
 import { SpelldleModal } from "./spelldle/SpelldleModal"
 import { loadUserImages, type GalleryImage } from "./imageGallery"
+import { useGamblingWallet } from "./gambling/useGamblingWallet"
+import { GamblingModal } from "./gambling/GamblingModal"
+import { TwentyFortyEightModal } from "./gambling/TwentyFortyEightModal"
 
 const BUCKET = "fableimages"
-const SPELLDLE_EMAILS = ["spaghettiloverjake@gmail.com", "vivian.bonilla@outlook.com", "liamlillico06@gmail.com"]
+const SPELLDLE_EMAILS = ["spaghettiloverjake@gmail.com", "vivian.bonilla@outlook.com", "liamlillico06@gmail.com", "loganadsit@gmail.com"]
 
 interface Props {
   open: boolean
@@ -31,6 +34,9 @@ export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
   const { theme: appTheme, setTheme: setAppTheme } = useAppTheme()
 
   const [showSpelldle, setShowSpelldle] = React.useState(false)
+  const [showGambling, setShowGambling] = React.useState(false)
+  const [show2048, setShow2048] = React.useState(false)
+  const { tokens, claimSpelldleToken, unlockedThemeIds, unlocked2048 } = useGamblingWallet()
 
   const userId = user?.id
   const canPlaySpelldle = SPELLDLE_EMAILS.includes(user?.email)
@@ -176,6 +182,20 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
                 Play
               </button>
             </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium">🎰 gamVIVIling</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{tokens} tokens — wager them on mini-games, spend them in the shop.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGambling(true)}
+                className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                Play
+              </button>
+            </div>
           </>
         )}
 
@@ -189,17 +209,23 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
               Sidebar, notes, and docs — not the character sheet, which has its own per-class theme.
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {APP_THEMES.map(t => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setAppTheme(t.id)}
-                title={t.label}
-                className={`size-8 rounded-full border-2 transition-all ${appTheme === t.id ? "border-primary scale-110" : "border-border hover:border-muted-foreground"}`}
-                style={{ background: t.swatch }}
-              />
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            {APP_THEMES.map(t => {
+              const locked = !FREE_THEMES.includes(t.id) && !unlockedThemeIds.includes(t.id)
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setAppTheme(t.id)}
+                  title={locked ? `${t.label} — unlock in gamVIVIling` : t.label}
+                  className={`relative size-8 rounded-full border-2 transition-all ${locked ? "opacity-30 cursor-not-allowed" : appTheme === t.id ? "border-primary scale-110" : "border-border hover:border-muted-foreground"}`}
+                  style={{ background: t.swatch }}
+                >
+                  {locked && <span className="absolute inset-0 flex items-center justify-center text-[10px]">🔒</span>}
+                </button>
+              )
+            })}
             <span className="text-xs text-muted-foreground ml-1">{APP_THEMES.find(t => t.id === appTheme)?.label}</span>
           </div>
         </div>
@@ -261,7 +287,15 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     </Dialog>
 
     {showSpelldle && canPlaySpelldle && (
-      <SpelldleModal onClose={() => setShowSpelldle(false)} />
+      <SpelldleModal onClose={() => setShowSpelldle(false)} onWin={claimSpelldleToken} />
+    )}
+
+    {showGambling && canPlaySpelldle && (
+      <GamblingModal onClose={() => setShowGambling(false)} onOpen2048={() => { setShowGambling(false); setShow2048(true) }} />
+    )}
+
+    {show2048 && canPlaySpelldle && unlocked2048 && (
+      <TwentyFortyEightModal onClose={() => setShow2048(false)} />
     )}
     </>
   )

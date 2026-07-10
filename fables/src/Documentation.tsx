@@ -13,6 +13,7 @@ import { SpellBrowser } from "./spells/SpellBrowser";
 import { DocBrowser } from "@/components/documentation/DocBrowser";
 import type { DocType } from "@/components/documentation/doc-types";
 import { ADMIN_EMAILS } from "@/components/documentation/doc-types";
+import { EquippedTagBadge } from "@/components/gambling/EquippedTagBadge";
 import { BookOpen, Sparkles, LayoutGrid, Swords, Gem, Users, Eye, ShieldCheck } from "lucide-react";
 import "./index.css";
 
@@ -60,6 +61,7 @@ export default function Documentation() {
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 bg-background">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+          <EquippedTagBadge />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden sm:block">

@@ -12,6 +12,7 @@ import { CharacterSheet } from "@/components/character";
 import { CampaignView } from "@/components/campaign-view";
 import { NoteView } from "@/components/NoteView";
 import { MonsterSheet } from "@/components/monster";
+import { EquippedTagBadge } from "@/components/gambling/EquippedTagBadge";
 import { useUserContext } from "./contexts/UserContext";
 import "./index.css";
 
@@ -46,6 +47,7 @@ export default function Dashboard() {
             orientation="vertical"
             className="mr-2 data-[orientation=vertical]:h-4"
           />
+          <EquippedTagBadge />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 bg-background overflow-hidden min-h-0">
           {loading ? (
