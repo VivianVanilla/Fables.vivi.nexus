@@ -6,6 +6,7 @@
 import { useState } from "react"
 import { useGamblingWallet } from "./useGamblingWallet"
 import { BlackjackGame } from "./BlackjackGame"
+import { CoinFlipGame } from "./CoinFlipGame"
 import { DiceRollGame } from "./DiceRollGame"
 import { SlotsGame } from "./SlotsGame"
 import { ShopPanel } from "./ShopPanel"
@@ -15,10 +16,11 @@ interface Props {
   onOpen2048: () => void
 }
 
-type Tab = "blackjack" | "dice" | "slots" | "shop"
+type Tab = "blackjack" | "coinflip" | "dice" | "slots" | "shop"
 
 const TABS: [Tab, string][] = [
   ["blackjack", "Blackjack"],
+  ["coinflip",  "Coin Flip"],
   ["dice",      "Dice"],
   ["slots",     "Slots"],
   ["shop",      "Shop"],
@@ -66,6 +68,7 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
         {/* Body */}
         <div className="px-6 pb-6">
           {tab === "blackjack" && <BlackjackGame />}
+          {tab === "coinflip" && <CoinFlipGame />}
           {tab === "dice" && <DiceRollGame />}
           {tab === "slots" && <SlotsGame />}
           {tab === "shop" && <ShopPanel />}

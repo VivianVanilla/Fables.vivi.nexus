@@ -1,6 +1,8 @@
 // ════════════════════════════════════════════════════════════════════════════
-// BlackjackGame.tsx — wager tokens, single hand vs. the dealer. Blackjack
-// pays 2.5x, a regular win pays 2x, a push returns the wager, a loss pays 0.
+// BlackjackGame.tsx — wager tokens, single hand vs. the dealer, turn-based:
+// your turn (hit/stand) resolves fully, then the dealer's turn plays out one
+// card at a time (not an instant jump to the final hand). Blackjack pays
+// 2.5x, a regular win pays 2x, a push returns the wager, a loss pays 0.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
@@ -13,14 +15,18 @@ import { WagerStepper } from "./WagerStepper"
 
 type Phase = "betting" | "playing" | "dealer" | "done"
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function CardFace({ card, hidden }: { card: Card; hidden?: boolean }) {
   if (hidden) {
     return (
-      <div className="w-11 h-16 rounded-lg bg-white/10 border-2 border-white/15 flex items-center justify-center text-white/20 text-lg">?</div>
+      <div className="w-11 h-16 rounded-lg bg-white/10 border-2 border-white/15 flex items-center justify-center text-white/20 text-lg animate-in fade-in zoom-in-90 duration-200">?</div>
     )
   }
   return (
-    <div className={`w-11 h-16 rounded-lg bg-white border-2 border-white/20 flex flex-col items-center justify-center leading-none ${isRed(card.suit) ? "text-red-600" : "text-zinc-900"}`}>
+    <div className={`w-11 h-16 rounded-lg bg-white border-2 border-white/20 flex flex-col items-center justify-center leading-none animate-in fade-in zoom-in-90 duration-200 ${isRed(card.suit) ? "text-red-600" : "text-zinc-900"}`}>
       <span className="text-sm font-bold">{card.rank}</span>
       <span className="text-lg">{card.suit}</span>
     </div>
@@ -36,7 +42,6 @@ export function BlackjackGame() {
   const [outcome, setOutcome] = useState<{ multiplier: number } | null>(null)
 
   const canDeal = phase === "betting" && wager >= 1 && wager <= tokens
-  const busy = phase === "dealer"
 
   function deal() {
     if (!canDeal) return
@@ -47,7 +52,7 @@ export function BlackjackGame() {
     setOutcome(null)
     if (isBlackjack(p)) {
       setPhase("dealer")
-      setTimeout(() => finishRound(p, d), 500)
+      playDealerTurn(p, d)
     } else {
       setPhase("playing")
     }
@@ -59,22 +64,30 @@ export function BlackjackGame() {
     setPlayerCards(next)
     if (isBust(next)) {
       setPhase("dealer")
-      setTimeout(() => finishRound(next, dealerCards), 400)
+      playDealerTurn(next, dealerCards)
     }
   }
 
   function stand() {
     if (phase !== "playing") return
     setPhase("dealer")
-    setTimeout(() => finishRound(playerCards, dealerCards), 500)
+    playDealerTurn(playerCards, dealerCards)
   }
 
-  async function finishRound(finalPlayer: Card[], startingDealer: Card[]) {
+  // The dealer's turn plays out one card at a time — each hit is its own
+  // visible step with a pause, not an instant jump to the final hand.
+  async function playDealerTurn(finalPlayer: Card[], startingDealer: Card[]) {
+    await sleep(600)
     let dealerHand = startingDealer
-    if (!isBust(finalPlayer)) {
-      while (dealerShouldHit(dealerHand)) dealerHand = [...dealerHand, drawCard()]
-    }
     setDealerCards(dealerHand)
+    if (!isBust(finalPlayer)) {
+      while (dealerShouldHit(dealerHand)) {
+        await sleep(700)
+        dealerHand = [...dealerHand, drawCard()]
+        setDealerCards(dealerHand)
+      }
+    }
+    await sleep(500)
     const multiplier = resolveOutcome(finalPlayer, dealerHand)
     await settleWager(wager, multiplier)
     setOutcome({ multiplier })
@@ -96,7 +109,9 @@ export function BlackjackGame() {
     <div className="flex flex-col items-center gap-4 py-4">
       {phase !== "betting" && (
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-[10px] text-white/30 uppercase tracking-widest">Dealer {!showDealerHole && `· ${dealerTotal}`}</span>
+          <span className="text-[10px] text-white/30 uppercase tracking-widest">
+            Dealer {!showDealerHole && `· ${dealerTotal}`} {phase === "dealer" && <span className="text-primary/70">— Dealer's Turn</span>}
+          </span>
           <div className="flex gap-1.5">
             {dealerCards.map((c, i) => <CardFace key={i} card={c} hidden={showDealerHole && i === 1} />)}
           </div>
@@ -108,7 +123,10 @@ export function BlackjackGame() {
           <div className="flex gap-1.5">
             {playerCards.map((c, i) => <CardFace key={i} card={c} />)}
           </div>
-          <span className="text-[10px] text-white/30 uppercase tracking-widest">You · {playerTotal}{isBlackjack(playerCards) ? " (Blackjack!)" : isBust(playerCards) ? " (Bust)" : ""}</span>
+          <span className="text-[10px] text-white/30 uppercase tracking-widest">
+            You · {playerTotal}{isBlackjack(playerCards) ? " (Blackjack!)" : isBust(playerCards) ? " (Bust)" : ""}
+            {phase === "playing" && <span className="text-primary/70"> — Your Turn</span>}
+          </span>
         </div>
       )}
 
@@ -135,8 +153,6 @@ export function BlackjackGame() {
           </button>
         </div>
       )}
-
-      {busy && <p className="text-xs text-white/30 italic">Dealer playing…</p>}
 
       {phase === "done" && outcome && (
         <>

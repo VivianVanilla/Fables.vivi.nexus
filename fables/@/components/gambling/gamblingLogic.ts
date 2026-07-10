@@ -1,8 +1,14 @@
 // ════════════════════════════════════════════════════════════════════════════
-// gamblingLogic.ts — pure game math for Dice + Slots (no React).
+// gamblingLogic.ts — pure game math for Coin Flip, Dice, and Slots (no React).
 // Blackjack has its own logic file (blackjackLogic.ts) since its multi-step
-// hit/stand flow doesn't fit the single-draw shape of these two.
+// hit/stand flow doesn't fit the single-draw shape of these three.
 // ════════════════════════════════════════════════════════════════════════════
+
+export type CoinSide = "heads" | "tails"
+
+export function flipCoin(): CoinSide {
+  return Math.random() < 0.5 ? "heads" : "tails"
+}
 
 export function rollDie(): number {
   return 1 + Math.floor(Math.random() * 6)
@@ -16,23 +22,37 @@ export interface SlotSymbol {
   id: string
   emoji: string
   multiplier: number  // payout multiplier for 3-of-a-kind
+  weight: number       // relative draw frequency — higher = more common per reel
 }
 
-// Slots previously topped out at 15x with the worst overall expected return
-// of the 3 games (~74%, vs. Dice's fair 100% and Coin Flip's fair 100%).
-// Scaled up so the jackpot actually feels worth chasing and the payout table
-// tracks closer to fair — 3-of-a-kind now averages ~38%, plus the 48% chance
-// of a push (any pair returns the wager), for ~86% overall.
+// Every symbol used to be equally likely (1-in-5 per reel), which means
+// triple cherries was exactly as rare as triple sevens (~0.8% each,
+// 1-in-125) — backwards for a slot machine, and it made the low-tier
+// symbols feel pointless since you'd basically never see them land 3x
+// either. Now weighted so cherries land a triple ~4.3% of spins (1-in-23)
+// while sevens stay a real jackpot (~0.03%, roughly 1-in-2900), and
+// multipliers are scaled up so the overall return is a generous ~93%
+// (there's no real money on the line — the point is it should feel good).
 export const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: "cherry", emoji: "🍒", multiplier: 3 },
-  { id: "lemon",  emoji: "🍋", multiplier: 4 },
-  { id: "bell",   emoji: "🔔", multiplier: 6 },
-  { id: "gem",    emoji: "💎", multiplier: 10 },
-  { id: "seven",  emoji: "7️⃣", multiplier: 25 },
+  { id: "cherry", emoji: "🍒", multiplier: 4,  weight: 35 },
+  { id: "lemon",  emoji: "🍋", multiplier: 6,  weight: 25 },
+  { id: "bell",   emoji: "🔔", multiplier: 10, weight: 20 },
+  { id: "gem",    emoji: "💎", multiplier: 18, weight: 13 },
+  { id: "seven",  emoji: "7️⃣", multiplier: 50, weight: 7 },
 ]
 
+function weightedSymbol(): SlotSymbol {
+  const totalWeight = SLOT_SYMBOLS.reduce((sum, s) => sum + s.weight, 0)
+  let r = Math.random() * totalWeight
+  for (const s of SLOT_SYMBOLS) {
+    if (r < s.weight) return s
+    r -= s.weight
+  }
+  return SLOT_SYMBOLS[SLOT_SYMBOLS.length - 1]
+}
+
 export function spinSlots(): SlotSymbol[] {
-  return [0, 1, 2].map(() => SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)])
+  return [0, 1, 2].map(() => weightedSymbol())
 }
 
 // Returns the payout multiplier for a spin: 3-of-a-kind pays that symbol's

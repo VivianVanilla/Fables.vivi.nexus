@@ -1,10 +1,18 @@
 // ════════════════════════════════════════════════════════════════════════════
 // TwentyFortyEightModal.tsx — classic 2048, unlocked via the gamVIVIling shop.
 // Arrow keys on desktop, swipe on touch. Session-only state, no persistence.
+//
+// Tiles are absolutely positioned (not a plain CSS grid of numbers) so a
+// slide is an actual `left`/`top` transition on the same DOM node (matched
+// by `tile.id` via the key prop) instead of the whole board just snapping
+// to new values every move. New tiles pop in, merges pulse.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useState } from "react"
-import { newGame, move, spawnTile, hasMoves, hasWon, type Direction } from "./twentyFortyEightLogic"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
+import {
+  newGame, moveTiles, spawnTile, hasMoves, hasWon, GRID_SIZE,
+  type Direction, type Tile,
+} from "./twentyFortyEightLogic"
 
 interface Props {
   onClose: () => void
@@ -28,10 +36,24 @@ function tileClass(v: number) {
   return TILE_STYLES[v] ?? "bg-fuchsia-500 text-white"
 }
 
+function cellStyle(row: number, col: number): CSSProperties {
+  return {
+    position: "absolute",
+    left: `${(col / GRID_SIZE) * 100}%`,
+    top: `${(row / GRID_SIZE) * 100}%`,
+    width: `${100 / GRID_SIZE}%`,
+    height: `${100 / GRID_SIZE}%`,
+    boxSizing: "border-box",
+    padding: "4px",
+  }
+}
+
 const SWIPE_THRESHOLD = 30
 
 export function TwentyFortyEightModal({ onClose }: Props) {
-  const [grid, setGrid] = useState(() => newGame())
+  const [tiles, setTiles] = useState<Tile[]>(() => newGame())
+  const [newIds, setNewIds] = useState<Set<number>>(new Set())
+  const [mergedIds, setMergedIds] = useState<Set<number>>(new Set())
   const [score, setScore] = useState(0)
   const [wonBannerShown, setWonBannerShown] = useState(false)
   const [wonDismissed, setWonDismissed] = useState(false)
@@ -39,7 +61,9 @@ export function TwentyFortyEightModal({ onClose }: Props) {
   const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   function reset() {
-    setGrid(newGame())
+    setTiles(newGame())
+    setNewIds(new Set())
+    setMergedIds(new Set())
     setScore(0)
     setWonBannerShown(false)
     setWonDismissed(false)
@@ -48,10 +72,14 @@ export function TwentyFortyEightModal({ onClose }: Props) {
 
   function handleMove(dir: Direction) {
     if (over) return
-    setGrid(prev => {
-      const result = move(prev, dir)
+    setTiles(prev => {
+      const result = moveTiles(prev, dir)
       if (!result.moved) return prev
-      const next = spawnTile(result.grid)
+      const beforeSpawnIds = new Set(result.tiles.map(t => t.id))
+      const next = spawnTile(result.tiles)
+      const spawned = next.find(t => !beforeSpawnIds.has(t.id))
+      setNewIds(spawned ? new Set([spawned.id]) : new Set())
+      setMergedIds(result.mergedIds)
       setScore(s => s + result.gained)
       if (!wonDismissed && hasWon(next)) setWonBannerShown(true)
       if (!hasMoves(next)) setOver(true)
@@ -115,20 +143,34 @@ export function TwentyFortyEightModal({ onClose }: Props) {
         {/* Board */}
         <div className="p-4 relative">
           <div
-            className="grid grid-cols-4 gap-2 select-none touch-none"
+            className="relative aspect-square w-full select-none touch-none"
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
-            {grid.flatMap((row, r) => row.map((v, c) => (
-              <div key={`${r}-${c}`}
-                className={`aspect-square rounded-lg flex items-center justify-center text-lg font-bold transition-colors ${v === 0 ? "bg-white/5" : tileClass(v)}`}>
-                {v !== 0 && v}
+            {/* Static empty-slot backdrop */}
+            {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, i) => (
+              <div key={i} style={cellStyle(Math.floor(i / GRID_SIZE), i % GRID_SIZE)}>
+                <div className="w-full h-full rounded-lg bg-white/5" />
               </div>
-            )))}
+            ))}
+
+            {/* Tiles — same cell math as the backdrop, but transitions on
+                left/top so a slide animates instead of snapping. */}
+            {tiles.map(tile => (
+              <div key={tile.id} style={{ ...cellStyle(tile.row, tile.col), transition: "left 120ms ease-out, top 120ms ease-out" }}>
+                <div
+                  className={`w-full h-full rounded-lg flex items-center justify-center text-lg font-bold ${tileClass(tile.value)} ${
+                    newIds.has(tile.id) ? "animate-in zoom-in-50 fade-in duration-200" : ""
+                  } ${mergedIds.has(tile.id) ? "animate-[fables-2048-merge_220ms_ease-out]" : ""}`}
+                >
+                  {tile.value}
+                </div>
+              </div>
+            ))}
           </div>
 
           {wonBannerShown && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-lg animate-in fade-in duration-200">
+            <div className="absolute inset-4 flex items-center justify-center bg-black/70 rounded-lg animate-in fade-in duration-200">
               <div className="text-center">
                 <p className="text-3xl mb-1">🎉</p>
                 <p className="text-lg font-bold text-white mb-3">You hit 2048!</p>
@@ -141,7 +183,7 @@ export function TwentyFortyEightModal({ onClose }: Props) {
           )}
 
           {over && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-lg animate-in fade-in duration-200">
+            <div className="absolute inset-4 flex items-center justify-center bg-black/70 rounded-lg animate-in fade-in duration-200">
               <div className="text-center">
                 <p className="text-lg font-bold text-white mb-1">Game over</p>
                 <p className="text-xs text-white/40 mb-3">Final score {score}</p>

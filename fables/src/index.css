@@ -249,6 +249,13 @@
   from { stroke-dashoffset: 400; }
   to   { stroke-dashoffset: 0; }
 }
+/* 2048 merge pulse — a tile briefly overshoots then settles when two tiles
+   combine, so the merge reads as an event instead of a silent value swap. */
+@keyframes fables-2048-merge {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
 /* Blended (not raw) rainbow — soft-light against the dark base color mutes
    it into a slow moving tint instead of a blinding neon wash, so it's still
    readable as an actual UI and not just a joke you have to squint through.
@@ -346,6 +353,37 @@
   background-blend-mode: soft-light;
   background-size: 100% 100%;
 }
+/* Old-monitor flavor: scanlines + a faint flicker + a vignette darkening the
+   edges, layered over the whole viewport. pointer-events: none so it never
+   blocks clicks — purely decorative. */
+@keyframes fables-crt-flicker {
+  0%, 100% { opacity: 0.9; }
+  50%      { opacity: 1; }
+}
+[data-app-theme="vaporwave"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.18) 0px,
+    rgba(0, 0, 0, 0.18) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: multiply;
+  animation: fables-crt-flicker 0.2s steps(2) infinite;
+}
+[data-app-theme="vaporwave"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.4) 100%);
+}
 
 /* gamVIVIling shop unlock — slow retro-sunset gradient sweep. */
 [data-app-theme="synthwave"] {
@@ -426,6 +464,54 @@
   background-image: linear-gradient(135deg, #0f0d05, #3a2f0f, #0f0d05);
   background-blend-mode: soft-light;
   background-size: 100% 100%;
+}
+/* High Roller flavor: a continuous rain of gold coins across the whole
+   viewport. Two layers at different tile sizes/speeds for a bit of parallax
+   depth (near coins bigger + faster, far coins smaller + slower). Each
+   layer's animation travels exactly one tile-height so it loops seamlessly.
+   pointer-events: none — purely decorative, never blocks clicks. */
+@keyframes fables-gold-rain-near {
+  from { background-position: 0 0; }
+  to   { background-position: 0 480px; }
+}
+@keyframes fables-gold-rain-far {
+  from { background-position: 0 0; }
+  to   { background-position: 0 620px; }
+}
+[data-app-theme="gold"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(circle 7px at 12% 15%, #ffe066 55%, transparent 60%),
+    radial-gradient(circle 5px at 40% 55%, #d4af37 55%, transparent 60%),
+    radial-gradient(circle 8px at 65% 10%, #ffe066 55%, transparent 60%),
+    radial-gradient(circle 6px at 85% 45%, #d4af37 55%, transparent 60%),
+    radial-gradient(circle 5px at 25% 80%, #ffe066 55%, transparent 60%),
+    radial-gradient(circle 7px at 55% 90%, #d4af37 55%, transparent 60%);
+  background-repeat: repeat;
+  background-size: 240px 480px;
+  animation: fables-gold-rain-near 7s linear infinite;
+}
+[data-app-theme="gold"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  opacity: 0.3;
+  background-image:
+    radial-gradient(circle 3px at 20% 25%, #ffe066 55%, transparent 60%),
+    radial-gradient(circle 4px at 50% 65%, #d4af37 55%, transparent 60%),
+    radial-gradient(circle 3px at 75% 20%, #ffe066 55%, transparent 60%),
+    radial-gradient(circle 4px at 90% 75%, #d4af37 55%, transparent 60%),
+    radial-gradient(circle 3px at 35% 90%, #ffe066 55%, transparent 60%);
+  background-repeat: repeat;
+  background-size: 310px 620px;
+  animation: fables-gold-rain-far 13s linear infinite;
 }
 
 /* gamVIVIling shop unlock — acid-green pulse. */

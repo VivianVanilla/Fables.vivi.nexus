@@ -1,94 +1,110 @@
 // ════════════════════════════════════════════════════════════════════════════
 // twentyFortyEightLogic.ts — classic 2048 grid mechanics (no React)
+//
+// Tiles are tracked as a flat list with stable ids (not a raw number[][])
+// specifically so the component can animate — React keys off `id`, so a tile
+// that slides keeps the same DOM node and its row/col change can transition
+// smoothly instead of the grid just snapping to new numbers every move.
 // ════════════════════════════════════════════════════════════════════════════
 
 export type Direction = "left" | "right" | "up" | "down"
 export const GRID_SIZE = 4
 
-export function createEmptyGrid(): number[][] {
-  return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0))
+export interface Tile {
+  id: number
+  value: number
+  row: number
+  col: number
 }
 
-function emptyCells(grid: number[][]): [number, number][] {
-  const cells: [number, number][] = []
+let nextId = 1
+
+export function createTiles(): Tile[] {
+  return []
+}
+
+export function spawnTile(tiles: Tile[]): Tile[] {
+  const occupied = new Set(tiles.map(t => `${t.row},${t.col}`))
+  const empty: [number, number][] = []
   for (let r = 0; r < GRID_SIZE; r++)
     for (let c = 0; c < GRID_SIZE; c++)
-      if (grid[r][c] === 0) cells.push([r, c])
-  return cells
+      if (!occupied.has(`${r},${c}`)) empty.push([r, c])
+  if (empty.length === 0) return tiles
+  const [row, col] = empty[Math.floor(Math.random() * empty.length)]
+  const value = Math.random() < 0.9 ? 2 : 4
+  return [...tiles, { id: nextId++, value, row, col }]
 }
 
-export function spawnTile(grid: number[][]): number[][] {
-  const cells = emptyCells(grid)
-  if (cells.length === 0) return grid
-  const [r, c] = cells[Math.floor(Math.random() * cells.length)]
-  const next = grid.map(row => [...row])
-  next[r][c] = Math.random() < 0.9 ? 2 : 4
-  return next
+export function newGame(): Tile[] {
+  return spawnTile(spawnTile(createTiles()))
 }
 
-function slideRowLeft(row: number[]): { row: number[]; gained: number } {
-  const nonZero = row.filter(v => v !== 0)
-  const merged: number[] = []
+// Moves + merges every tile one direction. Each line (row for left/right,
+// column for up/down) is compacted independently: adjacent equal values
+// merge once (the leading tile survives with doubled value and keeps its
+// id — so its position transition animates rather than popping a new tile
+// in place), everything else just slides into the gap.
+export function moveTiles(tiles: Tile[], dir: Direction): { tiles: Tile[]; moved: boolean; gained: number; mergedIds: Set<number> } {
   let gained = 0
-  let i = 0
-  while (i < nonZero.length) {
-    if (i + 1 < nonZero.length && nonZero[i] === nonZero[i + 1]) {
-      const val = nonZero[i] * 2
-      merged.push(val)
-      gained += val
-      i += 2
-    } else {
-      merged.push(nonZero[i])
-      i += 1
+  const mergedIds = new Set<number>()
+  const nextTiles: Tile[] = []
+
+  for (let i = 0; i < GRID_SIZE; i++) {
+    let line: Tile[]
+    if (dir === "left")       line = tiles.filter(t => t.row === i).sort((a, b) => a.col - b.col)
+    else if (dir === "right") line = tiles.filter(t => t.row === i).sort((a, b) => b.col - a.col)
+    else if (dir === "up")    line = tiles.filter(t => t.col === i).sort((a, b) => a.row - b.row)
+    else                      line = tiles.filter(t => t.col === i).sort((a, b) => b.row - a.row)
+
+    const compacted: Tile[] = []
+    let j = 0
+    while (j < line.length) {
+      const cur = line[j]
+      const nxt = line[j + 1]
+      if (nxt && nxt.value === cur.value) {
+        const mergedValue = cur.value * 2
+        gained += mergedValue
+        mergedIds.add(cur.id)
+        compacted.push({ ...cur, value: mergedValue })
+        j += 2
+      } else {
+        compacted.push(cur)
+        j += 1
+      }
     }
+
+    compacted.forEach((tile, pos) => {
+      let row = tile.row, col = tile.col
+      if (dir === "left")       { row = i; col = pos }
+      else if (dir === "right") { row = i; col = GRID_SIZE - 1 - pos }
+      else if (dir === "up")    { col = i; row = pos }
+      else                      { col = i; row = GRID_SIZE - 1 - pos }
+      nextTiles.push({ ...tile, row, col })
+    })
   }
-  while (merged.length < row.length) merged.push(0)
-  return { row: merged, gained }
-}
 
-function transpose(grid: number[][]): number[][] {
-  return grid[0].map((_, c) => grid.map(row => row[c]))
-}
-
-function reverseRows(grid: number[][]): number[][] {
-  return grid.map(row => [...row].reverse())
-}
-
-export function move(grid: number[][], dir: Direction): { grid: number[][]; moved: boolean; gained: number } {
-  let working = grid.map(row => [...row])
-  if (dir === "up" || dir === "down") working = transpose(working)
-  if (dir === "right" || dir === "down") working = reverseRows(working)
-
-  let gained = 0
-  let result = working.map(row => {
-    const { row: newRow, gained: g } = slideRowLeft(row)
-    gained += g
-    return newRow
+  const moved = tiles.some(t => {
+    const match = nextTiles.find(nt => nt.id === t.id)
+    return !match || match.row !== t.row || match.col !== t.col
   })
 
-  if (dir === "right" || dir === "down") result = reverseRows(result)
-  if (dir === "up" || dir === "down") result = transpose(result)
-
-  const moved = JSON.stringify(result) !== JSON.stringify(grid)
-  return { grid: result, moved, gained }
+  return { tiles: nextTiles, moved, gained, mergedIds }
 }
 
-export function hasMoves(grid: number[][]): boolean {
-  if (emptyCells(grid).length > 0) return true
+export function hasWon(tiles: Tile[]): boolean {
+  return tiles.some(t => t.value >= 2048)
+}
+
+export function hasMoves(tiles: Tile[]): boolean {
+  if (tiles.length < GRID_SIZE * GRID_SIZE) return true
+  const byPos = new Map<string, number>()
+  tiles.forEach(t => byPos.set(`${t.row},${t.col}`, t.value))
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      const v = grid[r][c]
-      if (c + 1 < GRID_SIZE && grid[r][c + 1] === v) return true
-      if (r + 1 < GRID_SIZE && grid[r + 1][c] === v) return true
+      const v = byPos.get(`${r},${c}`)!
+      if (c + 1 < GRID_SIZE && byPos.get(`${r},${c + 1}`) === v) return true
+      if (r + 1 < GRID_SIZE && byPos.get(`${r + 1},${c}`) === v) return true
     }
   }
   return false
-}
-
-export function hasWon(grid: number[][]): boolean {
-  return grid.some(row => row.some(v => v >= 2048))
-}
-
-export function newGame(): number[][] {
-  return spawnTile(spawnTile(createEmptyGrid()))
 }
