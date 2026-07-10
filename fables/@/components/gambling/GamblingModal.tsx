@@ -1,14 +1,15 @@
 // ════════════════════════════════════════════════════════════════════════════
-// GamblingModal.tsx — "gamVIVIling" overlay: 3 mini-games + shop, same modal
+// GamblingModal.tsx — "gamVIVIling" overlay: 5 mini-games + shop, same modal
 // chrome as SpelldleModal for visual consistency.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
 import { useGamblingWallet } from "./useGamblingWallet"
-import { BlackjackGame } from "./BlackjackGame"
+import { ScratchTicketGame } from "./ScratchTicketGame"
 import { CoinFlipGame } from "./CoinFlipGame"
 import { DiceRollGame } from "./DiceRollGame"
 import { SlotsGame } from "./SlotsGame"
+import { PlinkoGame } from "./PlinkoGame"
 import { ShopPanel } from "./ShopPanel"
 
 interface Props {
@@ -16,19 +17,20 @@ interface Props {
   onOpen2048: () => void
 }
 
-type Tab = "blackjack" | "coinflip" | "dice" | "slots" | "shop"
+type Tab = "scratch" | "coinflip" | "dice" | "slots" | "plinko" | "shop"
 
 const TABS: [Tab, string][] = [
-  ["blackjack", "Blackjack"],
+  ["scratch",   "Scratch"],
   ["coinflip",  "Coin Flip"],
   ["dice",      "Dice"],
   ["slots",     "Slots"],
+  ["plinko",    "Plinko"],
   ["shop",      "Shop"],
 ]
 
 export function GamblingModal({ onClose, onOpen2048 }: Props) {
   const { tokens, unlocked2048 } = useGamblingWallet()
-  const [tab, setTab] = useState<Tab>("blackjack")
+  const [tab, setTab] = useState<Tab>("scratch")
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
@@ -67,10 +69,11 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
 
         {/* Body */}
         <div className="px-6 pb-6">
-          {tab === "blackjack" && <BlackjackGame />}
+          {tab === "scratch" && <ScratchTicketGame />}
           {tab === "coinflip" && <CoinFlipGame />}
           {tab === "dice" && <DiceRollGame />}
           {tab === "slots" && <SlotsGame />}
+          {tab === "plinko" && <PlinkoGame />}
           {tab === "shop" && <ShopPanel />}
         </div>
       </div>

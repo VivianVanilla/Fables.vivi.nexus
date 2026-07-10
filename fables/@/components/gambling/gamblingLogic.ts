@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // gamblingLogic.ts — pure game math for Coin Flip, Dice, and Slots (no React).
-// Blackjack has its own logic file (blackjackLogic.ts) since its multi-step
-// hit/stand flow doesn't fit the single-draw shape of these three.
+// Scratch (scratchLogic.ts) and Plinko (plinkoLogic.ts) each get their own
+// file since they carry more state/geometry than fits this single-draw shape.
 // ════════════════════════════════════════════════════════════════════════════
 
 export type CoinSide = "heads" | "tails"
