@@ -347,6 +347,130 @@
   background-size: 100% 100%;
 }
 
+/* gamVIVIling shop unlock — slow retro-sunset gradient sweep. */
+[data-app-theme="synthwave"] {
+  --background: #120a1e;
+  --foreground: #ffe6f5;
+  --card: #1f1033;
+  --card-foreground: #ffe6f5;
+  --popover: #1f1033;
+  --popover-foreground: #ffe6f5;
+  --primary: #ff2079;
+  --primary-foreground: #120a1e;
+  --secondary: #ff8c42;
+  --secondary-foreground: #120a1e;
+  --muted: #2a1745;
+  --muted-foreground: #d9b8ff;
+  --accent: #7b2ff7;
+  --accent-foreground: #ffe6f5;
+  --border: rgba(255, 32, 121, 0.25);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ff2079;
+  --sidebar: #120a1e;
+  --sidebar-foreground: #ffe6f5;
+  --sidebar-primary: #ff2079;
+  --sidebar-primary-foreground: #120a1e;
+  --sidebar-accent: #7b2ff7;
+  --sidebar-accent-foreground: #ffe6f5;
+  --sidebar-border: rgba(255, 32, 121, 0.25);
+  --sidebar-ring: #ff2079;
+}
+@keyframes fables-app-synthwave {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+[data-app-theme="synthwave"] body,
+[data-app-theme="synthwave"] [data-slot="sidebar-inner"],
+[data-app-theme="synthwave"] [data-slot="sidebar-inset"],
+[data-app-theme="synthwave"] .bg-background {
+  background-color: var(--background);
+  background-image: linear-gradient(90deg, #ff2079, #ff8c42, #7b2ff7, #ff2079);
+  background-blend-mode: soft-light;
+  background-size: 200% 100%;
+  animation: fables-app-synthwave 18s linear infinite;
+}
+
+/* gamVIVIling shop unlock — black + gold, high-roller flavor, no animation. */
+[data-app-theme="gold"] {
+  --background: #0f0d05;
+  --foreground: #f5e7b8;
+  --card: #1a1608;
+  --card-foreground: #f5e7b8;
+  --popover: #1a1608;
+  --popover-foreground: #f5e7b8;
+  --primary: #d4af37;
+  --primary-foreground: #0f0d05;
+  --secondary: #b8860b;
+  --secondary-foreground: #0f0d05;
+  --muted: #241f0e;
+  --muted-foreground: #cbb887;
+  --accent: #f5e7b8;
+  --accent-foreground: #0f0d05;
+  --border: rgba(212, 175, 55, 0.3);
+  --input: rgba(212, 175, 55, 0.08);
+  --ring: #d4af37;
+  --sidebar: #0f0d05;
+  --sidebar-foreground: #f5e7b8;
+  --sidebar-primary: #d4af37;
+  --sidebar-primary-foreground: #0f0d05;
+  --sidebar-accent: #b8860b;
+  --sidebar-accent-foreground: #0f0d05;
+  --sidebar-border: rgba(212, 175, 55, 0.3);
+  --sidebar-ring: #d4af37;
+}
+[data-app-theme="gold"] body,
+[data-app-theme="gold"] [data-slot="sidebar-inner"],
+[data-app-theme="gold"] [data-slot="sidebar-inset"],
+[data-app-theme="gold"] .bg-background {
+  background-color: var(--background);
+  background-image: linear-gradient(135deg, #0f0d05, #3a2f0f, #0f0d05);
+  background-blend-mode: soft-light;
+  background-size: 100% 100%;
+}
+
+/* gamVIVIling shop unlock — acid-green pulse. */
+[data-app-theme="toxic"] {
+  --background: #060c00;
+  --foreground: #eaffcc;
+  --card: #0f1a02;
+  --card-foreground: #eaffcc;
+  --popover: #0f1a02;
+  --popover-foreground: #eaffcc;
+  --primary: #aaff00;
+  --primary-foreground: #060c00;
+  --secondary: #66cc00;
+  --secondary-foreground: #060c00;
+  --muted: #172805;
+  --muted-foreground: #c3e89a;
+  --accent: #ccff66;
+  --accent-foreground: #060c00;
+  --border: rgba(170, 255, 0, 0.25);
+  --input: rgba(170, 255, 0, 0.08);
+  --ring: #aaff00;
+  --sidebar: #060c00;
+  --sidebar-foreground: #eaffcc;
+  --sidebar-primary: #aaff00;
+  --sidebar-primary-foreground: #060c00;
+  --sidebar-accent: #66cc00;
+  --sidebar-accent-foreground: #060c00;
+  --sidebar-border: rgba(170, 255, 0, 0.25);
+  --sidebar-ring: #aaff00;
+}
+@keyframes fables-app-toxic {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.85; }
+}
+[data-app-theme="toxic"] body,
+[data-app-theme="toxic"] [data-slot="sidebar-inner"],
+[data-app-theme="toxic"] [data-slot="sidebar-inset"],
+[data-app-theme="toxic"] .bg-background {
+  background-color: var(--background);
+  background-image: linear-gradient(180deg, #060c00, #142400);
+  background-blend-mode: soft-light;
+  background-size: 100% 100%;
+  animation: fables-app-toxic 3s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -18,9 +18,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "../supabase"
 
-export type AppTheme = "abyss" | "midnight" | "light" | "rainbow" | "trippy" | "vaporwave"
+export type AppTheme = "abyss" | "midnight" | "light" | "rainbow" | "trippy" | "vaporwave" | "synthwave" | "gold" | "toxic"
 
-// Free themes are always selectable. "trippy" and "vaporwave" are locked
+// Free themes are always selectable. Everything past "rainbow" is locked
 // behind gamVIVIling (see @/components/gambling) — gating happens in
 // profile-settings-modal.tsx, not here.
 export const FREE_THEMES: AppTheme[] = ["abyss", "midnight", "light", "rainbow"]
@@ -32,6 +32,9 @@ export const APP_THEMES: { id: AppTheme; label: string; swatch: string }[] = [
   { id: "rainbow",   label: "Rainbow",      swatch: "linear-gradient(90deg, #ff0000, #ff9900, #33cc33, #0066ff, #9900cc)" },
   { id: "trippy",    label: "Trippy",       swatch: "linear-gradient(90deg, #ff00cc, #00ffea, #fffb00, #ff00cc)" },
   { id: "vaporwave", label: "Vaporwave",    swatch: "linear-gradient(90deg, #ff71ce, #b967ff, #01cdfe)" },
+  { id: "synthwave", label: "Synthwave",    swatch: "linear-gradient(90deg, #ff2079, #ff8c42, #7b2ff7)" },
+  { id: "gold",      label: "High Roller",  swatch: "linear-gradient(90deg, #1a1400, #d4af37, #1a1400)" },
+  { id: "toxic",     label: "Toxic",        swatch: "linear-gradient(90deg, #0a1a00, #aaff00, #0a1a00)" },
 ]
 
 const STORAGE_KEY = "fables-app-theme"
@@ -45,7 +48,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | null>(null)
 
 function isAppTheme(v: unknown): v is AppTheme {
-  return v === "abyss" || v === "midnight" || v === "light" || v === "rainbow" || v === "trippy" || v === "vaporwave"
+  return APP_THEMES.some(t => t.id === v)
 }
 
 function readStoredTheme(): AppTheme {

@@ -2,6 +2,14 @@
 // useGamblingWallet.ts — token wallet backed by a single `objects` row
 // (type: "gambling_wallet"), reusing the same createObject/updateObject
 // plumbing every other feature already uses. No new table, no new RLS.
+//
+// Every mutation goes through mutateWallet(), which re-reads the wallet's
+// current data at write time rather than trusting a component's
+// closure-captured `tokens` value. A wager's spend-then-payout used to be
+// two separate calls (spend, then credit ~1s later after the flip/roll/spin
+// animation) — the credit call closed over the *pre-spend* balance, so every
+// win paid out double what it should have. settleWager() below does the
+// whole "subtract wager, add payout" as one atomic read-modify-write.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useUserContext } from "../../../src/contexts/UserContext"
@@ -29,9 +37,16 @@ export function useGamblingWallet() {
     return createObject({ name: "Gambling Wallet", type: WALLET_TYPE, data: { tokens: 0 } })
   }
 
-  async function patch(next: Partial<GamblingWalletData>) {
+  // Re-reads the wallet's own data right before writing, so two mutations
+  // fired close together (spend, then a payout a second later) never stomp
+  // on each other using a stale pre-mutation balance. Returning null from
+  // `fn` aborts the write (used for "insufficient balance" / "already owned"
+  // checks that must be validated against the fresh balance, not render state).
+  async function mutateWallet(fn: (current: GamblingWalletData) => Partial<GamblingWalletData> | null) {
     const wallet = await ensureWallet()
     const current = safeParseJson(wallet.data) as GamblingWalletData
+    const next = fn(current)
+    if (!next) return
     return updateObject(wallet.id, { data: { ...current, ...next } as unknown as JSON })
   }
 
@@ -39,48 +54,59 @@ export function useGamblingWallet() {
   // seed so reopening/replaying the same day's already-won puzzle never double-pays.
   async function claimSpelldleToken() {
     const seed = getDailySeed()
-    const wallet = await ensureWallet()
-    const current = safeParseJson(wallet.data) as GamblingWalletData
-    if (current.lastSpelldleAwardSeed === seed) return
-    await updateObject(wallet.id, {
-      data: { ...current, tokens: (current.tokens ?? 0) + SPELLDLE_TOKEN_AWARD, lastSpelldleAwardSeed: seed } as unknown as JSON,
+    await mutateWallet(current => {
+      if (current.lastSpelldleAwardSeed === seed) return null
+      return { tokens: (current.tokens ?? 0) + SPELLDLE_TOKEN_AWARD, lastSpelldleAwardSeed: seed }
     })
   }
 
-  async function spend(amount: number) {
-    if (amount <= 0) return
-    await patch({ tokens: Math.max(0, tokens - amount) })
-  }
-
-  async function credit(amount: number) {
-    if (amount <= 0) return
-    await patch({ tokens: tokens + amount })
+  // Resolves one wager atomically: balance - wager + round(wager * payoutMultiplier).
+  // payoutMultiplier is 0 on a loss, 1 on a push (wager back), >1 on a win.
+  // No-ops (aborts the write) if the fresh balance can't actually cover the wager.
+  async function settleWager(wager: number, payoutMultiplier: number) {
+    if (wager <= 0) return
+    await mutateWallet(current => {
+      const balance = current.tokens ?? 0
+      if (balance < wager) return null
+      const payout = Math.round(wager * payoutMultiplier)
+      return { tokens: Math.max(0, balance - wager + payout) }
+    })
   }
 
   async function buyTag(id: string, cost: number) {
-    if (tokens < cost || unlockedTagIds.includes(id)) return
-    await patch({ tokens: tokens - cost, unlockedTagIds: [...unlockedTagIds, id] })
+    await mutateWallet(current => {
+      const balance = current.tokens ?? 0
+      const owned = current.unlockedTagIds ?? []
+      if (balance < cost || owned.includes(id)) return null
+      return { tokens: balance - cost, unlockedTagIds: [...owned, id] }
+    })
   }
 
   async function equipTag(id: string | null) {
-    await patch({ equippedTagId: id })
+    await mutateWallet(() => ({ equippedTagId: id }))
   }
 
   async function buyTheme(id: AppTheme, cost: number) {
-    if (tokens < cost || unlockedThemeIds.includes(id)) return
-    await patch({ tokens: tokens - cost, unlockedThemeIds: [...unlockedThemeIds, id] })
+    await mutateWallet(current => {
+      const balance = current.tokens ?? 0
+      const owned = current.unlockedThemeIds ?? []
+      if (balance < cost || owned.includes(id)) return null
+      return { tokens: balance - cost, unlockedThemeIds: [...owned, id] }
+    })
   }
 
   async function buy2048(cost: number) {
-    if (tokens < cost || unlocked2048) return
-    await patch({ tokens: tokens - cost, unlocked2048: true })
+    await mutateWallet(current => {
+      const balance = current.tokens ?? 0
+      if (balance < cost || current.unlocked2048) return null
+      return { tokens: balance - cost, unlocked2048: true }
+    })
   }
 
   return {
     tokens,
     claimSpelldleToken,
-    spend,
-    credit,
+    settleWager,
     unlockedTagIds,
     equippedTagId,
     equipTag,

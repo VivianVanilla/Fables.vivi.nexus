@@ -5,7 +5,7 @@
 
 import { useState } from "react"
 import { useGamblingWallet } from "./useGamblingWallet"
-import { CoinFlipGame } from "./CoinFlipGame"
+import { BlackjackGame } from "./BlackjackGame"
 import { DiceRollGame } from "./DiceRollGame"
 import { SlotsGame } from "./SlotsGame"
 import { ShopPanel } from "./ShopPanel"
@@ -15,18 +15,18 @@ interface Props {
   onOpen2048: () => void
 }
 
-type Tab = "coinflip" | "dice" | "slots" | "shop"
+type Tab = "blackjack" | "dice" | "slots" | "shop"
 
 const TABS: [Tab, string][] = [
-  ["coinflip", "Coin Flip"],
-  ["dice",     "Dice"],
-  ["slots",    "Slots"],
-  ["shop",     "Shop"],
+  ["blackjack", "Blackjack"],
+  ["dice",      "Dice"],
+  ["slots",     "Slots"],
+  ["shop",      "Shop"],
 ]
 
 export function GamblingModal({ onClose, onOpen2048 }: Props) {
   const { tokens, unlocked2048 } = useGamblingWallet()
-  const [tab, setTab] = useState<Tab>("coinflip")
+  const [tab, setTab] = useState<Tab>("blackjack")
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
@@ -65,7 +65,7 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
 
         {/* Body */}
         <div className="px-6 pb-6">
-          {tab === "coinflip" && <CoinFlipGame />}
+          {tab === "blackjack" && <BlackjackGame />}
           {tab === "dice" && <DiceRollGame />}
           {tab === "slots" && <SlotsGame />}
           {tab === "shop" && <ShopPanel />}

@@ -210,7 +210,10 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {APP_THEMES.map(t => {
+            {/* Non-allowlisted users never see gamVIVIling at all, so the
+                premium themes are filtered out entirely for them instead of
+                showing up as unreachable locked swatches. */}
+            {APP_THEMES.filter(t => canPlaySpelldle || FREE_THEMES.includes(t.id)).map(t => {
               const locked = !FREE_THEMES.includes(t.id) && !unlockedThemeIds.includes(t.id)
               return (
                 <button

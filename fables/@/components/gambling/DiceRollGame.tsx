@@ -10,7 +10,7 @@ import { WagerStepper } from "./WagerStepper"
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
 
 export function DiceRollGame() {
-  const { tokens, spend, credit } = useGamblingWallet()
+  const { tokens, settleWager } = useGamblingWallet()
   const [wager, setWager] = useState(1)
   const [pick, setPick] = useState(1)
   const [rolling, setRolling] = useState(false)
@@ -22,11 +22,10 @@ export function DiceRollGame() {
     if (!canPlay) return
     setRolling(true)
     setResult(null)
-    await spend(wager)
     const roll = rollDie()
     const won = roll === pick
     setTimeout(async () => {
-      if (won) await credit(wager * DICE_PAYOUT_MULTIPLIER)
+      await settleWager(wager, won ? DICE_PAYOUT_MULTIPLIER : 0)
       setResult({ roll, won })
       setRolling(false)
     }, 700)

@@ -1,12 +1,8 @@
 // ════════════════════════════════════════════════════════════════════════════
-// gamblingLogic.ts — pure game math for the 3 mini-games (no React)
+// gamblingLogic.ts — pure game math for Dice + Slots (no React).
+// Blackjack has its own logic file (blackjackLogic.ts) since its multi-step
+// hit/stand flow doesn't fit the single-draw shape of these two.
 // ════════════════════════════════════════════════════════════════════════════
-
-export type CoinSide = "heads" | "tails"
-
-export function flipCoin(): CoinSide {
-  return Math.random() < 0.5 ? "heads" : "tails"
-}
 
 export function rollDie(): number {
   return 1 + Math.floor(Math.random() * 6)

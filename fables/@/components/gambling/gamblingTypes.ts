@@ -27,9 +27,9 @@ export interface ShopTag {
 // Spelldle is just a small daily bonus, gambling is the real token source.
 export const TAGS: ShopTag[] = [
   { id: "high-roller", emoji: "🎲", label: "High Roller", cost: 100 },
-  { id: "degenerate",  emoji: "💀", label: "Degenerate",  cost: 100 },
-  { id: "lucky",       emoji: "🍀", label: "Lucky",       cost: 150 },
-  { id: "on-fire",     emoji: "🔥", label: "On Fire",     cost: 150 },
+  { id: "degenerate",  emoji: "💀", label: "Degenerate",  cost: 190 },
+  { id: "lucky",       emoji: "🍀", label: "Lucky",       cost: 250 },
+  { id: "on-fire",     emoji: "🔥", label: "On Fire",     cost: 250 },
   { id: "vivip",       emoji: "👑", label: "VIVIP",       cost: 200 },
 ]
 
@@ -40,8 +40,11 @@ export interface ShopTheme {
 }
 
 export const THEME_UNLOCKS: ShopTheme[] = [
-  { id: "trippy",    label: "Trippy",    cost: 200 },
-  { id: "vaporwave", label: "Vaporwave", cost: 200 },
+  { id: "trippy",    label: "Trippy",       cost: 400 },
+  { id: "vaporwave", label: "Vaporwave",    cost: 400 },
+  { id: "synthwave", label: "Synthwave",    cost: 400 },
+  { id: "toxic",     label: "Toxic",        cost: 400 },
+  { id: "gold",      label: "High Roller",  cost: 500 },
 ]
 
 export const TWO048_COST = 250

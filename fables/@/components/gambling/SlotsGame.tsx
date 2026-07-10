@@ -9,7 +9,7 @@ import { spinSlots, slotPayoutMultiplier, SLOT_SYMBOLS, type SlotSymbol } from "
 import { WagerStepper } from "./WagerStepper"
 
 export function SlotsGame() {
-  const { tokens, spend, credit } = useGamblingWallet()
+  const { tokens, settleWager } = useGamblingWallet()
   const [wager, setWager] = useState(1)
   const [spinning, setSpinning] = useState(false)
   const [reels, setReels] = useState<SlotSymbol[]>([SLOT_SYMBOLS[0], SLOT_SYMBOLS[0], SLOT_SYMBOLS[0]])
@@ -21,12 +21,11 @@ export function SlotsGame() {
     if (!canPlay) return
     setSpinning(true)
     setResult(null)
-    await spend(wager)
     const spun = spinSlots()
     const multiplier = slotPayoutMultiplier(spun)
     setTimeout(async () => {
       setReels(spun)
-      if (multiplier > 0) await credit(wager * multiplier)
+      await settleWager(wager, multiplier)
       setResult({ multiplier })
       setSpinning(false)
     }, 800)
