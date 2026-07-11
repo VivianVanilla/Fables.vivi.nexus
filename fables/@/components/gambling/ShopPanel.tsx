@@ -2,6 +2,7 @@
 // ShopPanel.tsx — spend tokens on cosmetic tags, app themes, and the 2048 unlock
 // ════════════════════════════════════════════════════════════════════════════
 
+import { Coins } from "lucide-react"
 import { useGamblingWallet } from "./useGamblingWallet"
 import { TAGS, THEME_UNLOCKS, TWO048_COST } from "./gamblingTypes"
 
@@ -24,7 +25,7 @@ export function ShopPanel() {
               <div key={tag.id} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
                 <span className="text-lg shrink-0">{tag.emoji}</span>
                 <span className="flex-1 text-sm text-white/80">{tag.label}</span>
-                {!owned && <span className="text-xs text-white/40 shrink-0">{tag.cost} 🪙</span>}
+                {!owned && <span className="text-xs text-white/40 shrink-0 flex items-center gap-1">{tag.cost} <Coins className="size-3" /></span>}
                 {owned ? (
                   <button type="button" onClick={() => equipTag(equipped ? null : tag.id)}
                     className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors shrink-0 ${equipped ? "bg-primary/30 text-primary" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"}`}>
@@ -56,7 +57,7 @@ export function ShopPanel() {
                   <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-semibold shrink-0">Unlocked</span>
                 ) : (
                   <>
-                    <span className="text-xs text-white/40 shrink-0">{theme.cost} 🪙</span>
+                    <span className="text-xs text-white/40 shrink-0 flex items-center gap-1">{theme.cost} <Coins className="size-3" /></span>
                     <button type="button" onClick={() => buyTheme(theme.id, theme.cost)} disabled={tokens < theme.cost}
                       className="text-[10px] px-2.5 py-1 rounded-full font-semibold bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 transition-colors disabled:opacity-30 shrink-0">
                       Buy
@@ -78,7 +79,7 @@ export function ShopPanel() {
             <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-semibold shrink-0">Unlocked</span>
           ) : (
             <>
-              <span className="text-xs text-white/40 shrink-0">{TWO048_COST} 🪙</span>
+              <span className="text-xs text-white/40 shrink-0 flex items-center gap-1">{TWO048_COST} <Coins className="size-3" /></span>
               <button type="button" onClick={() => buy2048(TWO048_COST)} disabled={tokens < TWO048_COST}
                 className="text-[10px] px-2.5 py-1 rounded-full font-semibold bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 transition-colors disabled:opacity-30 shrink-0">
                 Buy

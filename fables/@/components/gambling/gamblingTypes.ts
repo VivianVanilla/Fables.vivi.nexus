@@ -22,15 +22,15 @@ export interface ShopTag {
   cost: number
 }
 
-// Prices are 10x the original catalog (100/100/150/150/200) — at 10 tokens/day
-// from Spelldle alone, nothing here is reachable without actually gambling;
-// Spelldle is just a small daily bonus, gambling is the real token source.
+// Prices are 50x the original catalog (10x, then a further 5x pass) — at 10
+// tokens/day from Spelldle alone, nothing here is reachable without actually
+// gambling; Spelldle is just a small daily bonus, gambling is the real token source.
 export const TAGS: ShopTag[] = [
-  { id: "high-roller", emoji: "🎲", label: "High Roller", cost: 100 },
-  { id: "degenerate",  emoji: "💀", label: "Degenerate",  cost: 190 },
-  { id: "lucky",       emoji: "🍀", label: "Lucky",       cost: 250 },
-  { id: "on-fire",     emoji: "🔥", label: "On Fire",     cost: 250 },
-  { id: "vivip",       emoji: "👑", label: "VIVIP",       cost: 200 },
+  { id: "high-roller", emoji: "🎲", label: "High Roller", cost: 500 },
+  { id: "degenerate",  emoji: "💀", label: "Degenerate",  cost: 950 },
+  { id: "lucky",       emoji: "🍀", label: "Lucky",       cost: 1250 },
+  { id: "on-fire",     emoji: "🔥", label: "On Fire",     cost: 1250 },
+  { id: "vivip",       emoji: "👑", label: "VIVIP",       cost: 1000 },
 ]
 
 export interface ShopTheme {
@@ -40,11 +40,11 @@ export interface ShopTheme {
 }
 
 export const THEME_UNLOCKS: ShopTheme[] = [
-  { id: "trippy",    label: "Trippy",       cost: 400 },
-  { id: "vaporwave", label: "Vaporwave",    cost: 400 },
-  { id: "synthwave", label: "Synthwave",    cost: 400 },
-  { id: "toxic",     label: "Toxic",        cost: 400 },
-  { id: "gold",      label: "High Roller",  cost: 500 },
+  { id: "trippy",    label: "Trippy",       cost: 2000 },
+  { id: "vaporwave", label: "Vaporwave",    cost: 2000 },
+  { id: "synthwave", label: "Synthwave",    cost: 2000 },
+  { id: "toxic",     label: "Toxic",        cost: 2000 },
+  { id: "gold",      label: "High Roller",  cost: 2500 },
 ]
 
-export const TWO048_COST = 950
+export const TWO048_COST = 4750

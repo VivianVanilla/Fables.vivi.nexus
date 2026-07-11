@@ -4,12 +4,13 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
+import { Coins } from "lucide-react"
 import { useGamblingWallet } from "./useGamblingWallet"
-import { ScratchTicketGame } from "./ScratchTicketGame"
+import { ViviTrailGame } from "./ViviTrailGame"
 import { CoinFlipGame } from "./CoinFlipGame"
 import { DiceRollGame } from "./DiceRollGame"
 import { SlotsGame } from "./SlotsGame"
-import { PlinkoGame } from "./PlinkoGame"
+import { MinesweeperGame } from "./MinesweeperGame"
 import { ShopPanel } from "./ShopPanel"
 
 interface Props {
@@ -17,20 +18,20 @@ interface Props {
   onOpen2048: () => void
 }
 
-type Tab = "scratch" | "coinflip" | "dice" | "slots" | "plinko" | "shop"
+type Tab = "trail" | "coinflip" | "dice" | "slots" | "minesweeper" | "shop"
 
 const TABS: [Tab, string][] = [
-  ["scratch",   "Scratch"],
-  ["coinflip",  "Coin Flip"],
-  ["dice",      "Dice"],
-  ["slots",     "Slots"],
-  ["plinko",    "Plinko"],
-  ["shop",      "Shop"],
+  ["trail",       "Vivi Trail"],
+  ["coinflip",    "Coin Flip"],
+  ["dice",        "Dice"],
+  ["slots",       "Slots"],
+  ["minesweeper", "Minesweeper"],
+  ["shop",        "Shop"],
 ]
 
 export function GamblingModal({ onClose, onOpen2048 }: Props) {
   const { tokens, unlocked2048 } = useGamblingWallet()
-  const [tab, setTab] = useState<Tab>("scratch")
+  const [tab, setTab] = useState<Tab>("trail")
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
@@ -43,7 +44,7 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
           <span className="text-3xl">🎰</span>
           <div className="flex-1 min-w-0">
             <p className="text-lg font-bold text-white">gamVIVIling</p>
-            <p className="text-xs text-white/40">{tokens} 🪙 tokens</p>
+            <p className="text-xs text-white/40 flex items-center gap-1">{tokens} <Coins className="size-3.5" /> tokens</p>
           </div>
           {unlocked2048 && (
             <button type="button" onClick={onOpen2048} title="Play 2048"
@@ -69,11 +70,11 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
 
         {/* Body */}
         <div className="px-6 pb-6">
-          {tab === "scratch" && <ScratchTicketGame />}
+          {tab === "trail" && <ViviTrailGame />}
           {tab === "coinflip" && <CoinFlipGame />}
           {tab === "dice" && <DiceRollGame />}
           {tab === "slots" && <SlotsGame />}
-          {tab === "plinko" && <PlinkoGame />}
+          {tab === "minesweeper" && <MinesweeperGame />}
           {tab === "shop" && <ShopPanel />}
         </div>
       </div>
