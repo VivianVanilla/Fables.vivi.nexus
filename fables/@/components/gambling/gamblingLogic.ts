@@ -1,8 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // gamblingLogic.ts — pure game math for Coin Flip, Dice, and Slots (no React).
-// Minesweeper (minesweeperLogic.ts) and The Vivi Trail (viviTrailLogic.ts)
-// each get their own file since they carry more state/geometry than fits
-// this single-draw shape.
+// Minesweeper (minesweeperLogic.ts) gets its own file since it carries more
+// state/geometry than fits this single-draw shape.
 // ════════════════════════════════════════════════════════════════════════════
 
 export type CoinSide = "heads" | "tails"

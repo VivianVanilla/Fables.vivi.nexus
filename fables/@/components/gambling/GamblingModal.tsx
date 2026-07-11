@@ -1,12 +1,11 @@
 // ════════════════════════════════════════════════════════════════════════════
-// GamblingModal.tsx — "gamVIVIling" overlay: 5 mini-games + shop, same modal
+// GamblingModal.tsx — "gamVIVIling" overlay: 4 mini-games + shop, same modal
 // chrome as SpelldleModal for visual consistency.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
 import { Coins } from "lucide-react"
 import { useGamblingWallet } from "./useGamblingWallet"
-import { ViviTrailGame } from "./ViviTrailGame"
 import { CoinFlipGame } from "./CoinFlipGame"
 import { DiceRollGame } from "./DiceRollGame"
 import { SlotsGame } from "./SlotsGame"
@@ -18,10 +17,9 @@ interface Props {
   onOpen2048: () => void
 }
 
-type Tab = "trail" | "coinflip" | "dice" | "slots" | "minesweeper" | "shop"
+type Tab = "coinflip" | "dice" | "slots" | "minesweeper" | "shop"
 
 const TABS: [Tab, string][] = [
-  ["trail",       "Vivi Trail"],
   ["coinflip",    "Coin Flip"],
   ["dice",        "Dice"],
   ["slots",       "Slots"],
@@ -31,7 +29,7 @@ const TABS: [Tab, string][] = [
 
 export function GamblingModal({ onClose, onOpen2048 }: Props) {
   const { tokens, unlocked2048 } = useGamblingWallet()
-  const [tab, setTab] = useState<Tab>("trail")
+  const [tab, setTab] = useState<Tab>("coinflip")
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
@@ -70,7 +68,6 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
 
         {/* Body */}
         <div className="px-6 pb-6">
-          {tab === "trail" && <ViviTrailGame />}
           {tab === "coinflip" && <CoinFlipGame />}
           {tab === "dice" && <DiceRollGame />}
           {tab === "slots" && <SlotsGame />}
