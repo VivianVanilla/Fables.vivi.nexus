@@ -13,7 +13,7 @@ export interface GamblingWalletData {
   unlocked2048?: boolean
 }
 
-export const SPELLDLE_TOKEN_AWARD = 10
+export const SPELLDLE_TOKEN_AWARD = 500
 
 export interface ShopTag {
   id: string
