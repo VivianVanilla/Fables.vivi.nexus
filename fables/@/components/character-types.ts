@@ -88,7 +88,7 @@ export interface Feature {
   isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
   maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
   parentId?: string          // Items tab only — id of the containing item, when nested inside a container
-  rarity?: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact"  // Items tab only
+  rarity?: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact" | "Wondrous"  // Items tab only
   itemMeta?: {                // set when created from an Items-tab documentation suggestion, or edited directly
     itemType?: string
     damage?: string

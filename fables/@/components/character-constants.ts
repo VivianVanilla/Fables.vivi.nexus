@@ -52,7 +52,7 @@ export const CONDITION_EFFECTS: Record<string, string> = {
 // Conditions that force speed to 0 per RAW, until removed
 export const SPEED_ZERO_CONDITIONS = ["Grappled", "Restrained"]
 
-export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact"] as const
+export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact", "Wondrous"] as const
 
 export const RARITY_COLORS: Record<string, string> = {
   "Common":    "bg-white/10 text-white/50",
@@ -61,6 +61,7 @@ export const RARITY_COLORS: Record<string, string> = {
   "Very Rare": "bg-purple-500/15 text-purple-300",
   "Legendary": "bg-orange-500/15 text-orange-300",
   "Artifact":  "bg-red-500/15 text-red-300",
+  "Wondrous":  "bg-teal-500/15 text-teal-300",
 }
 
 export const SKILLS = [
