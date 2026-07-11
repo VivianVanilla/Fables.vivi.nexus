@@ -108,7 +108,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
           </button>
         )}
       </div>
-      <div className="flex flex-col gap-1.5 overflow-auto flex-1">
+      <div className="flex flex-col gap-1 overflow-auto flex-1">
         {items.length === 0 && (
           <p className="text-[10px] text-white/25 italic text-center py-6">
             {readOnly ? "None" : "None yet — click Add"}
@@ -193,7 +193,7 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
     const childWeight  = children.reduce((sum, c) => sum + (c.weight ?? 0) * (c.amount ?? 1), 0)
     const overCapacity = f.maxWeight != null && childWeight > f.maxWeight
     return (
-      <div key={f.id} className="flex flex-col gap-1.5" style={{ marginLeft: depth * 16 }}>
+      <div key={f.id} className="flex flex-col gap-1" style={{ marginLeft: depth * 16 }}>
         <FeatureEntry
           feature={f}
           allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
@@ -210,7 +210,7 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
         />
         <PopTransition show={!!f.isContainer}>
-          <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1.5 rounded-r-lg transition-colors"
+          <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"
             onDragOver={e => { if (!readOnly) e.preventDefault() }}
             onDrop={e => handleDrop(f.id, e)}>
             {f.maxWeight != null && (
@@ -243,7 +243,7 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           </button>
         )}
       </div>
-      <div className="flex flex-col gap-1.5 overflow-auto flex-1">
+      <div className="flex flex-col gap-1 overflow-auto flex-1">
         {roots.length === 0 && (
           <p className="text-[10px] text-white/25 italic text-center py-6">
             {readOnly ? "None" : "None yet — click Add"}

@@ -77,6 +77,7 @@ export interface Feature {
   resetsOn?: "short" | "long" | "dawn" | "manual"
   sliderColor?: string
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
+  requiresAttunement?: boolean // Items tab only — does this item require attunement at all?
   attuned?: boolean          // Items tab only — is the character currently attuned to this item?
   equipped?: boolean         // Items tab only — currently worn/wielded (applies itemMeta.acBonus to AC)
   weight?: number            // lb — rolled into the character's total carried weight

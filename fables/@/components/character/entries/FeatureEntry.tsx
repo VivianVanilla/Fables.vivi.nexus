@@ -157,7 +157,7 @@ interface FeatureEntryProps {
   onToggleFavorite?: () => void        // omit to hide the star
   onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab — toggles into/out of Martial
   inEquipment?:      boolean            // whether this feature already has a linked copy in the Martial list
-  showAttunement?:   boolean            // only true for the Items tab — shows an "Attuned" toggle
+  showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
 }
 
@@ -288,13 +288,26 @@ export function FeatureEntry({
         />
 
         {showAttunement && (
-          <label className="flex items-center gap-2 text-xs text-purple-300 cursor-pointer select-none border-t border-white/10 pt-2">
-            <input type="checkbox" checked={feature.attuned ?? false}
-              onChange={e => onChange({ attuned: e.target.checked })}
-              className="accent-purple-500"
-            />
-            Attuned
-          </label>
+          <div className="flex flex-col gap-2 text-xs border-t border-white/10 pt-2">
+            <label className="flex items-center gap-2 text-white/60 cursor-pointer select-none">
+              <input type="checkbox" checked={feature.requiresAttunement ?? false}
+                onChange={e => onChange({
+                  requiresAttunement: e.target.checked,
+                  ...(!e.target.checked ? { attuned: false } : {}),
+                })}
+              />
+              Requires Attunement
+            </label>
+            <PopTransition show={!!feature.requiresAttunement}>
+              <label className="flex items-center gap-2 text-purple-300 cursor-pointer select-none">
+                <input type="checkbox" checked={feature.attuned ?? false}
+                  onChange={e => onChange({ attuned: e.target.checked })}
+                  className="accent-purple-500"
+                />
+                Attuned
+              </label>
+            </PopTransition>
+          </div>
         )}
 
         {showItemExtras && (
@@ -567,7 +580,7 @@ export function FeatureEntry({
 
       {/* Header row */}
       <div {...dragAttrs}
-        className="flex flex-col px-3 py-2 cursor-pointer hover:bg-white/5 transition-colors select-none"
+        className="flex flex-col px-2.5 py-1.5 cursor-pointer hover:bg-white/5 transition-colors select-none"
         onClick={() => setExpanded(v => !v)}>
 
         {/* Top row: expand chevron + name + desktop bar */}
@@ -588,7 +601,7 @@ export function FeatureEntry({
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">Lv {feature.level}</span>
           )}
 
-          {showAttunement && (
+          {showAttunement && feature.requiresAttunement && (
             <label className="flex items-center gap-1 shrink-0 text-[10px] text-purple-300 cursor-pointer" onClick={e => e.stopPropagation()} title="Attuned">
               <input type="checkbox" checked={feature.attuned ?? false} disabled={readOnly}
                 onChange={e => onChange({ attuned: e.target.checked })}
@@ -648,8 +661,8 @@ export function FeatureEntry({
 
       {/* Expanded content */}
       <PopTransition show={expanded}>
-        <div className="px-4 pb-3 border-t border-white/5 flex flex-col gap-3">
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
+        <div className="px-3 pb-2 border-t border-white/5 flex flex-col gap-2">
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {showItemExtras && (feature.equipKind ?? "armor") === "armor" && !!feature.itemMeta?.acBonus && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">+{feature.itemMeta.acBonus} AC</span>
             )}

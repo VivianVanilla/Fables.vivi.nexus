@@ -355,7 +355,7 @@ export function EquipmentEntry({
       >
         {/* Compact row */}
         <div
-          className="px-3 py-2.5 flex items-center gap-2 min-h-11 cursor-pointer hover:bg-white/5 transition-colors select-none"
+          className="px-2.5 py-1.5 flex items-center gap-2 min-h-9 cursor-pointer hover:bg-white/5 transition-colors select-none"
           onClick={() => setIsExpanded(e => !e)}
         >
           {/* Name + tags */}
@@ -397,7 +397,7 @@ export function EquipmentEntry({
 
         {/* Expanded detail */}
         {isExpanded && (
-          <div className="px-4 pb-3 pt-2 border-t border-white/5 flex flex-col gap-2">
+          <div className="px-3 pb-2 pt-1.5 border-t border-white/5 flex flex-col gap-2">
             <div className="flex items-center gap-2">
               {item.attackStat && toHit && (
                 <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
