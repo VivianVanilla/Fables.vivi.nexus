@@ -15,7 +15,9 @@ import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
 import { PopTransition } from "../ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
-import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
+import { NumInput } from "../ui/NumInput"
+import { DamageEditor, DamagePills } from "../ui/DamageFields"
+import { computeDamageSegments } from "../../character-damage-types"
 import { ITEM_RARITIES, RARITY_COLORS } from "../../character-constants"
 import { classColorClasses } from "../../character-class-colors"
 import { supabase } from "../../../../src/supabase"
@@ -351,10 +353,10 @@ export function FeatureEntry({
                     </label>
                     <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                       AC Bonus
-                      <input type="number" value={feature.itemMeta?.acBonus ?? ""}
+                      <NumInput value={feature.itemMeta?.acBonus ?? ""}
                         onChange={e => onChange({ itemMeta: { ...feature.itemMeta, acBonus: e.target.value ? parseInt(e.target.value) || 0 : undefined } })}
                         placeholder="0"
-                        className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                        className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
                     </label>
                   </div>
                 </PopTransition>
@@ -371,22 +373,12 @@ export function FeatureEntry({
                         Ranged
                       </button>
                     </div>
+                    <DamageEditor
+                      value={feature.itemMeta ?? {}}
+                      onChange={patch => onChange({ itemMeta: { ...feature.itemMeta, ...patch } })}
+                      damagePlaceholder="1d8"
+                    />
                     <div className="flex flex-wrap items-center gap-3">
-                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
-                        Damage
-                        <input value={feature.itemMeta?.damage ?? ""} placeholder="1d8"
-                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, damage: e.target.value } })}
-                          className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
-                      </label>
-                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
-                        Dmg Type
-                        <select value={feature.itemMeta?.damageType ?? ""}
-                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, damageType: e.target.value } })}
-                          className="bg-zinc-800 rounded px-2 py-1 text-white text-xs outline-none">
-                          <option value="" className="bg-zinc-800 text-white">—</option>
-                          {DAMAGE_TYPES.map(dt => <option key={dt} value={dt} className="bg-zinc-800 text-white">{dt}</option>)}
-                        </select>
-                      </label>
                       <PopTransition show={(feature.itemMeta?.weaponKind ?? "melee") === "melee"}>
                         <div className="flex flex-wrap items-center gap-3">
                           <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
@@ -422,9 +414,9 @@ export function FeatureEntry({
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                     Amount
-                    <input type="number" min={1} value={feature.amount ?? 1}
+                    <NumInput min={1} value={feature.amount ?? 1}
                       onChange={e => onChange({ amount: Math.max(1, parseInt(e.target.value) || 1) })}
-                      className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                      className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
                   </label>
                   <label className="flex items-center gap-2 text-amber-300 cursor-pointer select-none whitespace-nowrap">
                     <input type="checkbox" checked={feature.isContainer ?? false}
@@ -436,10 +428,10 @@ export function FeatureEntry({
                   <PopTransition show={!!feature.isContainer}>
                     <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                       Max Weight (lb)
-                      <input type="number" min={0} step="0.1" value={feature.maxWeight ?? ""}
+                      <NumInput min={0} step="0.1" value={feature.maxWeight ?? ""}
                         onChange={e => onChange({ maxWeight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
                         placeholder="—"
-                        className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                        className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
                     </label>
                   </PopTransition>
                 </div>
@@ -447,17 +439,17 @@ export function FeatureEntry({
 
               <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                 Weight (lb)
-                <input type="number" min={0} step="0.1" value={feature.weight ?? ""}
+                <NumInput min={0} step="0.1" value={feature.weight ?? ""}
                   onChange={e => onChange({ weight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
                   placeholder="0"
-                  className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
               </label>
               <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                 Value (gp)
-                <input type="number" min={0} step="0.01" value={feature.value ?? ""}
+                <NumInput min={0} step="0.01" value={feature.value ?? ""}
                   onChange={e => onChange({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
                   placeholder="0"
-                  className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
               </label>
               <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                 Rarity
@@ -490,9 +482,9 @@ export function FeatureEntry({
                   {usesPB ? (
                     <span className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold">PB ({pb})</span>
                   ) : (
-                    <input type="number" value={feature.maxUses ?? ""} min={1}
+                    <NumInput value={feature.maxUses ?? ""} min={1}
                       onChange={e => onChange({ maxUses: parseInt(e.target.value) || 0 })}
-                      className="w-12 bg-white/10 rounded px-2 py-1 text-center text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="w-12 bg-white/10 rounded px-2 py-1 text-center text-white outline-none"
                     />
                   )}
                 </label>
@@ -666,10 +658,8 @@ export function FeatureEntry({
             {showItemExtras && (feature.equipKind ?? "armor") === "armor" && !!feature.itemMeta?.acBonus && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">+{feature.itemMeta.acBonus} AC</span>
             )}
-            {showItemExtras && feature.equipKind === "weapon" && feature.itemMeta?.damage && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${damageTypeClasses(feature.itemMeta.damageType)}`}>
-                {feature.itemMeta.damage} {feature.itemMeta.damageType ?? ""}
-              </span>
+            {showItemExtras && feature.equipKind === "weapon" && (
+              <DamagePills segments={computeDamageSegments(feature.itemMeta ?? {})} size="xs" />
             )}
             {showItemExtras && feature.equipKind === "weapon" && (
               feature.itemMeta?.weaponKind === "ranged"

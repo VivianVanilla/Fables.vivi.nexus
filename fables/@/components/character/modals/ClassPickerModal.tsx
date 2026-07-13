@@ -6,7 +6,7 @@ import { getSpells } from "../../../../src/spells/spellCache"
 import { SCHOOLS } from "../../../../src/spells/constants"
 import type { Feature, SpellItem } from "../../character-types"
 import { nanoid, maxSpellLevelForClass } from "../../character-utils"
-import { parseSpellCombat } from "../entries/SpellEntry"
+import { parseSpellCombat } from "../../character-spell-utils"
 
 interface ClassEntry {
   cls: string

@@ -7,9 +7,11 @@ import type { EquipmentItem } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import { Modal } from "../ui/Modal"
 import { Markdown } from "../../ui/Markdown"
-import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
 import { PopTransition } from "../ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
+import { NumInput } from "../ui/NumInput"
+import { DamageEditor, DamagePills } from "../ui/DamageFields"
+import { computeDamageSegments, type DamageSegment } from "../../character-damage-types"
 import { getSuggestions, type Suggestion } from "./FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -58,22 +60,18 @@ function computeToHit(
   return total >= 0 ? `+${total}` : `${total}`
 }
 
-function computeDamage(
+// The stat mod/magic bonus/extra-damage total only ever applies to the first
+// damage instance (a flaming sword's fire die doesn't get your STR mod) — see
+// computeDamageSegments in DamageFields.tsx.
+function computeDamageSegmentsForItem(
   item: EquipmentItem,
   statMods: Record<string, number>,
-): string | null {
-  if (!item.damage) return null
-  if (!item.attackStat) {
-    return `${item.damage}${item.damageType ? ` ${item.damageType}` : ""}`
-  }
+): DamageSegment[] {
+  if (!item.attackStat) return computeDamageSegments(item)
   const mod      = statMods[item.attackStat] ?? 0
   const magic    = parseMagic(item.magicBonus)
   const extra    = item.extraDamage ?? 0
-  const totalMod = mod + magic + extra
-  const dmgStr   = totalMod !== 0
-    ? `${item.damage}${totalMod > 0 ? "+" : ""}${totalMod}`
-    : item.damage
-  return `${dmgStr}${item.damageType ? ` ${item.damageType}` : ""}`
+  return computeDamageSegments(item, mod + magic + extra)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -87,8 +85,8 @@ export function EquipmentEntry({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [showSuggest, setShowSuggest] = useState(false)
 
-  const toHit  = computeToHit(item, statMods, pb)
-  const damage = computeDamage(item, statMods)
+  const toHit    = computeToHit(item, statMods, pb)
+  const segments = computeDamageSegmentsForItem(item, statMods)
   const isWeapon = item.type === "melee" || item.type === "ranged" || !item.type
 
   // ── Drag source ─────────────────────────────────────────────────────────
@@ -232,44 +230,31 @@ export function EquipmentEntry({
                 {item.attackStat && isWeapon && (
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-white/40 uppercase tracking-wider">Extra To Hit</span>
-                    <input
-                      type="number"
+                    <NumInput
                       value={item.extraToHit ?? ""}
                       onChange={e => onChange({ extraToHit: parseInt(e.target.value) || 0 })}
                       placeholder="0"
-                      className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20"
+                    />
+                  </label>
+                )}
+
+                {isWeapon && item.attackStat && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-white/40 uppercase tracking-wider">Extra Damage</span>
+                    <NumInput
+                      value={item.extraDamage ?? ""}
+                      onChange={e => onChange({ extraDamage: parseInt(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20"
                     />
                   </label>
                 )}
 
                 {isWeapon && (
-                  <>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs text-white/40 uppercase tracking-wider">Damage</span>
-                      <input value={item.damage ?? ""} onChange={e => onChange({ damage: e.target.value })} placeholder="1d8"
-                        className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs text-white/40 uppercase tracking-wider">Extra Damage</span>
-                      <input
-                        type="number"
-                        value={item.extraDamage ?? ""}
-                        onChange={e => onChange({ extraDamage: parseInt(e.target.value) || 0 })}
-                        placeholder="0"
-                        className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs text-white/40 uppercase tracking-wider">Dmg Type</span>
-                      <select value={item.damageType ?? ""} onChange={e => onChange({ damageType: e.target.value || undefined })}
-                        className="bg-zinc-800 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30">
-                        <option value="" className="bg-zinc-800 text-white">—</option>
-                        {DAMAGE_TYPES.map(t => <option key={t} value={t} className="bg-zinc-800 text-white">{t}</option>)}
-                      </select>
-                    </label>
-                  </>
+                  <div className="col-span-2">
+                    <DamageEditor value={item} onChange={onChange} damagePlaceholder="1d8" />
+                  </div>
                 )}
 
                 <label className="flex flex-col gap-1 col-span-2">
@@ -303,8 +288,8 @@ export function EquipmentEntry({
 
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Weight (lb)</span>
-                  <input type="number" min={0} step="0.1" value={item.weight ?? ""} onChange={e => onChange({ weight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })} placeholder="0"
-                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  <NumInput min={0} step="0.1" value={item.weight ?? ""} onChange={e => onChange({ weight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })} placeholder="0"
+                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
                 </label>
 
                 <label className="flex items-center gap-2 col-span-2 cursor-pointer select-none">
@@ -321,10 +306,12 @@ export function EquipmentEntry({
                     <span className="text-[10px] uppercase tracking-widest text-white/35 font-semibold">To Hit</span>
                     <span className="text-sm px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 font-medium">{toHit}</span>
                   </div>
-                  {damage && (
+                  {segments.length > 0 && (
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] uppercase tracking-widest text-white/35 font-semibold">Damage</span>
-                      <span className={`text-sm px-2.5 py-1 rounded-lg font-medium ${damageTypeClasses(item.damageType)}`}>{damage}</span>
+                      <div className="flex flex-wrap gap-1">
+                        <DamagePills segments={segments} size="sm" />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -373,9 +360,7 @@ export function EquipmentEntry({
               {toHit && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">{toHit} to hit</span>
               )}
-              {damage && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${damageTypeClasses(item.damageType)}`}>{damage}</span>
-              )}
+              <DamagePills segments={segments} size="sm" />
               {item.meleeRange && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">↔ {item.meleeRange}</span>
               )}

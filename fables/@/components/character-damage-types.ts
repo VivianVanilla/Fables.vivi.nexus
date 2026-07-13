@@ -38,3 +38,45 @@ export const DAMAGE_TYPES = [
   "Acid", "Bludgeoning", "Cold", "Fire", "Force", "Lightning", "Necrotic",
   "Piercing", "Poison", "Psychic", "Radiant", "Slashing", "Thunder",
 ] as const
+
+// ── Multi-damage-type support (weapons, monster actions, items) ─────────────
+//
+// Most things deal one instance of damage — `damage`/`damageType` — but some
+// (a flaming sword, a monster's breath-and-claw attack) deal several at once.
+// `multiDamage` toggles between that single pair and the repeatable `damages`
+// list. Lives here (not in the DamageFields.tsx editor component) so a plain
+// TS import of the math doesn't drag a component file's Fast Refresh boundary
+// along with it.
+
+export interface DamageEntryLike {
+  damage: string
+  damageType?: string
+}
+
+export interface MultiDamageFields {
+  damage?: string
+  damageType?: string
+  multiDamage?: boolean
+  damages?: DamageEntryLike[]
+}
+
+export interface DamageSegment {
+  text: string
+  damageType?: string
+}
+
+// Flattens the primary damage/damageType pair + any extra `damages` rows into
+// one ordered list of segments to render/join. `modifier` (already-summed
+// to-hit-style bonus, e.g. from a weapon's stat mod + magic bonus) is folded
+// into only the FIRST segment, matching how a bonus weapon die (like a
+// flaming sword's fire damage) never gets your STR mod added.
+export function computeDamageSegments(fields: MultiDamageFields, modifier = 0): DamageSegment[] {
+  const entries: DamageEntryLike[] = fields.multiDamage && fields.damages?.length
+    ? fields.damages
+    : (fields.damage ? [{ damage: fields.damage, damageType: fields.damageType }] : [])
+
+  return entries.map((e, i) => ({
+    text: i === 0 && modifier !== 0 ? `${e.damage}${modifier > 0 ? "+" : ""}${modifier}` : e.damage,
+    damageType: e.damageType,
+  }))
+}

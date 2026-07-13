@@ -23,6 +23,8 @@ import type { Theme } from "./character-themes"
 import { nanoid, safeParseJson } from "./character-utils"
 import { slotLevelColor } from "./character-themes"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "./imageGallery"
+import { spellItemFieldsFromSpell } from "./character-spell-utils"
+import type { Spell } from "../../src/spells/types"
 
 import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 import { Markdown } from "./ui/Markdown"
@@ -32,6 +34,7 @@ import { Modal } from "./character/ui/Modal"
 import { PopTransition } from "./character/ui/PopTransition"
 import { SpeedDisplay } from "./character/ui/SpeedDisplay"
 import { PortraitModal } from "./character/modals/PortraitModal"
+import { SpellPickerModal } from "./character/modals/SpellPickerModal"
 
 import { ActionEntry } from "./character/entries/ActionEntry"
 import { SpellEntry } from "./character/entries/SpellEntry"
@@ -64,7 +67,7 @@ const ACTION_SECTIONS: { key: "actions" | "bonusActions" | "reactions" | "legend
 ]
 
 const SECTION_HEADER_COLOR: Record<ActionCategory, string> = {
-  action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300",
+  trait: "text-emerald-300", action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300",
 }
 
 const CARD = "rounded-xl bg-zinc-900 ring-1 ring-zinc-700 transition-colors"
@@ -118,13 +121,14 @@ function CompactField({ label, value, onChange, readOnly }: { label: string; val
 }
 
 function ActionSection({
-  label, category, actions, readOnly, onAdd, onChange, onRemove, extra,
+  label, category, actions, readOnly, onAdd, onChange, onRemove, extra, beforeEntries,
 }: {
   label: string; category: ActionCategory; actions: MonsterAction[]; readOnly?: boolean
   onAdd: () => void; onChange: (id: string, patch: Partial<MonsterAction>) => void; onRemove: (id: string) => void
   extra?: React.ReactNode
+  beforeEntries?: React.ReactNode  // rendered above the entry list — e.g. the Multiattack block in Actions
 }) {
-  if (readOnly && actions.length === 0) return null
+  if (readOnly && actions.length === 0 && !beforeEntries) return null
   return (
     <div className={`${CARD} p-4 flex flex-col gap-2 animate-in fade-in duration-200`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -137,6 +141,7 @@ function ActionSection({
           </button>
         )}
       </div>
+      {beforeEntries}
       <div className="flex flex-col gap-1.5">
         {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
         {actions.map(a => (
@@ -148,6 +153,22 @@ function ActionSection({
   )
 }
 
+// Multiattack renders as one bolded lead-in sentence right above the action
+// entries (like a real stat block: "**Multiattack.** The dragon makes..."),
+// not a boxed sub-panel — both the on/off toggle AND the sentence itself are
+// edited from the Edit Stat Block modal, so this is display-only.
+function MultiattackBlock({ description, readOnly }: { description?: string; readOnly?: boolean }) {
+  if (!description) {
+    if (readOnly) return null
+    return (
+      <p className="text-sm text-white/30 italic">
+        <span className="font-bold text-white/40 not-italic">Multiattack.</span> No description set — add one in Edit Stat Block.
+      </p>
+    )
+  }
+  return <Markdown text={`**Multiattack.** ${description}`} tone="dark" />
+}
+
 function LegendaryTracker({
   used, max, readOnly, onChangeUsed,
 }: { used: number; max: number; readOnly?: boolean; onChangeUsed: (n: number) => void }) {
@@ -157,6 +178,45 @@ function LegendaryTracker({
       <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
         color="#EAB308" onChange={val => onChangeUsed(Math.max(0, max - val))} className="flex-1 min-w-0" />
       <span className="text-xs text-white/40 tabular-nums shrink-0">{remaining}/{max} left</span>
+    </div>
+  )
+}
+
+// Most monsters cast innate spells "X/day" rather than off leveled slots —
+// this is the per-spell version of that: an "At will" pill until a limit is
+// set, then a remaining-uses slider identical in spirit to LegendaryTracker.
+function PerDaySpellTracker({
+  spell, readOnly, onChange,
+}: { spell: SpellItem; readOnly?: boolean; onChange: (patch: Partial<SpellItem>) => void }) {
+  const max = spell.usesPerDay ?? 0
+
+  if (max <= 0) {
+    return readOnly ? (
+      <span className="text-[10px] text-white/25 italic shrink-0">At will</span>
+    ) : (
+      <button type="button" onClick={() => onChange({ usesPerDay: 1, usesPerDayUsed: 0 })}
+        className="text-[10px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/40 hover:text-white/70 transition-colors shrink-0">
+        At will
+      </button>
+    )
+  }
+
+  const used = spell.usesPerDayUsed ?? 0
+  const remaining = Math.max(0, max - used)
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
+        onChange={val => onChange({ usesPerDayUsed: Math.max(0, max - val) })} className="w-24" />
+      <span className="text-[10px] text-white/40 tabular-nums shrink-0">{remaining}/{max}/day</span>
+      {!readOnly && (
+        <>
+          <NumInput value={max} min={1}
+            onChange={e => onChange({ usesPerDay: Math.max(1, parseInt(e.target.value) || 1) })}
+            className="w-8 bg-white/10 rounded px-1 py-0.5 text-center text-white text-[10px] outline-none" />
+          <button type="button" onClick={() => onChange({ usesPerDay: undefined, usesPerDayUsed: undefined })}
+            className="text-white/20 hover:text-red-400 text-[10px] px-1 transition-colors" title="Set to at-will">✕</button>
+        </>
+      )}
     </div>
   )
 }
@@ -176,7 +236,7 @@ const COMPACT_FIELD_ROWS: { key: keyof MonsterData; label: string }[] = [
 ]
 
 function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData; onUpdate: (patch: Partial<MonsterData>) => void; readOnly?: boolean; onEdit: () => void }) {
-  const hasStructuredSpeed = !!(data.speeds && (data.speeds.walk || data.speeds.fly || data.speeds.swim || data.speeds.climb))
+  const hasStructuredSpeed = !!(data.speeds && Object.values(data.speeds).some(v => v))
   const [hpStep, setHpStep] = useState(1)
 
   function adjustHp(delta: number) {
@@ -188,7 +248,11 @@ function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData;
   return (
     <div className={`${CARD} p-3 flex flex-col gap-2.5`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-wrap items-stretch gap-1.5">
+        {/* flex-wrap, not grid — a grid's columns stretch to fill the row's full width even
+            when the container is way wider than the tiles need, which on a wide desktop page
+            left each tile centered in a huge mostly-empty box. Flex just sizes tiles to their
+            own content and wraps once it runs out of room. */}
+        <div className="flex flex-wrap gap-1.5 min-w-0">
           <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg bg-white/5 px-3 py-1.5 min-w-14">
             <span className="text-base font-bold text-white">{data.ac ?? 0}</span>
             <span className="text-[9px] uppercase tracking-widest text-white/40">AC</span>
@@ -251,11 +315,11 @@ function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData;
         )}
       </div>
 
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {ABILITY_KEYS.map(key => {
           const score = (data[key] as number | undefined) ?? 10
           return (
-            <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5">
+            <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-3 py-1.5">
               <span className={`text-[9px] uppercase tracking-widest font-bold ${ABILITY_COLORS[key]}`}>{ABILITY_ABBR[key]}</span>
               <span className="text-sm font-bold text-white">{score}</span>
               <span className={`text-[10px] font-mono ${ABILITY_COLORS[key]}`}>{abilityMod(score)}</span>
@@ -264,8 +328,11 @@ function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData;
         })}
       </div>
 
+      {/* Each field is its own full-width line (not paired into columns) — pairing e.g. a
+          short "Skills" with a long "Condition Immunities" into equal-width grid columns left
+          a wall of blank space in whichever column had the shorter value. */}
       {COMPACT_FIELD_ROWS.some(r => data[r.key]) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 border-t border-white/10 pt-2.5">
+        <div className="flex flex-col gap-1 border-t border-white/10 pt-2.5">
           {COMPACT_FIELD_ROWS.map(r => (
             <CompactField key={r.key} label={r.label} value={data[r.key] as string | undefined} onChange={() => {}} readOnly />
           ))}
@@ -277,7 +344,7 @@ function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData;
 
 // ── Edit Stat Block modal — everything configuration-shaped lives here ──────
 
-const SPEED_FIELDS = ["walk", "fly", "swim", "climb"] as const
+const SPEED_FIELDS = ["walk", "fly", "swim", "climb", "burrow", "hover"] as const
 
 function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpdate: (patch: Partial<MonsterData>) => void; onClose: () => void }) {
   const speeds = data.speeds ?? {}
@@ -285,14 +352,16 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
     onUpdate({ speeds: { ...speeds, [key]: v || undefined } })
   }
 
-  const bonusEnabled  = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
-  const reactEnabled  = data.hasReactions ?? (data.reactions ?? []).length > 0
-  const legendEnabled = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
-  const spellEnabled  = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
+  const traitsEnabled  = data.hasTraits ?? (data.traits ?? []).length > 0
+  const multiEnabled   = data.hasMultiattack ?? !!data.multiattackDescription
+  const bonusEnabled   = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
+  const reactEnabled   = data.hasReactions ?? (data.reactions ?? []).length > 0
+  const legendEnabled  = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
+  const spellEnabled   = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(520px,calc(100vw-2rem))] max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-5 text-white animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(720px,calc(100vw-2rem))] max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-5 text-white animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between shrink-0">
           <p className="text-sm font-bold">Edit Stat Block</p>
           <button type="button" onClick={onClose} className="text-white/40 hover:text-white text-sm transition-colors">✕</button>
@@ -327,17 +396,17 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
         {/* Speeds */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Speed (ft/round)</span>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {SPEED_FIELDS.map(k => (
               <label key={k} className="flex flex-col items-center gap-1">
                 <span className="text-[9px] uppercase text-white/40">{k}</span>
                 <NumInput value={speeds[k] ?? ""} min={0} placeholder="—"
                   onChange={e => setSpeed(k, parseInt(e.target.value) || 0)}
-                  className="w-full bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none text-sm transition-colors focus:bg-white/15" />
+                  className="w-14 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none text-sm transition-colors focus:bg-white/15" />
               </label>
             ))}
           </div>
-          <input value={data.speed ?? ""} placeholder="Other movement notes (e.g. burrow 20 ft.)"
+          <input value={data.speed ?? ""} placeholder="Other movement notes (e.g. can't be knocked prone)"
             onChange={e => onUpdate({ speed: e.target.value })}
             className="bg-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white/70 outline-none placeholder:text-white/20 transition-colors focus:bg-white/10" />
         </div>
@@ -345,11 +414,11 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
         {/* Ability scores */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Ability Scores</span>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {ABILITY_KEYS.map(key => {
               const score = (data[key] as number | undefined) ?? 10
               return (
-                <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 py-1.5 transition-colors focus-within:bg-white/10">
+                <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-1.5 py-1.5 transition-colors focus-within:bg-white/10">
                   <span className={`text-[9px] uppercase tracking-widest font-bold ${ABILITY_COLORS[key]}`}>{ABILITY_ABBR[key]}</span>
                   <NumInput value={score} onChange={e => onUpdate({ [key]: parseInt(e.target.value) || 0 } as Partial<MonsterData>)}
                     className="w-8 text-center bg-transparent text-sm font-bold text-white outline-none" />
@@ -360,8 +429,12 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
           </div>
         </div>
 
-        {/* Traits */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 border-t border-white/10 pt-3">
+        {/* Saves/skills/resistances/senses — not to be confused with the Traits *section* (passive feature entries), toggled below.
+            One full-width line per field rather than paired columns — pairing e.g. a short
+            "Skills" with a long "Condition Immunities" left a wall of blank space in whichever
+            column had the shorter value. This is also exactly where the modal's extra width goes:
+            each field gets a nearly-full-width single-line input to type a long value into. */}
+        <div className="flex flex-col gap-1.5 border-t border-white/10 pt-3">
           <CompactField label="Saving Throws"        value={data.savingThrows}         onChange={v => onUpdate({ savingThrows: v })} />
           <CompactField label="Skills"               value={data.skills}               onChange={v => onUpdate({ skills: v })} />
           <CompactField label="Dmg Resistances"      value={data.damageResistances}     onChange={v => onUpdate({ damageResistances: v })} />
@@ -378,6 +451,23 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
         {/* Section toggles */}
         <div className="flex flex-col gap-2.5 border-t border-white/10 pt-3">
           <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Sections</span>
+          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+            Traits
+            <input type="checkbox" checked={traitsEnabled} onChange={e => onUpdate({ hasTraits: e.target.checked })} />
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Multiattack
+              <input type="checkbox" checked={multiEnabled} onChange={e => onUpdate({ hasMultiattack: e.target.checked })} />
+            </label>
+            <PopTransition show={multiEnabled}>
+              <MarkdownTextarea value={data.multiattackDescription ?? ""} onChange={v => onUpdate({ multiattackDescription: v })}
+                placeholder="The monster makes two attacks: one with its bite and one with its claws."
+                rows={2}
+                className="bg-white/10 rounded-lg px-2.5 py-2 text-xs text-white/70 outline-none placeholder:text-white/20 resize-none leading-relaxed transition-colors focus:bg-white/15 w-full"
+                variant="light" />
+            </PopTransition>
+          </div>
           <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
             Bonus Actions
             <input type="checkbox" checked={bonusEnabled} onChange={e => onUpdate({ hasBonusActions: e.target.checked })} />
@@ -446,14 +536,26 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     onUpdate({ [key]: actionsBySection[key].filter(a => a.id !== id) } as Partial<MonsterData>)
   }
 
+  const traits = data.traits ?? []
+  function addTrait()                                     { onUpdate({ traits: [...traits, { id: nanoid(), name: "" }] }) }
+  function changeTrait(id: string, patch: Partial<MonsterAction>) { onUpdate({ traits: traits.map(t => t.id === id ? { ...t, ...patch } : t) }) }
+  function removeTrait(id: string)                        { onUpdate({ traits: traits.filter(t => t.id !== id) }) }
+
   const spellItems = data.spellItems ?? []
   const spellSlots = data.spellSlots ?? []
   const [pendingSpellId, setPendingSpellId] = useState<string | null>(null)
+  const [showSpellPicker, setShowSpellPicker] = useState(false)
 
-  function addSpell() {
+  // Blank entry the user fills in by hand — the fallback for homebrew/monster
+  // abilities that aren't a real SRD spell. The picker menu is the main path.
+  function addCustomSpell() {
     const id = nanoid()
     onUpdate({ spellItems: [...spellItems, { id, name: "", level: 0 }] })
     setPendingSpellId(id)
+  }
+  function addSpellFromPicker(s: Spell) {
+    onUpdate({ spellItems: [...spellItems, { id: nanoid(), ...spellItemFieldsFromSpell(s) }] })
+    setShowSpellPicker(false)
   }
   function changeSpell(id: string, patch: Partial<SpellItem>) { onUpdate({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...patch } : s) }) }
   function removeSpell(id: string)                          { onUpdate({ spellItems: spellItems.filter(s => s.id !== id) }) }
@@ -477,10 +579,13 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   // Explicit toggles, editable only from the Edit Stat Block modal — fall back
   // to auto-detecting existing data for monsters created before the toggle
   // existed, so nothing that already had content quietly disappears.
+  const traitsEnabled      = data.hasTraits ?? traits.length > 0
+  const multiattackEnabled = data.hasMultiattack ?? !!data.multiattackDescription
   const bonusEnabled       = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
   const reactEnabled       = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendaryEnabled   = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
   const spellcastingEnabled = data.hasSpellcasting ?? (levels.length > 0 || !!data.spellcastingAbility)
+  const spellUsageMode      = data.spellUsageMode ?? "slots"
 
   const sectionEnabled: Record<string, boolean> = {
     actions: true,
@@ -500,6 +605,15 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
       {/* ── Stats (read-only summary — edit via the modal) ──────────────────── */}
       <StatsSummary data={data} onUpdate={onUpdate} readOnly={readOnly} onEdit={() => setShowEditModal(true)} />
 
+      {/* ── Traits — right before Actions, same shape but passive (no attack/damage/save) ── */}
+      {traitsEnabled && (
+        <ActionSection label="Traits" category="trait" actions={traits} readOnly={readOnly}
+          onAdd={addTrait}
+          onChange={changeTrait}
+          onRemove={removeTrait}
+        />
+      )}
+
       {/* ── Action sections ──────────────────────────────────────────────── */}
       {ACTION_SECTIONS.filter(({ key }) => sectionEnabled[key]).map(({ key, category, label }) => (
         <ActionSection key={key} label={label} category={category}
@@ -507,6 +621,9 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
           onAdd={() => addAction(key)}
           onChange={(id, patch) => changeAction(key, id, patch)}
           onRemove={id => removeAction(key, id)}
+          beforeEntries={key === "actions" && multiattackEnabled ? (
+            <MultiattackBlock description={data.multiattackDescription} readOnly={readOnly} />
+          ) : undefined}
           extra={key === "legendaryActions" ? (
             <LegendaryTracker
               used={data.legendaryActionsUsed ?? 0}
@@ -539,6 +656,18 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
                 <TextTile label="Ability" value={data.spellcastingAbility} onChange={v => onUpdate({ spellcastingAbility: v })} placeholder="INT" />
               </>
             )}
+            {!readOnly && (
+              <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0" title="Most monsters cast innate spells X/day rather than off leveled slots">
+                <button type="button" onClick={() => onUpdate({ spellUsageMode: "slots" })}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${spellUsageMode !== "perDay" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                  Slots
+                </button>
+                <button type="button" onClick={() => onUpdate({ spellUsageMode: "perDay" })}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${spellUsageMode === "perDay" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                  Per Day
+                </button>
+              </div>
+            )}
             {isLucky && spellItems.length > 0 && (
               <button type="button" onClick={feelingLucky}
                 className="ml-auto text-xs font-extrabold px-3 py-1.5 rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 shrink-0"
@@ -561,7 +690,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
               const nodes: React.ReactNode[] = [
                 <div key={`header-${lvl}`} className="flex items-center gap-3 flex-wrap px-1">
                   <span className="text-sm font-bold uppercase tracking-widest text-white/75">{lvl === 0 ? "Cantrips" : `Level ${lvl}`}</span>
-                  {spellSlots.filter(s => s.level === lvl).map(slot => {
+                  {spellUsageMode !== "perDay" && spellSlots.filter(s => s.level === lvl).map(slot => {
                     const rem = Math.max(0, slot.total - slot.used)
                     return (
                       <div key={slot.id} className="flex items-center gap-1.5">
@@ -585,9 +714,16 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
               ]
               for (const spell of grouped.get(lvl)!) {
                 nodes.push(
-                  <SpellEntry key={spell.id} spell={spell} theme={NEUTRAL_THEME} readOnly={readOnly} showPrepToggle={false}
-                    autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
-                    onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
+                  <div key={spell.id} className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <SpellEntry spell={spell} theme={NEUTRAL_THEME} readOnly={readOnly} showPrepToggle={false}
+                        autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
+                        onChange={p => changeSpell(spell.id, p)} onRemove={() => removeSpell(spell.id)} />
+                    </div>
+                    {spellUsageMode === "perDay" && (
+                      <PerDaySpellTracker spell={spell} readOnly={readOnly} onChange={p => changeSpell(spell.id, p)} />
+                    )}
+                  </div>
                 )
               }
               return nodes
@@ -596,14 +732,16 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
 
           {!readOnly && (
             <div className="flex items-center gap-2 flex-wrap">
-              <button type="button" onClick={addSpell}
+              <button type="button" onClick={() => setShowSpellPicker(true)}
                 className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
                 + Add Spell
               </button>
-              <button type="button" onClick={addSlotLevel}
-                className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
-                + Add Slot Level
-              </button>
+              {spellUsageMode !== "perDay" && (
+                <button type="button" onClick={addSlotLevel}
+                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
+                  + Add Slot Level
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -639,6 +777,14 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
 
       {showEditModal && !readOnly && (
         <EditStatsModal data={data} onUpdate={onUpdate} onClose={() => setShowEditModal(false)} />
+      )}
+
+      {showSpellPicker && !readOnly && (
+        <SpellPickerModal
+          onClose={() => setShowSpellPicker(false)}
+          onPick={addSpellFromPicker}
+          onCustom={() => { setShowSpellPicker(false); addCustomSpell() }}
+        />
       )}
     </div>
   )

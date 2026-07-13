@@ -12,13 +12,17 @@ export interface SpeedValues {
   fly?: number
   swim?: number
   climb?: number
+  burrow?: number
+  hover?: number
 }
 
 const SPEED_TYPES = [
-  { key: "walk",  abbr: "Walk", color: "text-white"      },
-  { key: "fly",   abbr: "Fly", color: "text-sky-300"     },
-  { key: "swim",  abbr: "Swim", color: "text-cyan-300"    },
-  { key: "climb", abbr: "Climb", color: "text-amber-300"   },
+  { key: "walk",   abbr: "Walk",   color: "text-white"      },
+  { key: "fly",    abbr: "Fly",    color: "text-sky-300"    },
+  { key: "swim",   abbr: "Swim",   color: "text-cyan-300"   },
+  { key: "climb",  abbr: "Climb",  color: "text-amber-300"  },
+  { key: "burrow", abbr: "Burrow", color: "text-orange-300" },
+  { key: "hover",  abbr: "Hover",  color: "text-violet-300" },
 ] as const
 
 interface Props {
@@ -45,7 +49,7 @@ export function SpeedDisplay({ speeds, size = "sm", zeroed }: Props) {
   // Monster-size ("lg") lays the movement types out side by side — a vertical
   // stack of 3-4 entries took up too much room in the compact stats summary. 
   return (
-    <div className={`flex items-center transition-all duration-200 ${size === "lg" ? "flex-row gap-2" : "flex-col gap-0"}`}>
+    <div className={`flex items-center transition-all duration-200 ${size === "lg" ? "flex-row flex-wrap justify-center gap-x-2 gap-y-0.5" : "flex-col gap-0"}`}>
       {entries.map(e => (
         <div key={e.key} className="flex items-baseline gap-1 animate-in fade-in duration-200">
           <span className={`${size === "lg" ? "text-[11px]" : "text-[9px]"} font-bold ${e.color}`}>{e.abbr}</span>

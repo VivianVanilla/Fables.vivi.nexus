@@ -1,8 +1,8 @@
 // Data shapes used by the monster stat-block sheet
 
-import type { SpellItem, SpellSlot } from "./character-types"
+import type { DamageEntry, SpellItem, SpellSlot } from "./character-types"
 
-export type ActionCategory = "action" | "bonusAction" | "reaction" | "legendary"
+export type ActionCategory = "trait" | "action" | "bonusAction" | "reaction" | "legendary"
 
 export interface MonsterAction {
   id: string
@@ -11,6 +11,8 @@ export interface MonsterAction {
   attackBonus?: string   // e.g. "+5"
   damage?: string         // e.g. "2d6+3"
   damageType?: string
+  multiDamage?: boolean   // toggle — on splits damage across `damages` instead of the single damage/damageType pair
+  damages?: DamageEntry[] // additional damage instances beyond the primary damage/damageType, only used when multiDamage is on
   saveDC?: number
   saveAbility?: string    // "Dex", "Con", etc.
   recharge?: number       // e.g. 5 -> "Recharge 5-6"; undefined = no recharge
@@ -31,7 +33,7 @@ export interface MonsterData {
   hitDice?: string        // e.g. "9d8+18"
   speed?: string          // legacy free-text notes (e.g. "burrow 20 ft.") — kept for movement types
                            // not covered by `speeds`, and as a fallback display for older monsters
-  speeds?: { walk?: number; fly?: number; swim?: number; climb?: number }  // ft/round
+  speeds?: { walk?: number; fly?: number; swim?: number; climb?: number; burrow?: number; hover?: number }  // ft/round — hover isn't its own speed rating in 5e (it's a flag on fly speed), but tracking it as a number here keeps it consistent with the others and lets it double as "hovers at N ft."
 
   strength?: number
   dexterity?: number
@@ -51,6 +53,11 @@ export interface MonsterData {
   challengeRating?: string
   proficiencyBonus?: number
 
+  traits?: MonsterAction[]        // passive features shown right before Actions — same shape as actions, but only name/description are ever shown for them
+  hasTraits?: boolean              // toggle — off hides the whole Traits section (Actions is always shown)
+  hasMultiattack?: boolean         // toggle — shows the Multiattack entry at the top of Actions
+  multiattackDescription?: string // free-text sentence describing the multiattack (e.g. "The monster makes two attacks: one with its bite and one with its claws.")
+
   actions?: MonsterAction[]
   bonusActions?: MonsterAction[]
   reactions?: MonsterAction[]
@@ -66,6 +73,7 @@ export interface MonsterData {
   spellAttackBonus?: number
   spellSaveDC?: number
   spellcastingAbility?: string
+  spellUsageMode?: "slots" | "perDay"  // most monsters use "X/day" innate casting rather than leveled slots — "slots" (default) keeps the classic spellSlots-by-level display; "perDay" hides slot sliders and tracks each spell's own uses-per-day instead (see SpellItem.usesPerDay)
 
   spellItems?: SpellItem[]
   spellSlots?: SpellSlot[]

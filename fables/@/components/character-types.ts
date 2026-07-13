@@ -1,11 +1,24 @@
 // All data shapes used by the character sheet
 
+// One damage instance ("2d6" fire, "1d4" cold, etc.) — the base damage/damageType
+// fields on weapons/actions/items stay as the single/primary instance for backward
+// compatibility; `damages` holds any additional ones once `multiDamage` is toggled on
+// (e.g. a flaming sword: primary damage/damageType is "1d8 Slashing", damages[0] is
+// "1d6 Fire"). See character/ui/DamageFields.tsx for the shared editor/display.
+export interface DamageEntry {
+  id: string
+  damage: string
+  damageType?: string
+}
+
 export interface EquipmentItem {
   id: string
   name: string
   toHit?: string       // manual override when attackStat is not set
   damage?: string
   damageType?: string
+  multiDamage?: boolean   // toggle — on splits damage across `damages` instead of the single damage/damageType pair
+  damages?: DamageEntry[] // additional damage instances beyond the primary damage/damageType, only used when multiDamage is on
   type?: string        // "melee" | "ranged" | "armor" | "misc"
   notes?: string
   magicBonus?: string  // e.g. "+1", "+2"
@@ -46,6 +59,8 @@ export interface SpellItem {
   ritual?: boolean
   concentration?: boolean
   sourceClass?: string           // which class this spell is known/prepared from (multiclass)
+  usesPerDay?: number            // monster innate spellcasting (spellUsageMode "perDay") — e.g. 3 for "3/day"; undefined/0 = at will
+  usesPerDayUsed?: number        // uses spent today — only meaningful when usesPerDay is set
 }
 
 export interface HitDicePool {
@@ -93,6 +108,8 @@ export interface Feature {
     itemType?: string
     damage?: string
     damageType?: string
+    multiDamage?: boolean     // toggle — on splits damage across `damages` instead of the single damage/damageType pair
+    damages?: DamageEntry[]   // additional damage instances beyond the primary damage/damageType, only used when multiDamage is on
     properties?: string
     acBonus?: number          // AC bonus granted while equipped (armor/shield)
     weaponKind?: "melee" | "ranged"  // only meaningful when equipKind === "weapon"
