@@ -9,6 +9,7 @@ import { useState } from "react"
 import { Coins } from "lucide-react"
 import { useGamblingWallet } from "./useGamblingWallet"
 import { WagerStepper } from "./WagerStepper"
+import { useSpendWarning, SpendWarningBanner } from "./SpendWarning"
 import {
   generateBoard, floodReveal, isBoardCleared, NUMBER_COLORS,
   MINESWEEPER_DIFFICULTIES, type Difficulty, type Cell,
@@ -17,9 +18,10 @@ import {
 type Phase = "betting" | "playing" | "won" | "lost"
 
 export function MinesweeperGame() {
-  const { tokens, settleWager } = useGamblingWallet()
+  const { tokens, spendWager, payoutWager } = useGamblingWallet()
+  const { show: showSpendWarning, trigger: warnSpend } = useSpendWarning()
   const [wager, setWager] = useState(1)
-  const [difficulty, setDifficulty] = useState<Difficulty>("easy")
+  const [difficulty, setDifficulty] = useState<Difficulty>("normal")
   const [phase, setPhase] = useState<Phase>("betting")
   const [cells, setCells] = useState<Cell[] | null>(null)
   const [revealed, setRevealed] = useState<boolean[]>([])
@@ -30,8 +32,11 @@ export function MinesweeperGame() {
   const config = MINESWEEPER_DIFFICULTIES[difficulty]
   const canPlay = phase === "betting" && wager >= 1 && wager <= tokens
 
-  function startGame() {
+  async function startGame() {
     if (!canPlay) return
+    const spent = await spendWager(wager)
+    if (!spent) return
+    warnSpend()
     setCells(null)
     setRevealed([])
     setFlagged(new Set())
@@ -65,7 +70,6 @@ export function MinesweeperGame() {
     if (board[i].mine) {
       setRevealed(floodReveal(board, config.size, i, wasRevealed))
       setHitIndex(i)
-      await settleWager(wager, 0)
       setPhase("lost")
       return
     }
@@ -73,7 +77,7 @@ export function MinesweeperGame() {
     const next = floodReveal(board, config.size, i, wasRevealed)
     setRevealed(next)
     if (isBoardCleared(board, next)) {
-      await settleWager(wager, config.multiplier)
+      await payoutWager(wager * config.multiplier)
       setPhase("won")
     }
   }
@@ -152,6 +156,8 @@ export function MinesweeperGame() {
       {phase === "betting" && (
         <WagerStepper wager={wager} onChange={setWager} maxTokens={Math.max(1, tokens)} />
       )}
+
+      <SpendWarningBanner show={showSpendWarning} />
 
       {phase === "betting" && (
         <button type="button" onClick={startGame} disabled={!canPlay}

@@ -557,6 +557,235 @@
   animation: fables-app-toxic 3s ease-in-out infinite;
 }
 
+/* gamVIVIling shop unlock — 400k endgame cosmetic. Retro console palette
+   (NES-ish green/pink/blue) plus a static CRT scanline overlay. */
+[data-app-theme="eightbit"] {
+  --background: #0f0f1a;
+  --foreground: #d6ffe8;
+  --card: #1a1a2e;
+  --card-foreground: #d6ffe8;
+  --popover: #1a1a2e;
+  --popover-foreground: #d6ffe8;
+  --primary: #38b764;
+  --primary-foreground: #0f0f1a;
+  --secondary: #29adff;
+  --secondary-foreground: #0f0f1a;
+  --muted: #262640;
+  --muted-foreground: #9badc9;
+  --accent: #ff004d;
+  --accent-foreground: #ffffff;
+  --border: rgba(56, 183, 100, 0.3);
+  --input: rgba(41, 173, 255, 0.1);
+  --ring: #38b764;
+  --sidebar: #0f0f1a;
+  --sidebar-foreground: #d6ffe8;
+  --sidebar-primary: #38b764;
+  --sidebar-primary-foreground: #0f0f1a;
+  --sidebar-accent: #ff004d;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(56, 183, 100, 0.3);
+  --sidebar-ring: #38b764;
+}
+[data-app-theme="eightbit"] * {
+  image-rendering: pixelated;
+}
+[data-app-theme="eightbit"] body,
+[data-app-theme="eightbit"] [data-slot="sidebar-inner"],
+[data-app-theme="eightbit"] [data-slot="sidebar-inset"],
+[data-app-theme="eightbit"] .bg-background {
+  background-color: var(--background);
+}
+[data-app-theme="eightbit"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.15;
+  background-image: repeating-linear-gradient(0deg, #000 0px, #000 1px, transparent 1px, transparent 3px);
+}
+
+/* gamVIVIling shop unlock — 500k endgame cosmetic. Everything goes near-black
+   except a spotlight that follows the cursor (--flashlight-x/y, set from
+   mousemove in ThemeContext.tsx). Falls back to screen-center until the
+   mouse first moves. */
+[data-app-theme="flashlight"] {
+  --background: #030303;
+  --foreground: #f5f5f5;
+  --card: #0a0a0a;
+  --card-foreground: #f5f5f5;
+  --popover: #0a0a0a;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #030303;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f5f5f5;
+  --muted: #141414;
+  --muted-foreground: #a3a3a3;
+  --accent: #f5f5f5;
+  --accent-foreground: #030303;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.06);
+  --ring: #f5f5f5;
+  --sidebar: #030303;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #f5f5f5;
+  --sidebar-primary-foreground: #030303;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: #f5f5f5;
+}
+[data-app-theme="flashlight"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: radial-gradient(
+    circle 140px at var(--flashlight-x, 50%) var(--flashlight-y, 50%),
+    transparent 0%, transparent 60%, rgba(0, 0, 0, 0.97) 100%
+  );
+}
+
+/* gamVIVIling shop unlock — 300k. Hot-pink/gold/cyan color-cycling gradient
+   plus a field of static sparkle dots, disco-ball flavor. */
+[data-app-theme="disco"] {
+  --background: #140014;
+  --foreground: #fff6ff;
+  --card: #22052a;
+  --card-foreground: #fff6ff;
+  --popover: #22052a;
+  --popover-foreground: #fff6ff;
+  --primary: #ff2ec4;
+  --primary-foreground: #140014;
+  --secondary: #2ec4ff;
+  --secondary-foreground: #140014;
+  --muted: #33063d;
+  --muted-foreground: #e6b8f0;
+  --accent: #ffd23f;
+  --accent-foreground: #140014;
+  --border: rgba(255, 46, 196, 0.3);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ff2ec4;
+  --sidebar: #140014;
+  --sidebar-foreground: #fff6ff;
+  --sidebar-primary: #ff2ec4;
+  --sidebar-primary-foreground: #140014;
+  --sidebar-accent: #2ec4ff;
+  --sidebar-accent-foreground: #140014;
+  --sidebar-border: rgba(255, 46, 196, 0.3);
+  --sidebar-ring: #ff2ec4;
+}
+@keyframes fables-app-disco {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+[data-app-theme="disco"] body,
+[data-app-theme="disco"] [data-slot="sidebar-inner"],
+[data-app-theme="disco"] [data-slot="sidebar-inset"],
+[data-app-theme="disco"] .bg-background {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(circle 2px at 15% 20%, #ffffff 60%, transparent 65%),
+    radial-gradient(circle 2px at 45% 70%, #ffd23f 60%, transparent 65%),
+    radial-gradient(circle 2px at 75% 30%, #2ec4ff 60%, transparent 65%),
+    radial-gradient(circle 2px at 90% 80%, #ffffff 60%, transparent 65%),
+    radial-gradient(circle 2px at 30% 90%, #ff2ec4 60%, transparent 65%),
+    linear-gradient(90deg, #ff2ec4, #ffd23f, #2ec4ff, #ff2ec4);
+  background-repeat: repeat, repeat, repeat, repeat, repeat, no-repeat;
+  background-size: 180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px, 200% 100%;
+  background-blend-mode: normal, normal, normal, normal, normal, soft-light;
+  animation: fables-app-disco 10s linear infinite;
+}
+
+/* gamVIVIling shop unlock — 300k. Black + neon green, falling "code rain"
+   streaks drifting down the whole viewport. */
+[data-app-theme="matrix"] {
+  --background: #000000;
+  --foreground: #d6ffe0;
+  --card: #030a03;
+  --card-foreground: #d6ffe0;
+  --popover: #030a03;
+  --popover-foreground: #d6ffe0;
+  --primary: #00ff41;
+  --primary-foreground: #000000;
+  --secondary: #00b82f;
+  --secondary-foreground: #000000;
+  --muted: #061206;
+  --muted-foreground: #7fdf9a;
+  --accent: #baffc9;
+  --accent-foreground: #000000;
+  --border: rgba(0, 255, 65, 0.25);
+  --input: rgba(0, 255, 65, 0.08);
+  --ring: #00ff41;
+  --sidebar: #000000;
+  --sidebar-foreground: #d6ffe0;
+  --sidebar-primary: #00ff41;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #00b82f;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: rgba(0, 255, 65, 0.25);
+  --sidebar-ring: #00ff41;
+}
+@keyframes fables-app-matrix-rain {
+  from { background-position: 0 0; }
+  to   { background-position: 0 400px; }
+}
+[data-app-theme="matrix"] body,
+[data-app-theme="matrix"] [data-slot="sidebar-inner"],
+[data-app-theme="matrix"] [data-slot="sidebar-inset"],
+[data-app-theme="matrix"] .bg-background {
+  background-color: var(--background);
+  background-image: repeating-linear-gradient(
+    90deg, rgba(0, 255, 65, 0.5) 0px, rgba(0, 255, 65, 0.5) 1px,
+    transparent 1px, transparent 26px
+  ), linear-gradient(180deg, rgba(0, 255, 65, 0.25), transparent 60%);
+  background-size: 26px 400px, 100% 400px;
+  animation: fables-app-matrix-rain 9s linear infinite;
+}
+
+/* gamVIVIling shop unlock — 300k. Soft pastel pink/blue/lavender, playful
+   and sickly-sweet on purpose. */
+[data-app-theme="bubblegum"] {
+  --background: #2a1730;
+  --foreground: #ffe6f7;
+  --card: #391f42;
+  --card-foreground: #ffe6f7;
+  --popover: #391f42;
+  --popover-foreground: #ffe6f7;
+  --primary: #ff9ecd;
+  --primary-foreground: #2a1730;
+  --secondary: #a0e7ff;
+  --secondary-foreground: #2a1730;
+  --muted: #452650;
+  --muted-foreground: #e0b8e8;
+  --accent: #c9a0ff;
+  --accent-foreground: #2a1730;
+  --border: rgba(255, 158, 205, 0.3);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ff9ecd;
+  --sidebar: #2a1730;
+  --sidebar-foreground: #ffe6f7;
+  --sidebar-primary: #ff9ecd;
+  --sidebar-primary-foreground: #2a1730;
+  --sidebar-accent: #a0e7ff;
+  --sidebar-accent-foreground: #2a1730;
+  --sidebar-border: rgba(255, 158, 205, 0.3);
+  --sidebar-ring: #ff9ecd;
+}
+[data-app-theme="bubblegum"] body,
+[data-app-theme="bubblegum"] [data-slot="sidebar-inner"],
+[data-app-theme="bubblegum"] [data-slot="sidebar-inset"],
+[data-app-theme="bubblegum"] .bg-background {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(circle 60px at 10% 15%, rgba(255, 158, 205, 0.35), transparent 70%),
+    radial-gradient(circle 80px at 85% 25%, rgba(160, 231, 255, 0.35), transparent 70%),
+    radial-gradient(circle 70px at 40% 85%, rgba(201, 160, 255, 0.3), transparent 70%);
+  background-repeat: no-repeat;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

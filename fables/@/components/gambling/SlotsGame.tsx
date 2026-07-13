@@ -7,9 +7,11 @@ import { useState } from "react"
 import { useGamblingWallet } from "./useGamblingWallet"
 import { spinSlots, slotPayoutMultiplier, SLOT_SYMBOLS, type SlotSymbol } from "./gamblingLogic"
 import { WagerStepper } from "./WagerStepper"
+import { useSpendWarning, SpendWarningBanner } from "./SpendWarning"
 
 export function SlotsGame() {
-  const { tokens, settleWager } = useGamblingWallet()
+  const { tokens, spendWager, payoutWager } = useGamblingWallet()
+  const { show: showSpendWarning, trigger: warnSpend } = useSpendWarning()
   const [wager, setWager] = useState(1)
   const [spinning, setSpinning] = useState(false)
   const [reels, setReels] = useState<SlotSymbol[]>([SLOT_SYMBOLS[0], SLOT_SYMBOLS[0], SLOT_SYMBOLS[0]])
@@ -19,13 +21,16 @@ export function SlotsGame() {
 
   async function play() {
     if (!canPlay) return
+    const spent = await spendWager(wager)
+    if (!spent) return
+    warnSpend()
     setSpinning(true)
     setResult(null)
     const spun = spinSlots()
     const multiplier = slotPayoutMultiplier(spun)
     setTimeout(async () => {
       setReels(spun)
-      await settleWager(wager, multiplier)
+      if (multiplier > 0) await payoutWager(wager * multiplier)
       setResult({ multiplier })
       setSpinning(false)
     }, 800)
@@ -43,7 +48,9 @@ export function SlotsGame() {
         ))}
       </div>
 
-      <WagerStepper wager={wager} onChange={setWager} maxTokens={Math.max(1, tokens)} />
+      <WagerStepper wager={wager} onChange={setWager} maxTokens={Math.max(1, tokens)} disabled={spinning} />
+
+      <SpendWarningBanner show={showSpendWarning} />
 
       <button type="button" onClick={play} disabled={!canPlay}
         className="text-sm font-semibold px-5 py-2 rounded-xl bg-primary/80 hover:bg-primary text-white transition-colors disabled:opacity-30">
@@ -53,7 +60,7 @@ export function SlotsGame() {
       {result && !spinning && (
         <p className={`text-sm font-bold ${result.multiplier > 1 ? "text-emerald-300" : result.multiplier === 1 ? "text-amber-300" : "text-red-300"}`}>
           {result.multiplier > 1
-            ? `Jackpot! ${result.multiplier}x — you won ${wager * result.multiplier} tokens.`
+            ? `Jackpot! ${result.multiplier}x — you won ${wager * (result.multiplier - 1)} tokens.`
             : result.multiplier === 1
             ? `Push — you got your ${wager} back.`
             : `No match — you lost ${wager}.`}

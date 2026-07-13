@@ -5,11 +5,11 @@
 //
 // Every mutation goes through mutateWallet(), which re-reads the wallet's
 // current data at write time rather than trusting a component's
-// closure-captured `tokens` value. A wager's spend-then-payout used to be
-// two separate calls (spend, then credit ~1s later after the flip/roll/spin
-// animation) — the credit call closed over the *pre-spend* balance, so every
-// win paid out double what it should have. settleWager() below does the
-// whole "subtract wager, add payout" as one atomic read-modify-write.
+// closure-captured `tokens` value — safe to call spendWager() and, later,
+// payoutWager() back to back without either one clobbering the other's
+// write, as long as each call is awaited (so React has re-rendered with the
+// wallet's post-spend `objects` entry) before the next one fires — which the
+// mini-games already do, since there's an animation/round between the two.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useUserContext } from "../../../src/contexts/UserContext"
@@ -31,6 +31,7 @@ export function useGamblingWallet() {
   const equippedTagId = data.equippedTagId ?? null
   const unlockedThemeIds = data.unlockedThemeIds ?? []
   const unlocked2048 = data.unlocked2048 ?? false
+  const unlockedMeditation = data.unlockedMeditation ?? false
 
   async function ensureWallet() {
     if (walletObj) return walletObj
@@ -60,17 +61,28 @@ export function useGamblingWallet() {
     })
   }
 
-  // Resolves one wager atomically: balance - wager + round(wager * payoutMultiplier).
-  // payoutMultiplier is 0 on a loss, 1 on a push (wager back), >1 on a win.
-  // No-ops (aborts the write) if the fresh balance can't actually cover the wager.
-  async function settleWager(wager: number, payoutMultiplier: number) {
-    if (wager <= 0) return
+  // Deducts the wager immediately (before the round plays out), so the spend
+  // is real the instant you click Play, not something quietly reconciled at
+  // the end. Returns whether it went through — false means insufficient
+  // balance, and the caller should not start the round.
+  async function spendWager(wager: number): Promise<boolean> {
+    if (wager <= 0) return false
+    let ok = false
     await mutateWallet(current => {
       const balance = current.tokens ?? 0
       if (balance < wager) return null
-      const payout = Math.round(wager * payoutMultiplier)
-      return { tokens: Math.max(0, balance - wager + payout) }
+      ok = true
+      return { tokens: balance - wager }
     })
+    return ok
+  }
+
+  // Credits winnings once a round resolves. `amount` is the full payout
+  // (wager * multiplier), not just the profit — the wager itself was already
+  // taken by spendWager. A loss (multiplier 0) just never calls this.
+  async function payoutWager(amount: number) {
+    if (amount <= 0) return
+    await mutateWallet(current => ({ tokens: (current.tokens ?? 0) + Math.round(amount) }))
   }
 
   async function buyTag(id: string, cost: number) {
@@ -103,10 +115,19 @@ export function useGamblingWallet() {
     })
   }
 
+  async function buyMeditation(cost: number) {
+    await mutateWallet(current => {
+      const balance = current.tokens ?? 0
+      if (balance < cost || current.unlockedMeditation) return null
+      return { tokens: balance - cost, unlockedMeditation: true }
+    })
+  }
+
   return {
     tokens,
     claimSpelldleToken,
-    settleWager,
+    spendWager,
+    payoutWager,
     unlockedTagIds,
     equippedTagId,
     equipTag,
@@ -115,5 +136,7 @@ export function useGamblingWallet() {
     buyTheme,
     unlocked2048,
     buy2048,
+    unlockedMeditation,
+    buyMeditation,
   }
 }

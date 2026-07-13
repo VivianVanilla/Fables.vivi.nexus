@@ -29,16 +29,19 @@ export interface SlotSymbol {
 // triple cherries was exactly as rare as triple sevens (~0.8% each,
 // 1-in-125) — backwards for a slot machine, and it made the low-tier
 // symbols feel pointless since you'd basically never see them land 3x
-// either. Now weighted so cherries land a triple ~4.3% of spins (1-in-23)
-// while sevens stay a real jackpot (~0.03%, roughly 1-in-2900), and
-// multipliers are scaled up so the overall return is a generous ~93%
-// (there's no real money on the line — the point is it should feel good).
+// either. Weighted so cherries land a triple ~4.3% of spins (1-in-23)
+// while sevens stay a real jackpot (~0.03%, roughly 1-in-2900).
+//
+// Multipliers got a second pass (buffed from 4/6/10/18/50 to 5/8/13/22/65)
+// so the machine actually pays out more than it takes on average (~105%
+// RTP, up from ~93%) — there's no real money on the line, so a machine
+// that's *fun to keep feeding* beats one with a house edge.
 export const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: "cherry", emoji: "🍒", multiplier: 4,  weight: 35 },
-  { id: "lemon",  emoji: "🍋", multiplier: 6,  weight: 25 },
-  { id: "bell",   emoji: "🔔", multiplier: 10, weight: 20 },
-  { id: "gem",    emoji: "💎", multiplier: 18, weight: 13 },
-  { id: "seven",  emoji: "7️⃣", multiplier: 50, weight: 7 },
+  { id: "cherry", emoji: "🍒", multiplier: 5,  weight: 35 },
+  { id: "lemon",  emoji: "🍋", multiplier: 8,  weight: 25 },
+  { id: "bell",   emoji: "🔔", multiplier: 13, weight: 20 },
+  { id: "gem",    emoji: "💎", multiplier: 22, weight: 13 },
+  { id: "seven",  emoji: "7️⃣", multiplier: 65, weight: 7 },
 ]
 
 function weightedSymbol(): SlotSymbol {

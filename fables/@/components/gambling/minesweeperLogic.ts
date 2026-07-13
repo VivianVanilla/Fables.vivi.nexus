@@ -5,7 +5,7 @@
 // safe tile and collect it, or you hit a mine and lose the wager outright.
 // ════════════════════════════════════════════════════════════════════════════
 
-export type Difficulty = "easy" | "normal" | "hard"
+export type Difficulty = "normal" | "hard"
 
 export interface DifficultyConfig {
   label: string
@@ -15,7 +15,6 @@ export interface DifficultyConfig {
 }
 
 export const MINESWEEPER_DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
-  easy:   { label: "Easy",   size: 5, mines: 3,  multiplier: 1.2 },
   normal: { label: "Normal", size: 6, mines: 6,  multiplier: 1.5 },
   hard:   { label: "Hard",   size: 7, mines: 12, multiplier: 3 },
 }

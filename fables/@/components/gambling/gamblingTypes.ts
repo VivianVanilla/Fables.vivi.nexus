@@ -11,6 +11,7 @@ export interface GamblingWalletData {
   equippedTagId?: string | null
   unlockedThemeIds?: string[]      // AppTheme ids beyond the free set
   unlocked2048?: boolean
+  unlockedMeditation?: boolean
 }
 
 export const SPELLDLE_TOKEN_AWARD = 500
@@ -40,11 +41,22 @@ export interface ShopTheme {
 }
 
 export const THEME_UNLOCKS: ShopTheme[] = [
-  { id: "trippy",    label: "Trippy",       cost: 2000 },
-  { id: "vaporwave", label: "Vaporwave",    cost: 2000 },
-  { id: "synthwave", label: "Synthwave",    cost: 2000 },
-  { id: "toxic",     label: "Toxic",        cost: 2000 },
-  { id: "gold",      label: "High Roller",  cost: 2500 },
+  { id: "trippy",     label: "Trippy",       cost: 2000 },
+  { id: "vaporwave",  label: "Vaporwave",    cost: 2000 },
+  { id: "synthwave",  label: "Synthwave",    cost: 2000 },
+  { id: "toxic",      label: "Toxic",        cost: 2000 },
+  { id: "gold",       label: "High Roller",  cost: 2500 },
+  // Endgame cosmetics — a real jackpot's worth of tokens, priced way past
+  // the original catalog on purpose so they're an actual grind milestone.
+  { id: "disco",      label: "Disco",        cost: 300_000 },
+  { id: "matrix",     label: "Matrix",       cost: 300_000 },
+  { id: "bubblegum",  label: "Bubblegum",    cost: 300_000 },
+  { id: "eightbit",   label: "8-Bit",        cost: 400_000 },
+  { id: "flashlight", label: "Flashlight",   cost: 500_000 },
 ]
 
 export const TWO048_COST = 4750
+
+// Cheap on purpose — the one unlock in the shop that's a break from
+// gambling instead of more of it, so it shouldn't take forever to reach.
+export const MEDITATION_COST = 1000

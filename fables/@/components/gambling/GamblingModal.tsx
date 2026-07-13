@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// GamblingModal.tsx — "gamVIVIling" overlay: 4 mini-games + shop, same modal
+// GamblingModal.tsx — "gamVIVIling" overlay: mini-games + shop, same modal
 // chrome as SpelldleModal for visual consistency.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -15,6 +15,7 @@ import { ShopPanel } from "./ShopPanel"
 interface Props {
   onClose: () => void
   onOpen2048: () => void
+  onOpenMeditation: () => void
 }
 
 type Tab = "coinflip" | "dice" | "slots" | "minesweeper" | "shop"
@@ -27,8 +28,8 @@ const TABS: [Tab, string][] = [
   ["shop",        "Shop"],
 ]
 
-export function GamblingModal({ onClose, onOpen2048 }: Props) {
-  const { tokens, unlocked2048 } = useGamblingWallet()
+export function GamblingModal({ onClose, onOpen2048, onOpenMeditation }: Props) {
+  const { tokens, unlocked2048, unlockedMeditation } = useGamblingWallet()
   const [tab, setTab] = useState<Tab>("coinflip")
 
   return (
@@ -44,6 +45,12 @@ export function GamblingModal({ onClose, onOpen2048 }: Props) {
             <p className="text-lg font-bold text-white">gamVIVIling</p>
             <p className="text-xs text-white/40 flex items-center gap-1">{tokens} <Coins className="size-3.5" /> tokens</p>
           </div>
+          {unlockedMeditation && (
+            <button type="button" onClick={onOpenMeditation} title="Meditate"
+              className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors shrink-0">
+              🧘 Meditate
+            </button>
+          )}
           {unlocked2048 && (
             <button type="button" onClick={onOpen2048} title="Play 2048"
               className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors shrink-0">

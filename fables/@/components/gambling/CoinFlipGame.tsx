@@ -1,31 +1,35 @@
 // ════════════════════════════════════════════════════════════════════════════
-// CoinFlipGame.tsx — call heads/tails, double-or-nothing. Wager is fixed at
-// 1 token (no stepper) — a quick, low-stakes game alongside Blackjack/Dice/Slots.
+// CoinFlipGame.tsx — call heads/tails, double-or-nothing, for any wager you type in.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
 import { Coins } from "lucide-react"
 import { useGamblingWallet } from "./useGamblingWallet"
 import { flipCoin, type CoinSide } from "./gamblingLogic"
-
-const WAGER = 1
+import { WagerStepper } from "./WagerStepper"
+import { useSpendWarning, SpendWarningBanner } from "./SpendWarning"
 
 export function CoinFlipGame() {
-  const { tokens, settleWager } = useGamblingWallet()
+  const { tokens, spendWager, payoutWager } = useGamblingWallet()
+  const { show: showSpendWarning, trigger: warnSpend } = useSpendWarning()
+  const [wager, setWager] = useState(1)
   const [call, setCall] = useState<CoinSide>("heads")
   const [flipping, setFlipping] = useState(false)
   const [result, setResult] = useState<{ side: CoinSide; won: boolean } | null>(null)
 
-  const canPlay = !flipping && tokens >= WAGER
+  const canPlay = !flipping && wager >= 1 && wager <= tokens
 
   async function play() {
     if (!canPlay) return
+    const spent = await spendWager(wager)
+    if (!spent) return
+    warnSpend()
     setFlipping(true)
     setResult(null)
     const side = flipCoin()
     const won = side === call
     setTimeout(async () => {
-      await settleWager(WAGER, won ? 2 : 0)
+      if (won) await payoutWager(wager * 2)
       setResult({ side, won })
       setFlipping(false)
     }, 700)
@@ -48,22 +52,24 @@ export function CoinFlipGame() {
         ))}
       </div>
 
-      <span className="text-xs text-white/40 flex items-center gap-1">Wager: {WAGER} <Coins className="size-3" /> (fixed)</span>
+      <WagerStepper wager={wager} onChange={setWager} maxTokens={Math.max(1, tokens)} disabled={flipping} />
+
+      <SpendWarningBanner show={showSpendWarning} />
 
       <button type="button" onClick={play} disabled={!canPlay}
         className="text-sm font-semibold px-5 py-2 rounded-xl bg-primary/80 hover:bg-primary text-white transition-colors disabled:opacity-30">
-        {flipping ? "Flipping…" : "Flip"}
+        {flipping ? "Flipping…" : `Flip (pays 2x)`}
       </button>
 
       {result && !flipping && (
         <p className={`text-sm font-bold ${result.won ? "text-emerald-300" : "text-red-300"}`}>
           {result.won
-            ? `It's ${result.side}! You won ${WAGER} token.`
-            : `It's ${result.side} — you lost ${WAGER}.`}
+            ? `It's ${result.side}! You won ${wager} token${wager === 1 ? "" : "s"}.`
+            : `It's ${result.side} — you lost ${wager}.`}
         </p>
       )}
 
-      {tokens < WAGER && <p className="text-xs text-white/30 italic">Not enough tokens to play.</p>}
+      {tokens < 1 && <p className="text-xs text-white/30 italic">Not enough tokens to play.</p>}
     </div>
   )
 }

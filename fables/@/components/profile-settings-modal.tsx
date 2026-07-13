@@ -16,6 +16,7 @@ import { loadUserImages, type GalleryImage } from "./imageGallery"
 import { useGamblingWallet } from "./gambling/useGamblingWallet"
 import { GamblingModal } from "./gambling/GamblingModal"
 import { TwentyFortyEightModal } from "./gambling/TwentyFortyEightModal"
+import { MeditationModal } from "./gambling/MeditationModal"
 
 const BUCKET = "fableimages"
 const SPELLDLE_EMAILS = ["spaghettiloverjake@gmail.com", "vivian.bonilla@outlook.com", "liamlillico06@gmail.com", "loganadsit@gmail.com"]
@@ -36,7 +37,8 @@ export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
   const [showSpelldle, setShowSpelldle] = React.useState(false)
   const [showGambling, setShowGambling] = React.useState(false)
   const [show2048, setShow2048] = React.useState(false)
-  const { tokens, claimSpelldleToken, unlockedThemeIds, unlocked2048 } = useGamblingWallet()
+  const [showMeditation, setShowMeditation] = React.useState(false)
+  const { tokens, claimSpelldleToken, unlockedThemeIds, unlocked2048, unlockedMeditation } = useGamblingWallet()
 
   const userId = user?.id
   const canPlaySpelldle = SPELLDLE_EMAILS.includes(user?.email)
@@ -294,11 +296,19 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     )}
 
     {showGambling && canPlaySpelldle && (
-      <GamblingModal onClose={() => setShowGambling(false)} onOpen2048={() => { setShowGambling(false); setShow2048(true) }} />
+      <GamblingModal
+        onClose={() => setShowGambling(false)}
+        onOpen2048={() => { setShowGambling(false); setShow2048(true) }}
+        onOpenMeditation={() => { setShowGambling(false); setShowMeditation(true) }}
+      />
     )}
 
     {show2048 && canPlaySpelldle && unlocked2048 && (
       <TwentyFortyEightModal onClose={() => setShow2048(false)} />
+    )}
+
+    {showMeditation && canPlaySpelldle && unlockedMeditation && (
+      <MeditationModal onClose={() => setShowMeditation(false)} />
     )}
     </>
   )

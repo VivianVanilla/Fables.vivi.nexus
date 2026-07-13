@@ -6,11 +6,13 @@ import { useState } from "react"
 import { useGamblingWallet } from "./useGamblingWallet"
 import { rollDie, DICE_PAYOUT_MULTIPLIER } from "./gamblingLogic"
 import { WagerStepper } from "./WagerStepper"
+import { useSpendWarning, SpendWarningBanner } from "./SpendWarning"
 
 const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
 
 export function DiceRollGame() {
-  const { tokens, settleWager } = useGamblingWallet()
+  const { tokens, spendWager, payoutWager } = useGamblingWallet()
+  const { show: showSpendWarning, trigger: warnSpend } = useSpendWarning()
   const [wager, setWager] = useState(1)
   const [pick, setPick] = useState(1)
   const [rolling, setRolling] = useState(false)
@@ -20,12 +22,15 @@ export function DiceRollGame() {
 
   async function play() {
     if (!canPlay) return
+    const spent = await spendWager(wager)
+    if (!spent) return
+    warnSpend()
     setRolling(true)
     setResult(null)
     const roll = rollDie()
     const won = roll === pick
     setTimeout(async () => {
-      await settleWager(wager, won ? DICE_PAYOUT_MULTIPLIER : 0)
+      if (won) await payoutWager(wager * DICE_PAYOUT_MULTIPLIER)
       setResult({ roll, won })
       setRolling(false)
     }, 700)
@@ -48,7 +53,9 @@ export function DiceRollGame() {
         ))}
       </div>
 
-      <WagerStepper wager={wager} onChange={setWager} maxTokens={Math.max(1, tokens)} />
+      <WagerStepper wager={wager} onChange={setWager} maxTokens={Math.max(1, tokens)} disabled={rolling} />
+
+      <SpendWarningBanner show={showSpendWarning} />
 
       <button type="button" onClick={play} disabled={!canPlay}
         className="text-sm font-semibold px-5 py-2 rounded-xl bg-primary/80 hover:bg-primary text-white transition-colors disabled:opacity-30">
@@ -58,7 +65,7 @@ export function DiceRollGame() {
       {result && !rolling && (
         <p className={`text-sm font-bold ${result.won ? "text-emerald-300" : "text-red-300"}`}>
           {result.won
-            ? `Rolled ${result.roll}! You won ${wager * DICE_PAYOUT_MULTIPLIER} tokens.`
+            ? `Rolled ${result.roll}! You won ${wager * (DICE_PAYOUT_MULTIPLIER - 1)} tokens.`
             : `Rolled ${result.roll} — you lost ${wager}.`}
         </p>
       )}
