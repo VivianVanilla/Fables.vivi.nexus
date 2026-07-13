@@ -111,7 +111,13 @@ export interface Feature {
     multiDamage?: boolean     // toggle — on splits damage across `damages` instead of the single damage/damageType pair
     damages?: DamageEntry[]   // additional damage instances beyond the primary damage/damageType, only used when multiDamage is on
     properties?: string
-    acBonus?: number          // AC bonus granted while equipped (armor/shield)
+    acBonus?: number          // flat AC bonus granted while equipped — stacks on top of everything (shields, rings, cloaks).
+                               // Ignored when armorMode is "base" (that piece sets AC via armorBaseAc/armorDexMode instead).
+    armorMode?: "base" | "bonus"      // "base" = this piece sets the character's whole AC while equipped (body armor),
+                                       // replacing the 10 + ability formula; "bonus" (default, back-compat) = acBonus stacks as-is
+    armorBaseAc?: number               // base AC value while equipped, only used when armorMode === "base"
+    armorDexMode?: "full" | "half" | "none"  // how the Dex modifier applies on top of armorBaseAc — full (light),
+                                              // half/max +2 (medium), or none (heavy); only used when armorMode === "base"
     weaponKind?: "melee" | "ranged"  // only meaningful when equipKind === "weapon"
     meleeRange?: string       // e.g. "5 ft."
     throwRange?: string       // e.g. "20/60 ft." — thrown melee weapons
@@ -158,7 +164,11 @@ export interface CharacterData {
   level?: number
   background?: string
   alignment?: string
-  ac?: number
+  ac?: number          // legacy manual AC — only read as a fallback for characters that predate acAbility (see computeAc)
+  acBase?: number      // base number the ability mod(s) are added to (formula is acBase + mods); default 10
+  acAbility?: "str" | "dex" | "con" | "int" | "wis" | "cha"   // ability feeding the base AC formula; default "dex"
+  acAbility2?: "str" | "dex" | "con" | "int" | "wis" | "cha"  // optional 2nd ability for dual-stat AC (Monk Wis, Barbarian Con); unset = off
+  acMiscBonus?: number // flat AC adjustment on top of the computed value (feats, homebrew, etc.)
   hp?: number
   maxHp?: number
   maxHpMod?: number    // flat bonus or penalty to max HP (positive = bonus, negative = reduction)

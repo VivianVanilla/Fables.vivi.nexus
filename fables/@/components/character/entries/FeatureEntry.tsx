@@ -343,21 +343,62 @@ export function FeatureEntry({
                 </div>
 
                 <PopTransition show={(feature.equipKind ?? "armor") === "armor"}>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-sky-300 cursor-pointer select-none whitespace-nowrap">
-                      <input type="checkbox" checked={feature.equipped ?? false}
-                        onChange={e => onChange({ equipped: e.target.checked })}
-                        className="accent-sky-500"
-                      />
-                      Equipped
-                    </label>
-                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
-                      AC Bonus
-                      <NumInput value={feature.itemMeta?.acBonus ?? ""}
-                        onChange={e => onChange({ itemMeta: { ...feature.itemMeta, acBonus: e.target.value ? parseInt(e.target.value) || 0 : undefined } })}
-                        placeholder="0"
-                        className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 text-sky-300 cursor-pointer select-none whitespace-nowrap">
+                        <input type="checkbox" checked={feature.equipped ?? false}
+                          onChange={e => onChange({ equipped: e.target.checked })}
+                          className="accent-sky-500"
+                        />
+                        Equipped
+                      </label>
+                      <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+                        <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, armorMode: "bonus" } })}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${(feature.itemMeta?.armorMode ?? "bonus") === "bonus" ? "bg-sky-500/30 text-sky-200" : "text-white/40 hover:text-white/70"}`}>
+                          Flat Bonus
+                        </button>
+                        <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, armorMode: "base" } })}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${feature.itemMeta?.armorMode === "base" ? "bg-sky-500/30 text-sky-200" : "text-white/40 hover:text-white/70"}`}>
+                          Base Armor
+                        </button>
+                      </div>
+                    </div>
+
+                    <PopTransition show={(feature.itemMeta?.armorMode ?? "bonus") === "bonus"}>
+                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                        AC Bonus
+                        <NumInput value={feature.itemMeta?.acBonus ?? ""}
+                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, acBonus: e.target.value ? parseInt(e.target.value) || 0 : undefined } })}
+                          placeholder="0"
+                          className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                      </label>
+                    </PopTransition>
+
+                    <PopTransition show={feature.itemMeta?.armorMode === "base"}>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                          Base AC
+                          <NumInput value={feature.itemMeta?.armorBaseAc ?? ""}
+                            onChange={e => onChange({ itemMeta: { ...feature.itemMeta, armorBaseAc: e.target.value ? parseInt(e.target.value) || 0 : undefined } })}
+                            placeholder="10"
+                            className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                        </label>
+                        <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+                          <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, armorDexMode: "full" } })}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${(feature.itemMeta?.armorDexMode ?? "full") === "full" ? "bg-emerald-500/30 text-emerald-200" : "text-white/40 hover:text-white/70"}`}>
+                            Full Dex
+                          </button>
+                          <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, armorDexMode: "half" } })}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${feature.itemMeta?.armorDexMode === "half" ? "bg-amber-500/30 text-amber-200" : "text-white/40 hover:text-white/70"}`}>
+                            Half Dex (max +2)
+                          </button>
+                          <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, armorDexMode: "none" } })}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${feature.itemMeta?.armorDexMode === "none" ? "bg-red-500/30 text-red-200" : "text-white/40 hover:text-white/70"}`}>
+                            No Dex
+                          </button>
+                        </div>
+                      </div>
+                    </PopTransition>
                   </div>
                 </PopTransition>
 
@@ -655,7 +696,12 @@ export function FeatureEntry({
       <PopTransition show={expanded}>
         <div className="px-3 pb-2 border-t border-white/5 flex flex-col gap-2">
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {showItemExtras && (feature.equipKind ?? "armor") === "armor" && !!feature.itemMeta?.acBonus && (
+            {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">
+                AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
+              </span>
+            )}
+            {showItemExtras && (feature.equipKind ?? "armor") === "armor" && (feature.itemMeta?.armorMode ?? "bonus") === "bonus" && !!feature.itemMeta?.acBonus && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">+{feature.itemMeta.acBonus} AC</span>
             )}
             {showItemExtras && feature.equipKind === "weapon" && (

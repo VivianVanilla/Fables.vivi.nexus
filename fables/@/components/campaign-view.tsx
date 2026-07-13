@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import type { SidebarObject } from "@/components/sidebar-utils"
-import { safeParseJson } from "./character-utils"
+import { safeParseJson, computeAc } from "./character-utils"
+import type { Feature } from "./character-types"
 import { CharacterSheet } from "./character"
 import { PartyServer } from "./party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "./party/unread"
@@ -21,6 +22,10 @@ interface CharData {
   maxHp?: number
   portrait?: string
   ac?: number
+  acAbility?: "str" | "dex" | "con" | "int" | "wis" | "cha"
+  acAbility2?: "str" | "dex" | "con" | "int" | "wis" | "cha"
+  acMiscBonus?: number
+  items?: Feature[]
   speed?: number
   wisdom?: number
   intelligence?: number
@@ -321,7 +326,7 @@ export function CampaignView({ campaign, onClose }: Props) {
 
                 {/* Stat row */}
                 <div className="grid grid-cols-5 border-t border-foreground/5 divide-x divide-foreground/5">
-                  <StatCell label="AC"      value={charData.ac   != null ? String(charData.ac)   : "—"} />
+                  <StatCell label="AC"      value={String(computeAc(charData).total)} />
                   <StatCell label="Speed"   value={charData.speed != null ? `${charData.speed}ft` : "—"} />
                   <StatCell label="Perc"    value={String(pPassPerc)} />
                   <StatCell label="Insight" value={String(pPassIns)} />

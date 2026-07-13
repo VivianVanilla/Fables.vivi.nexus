@@ -3,7 +3,7 @@ import { NumInput } from "../ui/NumInput"
 import type { CharacterData } from "../../character-types"
 
 interface Props {
-  data: Pick<CharacterData, "maxHp" | "ac" | "tempHp" | "maxHpMod" | "hideEquipAcBadge">
+  data: Pick<CharacterData, "maxHp" | "tempHp" | "maxHpMod">
   effectiveMax: number
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
@@ -18,10 +18,10 @@ export function MaxStatsModal({ data, effectiveMax, onUpdate, onClose }: Props) 
           <p className="text-base font-bold text-white">Edit Stats</p>
         </div>
         <div className="px-5 py-4 flex flex-col gap-4">
-          {(["maxHp", "ac", "tempHp"] as const).map(k => (
+          {(["maxHp", "tempHp"] as const).map(k => (
             <label key={k} className="flex flex-col gap-1.5">
               <span className="text-xs text-white/40 uppercase tracking-wider">
-                {k === "maxHp" ? "Max HP" : k === "ac" ? "Armour Class" : "Temp HP"}
+                {k === "maxHp" ? "Max HP" : "Temp HP"}
               </span>
               <NumInput
                 value={(data[k] as number | undefined) ?? ""}
@@ -47,11 +47,6 @@ export function MaxStatsModal({ data, effectiveMax, onUpdate, onClose }: Props) 
               onChange={e => onUpdate({ maxHpMod: parseInt(e.target.value) || 0 })}
               className={`text-center bg-white/10 rounded-xl px-3 py-3 text-xl font-bold outline-none focus:ring-2 focus:ring-white/30 ${maxHpMod < 0 ? "text-red-400" : maxHpMod > 0 ? "text-emerald-400" : "text-white"}`}
             />
-          </label>
-          <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none pt-1">
-            <input type="checkbox" checked={data.hideEquipAcBadge ?? false}
-              onChange={e => onUpdate({ hideEquipAcBadge: e.target.checked })} />
-            Hide "equip" AC bonus badge
           </label>
         </div>
         <div className="px-5 pb-5">

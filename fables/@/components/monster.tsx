@@ -189,32 +189,38 @@ function PerDaySpellTracker({
   spell, readOnly, onChange,
 }: { spell: SpellItem; readOnly?: boolean; onChange: (patch: Partial<SpellItem>) => void }) {
   const max = spell.usesPerDay ?? 0
+  const isDaily = max > 0
+  const used = spell.usesPerDayUsed ?? 0
+  const remaining = Math.max(0, max - used)
 
-  if (max <= 0) {
-    return readOnly ? (
-      <span className="text-[10px] text-white/25 italic shrink-0">At will</span>
+  if (readOnly) {
+    return isDaily ? (
+      <span className="text-[10px] text-white/40 tabular-nums shrink-0">{remaining}/{max}/day</span>
     ) : (
-      <button type="button" onClick={() => onChange({ usesPerDay: 1, usesPerDayUsed: 0 })}
-        className="text-[10px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/40 hover:text-white/70 transition-colors shrink-0">
-        At will
-      </button>
+      <span className="text-[10px] text-white/25 italic shrink-0">At will</span>
     )
   }
 
-  const used = spell.usesPerDayUsed ?? 0
-  const remaining = Math.max(0, max - used)
   return (
     <div className="flex items-center gap-1.5 shrink-0">
-      <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
-        onChange={val => onChange({ usesPerDayUsed: Math.max(0, max - val) })} className="w-24" />
-      <span className="text-[10px] text-white/40 tabular-nums shrink-0">{remaining}/{max}/day</span>
-      {!readOnly && (
+      <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5 shrink-0">
+        <button type="button" onClick={() => onChange({ usesPerDay: undefined, usesPerDayUsed: undefined })}
+          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${!isDaily ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+          At Will
+        </button>
+        <button type="button" onClick={() => { if (!isDaily) onChange({ usesPerDay: 1, usesPerDayUsed: 0 }) }}
+          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${isDaily ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+          Daily
+        </button>
+      </div>
+      {isDaily && (
         <>
+          <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
+            onChange={val => onChange({ usesPerDayUsed: Math.max(0, max - val) })} className="w-24" />
+          <span className="text-[10px] text-white/40 tabular-nums shrink-0">{remaining}/{max}/day</span>
           <NumInput value={max} min={1}
             onChange={e => onChange({ usesPerDay: Math.max(1, parseInt(e.target.value) || 1) })}
             className="w-8 bg-white/10 rounded px-1 py-0.5 text-center text-white text-[10px] outline-none" />
-          <button type="button" onClick={() => onChange({ usesPerDay: undefined, usesPerDayUsed: undefined })}
-            className="text-white/20 hover:text-red-400 text-[10px] px-1 transition-colors" title="Set to at-will">✕</button>
         </>
       )}
     </div>
@@ -518,6 +524,9 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   const isLucky = user?.email === LUCKY_EMAIL
   const [luckySpell, setLuckySpell] = useState<SpellItem | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showAddSlotMenu, setShowAddSlotMenu] = useState(false)
+  const [newSlotLevel, setNewSlotLevel] = useState(1)
+  const [newSlotCount, setNewSlotCount] = useState(1)
 
   const actionsBySection = {
     actions: data.actions ?? [],
@@ -564,9 +573,17 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   function changeSpell(id: string, patch: Partial<SpellItem>) { onUpdate({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...patch } : s) }) }
   function removeSpell(id: string)                          { onUpdate({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
-  function addSlotLevel() {
-    const nextLevel = Math.min(9, (spellSlots.reduce((max, s) => Math.max(max, s.level), 0) || 0) + 1)
-    onUpdate({ spellSlots: [...spellSlots, { id: nanoid(), level: nextLevel, total: 1, used: 0, resetsOn: "long" }] })
+  const usedSlotLevels = new Set(spellSlots.map(s => s.level))
+  const openSlotLevels = Array.from({ length: 9 }, (_, i) => i + 1).filter(lvl => !usedSlotLevels.has(lvl))
+
+  function openAddSlotMenu() {
+    setNewSlotLevel(openSlotLevels[0] ?? 1)
+    setNewSlotCount(1)
+    setShowAddSlotMenu(true)
+  }
+  function confirmAddSlot() {
+    onUpdate({ spellSlots: [...spellSlots, { id: nanoid(), level: newSlotLevel, total: Math.max(1, newSlotCount), used: 0, resetsOn: "long" }] })
+    setShowAddSlotMenu(false)
   }
   function changeSlot(id: string, patch: Partial<SpellSlot>) { onUpdate({ spellSlots: spellSlots.map(s => s.id === id ? { ...s, ...patch } : s) }) }
   function removeSlot(id: string)                            { onUpdate({ spellSlots: spellSlots.filter(s => s.id !== id) }) }
@@ -740,11 +757,36 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
                 className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
                 + Add Spell
               </button>
-              {spellUsageMode !== "perDay" && (
-                <button type="button" onClick={addSlotLevel}
-                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors">
+              {spellUsageMode !== "perDay" && !showAddSlotMenu && (
+                <button type="button" onClick={openAddSlotMenu} disabled={openSlotLevels.length === 0}
+                  className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2 px-3 transition-colors disabled:opacity-30 disabled:cursor-default disabled:hover:text-white/40 disabled:hover:border-white/15">
                   + Add Slot Level
                 </button>
+              )}
+              {spellUsageMode !== "perDay" && showAddSlotMenu && (
+                <div className="flex items-center gap-2 flex-wrap border border-white/15 rounded-xl py-2 px-3">
+                  <span className="text-xs text-white/40">Level</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {openSlotLevels.map(lvl => (
+                      <button key={lvl} type="button" onClick={() => setNewSlotLevel(lvl)}
+                        className={`size-6 rounded-full text-[11px] font-semibold transition-colors ${newSlotLevel === lvl ? "bg-white/25 text-white" : "bg-white/10 text-white/40 hover:text-white/70"}`}>
+                        {lvl}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-white/40">Slots</span>
+                  <NumInput value={newSlotCount} min={1}
+                    onChange={e => setNewSlotCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-12 bg-white/10 rounded px-1 py-1 text-center text-white text-xs outline-none" />
+                  <button type="button" onClick={confirmAddSlot}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-200 transition-colors">
+                    Add
+                  </button>
+                  <button type="button" onClick={() => setShowAddSlotMenu(false)}
+                    className="text-xs text-white/40 hover:text-white/70 px-2 transition-colors">
+                    Cancel
+                  </button>
+                </div>
               )}
             </div>
           )}

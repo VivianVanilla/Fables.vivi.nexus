@@ -13,7 +13,7 @@ import type {
   SpellSlot, FavoriteRef, Feature, FamiliarRef,
 } from "./character-types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
-import { profBonus, nanoid, safeParseJson } from "./character-utils"
+import { profBonus, nanoid, safeParseJson, computeAc } from "./character-utils"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "./character-themes"
 import { loadUserImages, uploadUserImage } from "./imageGallery"
 
@@ -41,6 +41,7 @@ import { AbilityModal }          from "./character/modals/AbilityModal"
 import { SpellcastingModal }     from "./character/modals/SpellcastingModal"
 import { SkillModal }            from "./character/modals/SkillModal"
 import { InitiativeModal }       from "./character/modals/InitiativeModal"
+import { ArmorClassModal }       from "./character/modals/ArmorClassModal"
 import { SpeedModal }            from "./character/modals/SpeedModal"
 import { ConditionPickerModal }  from "./character/modals/ConditionPickerModal"
 import { SettingsModal }         from "./character/modals/SettingsModal"
@@ -91,6 +92,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [showSpellcastingModal, setShowSpellcastingModal] = useState(false)
   const [showSkillModal,        setShowSkillModal]        = useState<string | null>(null)
   const [showInitiativeModal,   setShowInitiativeModal]   = useState(false)
+  const [showAcModal,           setShowAcModal]           = useState(false)
   const [showSpeedModal,        setShowSpeedModal]        = useState(false)
   const [showClassPicker,       setShowClassPicker]       = useState(false)
   const [showRacePicker,        setShowRacePicker]        = useState(false)
@@ -223,10 +225,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.invocations   ?? []),
   ]
 
-  // Equipped armor/shields contribute their AC bonus to the displayed AC total
-  const equippedAcBonus = (data.items ?? [])
-    .filter(i => i.equipped && i.itemMeta?.acBonus)
-    .reduce((sum, i) => sum + (i.itemMeta!.acBonus ?? 0), 0)
+  // AC = 10 + chosen ability mod(s) (dual-stat aware), overridden by an equipped "base
+  // armor" piece's own base+Dex formula, plus flat bonuses from equipped shields/rings/etc.
+  const acResult = computeAc(data)
 
   // Items sent over to the Martial list keep a `sourceFeatureId` link — used both to render
   // "+ Equipment" as a toggle (on/off, not a repeatable spawn) and to avoid double-counting
@@ -730,14 +731,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 strokeDasharray={ringC} strokeDashoffset={ringC * (1 - hpPercent / 100)}
                 style={{ transition: "stroke-dashoffset 0.4s ease, stroke 0.4s ease" }} />
             </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
+            <button type="button" onClick={() => setShowAcModal(true)}
+              className="absolute inset-0 flex items-center justify-center hover:brightness-125 transition-all"
+              title="Edit Armor Class">
               <Shield className="size-11 text-white/60" />
-              <span className="absolute text-base font-bold text-white leading-none">{(data.ac ?? 0) + equippedAcBonus}</span>
-            </div>
-            {equippedAcBonus > 0 && !data.hideEquipAcBadge && (
+              <span className="absolute text-base font-bold text-white leading-none">{acResult.total}</span>
+            </button>
+            {acResult.equipBonus > 0 && !data.hideEquipAcBadge && (
               <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold shrink-0 whitespace-nowrap"
                 title="AC bonus from equipped armor/shield">
-                +{equippedAcBonus} equip
+                +{acResult.equipBonus} equip
               </span>
             )}
           </div>
@@ -1004,6 +1007,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <InitiativeModal
           data={data} readOnly={readOnly}
           onUpdate={update} onClose={() => setShowInitiativeModal(false)}
+          accentColor={theme.accent}
+        />
+      )}
+      {showAcModal && (
+        <ArmorClassModal
+          data={data} readOnly={readOnly}
+          onUpdate={update} onClose={() => setShowAcModal(false)}
           accentColor={theme.accent}
         />
       )}

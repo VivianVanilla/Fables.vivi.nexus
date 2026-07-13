@@ -1,9 +1,67 @@
 // Small helper functions used throughout the character sheet
 
+import type { CharacterData } from "./character-types"
+
 /** Returns the ability modifier as a signed string, e.g. "+2" or "-1" */
 export function abilityMod(score: number): string {
   const mod = Math.floor((score - 10) / 2)
   return mod >= 0 ? `+${mod}` : `${mod}`
+}
+
+const AC_ABILITY_TO_FULL: Record<string, "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma"> = {
+  str: "strength", dex: "dexterity", con: "constitution",
+  int: "intelligence", wis: "wisdom", cha: "charisma",
+}
+
+/** Returns the flat ability modifier (number) for a short key ("str", "dex", ...), default score 10 if unset */
+export function abilityScoreMod(data: CharacterData, key?: string): number {
+  const full = key ? AC_ABILITY_TO_FULL[key] : undefined
+  const score = (full ? data[full] : undefined) ?? 10
+  return Math.floor((score - 10) / 2)
+}
+
+export interface AcResult {
+  total: number
+  base: number
+  equipBonus: number      // stacked flat bonuses from equipped shields/rings/etc.
+  armorName?: string      // name of the equipped "base armor" piece driving `base`, if set
+}
+
+/**
+ * Computes a character's AC: 10 + the chosen ability modifier(s) (dual-stat aware),
+ * overridden by any equipped "base armor" piece's own base-AC + Dex formula, plus
+ * flat bonuses from equipped shields/rings/etc. Legacy characters that never opened
+ * the AC picker (no acAbility set) keep their old manually-typed `ac` value as-is.
+ */
+export function computeAc(data: CharacterData): AcResult {
+  const equippedArmor = (data.items ?? []).filter(i => i.equipped && (i.equipKind ?? "armor") === "armor")
+
+  const baseArmor = equippedArmor
+    .filter(i => i.itemMeta?.armorMode === "base" && i.itemMeta?.armorBaseAc != null)
+    .map(i => {
+      const dexMode = i.itemMeta?.armorDexMode ?? "full"
+      const dexMod  = abilityScoreMod(data, "dex")
+      const applied = dexMode === "none" ? 0 : dexMode === "half" ? Math.min(dexMod, 2) : dexMod
+      return { name: i.name, value: (i.itemMeta!.armorBaseAc ?? 0) + applied }
+    })
+    .sort((a, b) => b.value - a.value)[0]
+
+  const equipBonus = equippedArmor
+    .filter(i => i.itemMeta?.armorMode !== "base")
+    .reduce((sum, i) => sum + (i.itemMeta?.acBonus ?? 0), 0)
+
+  let base: number
+  let armorName: string | undefined
+  if (baseArmor) {
+    base = baseArmor.value
+    armorName = baseArmor.name
+  } else if (data.acAbility == null && data.acAbility2 == null && data.acBase == null && data.ac != null) {
+    base = data.ac
+  } else {
+    base = (data.acBase ?? 10) + abilityScoreMod(data, data.acAbility ?? "dex") + (data.acAbility2 ? abilityScoreMod(data, data.acAbility2) : 0)
+  }
+
+  return { total: base + equipBonus + (data.acMiscBonus ?? 0), base, equipBonus, armorName }
 }
 
 /** Returns the proficiency bonus for a given character level */
