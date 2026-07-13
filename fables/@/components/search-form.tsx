@@ -20,6 +20,7 @@ import { Field, FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useUserContext } from "../../src/contexts/UserContext"
 import { uniqueName } from "./character-utils"
+import { parseMonsterStatBlock } from "./monster-import"
 import { supabase } from "../../src/supabase"
 import { Link } from "react-router-dom"
 
@@ -475,6 +476,108 @@ function SimpleForm({
   )
 }
 
+// Monsters get their own form (rather than the generic SimpleForm above) so
+// creation can offer a second path: paste a stat block and have it parsed
+// into the sheet instead of starting blank. See monster-import.ts for the
+// parser itself and why it's a heuristic parser rather than an LLM call.
+function MonsterForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [mode, setMode] = useState<"new" | "import">("new")
+  const [name, setName] = useState("New Monster")
+  const [importText, setImportText] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const preview = mode === "import" && importText.trim() ? parseMonsterStatBlock(importText) : null
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      if (mode === "import") {
+        if (!preview) return
+        await createObject({ name: preview.name || "Imported Monster", type: "monster", data: preview.data })
+      } else {
+        await createObject({ name, type: "monster", data: {} })
+      }
+      onCreated()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create monster")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const actionCount = (preview?.data.actions?.length ?? 0) + (preview?.data.bonusActions?.length ?? 0)
+    + (preview?.data.reactions?.length ?? 0) + (preview?.data.legendaryActions?.length ?? 0)
+
+  return (
+    <DialogContent className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Create a Monster</DialogTitle>
+        <DialogDescription>
+          {mode === "new"
+            ? "Choose a name for your monster. You can edit details later."
+            : "Paste a stat block and Fables will do its best to fill in the sheet. This is a best-effort parse, not magic — skim the result afterward."}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="flex items-center gap-1 rounded-md bg-muted p-0.5 w-fit">
+        <button type="button" onClick={() => setMode("new")}
+          className={`text-xs px-3 py-1.5 rounded-sm font-medium transition-colors ${mode === "new" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          Create New
+        </button>
+        <button type="button" onClick={() => setMode("import")}
+          className={`text-xs px-3 py-1.5 rounded-sm font-medium transition-colors ${mode === "import" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          Import from Text
+        </button>
+      </div>
+
+      {mode === "new" ? (
+        <FieldGroup>
+          <Field>
+            <Label htmlFor="monster-name">Name</Label>
+            <Input id="monster-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+        </FieldGroup>
+      ) : (
+        <FieldGroup>
+          <Field>
+            <Label htmlFor="monster-import-text">Stat block text</Label>
+            <textarea
+              id="monster-import-text"
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={10}
+              placeholder="Paste a full stat block — name, AC, HP, speed, ability scores, traits, actions…"
+              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 resize-y font-mono"
+            />
+          </Field>
+          {preview && (
+            <p className="text-xs text-muted-foreground">
+              Parsed: <span className="font-medium text-foreground">{preview.name}</span>
+              {preview.data.ac != null ? ` · AC ${preview.data.ac}` : ""}
+              {preview.data.maxHp != null ? ` · ${preview.data.maxHp} HP` : ""}
+              {preview.data.traits?.length ? ` · ${preview.data.traits.length} trait${preview.data.traits.length === 1 ? "" : "s"}` : ""}
+              {actionCount ? ` · ${actionCount} action${actionCount === 1 ? "" : "s"}` : ""}
+            </p>
+          )}
+        </FieldGroup>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || (mode === "new" ? !name.trim() : !importText.trim())}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function SearchForm({ ...props }: React.ComponentProps<"div">) {
@@ -540,13 +643,7 @@ export function SearchForm({ ...props }: React.ComponentProps<"div">) {
                 <DialogTrigger asChild>
                   <Button variant="ghost" size="sm" className="justify-start w-full"> Monster</Button>
                 </DialogTrigger>
-                <SimpleForm
-                  title="Create a Monster"
-                  description="Choose a name for your monster. You can edit details later."
-                  type="monster"
-                  defaultName="New Monster"
-                  onCreated={closeAll}
-                />
+                <MonsterForm onCreated={closeAll} />
               </Dialog>
 
               <Dialog>

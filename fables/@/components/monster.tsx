@@ -557,6 +557,10 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     onUpdate({ spellItems: [...spellItems, { id: nanoid(), ...spellItemFieldsFromSpell(s) }] })
     setShowSpellPicker(false)
   }
+  function addSpellsFromPicker(spells: Spell[]) {
+    onUpdate({ spellItems: [...spellItems, ...spells.map(s => ({ id: nanoid(), ...spellItemFieldsFromSpell(s) }))] })
+    setShowSpellPicker(false)
+  }
   function changeSpell(id: string, patch: Partial<SpellItem>) { onUpdate({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...patch } : s) }) }
   function removeSpell(id: string)                          { onUpdate({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
@@ -783,6 +787,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
         <SpellPickerModal
           onClose={() => setShowSpellPicker(false)}
           onPick={addSpellFromPicker}
+          onImportAll={addSpellsFromPicker}
           onCustom={() => { setShowSpellPicker(false); addCustomSpell() }}
         />
       )}
