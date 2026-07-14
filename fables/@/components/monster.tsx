@@ -13,6 +13,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import React, { useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import type { userInfo } from "@/types/userInfo"
 import { useUserContext } from "../../src/contexts/UserContext"
@@ -25,6 +26,8 @@ import { slotLevelColor } from "./character-themes"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "./imageGallery"
 import { spellItemFieldsFromSpell } from "./character-spell-utils"
 import type { Spell } from "../../src/spells/types"
+import { copyMonsterMarkdown, downloadMonsterMarkdown } from "./monster-export"
+import { usePopoverPosition, useClickOutside } from "./collab/usePortalMenu"
 
 import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 import { Markdown } from "./ui/Markdown"
@@ -179,6 +182,47 @@ function LegendaryTracker({
       <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
         color="#EAB308" onChange={val => onChangeUsed(Math.max(0, max - val))} className="flex-1 min-w-0" />
       <span className="text-xs text-white/40 tabular-nums shrink-0">{remaining}/{max} left</span>
+    </div>
+  )
+}
+
+// Same portaled-dropdown pattern as InfoTab.tsx's LinkMenu — escapes this
+// header's own overflow-hidden ancestor instead of getting clipped.
+function MarkdownExportMenu({ name, data }: { name: string; data: MonsterData }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pos = usePopoverPosition(open, triggerRef)
+  useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
+
+  async function handleCopy() {
+    await copyMonsterMarkdown(name, data)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+    setTimeout(() => setOpen(false), 600)
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button type="button" ref={triggerRef} onClick={() => setOpen(v => !v)} title="Export as Markdown"
+        className="text-xs px-2.5 py-1 rounded-md hover:bg-white/10 text-white/50 hover:text-white transition-colors shrink-0">
+        .md
+      </button>
+      {open && pos && createPortal(
+        <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
+          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-44 animate-in fade-in zoom-in-95 duration-150">
+          <button type="button" onClick={handleCopy}
+            className="w-full text-left px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors whitespace-nowrap">
+            {copied ? "✓ Copied!" : "📋 Copy to clipboard"}
+          </button>
+          <button type="button" onClick={() => { setOpen(false); downloadMonsterMarkdown(name, data) }}
+            className="w-full text-left px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors whitespace-nowrap">
+            ⬇ Download .md file
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
@@ -944,6 +988,7 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
           <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 uppercase tracking-widest shrink-0">View Only</span>
         )}
         {saving && <span className="text-xs text-white/40 shrink-0 animate-pulse">saving…</span>}
+        <MarkdownExportMenu name={name} data={data} />
         <button type="button" onClick={onClose}
           className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/50 hover:text-white transition-colors shrink-0">
           ✕
