@@ -509,7 +509,7 @@ function MonsterForm({ onCreated }: { onCreated: () => void }) {
   }
 
   const actionCount = (preview?.data.actions?.length ?? 0) + (preview?.data.bonusActions?.length ?? 0)
-    + (preview?.data.reactions?.length ?? 0) + (preview?.data.legendaryActions?.length ?? 0)
+    + (preview?.data.reactions?.length ?? 0) + (preview?.data.legendaryActions?.length ?? 0) + (preview?.data.lairActions?.length ?? 0)
 
   return (
     <DialogContent className="sm:max-w-lg">

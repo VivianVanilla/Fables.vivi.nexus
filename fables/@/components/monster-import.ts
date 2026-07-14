@@ -25,7 +25,7 @@ export interface ParsedMonster {
   data: Partial<MonsterData>
 }
 
-type ActionSectionKey = "actions" | "bonusActions" | "reactions" | "legendaryActions"
+type ActionSectionKey = "actions" | "bonusActions" | "reactions" | "legendaryActions" | "lairActions"
 
 const SIZE_WORDS = ["fine", "diminutive", "tiny", "small", "medium", "large", "huge", "gargantuan", "colossal"]
 
@@ -34,6 +34,7 @@ const SECTION_ALIASES: Record<string, ActionSectionKey> = {
   "bonus action": "bonusActions", "bonus actions": "bonusActions",
   "reaction": "reactions", "reactions": "reactions",
   "legendary action": "legendaryActions", "legendary actions": "legendaryActions",
+  "lair action": "lairActions", "lair actions": "lairActions",
 }
 
 const DAMAGE_TYPE_WORDS = [
@@ -314,7 +315,7 @@ export function parseMonsterStatBlock(raw: string): ParsedMonster {
   let section: Section = "core"
 
   const traits: MonsterAction[] = []
-  const byKey: Record<ActionSectionKey, MonsterAction[]> = { actions: [], bonusActions: [], reactions: [], legendaryActions: [] }
+  const byKey: Record<ActionSectionKey, MonsterAction[]> = { actions: [], bonusActions: [], reactions: [], legendaryActions: [], lairActions: [] }
 
   let currentName: string | null = null
   let currentRest: string[] = []
@@ -416,6 +417,8 @@ export function parseMonsterStatBlock(raw: string): ParsedMonster {
   data.hasReactions = byKey.reactions.length > 0
   data.legendaryActions = byKey.legendaryActions
   data.hasLegendaryActions = byKey.legendaryActions.length > 0
+  data.lairActions = byKey.lairActions
+  data.hasLairActions = byKey.lairActions.length > 0
 
   return { name, data }
 }

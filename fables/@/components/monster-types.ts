@@ -2,7 +2,7 @@
 
 import type { DamageEntry, SpellItem, SpellSlot } from "./character-types"
 
-export type ActionCategory = "trait" | "action" | "bonusAction" | "reaction" | "legendary"
+export type ActionCategory = "trait" | "action" | "bonusAction" | "reaction" | "legendary" | "lair"
 
 export interface MonsterAction {
   id: string
@@ -62,11 +62,13 @@ export interface MonsterData {
   bonusActions?: MonsterAction[]
   reactions?: MonsterAction[]
   legendaryActions?: MonsterAction[]
+  lairActions?: MonsterAction[]   // no per-action cost/budget, unlike legendary — 5e triggers one of these per round on initiative count 20
   hasBonusActions?: boolean      // toggle — off hides the whole section (Actions is always shown)
   hasReactions?: boolean         // toggle — off hides the whole section
   hasLegendaryActions?: boolean  // toggle — off hides the whole legendary actions section
   legendaryActionsMax?: number
   legendaryActionsUsed?: number
+  hasLairActions?: boolean       // toggle — off hides the whole lair actions section
 
   hasSpellcasting?: boolean      // toggle — off hides the whole spellcasting section
   spellcastingLevel?: string    // "9th-level spellcaster"

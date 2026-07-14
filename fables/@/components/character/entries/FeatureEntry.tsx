@@ -7,9 +7,10 @@
 // Edit mode: name, source, description, track uses, max (or = PB), resets, links
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useState } from "react"
-import type { Feature } from "../../character-types"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
+import type { Feature, UseTracker } from "../../character-types"
 import type { Theme } from "../../character-themes"
+import { nanoid } from "../../character-utils"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
@@ -161,15 +162,50 @@ interface FeatureEntryProps {
   inEquipment?:      boolean            // whether this feature already has a linked copy in the Martial list
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
+  showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
+  showMagicStar?:    boolean            // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
+  magicItemStyle?:   "none" | "outline" | "galaxy"  // Settings choice (default "galaxy") — sheet-wide card treatment for items flagged Magic Item
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Purely cosmetic — a slow-drifting starfield/nebula card background for
+// items flagged "Magic Item" (see index.css for the @keyframes). Plain
+// inline style rather than a Tailwind class since it's a multi-layer
+// gradient, not a single utility value.
+//
+// Three stacked layers (first = frontmost):
+//  1. A flat translucent wash — heavier than it looks, so the pattern reads
+//     as a faint backdrop behind the name/badges instead of competing with them.
+//  2. A small repeating star tile, dim, animated by exactly its own tile size
+//     (see @keyframes fables-item-cosmos) — repeating tiles always wrap
+//     seamlessly at a multiple of their own size, same trick the "gold"
+//     theme's coin rain uses (index.css), unlike a one-shot 200%-canvas
+//     scroll which visibly seams once discrete dots (not a continuous
+//     gradient) reach the edge.
+//  3. A static, muted nebula gradient base — no animation, so nothing about it can seam.
+const STAR_TILE = [
+  "radial-gradient(circle 1px at 15% 20%, #fff 35%, transparent 45%)",
+  "radial-gradient(circle 1px at 55% 65%, #fff 35%, transparent 45%)",
+  "radial-gradient(circle 1.5px at 80% 30%, #fff 35%, transparent 45%)",
+  "radial-gradient(circle 1px at 30% 85%, #fff 35%, transparent 45%)",
+  "radial-gradient(circle 1px at 90% 90%, #fff 35%, transparent 45%)",
+].join(", ")
+
+const MAGIC_ITEM_BG: CSSProperties = {
+  backgroundImage: `linear-gradient(rgba(10,6,22,0.7), rgba(10,6,22,0.7)), ${STAR_TILE}, linear-gradient(135deg, #140a2c, #241250 45%, #3b1f6b 75%, #140a2c)`,
+  backgroundRepeat: "no-repeat, repeat, no-repeat",
+  backgroundSize: "100% 100%, 90px 90px, 100% 100%",
+  backgroundPosition: "0 0, 0 0, 0 0",
+  animation: "fables-item-cosmos 20s linear infinite",
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras,
+  isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras, showWeightColumn,
+  showMagicStar = true, magicItemStyle = "galaxy",
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(false)
@@ -209,6 +245,16 @@ export function FeatureEntry({
 
   if (editing) {
     const usesPB = feature.maxUsesFormula === "pb"
+
+    function addTracker() {
+      onChange({ trackers: [...(feature.trackers ?? []), { id: nanoid(), label: "", maxUses: 1, usesUsed: 0, resetsOn: "long" }] })
+    }
+    function changeTracker(id: string, patch: Partial<UseTracker>) {
+      onChange({ trackers: (feature.trackers ?? []).map(t => t.id === id ? { ...t, ...patch } : t) })
+    }
+    function removeTracker(id: string) {
+      onChange({ trackers: (feature.trackers ?? []).filter(t => t.id !== id) })
+    }
 
     return (
       <div className={`rounded-xl ${theme.box} border border-white/20 p-3 flex flex-col gap-2`}>
@@ -301,10 +347,10 @@ export function FeatureEntry({
               Requires Attunement
             </label>
             <PopTransition show={!!feature.requiresAttunement}>
-              <label className="flex items-center gap-2 text-purple-300 cursor-pointer select-none">
+              <label className={`flex items-center gap-2 font-bold cursor-pointer select-none ${theme.color}`}>
                 <input type="checkbox" checked={feature.attuned ?? false}
                   onChange={e => onChange({ attuned: e.target.checked })}
-                  className="accent-purple-500"
+                  className="accent-white"
                 />
                 Attuned
               </label>
@@ -323,6 +369,29 @@ export function FeatureEntry({
                 className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${feature.category !== "armor" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
                 Generic Item
               </button>
+            </div>
+
+            {/* Equipped/Magic Item apply to any item, armor or not — switching the
+                category above only changes which stat fields show below, it no
+                longer moves the item between the Equipped and Carried Items lists. */}
+            <div className="flex flex-wrap items-center gap-3">
+              {feature.category === "armor" && (
+                <label className={`flex items-center gap-2 font-bold cursor-pointer select-none whitespace-nowrap ${theme.color}`}>
+                  <input type="checkbox" checked={feature.equipped ?? false}
+                    onChange={e => onChange({ equipped: e.target.checked })}
+                    className="accent-white"
+                  />
+                  Equipped
+                </label>
+              )}
+              <label className="flex items-center gap-2 text-purple-300 cursor-pointer select-none whitespace-nowrap">
+                <input type="checkbox" checked={feature.isMagicItem ?? false}
+                  onChange={e => onChange({ isMagicItem: e.target.checked })}
+                  className="accent-purple-500"
+                />
+                Magic Item
+              </label>
+              <span className="text-white/25 italic">(style is set sheet-wide in Settings)</span>
             </div>
 
             <PopTransition show={feature.category === "armor"}>
@@ -345,13 +414,6 @@ export function FeatureEntry({
                 <PopTransition show={(feature.equipKind ?? "armor") === "armor"}>
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-3">
-                      <label className="flex items-center gap-2 text-sky-300 cursor-pointer select-none whitespace-nowrap">
-                        <input type="checkbox" checked={feature.equipped ?? false}
-                          onChange={e => onChange({ equipped: e.target.checked })}
-                          className="accent-sky-500"
-                        />
-                        Equipped
-                      </label>
                       <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
                         <button type="button" onClick={() => onChange({ itemMeta: { ...feature.itemMeta, armorMode: "bonus" } })}
                           className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${(feature.itemMeta?.armorMode ?? "bonus") === "bonus" ? "bg-sky-500/30 text-sky-200" : "text-white/40 hover:text-white/70"}`}>
@@ -593,6 +655,72 @@ export function FeatureEntry({
                   </div>
                 )
               })()}
+
+              {/* Multiple bars on one item — e.g. a staff with both "Charges"
+                  (the primary tracker above) and a separate "1/Day Recall". */}
+              <label className="flex items-center gap-2 text-white/60 cursor-pointer select-none">
+                <input type="checkbox" checked={feature.multiTracking ?? false}
+                  onChange={e => onChange({ multiTracking: e.target.checked })}
+                />
+                Track multiple things on this item
+              </label>
+
+              {feature.multiTracking && (
+                <div className="flex flex-col gap-2">
+                  {(feature.trackers ?? []).map(t => (
+                    <div key={t.id} className="flex flex-col gap-1.5 bg-white/5 rounded-lg p-2">
+                      <div className="flex items-center gap-2">
+                        <input value={t.label ?? ""} placeholder="Label (e.g. 1/Day Recall)"
+                          onChange={e => changeTracker(t.id, { label: e.target.value })}
+                          className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 border-b border-white/10 pb-1" />
+                        <button type="button" onClick={() => removeTracker(t.id)}
+                          className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs flex-wrap">
+                        <label className="flex items-center gap-1.5 text-white/50">
+                          Max
+                          {t.maxUsesFormula === "pb" ? (
+                            <span className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold">PB ({pb})</span>
+                          ) : (
+                            <NumInput value={t.maxUses ?? ""} min={1}
+                              onChange={e => changeTracker(t.id, { maxUses: parseInt(e.target.value) || 0 })}
+                              className="w-12 bg-white/10 rounded px-2 py-1 text-center text-white outline-none"
+                            />
+                          )}
+                        </label>
+                        <label className="flex items-center gap-1.5 text-white/50 cursor-pointer select-none">
+                          <input type="checkbox" checked={t.maxUsesFormula === "pb"}
+                            onChange={e => changeTracker(t.id, { maxUsesFormula: e.target.checked ? "pb" : undefined, maxUses: e.target.checked ? undefined : (t.maxUses ?? 1) })}
+                          />
+                          = Prof. Bonus
+                        </label>
+                        <label className="flex items-center gap-1.5 text-white/50">
+                          Resets on
+                          <select value={t.resetsOn ?? "long"}
+                            onChange={e => changeTracker(t.id, { resetsOn: e.target.value as UseTracker["resetsOn"] })}
+                            className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                            <option value="short" className="bg-zinc-800 text-white">Short Rest</option>
+                            <option value="long" className="bg-zinc-800 text-white">Long Rest</option>
+                            <option value="dawn" className="bg-zinc-800 text-white">Dawn</option>
+                            <option value="manual" className="bg-zinc-800 text-white">Manual</option>
+                          </select>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-white/50 cursor-pointer">
+                          Bar color
+                          <input type="color" value={t.sliderColor ?? "#6366f1"}
+                            onChange={e => changeTracker(t.id, { sliderColor: e.target.value })}
+                            className="size-4 cursor-pointer rounded border-0 bg-transparent p-0"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addTracker}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors self-start">
+                    + Add Tracker
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -608,8 +736,15 @@ export function FeatureEntry({
 
   // ── View mode ────────────────────────────────────────────────────────────
 
+  // The style itself (None/Outline/Galaxy) is a sheet-wide Settings choice,
+  // not per item — an item only decides whether it's magic at all.
+  const magicStar  = feature.isMagicItem && showMagicStar
+  const magicStyle = feature.isMagicItem && magicItemStyle !== "none" ? magicItemStyle : null
+  const cardStyle  = magicStyle === "galaxy" ? MAGIC_ITEM_BG : undefined
+
   return (
-    <div className={`rounded-xl ${theme.box} border border-white/10 overflow-hidden`}>
+    <div className={`rounded-xl border overflow-hidden ${magicStyle ? "border-purple-400/50" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
+      style={cardStyle}>
 
       {/* Header row */}
       <div {...dragAttrs}
@@ -621,6 +756,8 @@ export function FeatureEntry({
           <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
           <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
+            {feature.isContainer && "🎒 "}
+            {magicStar && "✨ "}
             {feature.name || <span className="text-white/30 italic">{unnamedLabel}</span>}
           </span>
 
@@ -635,25 +772,34 @@ export function FeatureEntry({
           )}
 
           {showAttunement && feature.requiresAttunement && (
-            <label className="flex items-center gap-1 shrink-0 text-[10px] text-purple-300 cursor-pointer" onClick={e => e.stopPropagation()} title="Attuned">
+            <label className={`flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer ${theme.color}`} onClick={e => e.stopPropagation()} title="Attuned">
               <input type="checkbox" checked={feature.attuned ?? false} disabled={readOnly}
                 onChange={e => onChange({ attuned: e.target.checked })}
-                className="size-3.5 accent-purple-500 cursor-pointer" />
+                className="size-3.5 accent-white cursor-pointer" />
               Attuned
-            </label>
-          )}
-
-          {showItemExtras && feature.category === "armor" && (feature.equipKind ?? "armor") === "armor" && (
-            <label className="flex items-center gap-1 shrink-0 text-[10px] text-sky-300 cursor-pointer" onClick={e => e.stopPropagation()} title="Equipped">
-              <input type="checkbox" checked={feature.equipped ?? false} disabled={readOnly}
-                onChange={e => onChange({ equipped: e.target.checked })}
-                className="size-3.5 accent-sky-500 cursor-pointer" />
-              Equip
             </label>
           )}
 
           {showItemExtras && feature.category !== "armor" && (feature.amount ?? 1) > 1 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">×{feature.amount}</span>
+          )}
+
+          {/* At the trailing edge, alongside Weight, rather than crowding the
+              name — this is the one toggle that also determines Equipped vs
+              Carried Items, so it reads better as its own aside than buried mid-row. */}
+          {showItemExtras && feature.category === "armor" && (
+            <label className={`flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer ${theme.color}`} onClick={e => e.stopPropagation()} title="Equipped">
+              <input type="checkbox" checked={feature.equipped ?? false} disabled={readOnly}
+                onChange={e => onChange({ equipped: e.target.checked })}
+                className="size-3.5 accent-white cursor-pointer" />
+              Equip
+            </label>
+          )}
+
+          {showWeightColumn && (
+            <span className="text-[10px] text-white/40 shrink-0 w-14 text-right tabular-nums">
+              {feature.weight ? `${feature.weight * (feature.amount ?? 1)} lb` : ""}
+            </span>
           )}
 
           {/* Desktop bar (sm and up) */}

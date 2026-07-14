@@ -25,6 +25,7 @@ const CATEGORY_STYLE: Record<ActionCategory, { border: string; text: string; bad
   bonusAction: { border: "border-amber-500/30",   text: "text-amber-300", badge: "bg-amber-500/15 text-amber-300", ring: "focus:ring-amber-400/40" },
   reaction:    { border: "border-violet-500/30",  text: "text-violet-300",badge: "bg-violet-500/15 text-violet-300", ring: "focus:ring-violet-400/40" },
   legendary:   { border: "border-yellow-400/30",  text: "text-yellow-300",badge: "bg-yellow-500/15 text-yellow-300", ring: "focus:ring-yellow-400/40" },
+  lair:        { border: "border-orange-500/30",  text: "text-orange-300",badge: "bg-orange-500/15 text-orange-300", ring: "focus:ring-orange-400/40" },
 }
 
 interface ActionEntryProps {

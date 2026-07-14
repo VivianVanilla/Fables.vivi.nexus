@@ -681,6 +681,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     onLinkToggle: toggleFeatureLink,
     onPopOutFamiliar: togglePopout,
     theme: { ...theme, box: effectiveBox }, card, readOnly,
+    showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),

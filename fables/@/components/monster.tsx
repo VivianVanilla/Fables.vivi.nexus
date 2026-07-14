@@ -59,15 +59,16 @@ const ABILITY_COLORS: Record<string, string> = {
   intelligence: "text-blue-400", wisdom: "text-purple-400", charisma: "text-pink-400",
 }
 
-const ACTION_SECTIONS: { key: "actions" | "bonusActions" | "reactions" | "legendaryActions"; category: ActionCategory; label: string }[] = [
+const ACTION_SECTIONS: { key: "actions" | "bonusActions" | "reactions" | "legendaryActions" | "lairActions"; category: ActionCategory; label: string }[] = [
   { key: "actions", category: "action", label: "Actions" },
   { key: "bonusActions", category: "bonusAction", label: "Bonus Actions" },
   { key: "reactions", category: "reaction", label: "Reactions" },
   { key: "legendaryActions", category: "legendary", label: "Legendary Actions" },
+  { key: "lairActions", category: "lair", label: "Lair Actions" },
 ]
 
 const SECTION_HEADER_COLOR: Record<ActionCategory, string> = {
-  trait: "text-emerald-300", action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300",
+  trait: "text-emerald-300", action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300", lair: "text-orange-300",
 }
 
 const CARD = "rounded-xl bg-zinc-900 ring-1 ring-zinc-700 transition-colors"
@@ -363,6 +364,7 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
   const bonusEnabled   = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
   const reactEnabled   = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendEnabled  = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
+  const lairEnabled    = data.hasLairActions ?? (data.lairActions ?? []).length > 0
   const spellEnabled   = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
 
   return (
@@ -497,6 +499,10 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
             </PopTransition>
           </div>
           <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+            Lair Actions
+            <input type="checkbox" checked={lairEnabled} onChange={e => onUpdate({ hasLairActions: e.target.checked })} />
+          </label>
+          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
             Spellcasting
             <input type="checkbox" checked={spellEnabled} onChange={e => onUpdate({ hasSpellcasting: e.target.checked })} />
           </label>
@@ -533,6 +539,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     bonusActions: data.bonusActions ?? [],
     reactions: data.reactions ?? [],
     legendaryActions: data.legendaryActions ?? [],
+    lairActions: data.lairActions ?? [],
   }
 
   function addAction(key: keyof typeof actionsBySection) {
@@ -605,6 +612,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   const bonusEnabled       = data.hasBonusActions ?? (data.bonusActions ?? []).length > 0
   const reactEnabled       = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendaryEnabled   = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
+  const lairEnabled        = data.hasLairActions ?? (data.lairActions ?? []).length > 0
   const spellcastingEnabled = data.hasSpellcasting ?? (levels.length > 0 || !!data.spellcastingAbility)
   const spellUsageMode      = data.spellUsageMode ?? "slots"
 
@@ -613,6 +621,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     bonusActions: bonusEnabled,
     reactions: reactEnabled,
     legendaryActions: legendaryEnabled,
+    lairActions: lairEnabled,
   }
 
   function feelingLucky() {

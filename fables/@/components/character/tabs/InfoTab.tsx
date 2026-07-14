@@ -63,12 +63,14 @@ interface FeatureListProps {
   equipmentLinkedIds?: Set<string>
   showAttunement?: boolean
   showItemExtras?: boolean
+  showMagicStar?: boolean
+  magicItemStyle?: "none" | "outline" | "galaxy"
   sortable?: boolean
 }
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, sortable }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, sortable }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -130,6 +132,8 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             inEquipment={equipmentLinkedIds?.has(f.id)}
             showAttunement={showAttunement}
             showItemExtras={showItemExtras}
+            showMagicStar={showMagicStar}
+            magicItemStyle={magicItemStyle}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -156,10 +160,13 @@ interface ContainerItemsListProps {
   userId?: string | null
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
+  showMagicStar?: boolean
+  magicItemStyle?: "none" | "outline" | "galaxy"
 }
 
-function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite }: ContainerItemsListProps) {
+function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle }: ContainerItemsListProps) {
   const roots = items.filter(i => !i.parentId)
+  const totalWeight = items.reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0)
 
   // A container can't be dropped into itself or into one of its own descendants
   function isSelfOrDescendant(candidateId: string, movingId: string): boolean {
@@ -205,6 +212,9 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           isFavorite={favorites.some(fav => fav.refId === f.id)}
           onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
           showItemExtras
+          showWeightColumn
+          showMagicStar={showMagicStar}
+          magicItemStyle={magicItemStyle}
           onChange={patch => onChange(f.id, patch)}
           onRemove={() => onRemove(f.id)}
           onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -213,9 +223,9 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"
             onDragOver={e => { if (!readOnly) e.preventDefault() }}
             onDrop={e => handleDrop(f.id, e)}>
-            {f.maxWeight != null && (
+            {(childWeight > 0 || f.maxWeight != null) && (
               <span className={`text-[9px] px-2 py-0.5 rounded-full self-start ${overCapacity ? "bg-red-500/20 text-red-300" : "bg-white/10 text-white/40"}`}>
-                {childWeight % 1 === 0 ? childWeight : childWeight.toFixed(1)}/{f.maxWeight} lb
+                {childWeight % 1 === 0 ? childWeight : childWeight.toFixed(1)}{f.maxWeight != null ? `/${f.maxWeight}` : ""} lb
               </span>
             )}
             {children.map(c => renderItem(c, depth + 1))}
@@ -234,11 +244,16 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}
       onDragOver={e => { if (!readOnly) e.preventDefault() }}
       onDrop={e => handleDrop(undefined, e)}>
-      <div className="flex items-center justify-between shrink-0">
-        <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Items</span>
+      <div className="flex items-center justify-between shrink-0 gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Carried Items</span>
+        {totalWeight > 0 && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/40 shrink-0">
+            {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} lb total
+          </span>
+        )}
         {!readOnly && (
           <button type="button" onClick={() => onAdd()}
-            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
+            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ml-auto shrink-0">
             + Add
           </button>
         )}
@@ -718,8 +733,8 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
       {subTab === "items" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
           <FeatureList
-            items={(data.items ?? []).filter(i => i.category === "armor")} allFeatures={allFeatures} label="Armor & Equipment"
-            onAdd={() => addFeature("items", { category: "armor" })}
+            items={(data.items ?? []).filter(i => i.category === "armor" && i.equipped)} allFeatures={allFeatures} label="Equipped"
+            onAdd={() => addFeature("items", { category: "armor", equipped: true })}
             onChange={onChangeFeature}
             onRemove={onRemoveFeature}
             onLinkToggle={onLinkToggle}
@@ -730,9 +745,13 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             equipmentLinkedIds={equipmentLinkedIds}
             showAttunement
             showItemExtras
+            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle}
           />
+          {/* Everything not equipped lands here — armor/weapons you own but
+              aren't wearing, and every generic item (which has no Equip
+              checkbox at all, so it can never leave this list on its own). */}
           <ContainerItemsList
-            items={(data.items ?? []).filter(i => i.category !== "armor")} allFeatures={allFeatures}
+            items={(data.items ?? []).filter(i => !(i.category === "armor" && i.equipped))} allFeatures={allFeatures}
             onAdd={parentId => addFeature("items", { category: "item", parentId })}
             onChange={onChangeFeature}
             onRemove={onRemoveFeature}
@@ -740,6 +759,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
+            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle}
           />
         </div>
       )}

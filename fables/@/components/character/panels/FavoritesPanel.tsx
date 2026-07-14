@@ -76,6 +76,8 @@ interface FavoritesPanelProps {
   theme:             Theme
   card:              string
   readOnly:          boolean
+  showMagicStar?:    boolean
+  magicItemStyle?:   "none" | "outline" | "galaxy"
   dragOver:          boolean
   onDragOver:        (e: React.DragEvent) => void
   onDragLeave:       () => void
@@ -89,7 +91,7 @@ export function FavoritesPanel({
   onRemove, onReorder,
   onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
-  theme, card, readOnly,
+  theme, card, readOnly, showMagicStar, magicItemStyle,
   dragOver, onDragOver, onDragLeave, onDrop,
 }: FavoritesPanelProps) {
   const [reorderDragIdx, setReorderDragIdx] = useState<number | null>(null)
@@ -206,6 +208,8 @@ export function FavoritesPanel({
                     readOnly={readOnly}
                     pb={pb}
                     isFavorite onToggleFavorite={onToggleFavorite}
+                    showMagicStar={showMagicStar}
+                    magicItemStyle={magicItemStyle}
                     onChange={patch => onUpdateFeature(fav.refId, patch)}
                     onRemove={() => onRemoveFeature(fav.refId)}
                     onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}

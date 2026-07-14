@@ -79,6 +79,22 @@ export interface SpellSlot {
   pact?: boolean         // Pact Magic marker — visual label for multiclass identification
 }
 
+// One tracked resource ("Charges 3/10", "1/Day Recall") — the base trackable/
+// maxUses/usesUsed/resetsOn fields on Feature stay as the single/primary
+// tracker for backward compatibility; `trackers` holds any additional ones
+// once `multiTracking` is toggled on (e.g. a staff: primary tracker is
+// "Charges 7/7", trackers[0] is "1/Day Recall"). Mirrors the multiDamage/
+// damages pattern on DamageEntry.
+export interface UseTracker {
+  id: string
+  label?: string
+  maxUses?: number
+  maxUsesFormula?: "pb"
+  usesUsed?: number
+  resetsOn?: "short" | "long" | "dawn" | "manual"
+  sliderColor?: string
+}
+
 export interface Feature {
   id: string
   name: string
@@ -92,13 +108,16 @@ export interface Feature {
   resetsOn?: "short" | "long" | "dawn" | "manual"
   sliderColor?: string
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
-  requiresAttunement?: boolean // Items tab only — does this item require attunement at all?
-  attuned?: boolean          // Items tab only — is the character currently attuned to this item?
-  equipped?: boolean         // Items tab only — currently worn/wielded (applies itemMeta.acBonus to AC)
+  multiTracking?: boolean    // toggle — on splits use-tracking across `trackers` instead of just the single trackable/maxUses/usesUsed triplet
+  trackers?: UseTracker[]    // additional tracked bars beyond the primary trackable/maxUses/usesUsed, only used when multiTracking is on
+  requiresAttunement?: boolean // does this item require attunement at all?
+  attuned?: boolean          // is the character currently attuned to this item?
+  equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
+  isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight
   value?: number             // gp — per-unit value, rolled into the character's total carried value
   amount?: number            // Items tab, generic items only — quantity (armor/equipment is always qty 1)
-  category?: "armor" | "item" // Items tab only — which section it's listed under
+  category?: "armor" | "item" // Items tab only — which stat fields this item's edit form shows (armor/weapon fields vs. generic amount/container fields); no longer determines which list (Equipped vs Carried) it shows in
   equipKind?: "armor" | "weapon" | "misc" // Armor & Equipment section only — which stat fields apply
   isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
   maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
@@ -196,6 +215,8 @@ export interface CharacterData {
   spellsDisplay?: "list" | "bubbles"            // list = one spell per row; bubbles = spells size to their content and wrap to pack multiple per line
   hideDiceRoller?: boolean       // true = hide the dice roller panel on the Combat tab
   hideJumpCalculator?: boolean   // true = hide the jump distance calculator on the Combat tab
+  showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
+  magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card treatment applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge
   notes?: string
   backgroundImage?: string
   theme?: string

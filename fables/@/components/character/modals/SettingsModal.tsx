@@ -116,6 +116,30 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
             </label>
           </div>
 
+          {/* Magic item display — sheet-wide. Individual items only decide
+              whether they're magic at all (their own edit form); the style
+              every flagged item renders with is chosen once, here. */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Magic Items</p>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.showMagicItemStar ?? true}
+                onChange={e => onUpdate({ showMagicItemStar: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">✨ Star on magic items</span>
+            </label>
+            <div className="flex items-center justify-between px-1 py-1">
+              <span className="text-sm text-white/70">Card style</span>
+              <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
+                {(["none", "outline", "galaxy"] as const).map(s => (
+                  <button key={s} type="button" onClick={() => onUpdate({ magicItemStyle: s })}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize transition-colors ${(data.magicItemStyle ?? "galaxy") === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </Modal>

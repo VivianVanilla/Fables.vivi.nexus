@@ -256,6 +256,14 @@
   50%  { transform: scale(1.15); }
   100% { transform: scale(1); }
 }
+/* "Magic Item" card background (FeatureEntry.tsx) — slow starfield drift,
+   independent of app theme. Three background-position values, one per
+   layer (mask, star tile, nebula base) — only the star tile (middle layer)
+   actually moves, by exactly its own tile size so the repeat wraps with no seam. */
+@keyframes fables-item-cosmos {
+  from { background-position: 0 0, 0 0, 0 0; }
+  to   { background-position: 0 0, 90px 90px, 0 0; }
+}
 /* Blended (not raw) rainbow — soft-light against the dark base color mutes
    it into a slow moving tint instead of a blinding neon wash, so it's still
    readable as an actual UI and not just a joke you have to squint through.
