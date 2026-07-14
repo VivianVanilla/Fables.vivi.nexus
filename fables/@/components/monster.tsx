@@ -187,33 +187,35 @@ function LegendaryTracker({
 }
 
 // Legendary Resistance uses, as checkboxes rather than a slider — there are
-// only ever a handful (usually 1-3), and checking one off as it's spent
-// reads faster at the table than dragging a bar. Same click-to-toggle
-// behavior as the Death Saves boxes: click the rightmost filled box to undo
-// it, click any empty box to spend one.
+// only ever a handful (usually 1-3). Starts fully ticked (all uses available)
+// and you remove a tick as each one gets spent, rather than starting empty
+// and filling boxes in — closer to how you'd actually track it at the table.
+// Click any ticked box to spend it, click any empty box to restore one.
 function LegendaryResistanceTracker({
   used, max, readOnly, onChangeUsed,
 }: { used: number; max: number; readOnly?: boolean; onChangeUsed: (n: number) => void }) {
+  const remaining = Math.max(0, max - used)
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-xs text-white/40 uppercase tracking-widest shrink-0">Legendary Resistance</span>
       <div className="flex items-center gap-1">
         {Array.from({ length: max }).map((_, i) => {
-          const filled = i < used
+          const available = i < remaining
           return (
             <button key={i} type="button" disabled={readOnly}
-              onClick={() => onChangeUsed(filled && i === used - 1 ? used - 1 : Math.min(max, used + 1))}
-              title={filled ? "Used" : "Available"}
+              onClick={() => onChangeUsed(Math.max(0, Math.min(max, available ? used + 1 : used - 1)))}
+              title={available ? "Available — click to spend" : "Used — click to restore"}
               className={`size-5 rounded border flex items-center justify-center text-[10px] transition-colors disabled:cursor-default ${
-                filled
+                available
                   ? "bg-yellow-500/25 border-yellow-400 text-yellow-300"
-                  : "border-white/20 text-transparent hover:border-yellow-400/50"
+                  : "border-white/15 text-transparent hover:border-yellow-400/50"
               }`}>
-              ✕
+              ✓
             </button>
           )
         })}
       </div>
+      <span className="text-xs text-white/40 tabular-nums shrink-0">{remaining}/{max}</span>
     </div>
   )
 }
