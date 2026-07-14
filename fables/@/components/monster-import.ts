@@ -56,11 +56,19 @@ function cap(s: string): string {
 
 // Strips markdown wrapping (##, **, *, _) from a line so it can be matched by
 // plain-text rules regardless of how a given source chose to style it.
+//
+// Bold/italic markers are stripped everywhere in the line, not just off each
+// edge — the single most common stat block layout is "**Label** value"
+// (bold wraps only the label, not the whole line), so the closing `**` sits
+// in the *middle* of the line, not at the end. Asterisks/underscores never
+// show up as literal content in a stat block, so a global strip is safe, and
+// it also cleans up nested/mixed decoration in one pass ("###### **Name.**",
+// "_**Name**_") instead of only handling one layer at a time.
 function stripDecoration(line: string): string {
   let s = line.trim()
   s = s.replace(/^#{1,6}\s*/, "")
-  s = s.replace(/^\*{1,3}/, "").replace(/\*{1,3}$/, "")
-  s = s.replace(/^_{1,3}/, "").replace(/_{1,3}$/, "")
+  s = s.replace(/\*{1,3}/g, "")
+  s = s.replace(/_{1,3}/g, "")
   return s.trim()
 }
 
@@ -177,7 +185,7 @@ function cleanEntryName(raw: string): { name: string; recharge?: number; legenda
 // ("The creature regains…", "If the target fails…" — excluded by starting
 // with a common sentence-opener word). Without both guards, every short
 // sentence that happens to sit alone on its own line reads as a new entry.
-const SENTENCE_STARTER = /^(the|a|an|each|every|all|any|some|no|other|this|that|these|those|when|whenever|if|unless|while|during|as|until|before|after|at|on|in|it|its|it's|they|their|them|you|your|yours|he|his|she|her|creature|creatures|target|targets|whoever|whatever|half|one|two|three|four|five|six|first|second|then|instead)\b/i
+const SENTENCE_STARTER = /^(the|a|an|each|every|all|any|some|no|other|this|that|these|those|when|whenever|if|unless|while|during|as|until|before|after|at|on|in|it|its|it's|they|their|them|you|your|yours|he|his|she|her|creature|creatures|target|targets|whoever|whatever|half|one|two|three|four|five|six|first|second|then|instead|make|makes|roll|deals|regains)\b/i
 
 function looksLikeSentenceNotName(candidate: string): boolean {
   return SENTENCE_STARTER.test(candidate.trim())
@@ -193,17 +201,28 @@ function looksLikeEntryHeader(line: string): boolean {
   return false
 }
 
+// Attack/description boilerplate that real stat blocks routinely wrap in its
+// own emphasis mid-sentence ("_Melee Weapon Attack:_ +7 to hit…", "_Hit:_ 10
+// (2d6) damage."). Those read exactly like a wrapped entry title — matching
+// markers, short label — so without this guard every attack's own body text
+// gets shredded into bogus "Melee Weapon Attack:" / "Hit:" sub-entries
+// instead of staying part of the attack that owns them.
+const INLINE_LABEL_RE = /^(melee|ranged)(\s+or\s+(melee|ranged))?\s+(weapon|spell)\s+attack:?$|^hit:?$/i
+
 function parseEntryHeaderLine(line: string): EntryHeader | null {
-  function finalize(rawName: string, rest?: string): EntryHeader {
+  function finalize(rawName: string, rest?: string): EntryHeader | null {
+    if (INLINE_LABEL_RE.test(rawName.trim())) return null
     const meta = cleanEntryName(rawName)
     return { name: meta.name, rest, recharge: meta.recharge, legendaryCost: meta.legendaryCost }
   }
 
-  // Markdown heading or a fully bold/italic-wrapped line — an explicit,
-  // deliberate signal from the source, trusted regardless of wording.
+  // Markdown heading — an explicit, deliberate signal from the source,
+  // trusted regardless of wording. Its captured text can still carry its own
+  // nested bold/italic ("###### **Name.**"), so strip that too.
   let m = line.match(/^#{1,6}\s+(.+?)\.?\s*$/)
-  if (m) return finalize(m[1])
+  if (m) return finalize(stripDecoration(m[1]))
 
+  // A fully bold/italic-wrapped line — same trust level as a heading.
   m = line.match(/^(\*{1,3}|_{1,3})(.+?)\.?\1(\s+(\S.*))?$/)
   if (m) return finalize(m[2], m[4]?.trim())
 
@@ -224,17 +243,23 @@ function buildAction(name: string, description: string, recharge?: number, legen
   if (recharge != null) { action.recharge = recharge; action.rechargeUsed = false }
   if (legendaryCost != null) action.legendaryCost = legendaryCost
 
-  const atk = description.match(/(?:Melee|Ranged)(?:\s+or\s+Ranged)?\s+(?:Weapon|Spell)\s+Attack:?\s*([+-]?\d+)\s+to hit/i)
+  // Extraction runs against a decoration-stripped copy so inline markdown
+  // ("_Melee Weapon Attack:_ +15 to hit…") can't land a marker right between
+  // a label and the value it's matching against — `description` itself keeps
+  // its original markdown, since it's rendered through the Markdown component.
+  const plain = description.replace(/[*_#]+/g, "")
+
+  const atk = plain.match(/(?:Melee|Ranged)(?:\s+or\s+Ranged)?\s+(?:Weapon|Spell)\s+Attack:?\s*([+-]?\d+)\s+to hit/i)
   if (atk) action.attackBonus = /^[+-]/.test(atk[1]) ? atk[1] : `+${atk[1]}`
 
-  const save = description.match(/DC\s*(\d+)\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma|Str|Dex|Con|Int|Wis|Cha)\b/i)
+  const save = plain.match(/DC\s*(\d+)\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma|Str|Dex|Con|Int|Wis|Cha)\b/i)
   if (save) {
     action.saveDC = parseInt(save[1])
     action.saveAbility = ABILITY_FULL_TO_ABBR[save[2].toLowerCase()] ?? cap(save[2].toLowerCase())
   }
 
   const dmgRe = new RegExp(`\\(([\\d\\s+dD-]+)\\)\\s+(${DAMAGE_TYPE_WORDS.join("|")})(?:\\s+damage)?`, "gi")
-  const dmgMatches = [...description.matchAll(dmgRe)]
+  const dmgMatches = [...plain.matchAll(dmgRe)]
   if (dmgMatches.length === 1) {
     action.damage = dmgMatches[0][1].replace(/\s+/g, "")
     action.damageType = cap(dmgMatches[0][2].toLowerCase())
