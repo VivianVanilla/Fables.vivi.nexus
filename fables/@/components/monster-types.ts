@@ -58,6 +58,13 @@ export interface MonsterData {
   hasMultiattack?: boolean         // toggle — shows the Multiattack entry at the top of Actions
   multiattackDescription?: string // free-text sentence describing the multiattack (e.g. "The monster makes two attacks: one with its bite and one with its claws.")
 
+  // Session-use tracker shown as checkboxes in the Traits section header —
+  // separate from any "Legendary Resistance (3/Day)" trait text (which is
+  // just flavor/rules prose); this is the live "how many are left tonight" count.
+  hasLegendaryResistance?: boolean  // toggle — off hides the checkbox tracker
+  legendaryResistanceMax?: number   // uses per day, default 3
+  legendaryResistanceUsed?: number
+
   actions?: MonsterAction[]
   bonusActions?: MonsterAction[]
   reactions?: MonsterAction[]

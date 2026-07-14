@@ -132,7 +132,7 @@ function ActionSection({
   extra?: React.ReactNode
   beforeEntries?: React.ReactNode  // rendered above the entry list — e.g. the Multiattack block in Actions
 }) {
-  if (readOnly && actions.length === 0 && !beforeEntries) return null
+  if (readOnly && actions.length === 0 && !beforeEntries && !extra) return null
   return (
     <div className={`${CARD} p-4 flex flex-col gap-2 animate-in fade-in duration-200`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -182,6 +182,38 @@ function LegendaryTracker({
       <TracingSlider value={remaining} max={max} disabled={readOnly} showButtons buttonSize="sm"
         color="#EAB308" onChange={val => onChangeUsed(Math.max(0, max - val))} className="flex-1 min-w-0" />
       <span className="text-xs text-white/40 tabular-nums shrink-0">{remaining}/{max} left</span>
+    </div>
+  )
+}
+
+// Legendary Resistance uses, as checkboxes rather than a slider — there are
+// only ever a handful (usually 1-3), and checking one off as it's spent
+// reads faster at the table than dragging a bar. Same click-to-toggle
+// behavior as the Death Saves boxes: click the rightmost filled box to undo
+// it, click any empty box to spend one.
+function LegendaryResistanceTracker({
+  used, max, readOnly, onChangeUsed,
+}: { used: number; max: number; readOnly?: boolean; onChangeUsed: (n: number) => void }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-white/40 uppercase tracking-widest shrink-0">Legendary Resistance</span>
+      <div className="flex items-center gap-1">
+        {Array.from({ length: max }).map((_, i) => {
+          const filled = i < used
+          return (
+            <button key={i} type="button" disabled={readOnly}
+              onClick={() => onChangeUsed(filled && i === used - 1 ? used - 1 : Math.min(max, used + 1))}
+              title={filled ? "Used" : "Available"}
+              className={`size-5 rounded border flex items-center justify-center text-[10px] transition-colors disabled:cursor-default ${
+                filled
+                  ? "bg-yellow-500/25 border-yellow-400 text-yellow-300"
+                  : "border-white/20 text-transparent hover:border-yellow-400/50"
+              }`}>
+              ✕
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -409,6 +441,7 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
   const reactEnabled   = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendEnabled  = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
   const lairEnabled    = data.hasLairActions ?? (data.lairActions ?? []).length > 0
+  const legResEnabled  = data.hasLegendaryResistance ?? false
   const spellEnabled   = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
 
   return (
@@ -542,6 +575,20 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
               </label>
             </PopTransition>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Legendary Resistance
+              <input type="checkbox" checked={legResEnabled} onChange={e => onUpdate({ hasLegendaryResistance: e.target.checked })} />
+            </label>
+            <PopTransition show={legResEnabled}>
+              <label className="flex items-center justify-between text-xs text-white/40 pl-3">
+                Uses per day
+                <NumInput value={data.legendaryResistanceMax ?? 3} min={0}
+                  onChange={e => onUpdate({ legendaryResistanceMax: parseInt(e.target.value) || 0 })}
+                  className="w-14 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none transition-colors focus:bg-white/15" />
+              </label>
+            </PopTransition>
+          </div>
           <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
             Lair Actions
             <input type="checkbox" checked={lairEnabled} onChange={e => onUpdate({ hasLairActions: e.target.checked })} />
@@ -657,6 +704,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   const reactEnabled       = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendaryEnabled   = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
   const lairEnabled        = data.hasLairActions ?? (data.lairActions ?? []).length > 0
+  const legendaryResistanceEnabled = data.hasLegendaryResistance ?? false
   const spellcastingEnabled = data.hasSpellcasting ?? (levels.length > 0 || !!data.spellcastingAbility)
   const spellUsageMode      = data.spellUsageMode ?? "slots"
 
@@ -685,6 +733,14 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
           onAdd={addTrait}
           onChange={changeTrait}
           onRemove={removeTrait}
+          extra={legendaryResistanceEnabled ? (
+            <LegendaryResistanceTracker
+              used={data.legendaryResistanceUsed ?? 0}
+              max={data.legendaryResistanceMax ?? 3}
+              readOnly={readOnly}
+              onChangeUsed={n => onUpdate({ legendaryResistanceUsed: n })}
+            />
+          ) : undefined}
         />
       )}
 
