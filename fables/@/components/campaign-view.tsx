@@ -13,10 +13,19 @@ import { usePopoverPosition, useClickOutside } from "./collab/usePortalMenu"
 import { useChannelSuffix } from "./party/partyTypes"
 import { supabase } from "../../src/supabase"
 
+interface DmDeathSaves {
+  successes: number
+  failures: number
+}
+
 interface CampaignData {
   partyCode?: string
   description?: string
   rosterFields?: Partial<Record<RosterFieldKey, boolean>>  // DM's per-campaign choice of what shows on each party member's preview card
+  // The DM's own death save tally per character, kept on the campaign object
+  // (not the character's own data) so it's genuinely independent of — and
+  // invisible to — whatever the player is tracking on their own sheet.
+  dmDeathSaves?: Record<string, DmDeathSaves>
 }
 
 interface CharData {
@@ -173,18 +182,22 @@ function RosterFieldsMenu({ rosterFields, onChange }: { rosterFields: CampaignDa
 
 type CampaignTab = "overview" | "initiative" | "chat"
 
-export function CampaignView({ campaign }: Props) {
-  const { user, updateSharedObject, updateObject } = useUserContext()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+// Everything about a campaign's live roster — fetching, realtime sync, and
+// the DM write-through actions (HP, conditions, kick) — factored out so both
+// the full CampaignView (Overview tab) and CampaignRosterSidebar (the compact
+// "characters only" dock, see below) can share one subscription instead of
+// each opening their own when both happen to be open for the same campaign.
+// useChannelSuffix keeps their realtime channel topics from colliding if
+// that does happen (same pattern as usePartyLatestMessageAt).
+function useCampaignRoster(campaign: SidebarObject) {
+  const { updateSharedObject, updateObject } = useUserContext()
   const [partyMembers, setPartyMembers] = useState<SidebarObject[]>([])
-  const [activeTab, setActiveTab] = useState<CampaignTab>("overview")
   const [kickConfirmId, setKickConfirmId] = useState<string | null>(null)
   const [kicking, setKicking] = useState(false)
+  const channelSuffix = useChannelSuffix()
 
   const campaignData = safeParseJson(campaign.data) as CampaignData
   const partyCode = campaignData.partyCode ?? ""
-  const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
-  const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
 
   // The DM owns their own campaign object, so a plain updateObject() write is
   // enough here — same reasoning as InitiativeTracker.tsx's encounter storage
@@ -194,14 +207,14 @@ export function CampaignView({ campaign }: Props) {
     updateObject(campaign.id, { data: { ...campaignData, rosterFields: next } as unknown as JSON }).catch(e => console.error(e))
   }
 
-  const chatLatestMessageAt = usePartyLatestMessageAt(partyCode, user?.id ?? "")
-  // Never show the dot while the Chat tab is the one you're looking at — it's
-  // definitionally seen. Without this, the dot could linger after opening
-  // Chat until some unrelated re-render happened to re-read the "seen"
-  // timestamp PartyServer had already written to localStorage.
-  const chatUnread = !!partyCode && !!user?.id && activeTab !== "chat" && isPartyUnread(user.id, partyCode, chatLatestMessageAt)
-
-  const channelSuffix = useChannelSuffix()
+  // The DM's own death save tally, stored on the campaign object (see
+  // CampaignData.dmDeathSaves) rather than the character — a deliberately
+  // separate, DM-only count that never touches (or is visible from) what
+  // the player rolls and tracks on their own sheet.
+  function updateDmDeathSaves(characterId: string, next: DmDeathSaves) {
+    const current = campaignData.dmDeathSaves ?? {}
+    updateObject(campaign.id, { data: { ...campaignData, dmDeathSaves: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
+  }
 
   useEffect(() => {
     if (!partyCode) return
@@ -297,10 +310,6 @@ export function CampaignView({ campaign }: Props) {
     } catch (e) { console.error(e) }
   }
 
-  function copyCode() {
-    if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
-  }
-
   // Kicking just clears the party code on the player's own character — same
   // as if they'd left voluntarily from their Info tab. Uses the same
   // DM-write-through path (and RLS policy) as updatePartyMemberHp above.
@@ -318,6 +327,35 @@ export function CampaignView({ campaign }: Props) {
       setKicking(false)
       setKickConfirmId(null)
     }
+  }
+
+  return {
+    campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
+    updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
+  }
+}
+
+export function CampaignView({ campaign }: Props) {
+  const { user } = useUserContext()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<CampaignTab>("overview")
+  const {
+    campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
+    updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
+  } = useCampaignRoster(campaign)
+
+  const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
+  const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
+
+  const chatLatestMessageAt = usePartyLatestMessageAt(partyCode, user?.id ?? "")
+  // Never show the dot while the Chat tab is the one you're looking at — it's
+  // definitionally seen. Without this, the dot could linger after opening
+  // Chat until some unrelated re-render happened to re-read the "seen"
+  // timestamp PartyServer had already written to localStorage.
+  const chatUnread = !!partyCode && !!user?.id && activeTab !== "chat" && isPartyUnread(user.id, partyCode, chatLatestMessageAt)
+
+  function copyCode() {
+    if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
   }
 
   if (expandedId) {
@@ -444,6 +482,8 @@ export function CampaignView({ campaign }: Props) {
               showConditions={showConditions}
               kickConfirmId={kickConfirmId}
               kicking={kicking}
+              dmDeathSaves={campaignData.dmDeathSaves?.[char.id] ?? { successes: 0, failures: 0 }}
+              onChangeDmDeathSaves={next => updateDmDeathSaves(char.id, next)}
               onExpand={() => setExpandedId(char.id)}
               onKickConfirm={() => setKickConfirmId(char.id)}
               onKickCancel={() => setKickConfirmId(null)}
@@ -458,24 +498,128 @@ export function CampaignView({ campaign }: Props) {
   )
 }
 
+// ── Roster sidebar ────────────────────────────────────────────────────────
+// The compact "characters only" dock, opened from the ⓘ context menu on a
+// campaign in the left sidebar (see app-sidebar.tsx) and rendered alongside
+// the main pane workspace in Dashboard.tsx. Deliberately excludes the party
+// code card and the Initiative/Chat tabs — just the roster, so it's small
+// enough to keep visible while you work on something else.
+export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
+  campaign: SidebarObject
+  onClose: () => void
+  onOpenCharacter: (characterId: string) => void
+}) {
+  const {
+    campaignData, partyCode, partyMembers,
+    updateRosterFields, updateDmDeathSaves, addConditionToMember, removeConditionFromMember,
+  } = useCampaignRoster(campaign)
+
+  const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
+  const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
+
+  return (
+    <div className="w-48 shrink-0 h-full min-h-0 flex flex-col rounded-xl bg-card ring-1 ring-border overflow-hidden text-foreground">
+      <div className="flex items-center gap-1.5 px-2 py-2 border-b border-foreground/10 shrink-0">
+        <p className="flex-1 min-w-0 text-xs font-bold tracking-wide truncate">{campaign.name}</p>
+        <RosterFieldsMenu rosterFields={campaignData.rosterFields} onChange={updateRosterFields} />
+        <button type="button" onClick={onClose} title="Hide roster sidebar"
+          className="size-5 flex items-center justify-center rounded-md hover:bg-foreground/10 text-foreground/50 hover:text-foreground shrink-0 transition-colors">
+          ✕
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-auto p-1.5 flex flex-col gap-1.5">
+        {partyCode === "" && (
+          <p className="text-[10px] text-foreground/30 italic text-center py-6">This campaign has no party code.</p>
+        )}
+        {partyCode !== "" && partyMembers.length === 0 && (
+          <div className="rounded-xl bg-muted ring-1 ring-border p-3 text-center">
+            <p className="text-[10px] text-foreground/40 italic">No characters have joined yet.</p>
+          </div>
+        )}
+        {partyMembers.map(char => (
+          <PartyMemberCard
+            key={char.id}
+            char={char}
+            charData={safeParseJson(char.data) as CharData}
+            enabledStatCells={enabledStatCells}
+            showConditions={showConditions}
+            compact
+            dmDeathSaves={campaignData.dmDeathSaves?.[char.id] ?? { successes: 0, failures: 0 }}
+            onChangeDmDeathSaves={next => updateDmDeathSaves(char.id, next)}
+            onExpand={() => onOpenCharacter(char.id)}
+            onAddCondition={name => addConditionToMember(char.id, name)}
+            onRemoveCondition={id => removeConditionFromMember(char.id, id)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// A DM-only death save tally, independent of whatever the player rolls and
+// tracks on their own sheet — see CampaignData.dmDeathSaves. Deliberately
+// simple (no auto-stabilize/dead transitions like the player's own
+// DeathSavingThrows panel) since this is just the DM's private bookkeeping,
+// not a mechanic that should silently change the character's real state.
+function DmDeathSaveTracker({ saves, onChange }: { saves: DmDeathSaves; onChange: (next: DmDeathSaves) => void }) {
+  const { successes, failures } = saves
+  function toggle(kind: "successes" | "failures", i: number) {
+    const current = saves[kind]
+    const filled = i < current
+    const next = filled && i === current - 1 ? current - 1 : Math.min(3, current + 1)
+    onChange({ ...saves, [kind]: next })
+  }
+  return (
+    <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 border-t border-foreground/5" onClick={e => e.stopPropagation()}>
+      <span className="text-[8px] text-foreground/35 uppercase tracking-widest shrink-0">DM Death Saves</span>
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <button key={i} type="button" onClick={() => toggle("successes", i)}
+            className={`size-3.5 rounded-full border flex items-center justify-center text-[7px] leading-none transition-colors ${
+              i < successes ? "bg-emerald-500/25 border-emerald-400 text-emerald-300" : "border-foreground/20 text-transparent hover:border-emerald-400/50"
+            }`}>
+            ♥
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <button key={i} type="button" onClick={() => toggle("failures", i)}
+            className={`size-3.5 rounded-full border flex items-center justify-center text-[7px] leading-none transition-colors ${
+              i < failures ? "bg-red-500/25 border-red-400 text-red-300" : "border-foreground/20 text-transparent hover:border-red-400/50"
+            }`}>
+            ☠
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PartyMemberCard({
   char, charData, enabledStatCells, showConditions,
   kickConfirmId, kicking,
+  dmDeathSaves, onChangeDmDeathSaves,
   onExpand, onKickConfirm, onKickCancel, onKick,
   onAddCondition, onRemoveCondition,
+  compact = false,
 }: {
   char: SidebarObject
   charData: CharData
   enabledStatCells: typeof STAT_CELL_FIELDS
   showConditions: boolean
-  kickConfirmId: string | null
-  kicking: boolean
+  kickConfirmId?: string | null
+  kicking?: boolean
+  dmDeathSaves: DmDeathSaves
+  onChangeDmDeathSaves: (next: DmDeathSaves) => void
   onExpand: () => void
-  onKickConfirm: () => void
-  onKickCancel: () => void
-  onKick: () => void
+  onKickConfirm?: () => void
+  onKickCancel?: () => void
+  onKick?: () => void
   onAddCondition: (name: string) => void
   onRemoveCondition: (id: string) => void
+  compact?: boolean
 }) {
   const [showConditionMenu, setShowConditionMenu] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -490,23 +634,27 @@ function PartyMemberCard({
 
   return (
     <div className="rounded-xl bg-muted ring-1 ring-border hover:ring-border transition-all overflow-hidden">
-      {/* Top row — portrait + name + arrow */}
-      <div className="p-3 flex items-center gap-3 cursor-pointer" onClick={onExpand}>
-        <div className="size-10 rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center">
-          {charData.portrait ? (
-            <img src={charData.portrait} alt={char.name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-lg leading-none select-none">🧙</span>
-          )}
-        </div>
+      {/* Top row — name + arrow (portrait/kick only in the full, non-compact card) */}
+      <div className={`${compact ? "p-2 gap-2" : "p-3 gap-3"} flex items-center cursor-pointer`} onClick={onExpand}>
+        {!compact && (
+          <div className="size-10 rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+            {charData.portrait ? (
+              <img src={charData.portrait} alt={char.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-lg leading-none select-none">🧙</span>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">{char.name}</p>
-          <p className="text-[10px] text-foreground/50 uppercase tracking-wider truncate">
-            {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}
-          </p>
+          <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-foreground truncate`}>{char.name}</p>
+          {!compact && (
+            <p className="text-[10px] text-foreground/50 uppercase tracking-wider truncate">
+              {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}
+            </p>
+          )}
           {charData.maxHp ? (
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className={`${compact ? "mt-1" : "mt-1.5"} flex items-center gap-2`}>
               <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
                 <div className={`h-full ${hpColor} transition-all`} style={{ width: `${hpPercent}%` }} />
               </div>
@@ -515,34 +663,36 @@ function PartyMemberCard({
           ) : null}
         </div>
 
-        {kickConfirmId === char.id ? (
-          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+        {!compact && (
+          kickConfirmId === char.id ? (
+            <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                disabled={kicking}
+                onClick={onKick}
+                className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+              >
+                {kicking ? "Kicking…" : "Confirm kick"}
+              </button>
+              <button
+                type="button"
+                disabled={kicking}
+                onClick={onKickCancel}
+                className="text-[10px] px-2 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              disabled={kicking}
-              onClick={onKick}
-              className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+              onClick={e => { e.stopPropagation(); onKickConfirm?.() }}
+              title="Remove from party"
+              className="text-[10px] px-2 py-1 rounded-full bg-foreground/5 hover:bg-red-500/20 text-foreground/40 hover:text-red-300 transition-colors shrink-0"
             >
-              {kicking ? "Kicking…" : "Confirm kick"}
+              Kick
             </button>
-            <button
-              type="button"
-              disabled={kicking}
-              onClick={onKickCancel}
-              className="text-[10px] px-2 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); onKickConfirm() }}
-            title="Remove from party"
-            className="text-[10px] px-2 py-1 rounded-full bg-foreground/5 hover:bg-red-500/20 text-foreground/40 hover:text-red-300 transition-colors shrink-0"
-          >
-            Kick
-          </button>
+          )
         )}
 
         <span className="text-foreground/30 text-xs shrink-0">→</span>
@@ -553,14 +703,20 @@ function PartyMemberCard({
       {enabledStatCells.length > 0 && (
         <div className="flex border-t border-foreground/5 divide-x divide-foreground/5">
           {enabledStatCells.map(f => (
-            <StatCell key={f.key} label={f.shortLabel} value={rosterFieldValue(f.key, charData, level)} />
+            <StatCell key={f.key} label={f.shortLabel} value={rosterFieldValue(f.key, charData, level)} compact={compact} />
           ))}
         </div>
       )}
 
+      {/* DM's own death save tally — only surfaces once the character is
+          actually down, and never touches the player's own tracked saves. */}
+      {charData.maxHp != null && (charData.hp ?? 0) <= 0 && (
+        <DmDeathSaveTracker saves={dmDeathSaves} onChange={onChangeDmDeathSaves} />
+      )}
+
       {/* Conditions row — DM can add/remove conditions right from the roster */}
       {showConditions && (
-        <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-t border-foreground/5" onClick={e => e.stopPropagation()}>
+        <div className={`flex flex-wrap items-center gap-1 ${compact ? "px-2 py-1.5" : "px-3 py-2"} border-t border-foreground/5`} onClick={e => e.stopPropagation()}>
           {conditions.map(c => (
             <button
               key={c.id}
@@ -606,9 +762,9 @@ function PartyMemberCard({
   )
 }
 
-function StatCell({ label, value }: { label: string; value: string }) {
+function StatCell({ label, value, compact = false }: { label: string; value: string; compact?: boolean }) {
   return (
-    <div className="flex-1 min-w-0 flex flex-col items-center py-2 gap-0.5">
+    <div className={`flex-1 min-w-0 flex flex-col items-center ${compact ? "py-1" : "py-2"} gap-0.5`}>
       <span className="text-[9px] text-foreground/30 uppercase tracking-widest">{label}</span>
       <span className="text-xs font-semibold text-foreground tabular-nums">{value}</span>
     </div>

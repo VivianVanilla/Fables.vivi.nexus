@@ -120,7 +120,7 @@ export function PartyServer({
   )
 
   return (
-    <div className="flex flex-1 min-h-0 relative">
+    <div className="flex flex-1 min-h-0 min-w-0 relative overflow-hidden">
       {/* Mobile backdrop — tap outside the drawer to close it */}
       {railOpen && (
         <div className="fixed inset-0 z-20 bg-black/30 md:hidden" onClick={() => setRailOpen(false)} />

@@ -26,6 +26,7 @@ export interface MonsterData {
   hidePortrait?: boolean    // display setting — hides the artwork to make the sheet more compact
   description?: string
   hideDescription?: boolean // display setting — hides the flavor text to make the sheet more compact
+  collapsibleAbilities?: boolean // display setting — traits/actions/spellcasting start collapsed to name+badges, click to expand
   creatureType?: string   // e.g. "Medium beast, unaligned"
   alignment?: string
 

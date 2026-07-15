@@ -127,6 +127,28 @@ export function splitPane(tree: LayoutNode, paneId: string, direction: "row" | "
   return { tree: recur(tree), newPaneId: newLeaf.id }
 }
 
+// Splits paneId along one of its own outer edges, independent of whatever
+// splits already exist elsewhere in the tree — used by the edge-drag handles
+// on every pane (see PaneView.tsx) so you can always grab a pane's own
+// top/bottom/left/right edge and set its size, whether or not anything is
+// already split next to it. Returns the new split's id too, so the caller
+// can immediately drive a live resize from the same pointer-down that
+// triggered the split (see useWorkspace.ts's splitAtEdge).
+export function splitPaneAtEdge(tree: LayoutNode, paneId: string, edge: Exclude<Edge, "center">, objectId: string): { tree: LayoutNode; newPaneId: string; splitId: string } {
+  const direction: "row" | "column" = edge === "left" || edge === "right" ? "row" : "column"
+  const newLeaf = createLeaf([objectId])
+  const splitId = nanoid()
+  function recur(node: LayoutNode): LayoutNode {
+    if (node.type === "leaf") {
+      if (node.id !== paneId) return node
+      const children = edge === "left" || edge === "top" ? [newLeaf, node] : [node, newLeaf]
+      return { type: "split", id: splitId, direction, children, sizes: [50, 50] }
+    }
+    return { ...node, children: node.children.map(recur) }
+  }
+  return { tree: recur(tree), newPaneId: newLeaf.id, splitId }
+}
+
 // Drag-and-drop: move objectId out of fromPaneId and into targetPaneId. A
 // "center" drop just merges it into the target's tab strip; an edge drop
 // splits the target pane and places the tab in the new half. Works even

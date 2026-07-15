@@ -10,7 +10,7 @@ import type { SidebarObject } from "@/components/sidebar-utils"
 import {
   type LayoutNode, type Edge,
   createLeaf, firstLeafId, findLeaf, findLeafContaining,
-  openTab, setActiveTab, closeTab, splitPane, moveTab, setSplitSizes, pruneMissing,
+  openTab, setActiveTab, closeTab, splitPane, splitPaneAtEdge, moveTab, setSplitSizes, pruneMissing,
 } from "./paneTree"
 
 const STORAGE_KEY = "fables-workspace-layout"
@@ -75,6 +75,20 @@ export function useWorkspace(objects: SidebarObject[]) {
     setFocusedPaneId(newPaneId)
   }
 
+  // Splits paneId along its own outer edge, regardless of whatever's already
+  // split next to it — used by the edge-drag handles (PaneView.tsx) so a
+  // pane's top/bottom/left/right edge is always grabbable. Returns the new
+  // split's id synchronously so the caller can immediately drive a live
+  // resize from the same pointer-down that triggered the split.
+  function splitAtEdge(paneId: string, edge: Exclude<Edge, "center">): string | null {
+    const leaf = findLeaf(tree, paneId)
+    if (!leaf?.activeId) return null
+    const { tree: next, newPaneId, splitId } = splitPaneAtEdge(tree, paneId, edge, leaf.activeId)
+    setTree(next)
+    setFocusedPaneId(newPaneId)
+    return splitId
+  }
+
   function dropTab(targetPaneId: string, objectId: string, fromPaneId: string, edge: Edge) {
     if (fromPaneId === targetPaneId && edge === "center") return
     const { tree: next, focusPaneId } = moveTab(tree, objectId, fromPaneId, targetPaneId, edge)
@@ -86,5 +100,5 @@ export function useWorkspace(objects: SidebarObject[]) {
     setTree(setSplitSizes(tree, splitId, sizes))
   }
 
-  return { tree, focusedPaneId: effectiveFocusedPaneId, setFocusedPaneId, openObject, activateTab, closeObjectTab, split, dropTab, resize }
+  return { tree, focusedPaneId: effectiveFocusedPaneId, setFocusedPaneId, openObject, activateTab, closeObjectTab, split, splitAtEdge, dropTab, resize }
 }

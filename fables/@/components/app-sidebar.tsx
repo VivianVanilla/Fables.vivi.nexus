@@ -1,6 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search } from "lucide-react"
+import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search, PanelRight } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -46,9 +46,10 @@ interface BgImage {
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSelectObject?: (obj: SidebarObject | null) => void
+  onShowRosterSidebar?: (obj: SidebarObject) => void
 }
 
-export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
+export function AppSidebar({ onSelectObject, onShowRosterSidebar, ...props }: AppSidebarProps) {
   const { user, objects, loading, updateObject, deleteObject, batchUpdateObjects } = useUserContext()
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -588,6 +589,17 @@ export function AppSidebar({ onSelectObject, ...props }: AppSidebarProps) {
                 onClick={() => { handleSetRootFolder(contextMenu.item); setContextMenu(null) }}
                 className="block w-full rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground">
                 {isNoNesting(contextMenu.item) ? "✓ No-Nesting (click to disable)" : "Set Folder to 'No Nesting'"}
+              </button>
+            </>
+          )}
+          {contextMenu.item.type === "campaign" && onShowRosterSidebar && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button type="button"
+                onClick={() => { onShowRosterSidebar(contextMenu.item); setContextMenu(null) }}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground">
+                <PanelRight className="size-3.5" />
+                Show Roster Sidebar
               </button>
             </>
           )}

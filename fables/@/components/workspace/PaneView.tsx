@@ -6,11 +6,14 @@
 // overlay during drag-over shows which one is about to happen.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { X, SplitSquareHorizontal, SplitSquareVertical } from "lucide-react"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import { ObjectContent } from "./ObjectContent"
 import type { LeafNode, Edge } from "./paneTree"
+
+const MIN_EDGE_SPLIT_PERCENT = 6
+const EDGE_DRAG_THRESHOLD_PX = 6
 
 export const PANE_TAB_DRAG_TYPE = "application/x-fable-pane-tab"
 
@@ -46,7 +49,7 @@ const EDGE_OVERLAY_STYLE: Record<Edge, React.CSSProperties> = {
 
 export function PaneView({
   leaf, objects, focused,
-  onFocus, onActivateTab, onCloseTab, onSplit, onDropTab,
+  onFocus, onActivateTab, onCloseTab, onSplit, onDropTab, onSplitAtEdge, onResizeSplit,
 }: {
   leaf: LeafNode
   objects: SidebarObject[]
@@ -56,8 +59,11 @@ export function PaneView({
   onCloseTab: (objectId: string) => void
   onSplit: (direction: "row" | "column") => void
   onDropTab: (objectId: string, fromPaneId: string, edge: Edge) => void
+  onSplitAtEdge: (edge: Exclude<Edge, "center">) => string | null
+  onResizeSplit: (splitId: string, sizes: number[]) => void
 }) {
   const [dragOverEdge, setDragOverEdge] = useState<Edge | null>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const tabObjects = leaf.tabs
     .map(id => objects.find(o => o.id === id))
@@ -85,9 +91,57 @@ export function PaneView({
     onDropTab(payload.objectId, payload.fromPaneId, "center")
   }
 
+  // Grab any of this pane's own outer edges to carve out a new sibling and
+  // resize live in one motion — works regardless of whether anything is
+  // already split next to this pane, unlike the between-sibling handles in
+  // PaneLayoutView (which only exist once a split is already there).
+  //
+  // The split itself only actually gets created once the pointer has moved
+  // past a small threshold — a bare click near the edge (no real drag) does
+  // nothing, instead of instantly spawning a pane, which read as a bug more
+  // than a feature.
+  function startEdgeDrag(edge: Exclude<Edge, "center">) {
+    return (e: React.PointerEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const rect = contentRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const direction: "row" | "column" = edge === "left" || edge === "right" ? "row" : "column"
+      const containerSize = direction === "row" ? rect.width : rect.height
+      const originStart = direction === "row" ? rect.left : rect.top
+      if (containerSize <= 0) return
+
+      const downX = e.clientX
+      const downY = e.clientY
+      let splitId: string | null = null
+
+      function applyResize(ev: PointerEvent) {
+        const pos = direction === "row" ? ev.clientX : ev.clientY
+        const percent = ((pos - originStart) / containerSize) * 100
+        const clamped = Math.max(MIN_EDGE_SPLIT_PERCENT, Math.min(100 - MIN_EDGE_SPLIT_PERCENT, percent))
+        onResizeSplit(splitId as string, [clamped, 100 - clamped])
+      }
+
+      function onMove(ev: PointerEvent) {
+        if (splitId) { applyResize(ev); return }
+        const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY)
+        if (moved < EDGE_DRAG_THRESHOLD_PX) return
+        splitId = onSplitAtEdge(edge)
+        if (!splitId) { onUp(); return }
+        applyResize(ev)
+      }
+      function onUp() {
+        window.removeEventListener("pointermove", onMove)
+        window.removeEventListener("pointerup", onUp)
+      }
+      window.addEventListener("pointermove", onMove)
+      window.addEventListener("pointerup", onUp)
+    }
+  }
+
   return (
     <div
-      className={`flex flex-col h-full min-h-0 rounded-lg overflow-hidden ring-1 transition-colors ${focused ? "ring-foreground/20" : "ring-border/60"}`}
+      className={`flex flex-col h-full min-h-0 min-w-0 rounded-lg overflow-hidden ring-1 transition-colors ${focused ? "ring-foreground/20" : "ring-border/60"}`}
       onMouseDownCapture={onFocus}
     >
       {/* Tab strip */}
@@ -136,11 +190,26 @@ export function PaneView({
 
       {/* Content + drop-zone overlay */}
       <div
-        className="relative flex-1 min-h-0 bg-background"
+        ref={contentRef}
+        className="relative flex-1 min-h-0 min-w-0 bg-background"
         onDragOver={handleDragOver}
         onDragLeave={() => setDragOverEdge(null)}
         onDrop={handleDrop}
       >
+        {/* Edge-drag handles — grab any side of this pane to split + resize
+            live in one motion, whether or not it's already split next to
+            something. Invisible hit zones (cursor change is the only
+            affordance) so there's never a colored bar left sitting on
+            screen after a drag ends. */}
+        <div onPointerDown={startEdgeDrag("top")} title="Drag to split up"
+          className="absolute top-0 inset-x-0 h-1.5 z-20 cursor-row-resize" />
+        <div onPointerDown={startEdgeDrag("bottom")} title="Drag to split down"
+          className="absolute bottom-0 inset-x-0 h-1.5 z-20 cursor-row-resize" />
+        <div onPointerDown={startEdgeDrag("left")} title="Drag to split left"
+          className="absolute left-0 inset-y-0 w-1.5 z-20 cursor-col-resize" />
+        <div onPointerDown={startEdgeDrag("right")} title="Drag to split right"
+          className="absolute right-0 inset-y-0 w-1.5 z-20 cursor-col-resize" />
+
         {active ? (
           <ObjectContent object={active} />
         ) : (

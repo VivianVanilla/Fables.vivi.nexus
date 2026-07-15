@@ -32,7 +32,12 @@ export function ShareCard({ payload }: { payload: SharePayload }) {
       </div>
       <div className="px-3 py-2">
         <p className="text-sm font-semibold text-foreground">{name}</p>
-        {description && <p className="text-xs text-foreground/60 mt-1 whitespace-pre-wrap">{description}</p>}
+        {/* Capped and self-scrolling — a long backstory/notes field (a whole
+            page of prose isn't unusual) would otherwise render at full,
+            uncapped height inline in the message list. */}
+        {description && (
+          <p className="text-xs text-foreground/60 mt-1 whitespace-pre-wrap max-h-48 overflow-y-auto">{description}</p>
+        )}
       </div>
     </div>
   )

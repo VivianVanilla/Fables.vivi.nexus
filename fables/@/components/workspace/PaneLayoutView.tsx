@@ -9,7 +9,11 @@ import type { SidebarObject } from "@/components/sidebar-utils"
 import { PaneView } from "./PaneView"
 import type { LayoutNode, Edge } from "./paneTree"
 
-const MIN_PANE_PERCENT = 15
+// Kept just large enough that a pane's tab strip (name + close + split
+// buttons) doesn't get crushed — below this a pane stops being usable, not
+// just small. Lowered from an earlier, more conservative 15% so splitting
+// aggressively (lots of panes) has real room to work.
+const MIN_PANE_PERCENT = 6
 
 function ResizeHandle({ direction, onResize, containerRef }: { direction: "row" | "column"; onResize: (deltaPercent: number) => void; containerRef: RefObject<HTMLDivElement | null> }) {
   const containerSizeRef = useRef(0)
@@ -41,14 +45,14 @@ function ResizeHandle({ direction, onResize, containerRef }: { direction: "row" 
       onPointerDown={startDrag}
       className={`shrink-0 group relative z-10 ${direction === "row" ? "w-2 -mx-1 cursor-col-resize" : "h-2 -my-1 cursor-row-resize"}`}
     >
-      <div className={`absolute bg-transparent group-hover:bg-primary/40 transition-colors ${direction === "row" ? "inset-y-0 left-1/2 -translate-x-1/2 w-0.5" : "inset-x-0 top-1/2 -translate-y-1/2 h-0.5"}`} />
+      <div className={`absolute bg-transparent group-hover:bg-foreground/15 transition-colors ${direction === "row" ? "inset-y-0 left-1/2 -translate-x-1/2 w-0.5" : "inset-x-0 top-1/2 -translate-y-1/2 h-0.5"}`} />
     </div>
   )
 }
 
 export function PaneLayoutView({
   node, objects, focusedPaneId,
-  onFocus, onActivateTab, onCloseTab, onSplit, onDropTab, onResize,
+  onFocus, onActivateTab, onCloseTab, onSplit, onSplitAtEdge, onDropTab, onResize,
 }: {
   node: LayoutNode
   objects: SidebarObject[]
@@ -57,6 +61,7 @@ export function PaneLayoutView({
   onActivateTab: (paneId: string, objectId: string) => void
   onCloseTab: (paneId: string, objectId: string) => void
   onSplit: (paneId: string, direction: "row" | "column") => void
+  onSplitAtEdge: (paneId: string, edge: Exclude<Edge, "center">) => string | null
   onDropTab: (targetPaneId: string, objectId: string, fromPaneId: string, edge: Edge) => void
   onResize: (splitId: string, sizes: number[]) => void
 }) {
@@ -72,7 +77,9 @@ export function PaneLayoutView({
         onActivateTab={objectId => onActivateTab(node.id, objectId)}
         onCloseTab={objectId => onCloseTab(node.id, objectId)}
         onSplit={direction => onSplit(node.id, direction)}
+        onSplitAtEdge={edge => onSplitAtEdge(node.id, edge)}
         onDropTab={(objectId, fromPaneId, edge) => onDropTab(node.id, objectId, fromPaneId, edge)}
+        onResizeSplit={onResize}
       />
     )
   }
@@ -91,7 +98,7 @@ export function PaneLayoutView({
   }
 
   return (
-    <div ref={containerRef} className={`flex ${node.direction === "row" ? "flex-row" : "flex-col"} h-full min-h-0 w-full gap-1`}>
+    <div ref={containerRef} className={`flex ${node.direction === "row" ? "flex-row" : "flex-col"} h-full min-h-0 w-full min-w-0 gap-1 overflow-hidden`}>
       {node.children.map((child, i) => (
         <div key={child.id} className="contents">
           <div
@@ -106,6 +113,7 @@ export function PaneLayoutView({
               onActivateTab={onActivateTab}
               onCloseTab={onCloseTab}
               onSplit={onSplit}
+              onSplitAtEdge={onSplitAtEdge}
               onDropTab={onDropTab}
               onResize={onResize}
             />

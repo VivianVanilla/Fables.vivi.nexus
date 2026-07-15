@@ -905,8 +905,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   function renderCombatTab() {
     return (
-      <div className="flex flex-col gap-4 flex-1 min-h-0">
-        <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+      // No flex-1/min-h-0 here — this tab's own ancestor (the Body wrapper,
+      // just below) is the actual scroll container (overflow-auto), so this
+      // content should just render at its natural height and let that
+      // ancestor scroll if it's tall. flex-1/min-h-0 on a row that has a
+      // sibling (SpellsEquipPanel) NOT similarly shrinkable made flexbox's
+      // shrink algorithm crush this row toward 0 height whenever the
+      // sibling's natural content got tall (e.g. lots of cantrips) — its
+      // own content (the AC ring, etc.) then visually spilled outside that
+      // collapsed box instead of actually being missing.
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row gap-4">
 
           {/* Col 1: HP / speed / hit dice / conditions / dice */}
           <div className="lg:w-52 shrink-0 flex flex-col gap-3">

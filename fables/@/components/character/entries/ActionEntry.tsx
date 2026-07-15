@@ -2,9 +2,10 @@
 // ActionEntry.tsx — read-only monster action/trait card, color-coded by category
 //
 // Always shows: Name  [+5 atk] [2d6+3 fire] [DC 14 Dex]              [⟳5-6]
-//               full description text underneath (no expand/collapse — the
-//               point is you can read a whole stat block without clicking
-//               through every entry one at a time).
+//               full description text underneath — unless the monster has
+//               "Collapsible abilities" on (Edit Stat Block → Display), in
+//               which case the description starts hidden and clicking the
+//               name row toggles it, for a denser read on a big stat block.
 //
 // Adding, editing, and deleting entries all happen in Edit Stat Block
 // instead (see ActionEntryEditor.tsx, used there) — this component has no
@@ -16,6 +17,7 @@
 // + description.
 // ════════════════════════════════════════════════════════════════════════════
 
+import { useState } from "react"
 import type { MonsterAction, ActionCategory } from "../../monster-types"
 import { Markdown } from "../../ui/Markdown"
 import { DamagePills } from "../ui/DamageFields"
@@ -27,11 +29,14 @@ interface ActionEntryProps {
   category: ActionCategory
   onChange: (patch: Partial<MonsterAction>) => void
   readOnly?: boolean
+  collapsible?: boolean
 }
 
-export function ActionEntry({ action, category, onChange, readOnly = false }: ActionEntryProps) {
+export function ActionEntry({ action, category, onChange, readOnly = false, collapsible = false }: ActionEntryProps) {
   const style = CATEGORY_STYLE[category]
   const segments = computeDamageSegments(action)
+  const [expanded, setExpanded] = useState(false)
+  const showDescription = !!action.description && (!collapsible || expanded)
 
   function rollRecharge() {
     if (readOnly || !action.recharge) return
@@ -41,8 +46,14 @@ export function ActionEntry({ action, category, onChange, readOnly = false }: Ac
 
   return (
     <div className={`rounded-xl bg-black/10 border ${style.border} px-3 py-2 flex flex-col gap-1`}>
-      <div className="flex items-start justify-between gap-2">
+      <div
+        className={`flex items-start justify-between gap-2 ${collapsible && action.description ? "cursor-pointer" : ""}`}
+        onClick={collapsible && action.description ? () => setExpanded(v => !v) : undefined}
+      >
         <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          {collapsible && action.description && (
+            <span className={`text-[10px] text-white/30 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}>▸</span>
+          )}
           <span className={`text-sm font-semibold ${style.text}`}>
             {action.name || <span className="text-white/30 italic">Unnamed</span>}
           </span>
@@ -61,7 +72,7 @@ export function ActionEntry({ action, category, onChange, readOnly = false }: Ac
         </div>
 
         {action.recharge != null && (
-          <button type="button" onClick={rollRecharge} disabled={readOnly}
+          <button type="button" onClick={e => { e.stopPropagation(); rollRecharge() }} disabled={readOnly}
             title={action.rechargeUsed ? "Click to roll for recharge" : "Available"}
             className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-full transition-colors ${
               action.rechargeUsed ? "bg-white/10 text-white/30" : style.badge
@@ -71,7 +82,7 @@ export function ActionEntry({ action, category, onChange, readOnly = false }: Ac
         )}
       </div>
 
-      {action.description && <Markdown text={action.description} tone="dark" />}
+      {showDescription && <Markdown text={action.description!} tone="dark" />}
     </div>
   )
 }

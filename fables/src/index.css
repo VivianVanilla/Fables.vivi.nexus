@@ -747,6 +747,18 @@
   background-repeat: no-repeat;
 }
 
+/* Scrollbar chrome hidden everywhere — content stays scrollable (wheel,
+   touch, drag), just without a visible track/thumb. Matters most for the
+   split-pane workspace: however a pane is divided, its own scroll region
+   should never grow a visible bar of its own regardless of split shape. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

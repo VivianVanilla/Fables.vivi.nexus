@@ -130,12 +130,13 @@ function CompactField({ label, value, onChange, readOnly }: { label: string; val
 // from padding itself out with dead space or controls that don't do anything
 // here anymore.
 function ActionSection({
-  label, category, actions, readOnly, onChange, extra, beforeEntries,
+  label, category, actions, readOnly, onChange, extra, beforeEntries, collapsible,
 }: {
   label: string; category: ActionCategory; actions: MonsterAction[]; readOnly?: boolean
   onChange: (id: string, patch: Partial<MonsterAction>) => void
   extra?: React.ReactNode
   beforeEntries?: React.ReactNode  // rendered above the entry list — e.g. the Multiattack block in Actions
+  collapsible?: boolean
 }) {
   if (actions.length === 0 && !beforeEntries && !extra) return null
   return (
@@ -147,7 +148,7 @@ function ActionSection({
       {beforeEntries}
       <div className="flex flex-col gap-1.5">
         {actions.map(a => (
-          <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
+          <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly} collapsible={collapsible}
             onChange={p => onChange(a.id, p)} />
         ))}
       </div>
@@ -522,6 +523,10 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
             <input type="checkbox" checked={data.hideDescription ?? false} onChange={e => onUpdate({ hideDescription: e.target.checked })} />
             Hide description
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
+            <input type="checkbox" checked={data.collapsibleAbilities ?? false} onChange={e => onUpdate({ collapsibleAbilities: e.target.checked })} />
+            Collapsible abilities
+          </label>
         </div>
 
         {/* Core stats */}
@@ -736,6 +741,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   const isLucky = user?.email === LUCKY_EMAIL
   const [luckySpell, setLuckySpell] = useState<SpellItem | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [spellcastingExpanded, setSpellcastingExpanded] = useState(false)
   const [showAddSlotMenu, setShowAddSlotMenu] = useState(false)
   const [newSlotLevel, setNewSlotLevel] = useState(1)
   const [newSlotCount, setNewSlotCount] = useState(1)
@@ -844,7 +850,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
 
       {/* ── Traits — right before Actions, same shape but passive (no attack/damage/save) ── */}
       {traitsEnabled && (
-        <ActionSection label="Traits" category="trait" actions={traits} readOnly={readOnly}
+        <ActionSection label="Traits" category="trait" actions={traits} readOnly={readOnly} collapsible={data.collapsibleAbilities}
           onChange={changeTrait}
           extra={legendaryResistanceEnabled ? (
             <LegendaryResistanceTracker
@@ -860,7 +866,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
       {/* ── Action sections ──────────────────────────────────────────────── */}
       {ACTION_SECTIONS.filter(({ key }) => sectionEnabled[key]).map(({ key, category, label }) => (
         <ActionSection key={key} label={label} category={category}
-          actions={actionsBySection[key]} readOnly={readOnly}
+          actions={actionsBySection[key]} readOnly={readOnly} collapsible={data.collapsibleAbilities}
           onChange={(id, patch) => changeAction(key, id, patch)}
           beforeEntries={key === "actions" && multiattackEnabled ? (
             <MultiattackBlock description={data.multiattackDescription} readOnly={readOnly} />
@@ -879,7 +885,15 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
       {/* ── Spellcasting ─────────────────────────────────────────────────── */}
       {spellcastingEnabled && (
         <div className={`${CARD} p-3 flex flex-col gap-2 animate-in fade-in duration-200`}>
-          <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Spellcasting</span>
+          {data.collapsibleAbilities ? (
+            <button type="button" onClick={() => setSpellcastingExpanded(v => !v)}
+              className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-white/50 font-semibold self-start">
+              <span className={`text-[10px] text-white/30 transition-transform ${spellcastingExpanded ? "rotate-90" : ""}`}>▸</span>
+              Spellcasting
+            </button>
+          ) : (
+            <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Spellcasting</span>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             {readOnly ? (
@@ -922,6 +936,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
             )}
           </div>
 
+          {(!data.collapsibleAbilities || spellcastingExpanded) && <>
           {/* Rendered as ONE flat list of siblings (not nested per-level containers) so that
               changing a spell's level — which moves it between groups — reorders it within the
               same parent instead of unmounting/remounting it (which would lose the spell's own
@@ -1010,6 +1025,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
               )}
             </div>
           )}
+          </>}
         </div>
       )}
 
@@ -1022,7 +1038,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
           <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,calc(100vw-2rem))] overflow-hidden">
             <div className="p-6 flex flex-col items-center text-center gap-3"
               style={{ backgroundImage: "linear-gradient(135deg, #ff000033, #ff990033, #33cc3333, #0066ff33, #9900cc33)" }}>
-              <p className="text-2xl font-black text-white drop-shadow">YAYAY OMFG NEW SPELL :D</p>
+              <p className="text-2xl font-black text-white drop-shadow">YAYAY OMFG RAndom SPELL :D</p>
               <p className="text-lg font-bold text-white">{luckySpell.name || "Unnamed Spell"}</p>
               <p className="text-sm text-white/70">
                 {luckySpell.level === 0 ? "Cantrip" : `Level ${luckySpell.level}`}{luckySpell.school ? ` · ${luckySpell.school}` : ""}

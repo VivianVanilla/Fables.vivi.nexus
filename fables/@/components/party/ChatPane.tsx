@@ -145,7 +145,7 @@ export function ChatPane({
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 relative">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 relative overflow-hidden">
       <div className="px-3.5 py-2.5 border-b border-border shrink-0 flex items-center gap-2">
         {leftAccessory}
         <span className="text-sm font-bold text-foreground">{headerLabel}</span>
