@@ -695,7 +695,7 @@ function PartyMemberCard({
           )
         )}
 
-        <span className="text-foreground/30 text-xs shrink-0">→</span>
+        {!compact && <span className="text-foreground/30 text-xs shrink-0">→</span>}
       </div>
 
       {/* Stat row — only the fields turned on in the ⚙ menu above, in a

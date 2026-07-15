@@ -45,7 +45,7 @@ function ResizeHandle({ direction, onResize, containerRef }: { direction: "row" 
       onPointerDown={startDrag}
       className={`shrink-0 group relative z-10 ${direction === "row" ? "w-2 -mx-1 cursor-col-resize" : "h-2 -my-1 cursor-row-resize"}`}
     >
-      <div className={`absolute bg-transparent group-hover:bg-foreground/15 transition-colors ${direction === "row" ? "inset-y-0 left-1/2 -translate-x-1/2 w-0.5" : "inset-x-0 top-1/2 -translate-y-1/2 h-0.5"}`} />
+      <div className={`absolute bg-border group-hover:bg-foreground/30 transition-colors ${direction === "row" ? "inset-y-0 left-1/2 -translate-x-1/2 w-0.5" : "inset-x-0 top-1/2 -translate-y-1/2 h-0.5"}`} />
     </div>
   )
 }
@@ -97,13 +97,24 @@ export function PaneLayoutView({
     onResize(node.id, sizes)
   }
 
+  // No `gap` on this container — with percentage flex-basis + flexGrow:0/
+  // flexShrink:0 children, a CSS gap adds its own space ON TOP of the 100%
+  // the children already claim, and children that can't shrink can't give
+  // that space back. Each split (and worse, each further-nested split)
+  // compounded a few non-negotiable pixels of overflow, which became
+  // visible as content pushed past the viewport edge once the left sidebar
+  // ate into the available width. The breathing room between panes instead
+  // comes from padding on each child's own wrapper below — that insets the
+  // visible pane *within* its already-claimed percentage instead of adding
+  // extra width the row has to find room for, so it can't reintroduce the
+  // same overflow.
   return (
-    <div ref={containerRef} className={`flex ${node.direction === "row" ? "flex-row" : "flex-col"} h-full min-h-0 w-full min-w-0 gap-1 overflow-hidden`}>
+    <div ref={containerRef} className={`flex ${node.direction === "row" ? "flex-row" : "flex-col"} h-full min-h-0 w-full min-w-0 overflow-hidden`}>
       {node.children.map((child, i) => (
         <div key={child.id} className="contents">
           <div
             style={{ flexBasis: `${node.sizes[i]}%`, flexGrow: 0, flexShrink: 0 }}
-            className="min-h-0 min-w-0 h-full"
+            className="min-h-0 min-w-0 h-full p-0.5"
           >
             <PaneLayoutView
               node={child}
