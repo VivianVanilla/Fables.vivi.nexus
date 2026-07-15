@@ -45,14 +45,18 @@ interface Tone {
   code: string
 }
 
-const TONES: Record<"dark" | "slate", Tone> = {
+const TONES: Record<"dark" | "slate" | "auto", Tone> = {
   dark:  { text: "text-white/70",   heading: "text-white",        muted: "text-white/55",   border: "border-white/10",   headBg: "bg-white/5",     code: "bg-white/10 text-white/80" },
   slate: { text: "text-slate-400",  heading: "text-slate-100",    muted: "text-slate-400",  border: "border-slate-700",  headBg: "bg-slate-800/70", code: "bg-slate-800 text-purple-300" },
+  // For contexts that follow the app's light/dark theme (semantic shadcn
+  // tokens) instead of the character sheet's always-dark styling — e.g.
+  // party chat, which renders under both.
+  auto:  { text: "text-foreground/85", heading: "text-foreground", muted: "text-foreground/55", border: "border-border", headBg: "bg-foreground/5", code: "bg-foreground/10 text-foreground/80" },
 }
 
 interface MarkdownProps {
   text: string
-  tone?: "dark" | "slate"
+  tone?: "dark" | "slate" | "auto"
   size?: "sm" | "xs"
   className?: string
 }

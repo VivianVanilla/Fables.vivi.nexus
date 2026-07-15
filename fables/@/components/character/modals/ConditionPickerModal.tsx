@@ -1,11 +1,6 @@
 import { Modal } from "../ui/Modal"
 import type { ActiveCondition } from "../../character-types"
-
-const ALL_CONDITIONS = [
-  "Blinded", "Charmed", "Concentrating", "Deafened", "Exhaustion",
-  "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed",
-  "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious",
-]
+import { ALL_CONDITIONS } from "../../character-constants"
 
 interface Props {
   conditions: ActiveCondition[]

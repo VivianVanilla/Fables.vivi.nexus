@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "../../../src/supabase"
-import { safeParseJson } from "../character-utils"
+import { safeParseJson, nanoid } from "../character-utils"
 import type { SidebarObject } from "../sidebar-utils"
 import { DEFAULT_CHANNEL, useChannelSuffix, type Channel, type Message, type PartyMember, type SharePayload } from "./partyTypes"
 
@@ -126,6 +126,27 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
   }) {
     if (!currentUserId) return
     if (!input.body && !input.imageUrl && !input.payload) return
+
+    // Show the message the instant you hit send instead of waiting on the
+    // insert round-trip — that wait is what made sending feel slow. A
+    // temp id (never a real uuid, so it can't collide with the real row)
+    // marks it as pending until the insert resolves and swaps it in below.
+    const tempId = `pending:${nanoid()}`
+    const optimistic: Message = {
+      id: tempId,
+      created_at: new Date().toISOString(),
+      party_code: partyCode,
+      channel: input.channel ?? null,
+      sender_id: currentUserId,
+      sender_name: input.senderName,
+      body: input.body ?? null,
+      image_url: input.imageUrl ?? null,
+      recipient_id: input.recipientId ?? null,
+      type: input.type ?? "message",
+      payload: input.payload ?? null,
+    }
+    setMessages(prev => [...prev, optimistic])
+
     const { data, error } = await supabase.from("messages").insert({
       party_code: partyCode,
       sender_id: currentUserId,
@@ -137,13 +158,21 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
       type: input.type ?? "message",
       payload: input.payload ?? null,
     }).select().single()
-    if (error) { console.error("send error:", error); return }
+    if (error) {
+      console.error("send error:", error)
+      setMessages(prev => prev.filter(m => m.id !== tempId))
+      return
+    }
     // Don't rely solely on the realtime INSERT echo to show our own message —
     // it can lag or (depending on the messages table's realtime RLS policy)
-    // never fire back to the sender at all. Append it locally now; the
-    // realtime handler above already dedupes by id if the echo does arrive.
+    // never fire back to the sender at all. Swap the optimistic row for the
+    // real one now; the realtime handler above already dedupes by id if the
+    // echo does arrive afterward.
     const msg = data as Message
-    setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+    setMessages(prev => {
+      const withoutTemp = prev.filter(m => m.id !== tempId)
+      return withoutTemp.some(m => m.id === msg.id) ? withoutTemp : [...withoutTemp, msg]
+    })
   }
 
   async function deleteMessage(id: string) {

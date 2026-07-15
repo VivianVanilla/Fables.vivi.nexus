@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { ImageIcon, Paperclip, Trash2 } from "lucide-react"
 import { loadUserImages } from "../imageGallery"
+import { Markdown } from "../ui/Markdown"
 import { ShareCard } from "./ShareCard"
 import { ShareComposer } from "./ShareComposer"
 import type { Message, SharePayload } from "./partyTypes"
@@ -64,7 +65,7 @@ function Row({ msg, showHeader, canDelete, onDelete }: {
             {msg.image_url && (
               <img src={msg.image_url} alt="attachment" className="rounded-lg max-w-xs max-h-64 object-cover mt-1 mb-0.5" />
             )}
-            {msg.body && <p className="text-sm leading-snug text-foreground/90 wrap-break-word">{msg.body}</p>}
+            {msg.body && <Markdown text={msg.body} tone="auto" className="wrap-break-word" />}
           </>
         )}
       </div>
@@ -102,10 +103,21 @@ export function ChatPane({
   const [pickerLoading, setPickerLoading] = useState(false)
   const [showComposer, setShowComposer] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Grows with the message up to a cap, then scrolls internally — lets you
+  // paste a whole paragraph (a long in-character moment, say) and actually
+  // see what you're sending instead of it staying pinned to one line.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [text])
 
   const loadPickerImages = useCallback(async () => {
     setPickerLoading(true)
@@ -164,27 +176,30 @@ export function ChatPane({
         {showComposer && (
           <ShareComposer partyCode={partyCode} onAttach={attachShare} onClose={() => setShowComposer(false)} />
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
           <button type="button" onClick={() => setShowComposer(v => !v)} title="Attach a feature, spell, or familiar"
-            className="size-8 flex items-center justify-center rounded-xl bg-foreground/8 hover:bg-foreground/15 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+            className="size-8 flex items-center justify-center rounded-xl bg-foreground/8 hover:bg-foreground/15 text-muted-foreground hover:text-foreground transition-colors shrink-0 mb-[3px]">
             <Paperclip className="size-4" />
           </button>
           <button type="button" onClick={openPicker} title="Send a profile image"
-            className="size-8 flex items-center justify-center rounded-xl bg-foreground/8 hover:bg-foreground/15 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+            className="size-8 flex items-center justify-center rounded-xl bg-foreground/8 hover:bg-foreground/15 text-muted-foreground hover:text-foreground transition-colors shrink-0 mb-[3px]">
             <ImageIcon className="size-4" />
           </button>
-          <input
+          <textarea
+            ref={textareaRef}
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit() } }}
             placeholder={placeholder}
-            className="flex-1 bg-foreground/8 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:bg-foreground/12 transition-colors"
+            rows={1}
+            className="flex-1 resize-none max-h-40 overflow-y-auto bg-foreground/8 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:bg-foreground/12 transition-colors leading-snug"
           />
           <button type="button" onClick={submit} disabled={!text.trim()}
-            className="px-3 py-2 rounded-xl bg-foreground/15 hover:bg-foreground/25 text-foreground text-xs font-semibold disabled:opacity-25 transition-colors shrink-0">
+            className="px-3 py-2 rounded-xl bg-foreground/15 hover:bg-foreground/25 text-foreground text-xs font-semibold disabled:opacity-25 transition-colors shrink-0 mb-[3px]">
             Send
           </button>
         </div>
+        <p className="text-[9px] text-muted-foreground/30 px-1 pt-1">Markdown supported · Shift+Enter for a new line</p>
       </div>
 
       {showPicker && (

@@ -1,17 +1,22 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import type { SidebarObject } from "@/components/sidebar-utils"
-import { safeParseJson, computeAc } from "./character-utils"
+import { safeParseJson, computeAc, nanoid } from "./character-utils"
 import type { Feature } from "./character-types"
+import { SAVE_TO_ABILITY, ALL_CONDITIONS } from "./character-constants"
 import { CharacterSheet } from "./character"
 import { PartyServer } from "./party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "./party/unread"
 import { InitiativeTracker } from "./campaign/InitiativeTracker"
 import { useUserContext } from "../../src/contexts/UserContext"
+import { usePopoverPosition, useClickOutside } from "./collab/usePortalMenu"
+import { useChannelSuffix } from "./party/partyTypes"
 import { supabase } from "../../src/supabase"
 
 interface CampaignData {
   partyCode?: string
   description?: string
+  rosterFields?: Partial<Record<RosterFieldKey, boolean>>  // DM's per-campaign choice of what shows on each party member's preview card
 }
 
 interface CharData {
@@ -37,11 +42,15 @@ interface CharData {
   skillBonuses?: Record<string, number>
   conditions?: Array<{ id: string; name: string }>
   partyCode?: string
+  spellcastingAbility?: string
+  spellSaveDCBonus?: number
+  initiativeStat?: string
+  initiativeBonus?: number
+  hitDicePools?: Array<{ id: string; dieType: string; total: number; used: number }>
 }
 
 interface Props {
   campaign: SidebarObject
-  onClose: () => void
 }
 
 function profBonus(level: number) {
@@ -50,6 +59,10 @@ function profBonus(level: number) {
 
 function abilityMod(score: number) {
   return Math.floor((score - 10) / 2)
+}
+
+function signed(n: number) {
+  return n >= 0 ? `+${n}` : `${n}`
 }
 
 function passiveStat(baseScore: number, skillName: string, level: number, skillProfs?: Record<string, "half" | "prof" | "exp">, skillBonuses?: Record<string, number>) {
@@ -61,10 +74,107 @@ function passiveStat(baseScore: number, skillName: string, level: number, skillP
   return 10 + base + profMod + bonus
 }
 
+// Mirrors SpellcastingModal.tsx's own formula exactly (8 + PB + ability mod +
+// spellSaveDCBonus) so the roster preview never disagrees with the real sheet.
+function spellSaveDC(charData: CharData, level: number): number | null {
+  if (!charData.spellcastingAbility) return null
+  const abilityKey = SAVE_TO_ABILITY[charData.spellcastingAbility.toLowerCase()]
+  const score = abilityKey ? (charData[abilityKey as keyof CharData] as number | undefined) ?? 10 : 10
+  return 8 + profBonus(level) + abilityMod(score) + (charData.spellSaveDCBonus ?? 0)
+}
+
+function initiativeMod(charData: CharData): number {
+  const key = charData.initiativeStat ?? "dex"
+  const abilityKey = SAVE_TO_ABILITY[key] ?? "dexterity"
+  const score = (charData[abilityKey as keyof CharData] as number | undefined) ?? 10
+  return abilityMod(score) + (charData.initiativeBonus ?? 0)
+}
+
+// ── Roster preview field customization ───────────────────────────────────────
+
+// "conditions" isn't a StatCell — it renders as its own pill row (and is
+// where the DM's add/remove condition control lives) — but it still goes
+// through the same on/off settings menu as everything else here.
+type RosterFieldKey = "ac" | "speed" | "passivePerception" | "saveDC" | "initiative" | "hitDice" | "conditions"
+
+const ROSTER_FIELDS: { key: RosterFieldKey; label: string; shortLabel: string; default: boolean }[] = [
+  { key: "ac",                label: "Armor Class",       shortLabel: "AC",    default: true },
+  { key: "speed",              label: "Speed",              shortLabel: "Speed", default: true },
+  { key: "passivePerception",  label: "Passive Perception", shortLabel: "Perception",  default: true },
+  { key: "saveDC",             label: "Spell Save DC",      shortLabel: "DC",    default: true },
+  { key: "hitDice",            label: "Hit Dice",           shortLabel: "HD",    default: true },
+  { key: "initiative",         label: "Initiative",         shortLabel: "Init",  default: false },
+  { key: "conditions",         label: "Current Conditions", shortLabel: "",      default: true },
+]
+
+// The subset of ROSTER_FIELDS that render as a StatCell in the stat row —
+// "conditions" has its own row further down instead.
+const STAT_CELL_FIELDS = ROSTER_FIELDS.filter(
+  (f): f is typeof ROSTER_FIELDS[number] & { key: Exclude<RosterFieldKey, "conditions"> } => f.key !== "conditions"
+)
+
+function isRosterFieldOn(rosterFields: CampaignData["rosterFields"], key: RosterFieldKey): boolean {
+  return rosterFields?.[key] ?? ROSTER_FIELDS.find(f => f.key === key)!.default
+}
+
+function hitDiceValue(charData: CharData): string {
+  const pools = charData.hitDicePools ?? []
+  if (pools.length === 0) return "—"
+  return pools.map(p => `${Math.max(0, p.total - p.used)}/${p.total}${p.dieType}`).join(", ")
+}
+
+function rosterFieldValue(key: Exclude<RosterFieldKey, "conditions">, charData: CharData, level: number): string {
+  switch (key) {
+    case "ac": return String(computeAc(charData).total)
+    case "speed": return charData.speed != null ? `${charData.speed}ft` : "—"
+    case "passivePerception": return String(passiveStat(charData.wisdom ?? 10, "Perception", level, charData.skillProfs, charData.skillBonuses))
+    case "saveDC": { const dc = spellSaveDC(charData, level); return dc != null ? String(dc) : "—" }
+    case "initiative": return signed(initiativeMod(charData))
+    case "hitDice": return hitDiceValue(charData)
+  }
+}
+
+// Settings popover — same portaled-dropdown pattern used elsewhere (LinkMenu
+// in InfoTab.tsx, MarkdownExportMenu in monster.tsx) so it isn't clipped by
+// this panel's own scroll container.
+function RosterFieldsMenu({ rosterFields, onChange }: { rosterFields: CampaignData["rosterFields"]; onChange: (next: CampaignData["rosterFields"]) => void }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pos = usePopoverPosition(open, triggerRef)
+  useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
+
+  function toggle(key: RosterFieldKey) {
+    onChange({ ...rosterFields, [key]: !isRosterFieldOn(rosterFields, key) })
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button type="button" ref={triggerRef} onClick={() => setOpen(v => !v)} title="Choose what shows on each party member's card"
+        className="text-foreground/40 hover:text-foreground text-xs size-6 flex items-center justify-center rounded-md hover:bg-foreground/10 transition-colors">
+        ⚙
+      </button>
+      {open && pos && createPortal(
+        <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
+          className="z-50 bg-popover text-popover-foreground border border-border rounded-lg shadow-xl overflow-hidden w-56 p-2 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150">
+          <p className="text-[10px] uppercase tracking-widest text-foreground/40 font-semibold px-2 pt-1 pb-1.5">Show on party cards</p>
+          {ROSTER_FIELDS.map(f => (
+            <label key={f.key} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 text-xs text-foreground/70 cursor-pointer select-none">
+              <input type="checkbox" checked={isRosterFieldOn(rosterFields, f.key)} onChange={() => toggle(f.key)} />
+              {f.label}
+            </label>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 type CampaignTab = "overview" | "initiative" | "chat"
 
-export function CampaignView({ campaign, onClose }: Props) {
-  const { user, updateSharedObject } = useUserContext()
+export function CampaignView({ campaign }: Props) {
+  const { user, updateSharedObject, updateObject } = useUserContext()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [partyMembers, setPartyMembers] = useState<SidebarObject[]>([])
   const [activeTab, setActiveTab] = useState<CampaignTab>("overview")
@@ -73,22 +183,81 @@ export function CampaignView({ campaign, onClose }: Props) {
 
   const campaignData = safeParseJson(campaign.data) as CampaignData
   const partyCode = campaignData.partyCode ?? ""
+  const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
+  const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
+
+  // The DM owns their own campaign object, so a plain updateObject() write is
+  // enough here — same reasoning as InitiativeTracker.tsx's encounter storage
+  // on this same object (no cross-user RLS write-through needed, unlike the
+  // party-member HP/kick writes below which touch someone else's character).
+  function updateRosterFields(next: CampaignData["rosterFields"]) {
+    updateObject(campaign.id, { data: { ...campaignData, rosterFields: next } as unknown as JSON }).catch(e => console.error(e))
+  }
 
   const chatLatestMessageAt = usePartyLatestMessageAt(partyCode, user?.id ?? "")
-  const chatUnread = !!partyCode && !!user?.id && isPartyUnread(user.id, partyCode, chatLatestMessageAt)
+  // Never show the dot while the Chat tab is the one you're looking at — it's
+  // definitionally seen. Without this, the dot could linger after opening
+  // Chat until some unrelated re-render happened to re-read the "seen"
+  // timestamp PartyServer had already written to localStorage.
+  const chatUnread = !!partyCode && !!user?.id && activeTab !== "chat" && isPartyUnread(user.id, partyCode, chatLatestMessageAt)
+
+  const channelSuffix = useChannelSuffix()
 
   useEffect(() => {
     if (!partyCode) return
+    let cancelled = false
     supabase
       .from("objects")
       .select("*")
       .eq("type", "character")
       .filter("data->>partyCode", "eq", partyCode)
       .then(({ data, error }) => {
+        if (cancelled) return
         if (error) { console.error("party fetch error:", error); return }
         setPartyMembers((data ?? []) as SidebarObject[])
       })
+    return () => { cancelled = true }
   }, [partyCode])
+
+  // Keeps the roster live without a page refresh: a player's own edits (HP,
+  // AC, conditions, leaving the party — anything on their character sheet)
+  // land here the moment they save, instead of only after the DM re-opens
+  // the campaign. `objects` has no partyCode column to filter on server-side
+  // (it's nested in `data`), so this subscribes broadly to character-row
+  // changes and checks data.partyCode client-side once the payload arrives —
+  // same trade-off usePartyLatestMessageAt makes for messages.
+  useEffect(() => {
+    if (!partyCode) return
+    const ch = supabase
+      .channel(`campaign-roster:${partyCode}:${channelSuffix}`)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "objects", filter: "type=eq.character",
+      }, payload => {
+        const row = payload.new as SidebarObject
+        const rowData = safeParseJson(row.data) as CharData
+        setPartyMembers(prev => {
+          const wasMember = prev.some(c => c.id === row.id)
+          if (rowData.partyCode !== partyCode) return wasMember ? prev.filter(c => c.id !== row.id) : prev
+          return wasMember ? prev.map(c => c.id === row.id ? row : c) : [...prev, row]
+        })
+      })
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "objects", filter: "type=eq.character",
+      }, payload => {
+        const row = payload.new as SidebarObject
+        const rowData = safeParseJson(row.data) as CharData
+        if (rowData.partyCode !== partyCode) return
+        setPartyMembers(prev => prev.some(c => c.id === row.id) ? prev : [...prev, row])
+      })
+      .on("postgres_changes", {
+        event: "DELETE", schema: "public", table: "objects", filter: "type=eq.character",
+      }, payload => {
+        const old = payload.old as Partial<SidebarObject>
+        if (old?.id) setPartyMembers(prev => prev.filter(c => c.id !== old.id))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [partyCode, channelSuffix])
 
   // DM editing a PC's HP straight from the Initiative tracker — writes through
   // to the player's real character sheet. Needs an RLS policy on `objects`
@@ -100,6 +269,30 @@ export function CampaignView({ campaign, onClose }: Props) {
     const charData = safeParseJson(char.data) as CharData
     try {
       const updated = await updateSharedObject(characterId, { data: { ...charData, hp } as unknown as JSON })
+      setPartyMembers(prev => prev.map(c => c.id === characterId ? (updated as unknown as SidebarObject) : c))
+    } catch (e) { console.error(e) }
+  }
+
+  // DM applying/clearing a condition on a player's character — same
+  // write-through path as updatePartyMemberHp above.
+  async function addConditionToMember(characterId: string, name: string) {
+    const char = partyMembers.find(c => c.id === characterId)
+    if (!char) return
+    const charData = safeParseJson(char.data) as CharData
+    const conditions = charData.conditions ?? []
+    if (conditions.some(c => c.name === name)) return
+    try {
+      const updated = await updateSharedObject(characterId, { data: { ...charData, conditions: [...conditions, { id: nanoid(), name }] } as unknown as JSON })
+      setPartyMembers(prev => prev.map(c => c.id === characterId ? (updated as unknown as SidebarObject) : c))
+    } catch (e) { console.error(e) }
+  }
+  async function removeConditionFromMember(characterId: string, conditionId: string) {
+    const char = partyMembers.find(c => c.id === characterId)
+    if (!char) return
+    const charData = safeParseJson(char.data) as CharData
+    const conditions = (charData.conditions ?? []).filter(c => c.id !== conditionId)
+    try {
+      const updated = await updateSharedObject(characterId, { data: { ...charData, conditions } as unknown as JSON })
       setPartyMembers(prev => prev.map(c => c.id === characterId ? (updated as unknown as SidebarObject) : c))
     } catch (e) { console.error(e) }
   }
@@ -141,7 +334,7 @@ export function CampaignView({ campaign, onClose }: Props) {
             <span>{campaign.name}</span>
           </button>
           <div className="flex-1 min-h-0">
-            <CharacterSheet character={char} onClose={() => setExpandedId(null)} readOnly={true} />
+            <CharacterSheet character={char} readOnly={true} />
           </div>
         </div>
       )
@@ -156,13 +349,6 @@ export function CampaignView({ campaign, onClose }: Props) {
           <p className="text-sm font-bold tracking-wide truncate">{campaign.name}</p>
           <p className="text-[10px] text-foreground/40 uppercase tracking-widest">Campaign · DM</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="size-7 flex items-center justify-center rounded-md hover:bg-foreground/10 text-foreground/50 hover:text-foreground shrink-0 transition-colors"
-        >
-          ✕
-        </button>
       </div>
 
       {/* Tabs */}
@@ -228,11 +414,14 @@ export function CampaignView({ campaign, onClose }: Props) {
 
         {/* Party members */}
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">
               Party Members
             </span>
-            <span className="text-[10px] text-foreground/30">{partyMembers.length} character{partyMembers.length !== 1 ? "s" : ""}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-foreground/30">{partyMembers.length} character{partyMembers.length !== 1 ? "s" : ""}</span>
+              <RosterFieldsMenu rosterFields={campaignData.rosterFields} onChange={updateRosterFields} />
+            </div>
           </div>
 
           {partyCode === "" && (
@@ -246,113 +435,180 @@ export function CampaignView({ campaign, onClose }: Props) {
             </div>
           )}
 
-          {partyMembers.map(char => {
-            const charData = safeParseJson(char.data) as CharData
-            const level       = charData.level ?? 1
-            const hpPercent   = charData.maxHp ? Math.round((charData.hp ?? 0) / charData.maxHp * 100) : 0
-            const hpColor     = hpPercent > 50 ? "bg-green-500" : hpPercent > 25 ? "bg-yellow-500" : "bg-red-500"
-
-            const wis = charData.wisdom       ?? 10
-            const int = charData.intelligence ?? 10
-            const pPassPerc = passiveStat(wis, "Perception",    level, charData.skillProfs, charData.skillBonuses)
-            const pPassIns  = passiveStat(wis, "Insight",       level, charData.skillProfs, charData.skillBonuses)
-            const pPassInv  = passiveStat(int, "Investigation", level, charData.skillProfs, charData.skillBonuses)
-
-            const conditions = charData.conditions ?? []
-
-            return (
-              <div
-                key={char.id}
-                className="rounded-xl bg-muted ring-1 ring-border hover:ring-border transition-all cursor-pointer overflow-hidden"
-                onClick={() => setExpandedId(char.id)}
-              >
-                {/* Top row — portrait + name + arrow */}
-                <div className="p-3 flex items-center gap-3">
-                  <div className="size-10 rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center">
-                    {charData.portrait ? (
-                      <img src={charData.portrait} alt={char.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-lg leading-none select-none">🧙</span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{char.name}</p>
-                    <p className="text-[10px] text-foreground/50 uppercase tracking-wider truncate">
-                      {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}
-                    </p>
-                    {charData.maxHp ? (
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
-                          <div className={`h-full ${hpColor} transition-all`} style={{ width: `${hpPercent}%` }} />
-                        </div>
-                        <span className="text-[9px] text-foreground/40 shrink-0">{charData.hp ?? 0}/{charData.maxHp} HP</span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {kickConfirmId === char.id ? (
-                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        disabled={kicking}
-                        onClick={() => kickMember(char.id)}
-                        className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-40"
-                      >
-                        {kicking ? "Kicking…" : "Confirm kick"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={kicking}
-                        onClick={() => setKickConfirmId(null)}
-                        className="text-[10px] px-2 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); setKickConfirmId(char.id) }}
-                      title="Remove from party"
-                      className="text-[10px] px-2 py-1 rounded-full bg-foreground/5 hover:bg-red-500/20 text-foreground/40 hover:text-red-300 transition-colors shrink-0"
-                    >
-                      Kick
-                    </button>
-                  )}
-
-                  <span className="text-foreground/30 text-xs shrink-0">→</span>
-                </div>
-
-                {/* Stat row */}
-                <div className="grid grid-cols-5 border-t border-foreground/5 divide-x divide-foreground/5">
-                  <StatCell label="AC"      value={String(computeAc(charData).total)} />
-                  <StatCell label="Speed"   value={charData.speed != null ? `${charData.speed}ft` : "—"} />
-                  <StatCell label="Perc"    value={String(pPassPerc)} />
-                  <StatCell label="Insight" value={String(pPassIns)} />
-                  <StatCell label="Invest"  value={String(pPassInv)} />
-                </div>
-
-                {/* Conditions row (only if any) */}
-                {conditions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 px-3 py-2 border-t border-foreground/5">
-                    {conditions.map(c => (
-                      <span key={c.id} className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-300/80 font-medium">{c.name}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          {partyMembers.map(char => (
+            <PartyMemberCard
+              key={char.id}
+              char={char}
+              charData={safeParseJson(char.data) as CharData}
+              enabledStatCells={enabledStatCells}
+              showConditions={showConditions}
+              kickConfirmId={kickConfirmId}
+              kicking={kicking}
+              onExpand={() => setExpandedId(char.id)}
+              onKickConfirm={() => setKickConfirmId(char.id)}
+              onKickCancel={() => setKickConfirmId(null)}
+              onKick={() => kickMember(char.id)}
+              onAddCondition={name => addConditionToMember(char.id, name)}
+              onRemoveCondition={id => removeConditionFromMember(char.id, id)}
+            />
+          ))}
         </div>
       </div>}
     </div>
   )
 }
 
+function PartyMemberCard({
+  char, charData, enabledStatCells, showConditions,
+  kickConfirmId, kicking,
+  onExpand, onKickConfirm, onKickCancel, onKick,
+  onAddCondition, onRemoveCondition,
+}: {
+  char: SidebarObject
+  charData: CharData
+  enabledStatCells: typeof STAT_CELL_FIELDS
+  showConditions: boolean
+  kickConfirmId: string | null
+  kicking: boolean
+  onExpand: () => void
+  onKickConfirm: () => void
+  onKickCancel: () => void
+  onKick: () => void
+  onAddCondition: (name: string) => void
+  onRemoveCondition: (id: string) => void
+}) {
+  const [showConditionMenu, setShowConditionMenu] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pos = usePopoverPosition(showConditionMenu, triggerRef)
+  useClickOutside(showConditionMenu, () => setShowConditionMenu(false), triggerRef, contentRef)
+
+  const level     = charData.level ?? 1
+  const hpPercent = charData.maxHp ? Math.round((charData.hp ?? 0) / charData.maxHp * 100) : 0
+  const hpColor   = hpPercent > 50 ? "bg-green-500" : hpPercent > 25 ? "bg-yellow-500" : "bg-red-500"
+  const conditions = charData.conditions ?? []
+
+  return (
+    <div className="rounded-xl bg-muted ring-1 ring-border hover:ring-border transition-all overflow-hidden">
+      {/* Top row — portrait + name + arrow */}
+      <div className="p-3 flex items-center gap-3 cursor-pointer" onClick={onExpand}>
+        <div className="size-10 rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+          {charData.portrait ? (
+            <img src={charData.portrait} alt={char.name} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-lg leading-none select-none">🧙</span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{char.name}</p>
+          <p className="text-[10px] text-foreground/50 uppercase tracking-wider truncate">
+            {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}
+          </p>
+          {charData.maxHp ? (
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
+                <div className={`h-full ${hpColor} transition-all`} style={{ width: `${hpPercent}%` }} />
+              </div>
+              <span className="text-[9px] text-foreground/40 shrink-0">{charData.hp ?? 0}/{charData.maxHp} HP</span>
+            </div>
+          ) : null}
+        </div>
+
+        {kickConfirmId === char.id ? (
+          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              disabled={kicking}
+              onClick={onKick}
+              className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+            >
+              {kicking ? "Kicking…" : "Confirm kick"}
+            </button>
+            <button
+              type="button"
+              disabled={kicking}
+              onClick={onKickCancel}
+              className="text-[10px] px-2 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/50 hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onKickConfirm() }}
+            title="Remove from party"
+            className="text-[10px] px-2 py-1 rounded-full bg-foreground/5 hover:bg-red-500/20 text-foreground/40 hover:text-red-300 transition-colors shrink-0"
+          >
+            Kick
+          </button>
+        )}
+
+        <span className="text-foreground/30 text-xs shrink-0">→</span>
+      </div>
+
+      {/* Stat row — only the fields turned on in the ⚙ menu above, in a
+          flex row so it stays evenly spaced whether that's 1 field or 6. */}
+      {enabledStatCells.length > 0 && (
+        <div className="flex border-t border-foreground/5 divide-x divide-foreground/5">
+          {enabledStatCells.map(f => (
+            <StatCell key={f.key} label={f.shortLabel} value={rosterFieldValue(f.key, charData, level)} />
+          ))}
+        </div>
+      )}
+
+      {/* Conditions row — DM can add/remove conditions right from the roster */}
+      {showConditions && (
+        <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-t border-foreground/5" onClick={e => e.stopPropagation()}>
+          {conditions.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onRemoveCondition(c.id)}
+              title="Click to remove"
+              className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-300/80 font-medium hover:bg-red-500/30 transition-colors"
+            >
+              {c.name} ✕
+            </button>
+          ))}
+          <button
+            type="button"
+            ref={triggerRef}
+            onClick={() => setShowConditionMenu(v => !v)}
+            className="text-[9px] px-1.5 py-0.5 rounded-full bg-foreground/5 hover:bg-foreground/10 text-foreground/40 hover:text-foreground/70 transition-colors"
+          >
+            + Condition
+          </button>
+          {showConditionMenu && pos && createPortal(
+            <div
+              ref={contentRef}
+              style={{ position: "fixed", top: pos.top, right: pos.right }}
+              className="z-50 bg-popover text-popover-foreground border border-border rounded-lg shadow-xl overflow-hidden w-56 p-2 grid grid-cols-2 gap-1 animate-in fade-in zoom-in-95 duration-150"
+            >
+              {ALL_CONDITIONS.map(name => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => { onAddCondition(name); setShowConditionMenu(false) }}
+                  disabled={conditions.some(c => c.name === name)}
+                  className={`text-xs px-2 py-1.5 rounded-lg text-left transition-colors ${conditions.some(c => c.name === name) ? "text-foreground/25 cursor-default" : "text-foreground/80 hover:bg-foreground/10"}`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StatCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col items-center py-2 gap-0.5">
+    <div className="flex-1 min-w-0 flex flex-col items-center py-2 gap-0.5">
       <span className="text-[9px] text-foreground/30 uppercase tracking-widest">{label}</span>
       <span className="text-xs font-semibold text-foreground tabular-nums">{value}</span>
     </div>

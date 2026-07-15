@@ -23,10 +23,9 @@ interface NoteData {
 
 interface NoteViewProps {
   note: SidebarObject
-  onClose: () => void
 }
 
-export function NoteView({ note, onClose }: NoteViewProps) {
+export function NoteView({ note }: NoteViewProps) {
   const { user, updateObject } = useUserContext()
 
   const initialData = safeParseJson(note.data) as NoteData
@@ -62,14 +61,6 @@ export function NoteView({ note, onClose }: NoteViewProps) {
           className={`text-xs px-2.5 py-1 rounded-full transition-colors ${editing ? "bg-foreground/20 text-foreground" : "bg-foreground/10 hover:bg-foreground/20 text-muted-foreground hover:text-foreground"}`}
         >
           {editing ? "👁 Preview" : "✎ Edit"}
-        </button>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="size-7 flex items-center justify-center rounded-md hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          ✕
         </button>
       </div>
 

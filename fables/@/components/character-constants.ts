@@ -32,6 +32,12 @@ export const SUPABASE_BUCKET = "fableimages"
 // persistent notices next to the character's name. Not exhaustive — only
 // conditions with a clear, general-purpose combat effect are covered.
 
+export const ALL_CONDITIONS = [
+  "Blinded", "Charmed", "Concentrating", "Deafened", "Exhaustion",
+  "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed",
+  "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious",
+]
+
 export const CONDITION_EFFECTS: Record<string, string> = {
   Blinded:       "Disadvantage on attack rolls; attacks against you have advantage.",
   Charmed:       "Can't attack the charmer or target them with harmful abilities.",

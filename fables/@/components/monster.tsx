@@ -40,6 +40,7 @@ import { PortraitModal } from "./character/modals/PortraitModal"
 import { SpellPickerModal } from "./character/modals/SpellPickerModal"
 
 import { ActionEntry } from "./character/entries/ActionEntry"
+import { ActionEntryEditor } from "./character/entries/ActionEntryEditor"
 import { SpellEntry } from "./character/entries/SpellEntry"
 
 const LUCKY_EMAIL = "loganadsit@gmail.com"
@@ -48,7 +49,6 @@ const LUCKY_EMAIL = "loganadsit@gmail.com"
 
 interface Props {
   monster: SidebarObject
-  onClose: () => void
   readOnly?: boolean
 }
 
@@ -124,33 +124,31 @@ function CompactField({ label, value, onChange, readOnly }: { label: string; val
   )
 }
 
+// Pure display now — adding/editing/removing entries all happen in Edit
+// Stat Block (see EntryListEditor there), so there's no "+Add" here and
+// nothing to show for an empty section, for anyone. Keeps the read view
+// from padding itself out with dead space or controls that don't do anything
+// here anymore.
 function ActionSection({
-  label, category, actions, readOnly, onAdd, onChange, onRemove, extra, beforeEntries,
+  label, category, actions, readOnly, onChange, extra, beforeEntries,
 }: {
   label: string; category: ActionCategory; actions: MonsterAction[]; readOnly?: boolean
-  onAdd: () => void; onChange: (id: string, patch: Partial<MonsterAction>) => void; onRemove: (id: string) => void
+  onChange: (id: string, patch: Partial<MonsterAction>) => void
   extra?: React.ReactNode
   beforeEntries?: React.ReactNode  // rendered above the entry list — e.g. the Multiattack block in Actions
 }) {
-  if (readOnly && actions.length === 0 && !beforeEntries && !extra) return null
+  if (actions.length === 0 && !beforeEntries && !extra) return null
   return (
-    <div className={`${CARD} p-4 flex flex-col gap-2 animate-in fade-in duration-200`}>
+    <div className={`${CARD} p-3 flex flex-col gap-1.5 animate-in fade-in duration-200`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`text-xs uppercase tracking-widest font-semibold ${SECTION_HEADER_COLOR[category]}`}>{label}</span>
         {extra}
-        {!readOnly && (
-          <button type="button" onClick={onAdd}
-            className="text-xs px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors">
-            + Add
-          </button>
-        )}
       </div>
       {beforeEntries}
       <div className="flex flex-col gap-1.5">
-        {actions.length === 0 && !readOnly && <p className="text-xs text-white/20 italic">Nothing here yet.</p>}
         {actions.map(a => (
           <ActionEntry key={a.id} action={a} category={category} readOnly={readOnly}
-            onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
+            onChange={p => onChange(a.id, p)} />
         ))}
       </div>
     </div>
@@ -431,6 +429,32 @@ function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData;
 
 const SPEED_FIELDS = ["walk", "fly", "swim", "climb", "burrow", "hover"] as const
 
+// One category's full entry list, editable — used for every trait/action
+// section inside the modal now that the read view has no add/edit affordances.
+function EntryListEditor({
+  label, category, items, onAdd, onChange, onRemove,
+}: {
+  label: string
+  category: ActionCategory
+  items: MonsterAction[]
+  onAdd: () => void
+  onChange: (id: string, patch: Partial<MonsterAction>) => void
+  onRemove: (id: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2 pl-3 border-l border-white/10">
+      {items.map(a => (
+        <ActionEntryEditor key={a.id} action={a} category={category}
+          onChange={p => onChange(a.id, p)} onRemove={() => onRemove(a.id)} />
+      ))}
+      <button type="button" onClick={onAdd}
+        className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors self-start">
+        + Add {label}
+      </button>
+    </div>
+  )
+}
+
 function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpdate: (patch: Partial<MonsterData>) => void; onClose: () => void }) {
   const speeds = data.speeds ?? {}
   function setSpeed(key: typeof SPEED_FIELDS[number], v: number) {
@@ -445,6 +469,30 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
   const lairEnabled    = data.hasLairActions ?? (data.lairActions ?? []).length > 0
   const legResEnabled  = data.hasLegendaryResistance ?? false
   const spellEnabled   = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
+
+  // Full entry CRUD lives here now — adding/editing/removing traits and
+  // actions all happen in this modal instead of inline in the read view.
+  const traits = data.traits ?? []
+  function addTrait()                                     { onUpdate({ traits: [...traits, { id: nanoid(), name: "" }] }) }
+  function changeTrait(id: string, patch: Partial<MonsterAction>) { onUpdate({ traits: traits.map(t => t.id === id ? { ...t, ...patch } : t) }) }
+  function removeTrait(id: string)                        { onUpdate({ traits: traits.filter(t => t.id !== id) }) }
+
+  const actionsBySection = {
+    actions: data.actions ?? [],
+    bonusActions: data.bonusActions ?? [],
+    reactions: data.reactions ?? [],
+    legendaryActions: data.legendaryActions ?? [],
+    lairActions: data.lairActions ?? [],
+  }
+  function addAction(key: keyof typeof actionsBySection) {
+    onUpdate({ [key]: [...actionsBySection[key], { id: nanoid(), name: "" }] } as Partial<MonsterData>)
+  }
+  function changeAction(key: keyof typeof actionsBySection, id: string, patch: Partial<MonsterAction>) {
+    onUpdate({ [key]: actionsBySection[key].map(a => a.id === id ? { ...a, ...patch } : a) } as Partial<MonsterData>)
+  }
+  function removeAction(key: keyof typeof actionsBySection, id: string) {
+    onUpdate({ [key]: actionsBySection[key].filter(a => a.id !== id) } as Partial<MonsterData>)
+  }
 
   return (
     <Modal onClose={onClose}>
@@ -462,6 +510,18 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
           <input value={data.alignment ?? ""} placeholder="unaligned"
             onChange={e => onUpdate({ alignment: e.target.value })}
             className="w-32 shrink-0 bg-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none placeholder:text-white/20 transition-colors focus:bg-white/10" />
+        </div>
+
+        {/* Display — trims the sheet down for a quicker read, doesn't touch the underlying data */}
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
+            <input type="checkbox" checked={data.hidePortrait ?? false} onChange={e => onUpdate({ hidePortrait: e.target.checked })} />
+            Hide artwork
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
+            <input type="checkbox" checked={data.hideDescription ?? false} onChange={e => onUpdate({ hideDescription: e.target.checked })} />
+            Hide description
+          </label>
         </div>
 
         {/* Core stats */}
@@ -535,13 +595,22 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
             onChange={v => onUpdate({ proficiencyBonus: v ? parseInt(v) || 0 : undefined })} />
         </div>
 
-        {/* Section toggles */}
+        {/* Section toggles — this is also where every trait/action gets added,
+            edited, and removed now; the read view is pure display. */}
         <div className="flex flex-col gap-2.5 border-t border-white/10 pt-3">
           <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Sections</span>
-          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
-            Traits
-            <input type="checkbox" checked={traitsEnabled} onChange={e => onUpdate({ hasTraits: e.target.checked })} />
-          </label>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Traits
+              <input type="checkbox" checked={traitsEnabled} onChange={e => onUpdate({ hasTraits: e.target.checked })} />
+            </label>
+            <PopTransition show={traitsEnabled}>
+              <EntryListEditor label="Trait" category="trait" items={traits}
+                onAdd={addTrait} onChange={changeTrait} onRemove={removeTrait} />
+            </PopTransition>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
               Multiattack
@@ -555,14 +624,43 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
                 variant="light" />
             </PopTransition>
           </div>
-          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
-            Bonus Actions
-            <input type="checkbox" checked={bonusEnabled} onChange={e => onUpdate({ hasBonusActions: e.target.checked })} />
-          </label>
-          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
-            Reactions
-            <input type="checkbox" checked={reactEnabled} onChange={e => onUpdate({ hasReactions: e.target.checked })} />
-          </label>
+
+          {/* Actions has no on/off toggle (always shown), but its entries are
+              still only added/edited here. */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm text-white/70">Actions</span>
+            <EntryListEditor label="Action" category="action" items={actionsBySection.actions}
+              onAdd={() => addAction("actions")}
+              onChange={(id, patch) => changeAction("actions", id, patch)}
+              onRemove={id => removeAction("actions", id)} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Bonus Actions
+              <input type="checkbox" checked={bonusEnabled} onChange={e => onUpdate({ hasBonusActions: e.target.checked })} />
+            </label>
+            <PopTransition show={bonusEnabled}>
+              <EntryListEditor label="Bonus Action" category="bonusAction" items={actionsBySection.bonusActions}
+                onAdd={() => addAction("bonusActions")}
+                onChange={(id, patch) => changeAction("bonusActions", id, patch)}
+                onRemove={id => removeAction("bonusActions", id)} />
+            </PopTransition>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Reactions
+              <input type="checkbox" checked={reactEnabled} onChange={e => onUpdate({ hasReactions: e.target.checked })} />
+            </label>
+            <PopTransition show={reactEnabled}>
+              <EntryListEditor label="Reaction" category="reaction" items={actionsBySection.reactions}
+                onAdd={() => addAction("reactions")}
+                onChange={(id, patch) => changeAction("reactions", id, patch)}
+                onRemove={id => removeAction("reactions", id)} />
+            </PopTransition>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
               Legendary Actions
@@ -575,8 +673,13 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
                   onChange={e => onUpdate({ legendaryActionsMax: parseInt(e.target.value) || 0 })}
                   className="w-14 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none transition-colors focus:bg-white/15" />
               </label>
+              <EntryListEditor label="Legendary Action" category="legendary" items={actionsBySection.legendaryActions}
+                onAdd={() => addAction("legendaryActions")}
+                onChange={(id, patch) => changeAction("legendaryActions", id, patch)}
+                onRemove={id => removeAction("legendaryActions", id)} />
             </PopTransition>
           </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
               Legendary Resistance
@@ -591,10 +694,20 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
               </label>
             </PopTransition>
           </div>
-          <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
-            Lair Actions
-            <input type="checkbox" checked={lairEnabled} onChange={e => onUpdate({ hasLairActions: e.target.checked })} />
-          </label>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Lair Actions
+              <input type="checkbox" checked={lairEnabled} onChange={e => onUpdate({ hasLairActions: e.target.checked })} />
+            </label>
+            <PopTransition show={lairEnabled}>
+              <EntryListEditor label="Lair Action" category="lair" items={actionsBySection.lairActions}
+                onAdd={() => addAction("lairActions")}
+                onChange={(id, patch) => changeAction("lairActions", id, patch)}
+                onRemove={id => removeAction("lairActions", id)} />
+            </PopTransition>
+          </div>
+
           <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
             Spellcasting
             <input type="checkbox" checked={spellEnabled} onChange={e => onUpdate({ hasSpellcasting: e.target.checked })} />
@@ -635,20 +748,16 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     lairActions: data.lairActions ?? [],
   }
 
-  function addAction(key: keyof typeof actionsBySection) {
-    onUpdate({ [key]: [...actionsBySection[key], { id: nanoid(), name: "" }] } as Partial<MonsterData>)
-  }
+  // Only `change` survives here — used for the recharge-roll button, a live
+  // gameplay action. Add/remove (and every other field) now only happen in
+  // Edit Stat Block, which keeps its own copies of this same CRUD built off
+  // data/onUpdate (see EntryListEditor below).
   function changeAction(key: keyof typeof actionsBySection, id: string, patch: Partial<MonsterAction>) {
     onUpdate({ [key]: actionsBySection[key].map(a => a.id === id ? { ...a, ...patch } : a) } as Partial<MonsterData>)
   }
-  function removeAction(key: keyof typeof actionsBySection, id: string) {
-    onUpdate({ [key]: actionsBySection[key].filter(a => a.id !== id) } as Partial<MonsterData>)
-  }
 
   const traits = data.traits ?? []
-  function addTrait()                                     { onUpdate({ traits: [...traits, { id: nanoid(), name: "" }] }) }
   function changeTrait(id: string, patch: Partial<MonsterAction>) { onUpdate({ traits: traits.map(t => t.id === id ? { ...t, ...patch } : t) }) }
-  function removeTrait(id: string)                        { onUpdate({ traits: traits.filter(t => t.id !== id) }) }
 
   const spellItems = data.spellItems ?? []
   const spellSlots = data.spellSlots ?? []
@@ -724,7 +833,11 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    // [zoom:90%] — "10% smaller" applied uniformly (not just individual text
+    // classes) so type, padding, and gaps all shrink together proportionally
+    // instead of getting mismatched; this is also where most of the "fits on
+    // one page" win on mobile actually comes from.
+    <div className="flex flex-col gap-2.5 [zoom:90%]">
 
       {/* ── Stats (read-only summary — edit via the modal) ──────────────────── */}
       <StatsSummary data={data} onUpdate={onUpdate} readOnly={readOnly} onEdit={() => setShowEditModal(true)} />
@@ -732,9 +845,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
       {/* ── Traits — right before Actions, same shape but passive (no attack/damage/save) ── */}
       {traitsEnabled && (
         <ActionSection label="Traits" category="trait" actions={traits} readOnly={readOnly}
-          onAdd={addTrait}
           onChange={changeTrait}
-          onRemove={removeTrait}
           extra={legendaryResistanceEnabled ? (
             <LegendaryResistanceTracker
               used={data.legendaryResistanceUsed ?? 0}
@@ -750,9 +861,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
       {ACTION_SECTIONS.filter(({ key }) => sectionEnabled[key]).map(({ key, category, label }) => (
         <ActionSection key={key} label={label} category={category}
           actions={actionsBySection[key]} readOnly={readOnly}
-          onAdd={() => addAction(key)}
           onChange={(id, patch) => changeAction(key, id, patch)}
-          onRemove={id => removeAction(key, id)}
           beforeEntries={key === "actions" && multiattackEnabled ? (
             <MultiattackBlock description={data.multiattackDescription} readOnly={readOnly} />
           ) : undefined}
@@ -769,7 +878,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
 
       {/* ── Spellcasting ─────────────────────────────────────────────────── */}
       {spellcastingEnabled && (
-        <div className={`${CARD} p-4 flex flex-col gap-3 animate-in fade-in duration-200`}>
+        <div className={`${CARD} p-3 flex flex-col gap-2 animate-in fade-in duration-200`}>
           <span className="text-xs uppercase tracking-widest text-white/50 font-semibold">Spellcasting</span>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -802,7 +911,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
             )}
             {isLucky && spellItems.length > 0 && (
               <button type="button" onClick={feelingLucky}
-                className="ml-auto text-xs font-extrabold px-3 py-1.5 rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 shrink-0"
+                className="w-full sm:w-auto sm:ml-auto text-xs font-extrabold px-3 py-1.5 rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 shrink-0"
                 style={{
                   backgroundImage: "linear-gradient(90deg, #ff0000, #ff9900, #33cc33, #0066ff, #9900cc, #ff0000)",
                   backgroundSize: "200% 100%",
@@ -820,7 +929,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
           <div className="flex flex-col gap-1.5">
             {levels.flatMap(lvl => {
               const nodes: React.ReactNode[] = [
-                <div key={`header-${lvl}`} className="flex items-center gap-3 flex-wrap px-1">
+                <div key={`header-${lvl}`} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 flex-wrap px-1">
                   <span className="text-sm font-bold uppercase tracking-widest text-white/75">{lvl === 0 ? "Cantrips" : `Level ${lvl}`}</span>
                   {spellUsageMode !== "perDay" && spellSlots.filter(s => s.level === lvl).map(slot => {
                     const rem = Math.max(0, slot.total - slot.used)
@@ -829,7 +938,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
                         <TracingSlider value={rem} max={slot.total} disabled={readOnly}
                           showButtons buttonSize="sm" color={slotLevelColor("#F59E0B", lvl || 1)}
                           onChange={val => changeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
-                          className="w-32" />
+                          className="w-24 sm:w-32" />
                         <span className="text-xs text-white/30 tabular-nums shrink-0">{rem}/{slot.total}</span>
                         {!readOnly && (
                           <>
@@ -985,7 +1094,7 @@ export function FamiliarMonsterView({ monster, readOnly = false }: { monster: us
 
 // ── Root sheet ───────────────────────────────────────────────────────────────
 
-export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
+export function MonsterSheet({ monster, readOnly = false }: Props) {
   const { user, updateObject } = useUserContext()
 
   const { data, update, saving } = useMonsterData(monster, readOnly)
@@ -1047,70 +1156,74 @@ export function MonsterSheet({ monster, onClose, readOnly = false }: Props) {
         )}
         {saving && <span className="text-xs text-white/40 shrink-0 animate-pulse">saving…</span>}
         <MarkdownExportMenu name={name} data={data} />
-        <button type="button" onClick={onClose}
-          className="size-7 flex items-center justify-center rounded-md hover:bg-white/10 text-white/50 hover:text-white transition-colors shrink-0">
-          ✕
-        </button>
       </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2.5">
 
-        {/* Description + artwork — creature type/alignment now live in the stat block summary/modal */}
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
-            {readOnly ? (
-              data.description
-                ? <Markdown text={data.description} tone="dark" />
-                : <p className="text-sm text-white/20 italic">No description.</p>
-            ) : (
-              <MarkdownTextarea value={data.description ?? ""} onChange={v => update({ description: v })}
-                placeholder="Description…" rows={6}
-                className="bg-white/5 rounded-lg px-3 py-2 outline-none text-sm text-white/70 placeholder:text-white/20 resize-none leading-relaxed transition-colors focus:bg-white/10"
-                variant="light" />
+        {/* Description + artwork — creature type/alignment now live in the stat block summary/modal.
+            Each half can be hidden independently (Edit Stat Block → Display) to keep the sheet
+            compact once you're done writing it up. */}
+        {(!data.hideDescription || !data.hidePortrait) && (
+          <div className="flex flex-col lg:flex-row gap-4">
+            {!data.hideDescription && (
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                {readOnly ? (
+                  data.description
+                    ? <Markdown text={data.description} tone="dark" />
+                    : <p className="text-sm text-white/20 italic">No description.</p>
+                ) : (
+                  <MarkdownTextarea value={data.description ?? ""} onChange={v => update({ description: v })}
+                    placeholder="Description…" rows={6}
+                    className="bg-white/5 rounded-lg px-3 py-2 outline-none text-sm text-white/70 placeholder:text-white/20 resize-none leading-relaxed transition-colors focus:bg-white/10"
+                    variant="light" />
+                )}
+              </div>
+            )}
+
+            {/* Artwork */}
+            {!data.hidePortrait && (
+              <div className="lg:w-72 shrink-0 flex flex-col gap-2">
+                <div className="relative aspect-square rounded-xl overflow-hidden bg-white/5 ring-1 ring-white/10 flex items-center justify-center">
+                  {data.portrait ? (
+                    <img src={data.portrait} alt="portrait" className="w-full h-full object-cover transition-[filter] duration-200" style={{ filter: filterCss }} />
+                  ) : (
+                    <span className="text-xs text-white/20">No artwork</span>
+                  )}
+
+                  {!readOnly && (
+                    <div className="absolute bottom-2 right-2 flex gap-1">
+                      <button type="button" onClick={() => setShowLighting(v => !v)}
+                        className="size-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white text-xs backdrop-blur-sm transition-colors"
+                        title="Lighting adjustments">☀</button>
+                      <button type="button" onClick={openPortraitPicker}
+                        className="size-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white text-xs backdrop-blur-sm transition-colors"
+                        title="Choose image">
+                        {uploading ? "…" : "↑"}
+                      </button>
+                    </div>
+                  )}
+
+                  {showLighting && !readOnly && (
+                    <div className="absolute inset-x-2 bottom-12 bg-black/80 backdrop-blur-sm rounded-lg p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                      {(["brightness", "contrast", "saturate"] as const).map(key => (
+                        <label key={key} className="flex items-center gap-2 text-[10px] text-white/50">
+                          <span className="w-16 uppercase tracking-wider shrink-0">{key}</span>
+                          <input type="range" min={40} max={160} value={filter[key]}
+                            onChange={e => update({ portraitFilter: { ...filter, [key]: parseInt(e.target.value) } })}
+                            className="flex-1" />
+                          <span className="w-8 text-right tabular-nums shrink-0">{filter[key]}%</span>
+                        </label>
+                      ))}
+                      <button type="button" onClick={() => update({ portraitFilter: { brightness: 100, contrast: 100, saturate: 100 } })}
+                        className="text-[10px] text-white/30 hover:text-white/60 self-end transition-colors">Reset</button>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-
-          {/* Artwork */}
-          <div className="lg:w-72 shrink-0 flex flex-col gap-2">
-            <div className="relative aspect-square rounded-xl overflow-hidden bg-white/5 ring-1 ring-white/10 flex items-center justify-center">
-              {data.portrait ? (
-                <img src={data.portrait} alt="portrait" className="w-full h-full object-cover transition-[filter] duration-200" style={{ filter: filterCss }} />
-              ) : (
-                <span className="text-xs text-white/20">No artwork</span>
-              )}
-
-              {!readOnly && (
-                <div className="absolute bottom-2 right-2 flex gap-1">
-                  <button type="button" onClick={() => setShowLighting(v => !v)}
-                    className="size-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white text-xs backdrop-blur-sm transition-colors"
-                    title="Lighting adjustments">☀</button>
-                  <button type="button" onClick={openPortraitPicker}
-                    className="size-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white text-xs backdrop-blur-sm transition-colors"
-                    title="Choose image">
-                    {uploading ? "…" : "↑"}
-                  </button>
-                </div>
-              )}
-
-              {showLighting && !readOnly && (
-                <div className="absolute inset-x-2 bottom-12 bg-black/80 backdrop-blur-sm rounded-lg p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-1 duration-150">
-                  {(["brightness", "contrast", "saturate"] as const).map(key => (
-                    <label key={key} className="flex items-center gap-2 text-[10px] text-white/50">
-                      <span className="w-16 uppercase tracking-wider shrink-0">{key}</span>
-                      <input type="range" min={40} max={160} value={filter[key]}
-                        onChange={e => update({ portraitFilter: { ...filter, [key]: parseInt(e.target.value) } })}
-                        className="flex-1" />
-                      <span className="w-8 text-right tabular-nums shrink-0">{filter[key]}%</span>
-                    </label>
-                  ))}
-                  <button type="button" onClick={() => update({ portraitFilter: { brightness: 100, contrast: 100, saturate: 100 } })}
-                    className="text-[10px] text-white/30 hover:text-white/60 self-end transition-colors">Reset</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
 
         <input ref={portraitRef} type="file" accept="image/*" className="hidden" onChange={uploadPortrait} />
 

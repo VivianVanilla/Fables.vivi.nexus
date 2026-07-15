@@ -212,48 +212,6 @@
   color-scheme: light;
 }
 
-[data-app-theme="rainbow"] {
-  --background: #0a0118;
-  --foreground: #ffffff;
-  --card: #150a2e;
-  --card-foreground: #ffffff;
-  --popover: #150a2e;
-  --popover-foreground: #ffffff;
-  --primary: #ffffff;
-  --primary-foreground: #150a2e;
-  --secondary: #2a1454;
-  --secondary-foreground: #ffffff;
-  --muted: #1a0f38;
-  --muted-foreground: #c4b5fd;
-  --accent: #f97316;
-  --accent-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.18);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: #ffffff;
-  --sidebar: #0a0118;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #150a2e;
-  --sidebar-accent: #2a1454;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.18);
-  --sidebar-ring: #ffffff;
-}
-@keyframes fables-app-rainbow {
-  from { background-position: 0% 50%; }
-  to   { background-position: 200% 50%; }
-}
-[data-app-theme="rainbow"] body,
-[data-app-theme="rainbow"] [data-slot="sidebar-inner"],
-[data-app-theme="rainbow"] [data-slot="sidebar-inset"],
-[data-app-theme="rainbow"] .bg-background {
-  background-color: var(--background);
-  background-image: linear-gradient(90deg, #ff0000, #ff9900, #33cc33, #0066ff, #9900cc, #ff0000);
-  background-blend-mode: soft-light;
-  background-size: 200% 100%;
-  animation: fables-app-rainbow 24s linear infinite;
-}
-
 @layer base {
   * {
     @apply border-border outline-ring/50;

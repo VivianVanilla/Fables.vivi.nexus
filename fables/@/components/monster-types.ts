@@ -23,7 +23,9 @@ export interface MonsterAction {
 export interface MonsterData {
   portrait?: string
   portraitFilter?: { brightness: number; contrast: number; saturate: number }
+  hidePortrait?: boolean    // display setting — hides the artwork to make the sheet more compact
   description?: string
+  hideDescription?: boolean // display setting — hides the flavor text to make the sheet more compact
   creatureType?: string   // e.g. "Medium beast, unaligned"
   alignment?: string
 

@@ -19,19 +19,18 @@ import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "../supabase"
 
 export type AppTheme =
-  | "abyss" | "midnight" | "light" | "rainbow" | "trippy" | "vaporwave" | "synthwave" | "gold" | "toxic"
+  | "abyss" | "midnight" | "light" | "trippy" | "vaporwave" | "synthwave" | "gold" | "toxic"
   | "eightbit" | "flashlight" | "disco" | "matrix" | "bubblegum"
 
-// Free themes are always selectable. Everything past "rainbow" is locked
+// Free themes are always selectable. Everything past "light" is locked
 // behind gamVIVIling (see @/components/gambling) — gating happens in
 // profile-settings-modal.tsx, not here.
-export const FREE_THEMES: AppTheme[] = ["abyss", "midnight", "light", "rainbow"]
+export const FREE_THEMES: AppTheme[] = ["abyss", "midnight", "light"]
 
 export const APP_THEMES: { id: AppTheme; label: string; swatch: string }[] = [
   { id: "abyss",      label: "Abyss",        swatch: "#000000" },
   { id: "midnight",   label: "Dark Blue",    swatch: "#0b1220" },
   { id: "light",      label: "Light",        swatch: "#f8fafc" },
-  { id: "rainbow",    label: "Rainbow",      swatch: "linear-gradient(90deg, #ff0000, #ff9900, #33cc33, #0066ff, #9900cc)" },
   { id: "trippy",     label: "Trippy",       swatch: "linear-gradient(90deg, #ff00cc, #00ffea, #fffb00, #ff00cc)" },
   { id: "vaporwave",  label: "Vaporwave",    swatch: "linear-gradient(90deg, #ff71ce, #b967ff, #01cdfe)" },
   { id: "synthwave",  label: "Synthwave",    swatch: "linear-gradient(90deg, #ff2079, #ff8c42, #7b2ff7)" },

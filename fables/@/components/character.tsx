@@ -62,7 +62,6 @@ import { Modal }                 from "./character/ui/Modal"
 
 interface Props {
   character: SidebarObject
-  onClose: () => void
   readOnly?: boolean
 }
 
@@ -133,7 +132,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // No chat access at all in read-only mode (DM peeking at a party member's
   // sheet) — skip the subscription entirely rather than just hiding the badge.
   const partyLatestMessageAt = usePartyLatestMessageAt(readOnly ? "" : (data.partyCode ?? ""), user?.id ?? "")
-  const partyChatUnread = !readOnly && !!data.partyCode && !!user?.id && isPartyUnread(user.id, data.partyCode, partyLatestMessageAt)
+  // Guarded on activeTab !== "chat" so the dot never lingers after you've
+  // actually opened Chat — see the matching comment in campaign-view.tsx.
+  const partyChatUnread = !readOnly && !!data.partyCode && !!user?.id && activeTab !== "chat" && isPartyUnread(user.id, data.partyCode, partyLatestMessageAt)
 
   // ── SAVE ──────────────────────────────────────────────────────────────────
 
