@@ -206,6 +206,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const speedOverrideReason  = SPEED_ZERO_CONDITIONS.find(name => activeConditionNames.has(name))
   const effectiveSpeed       = speedOverrideReason ? 0 : (data.speed ?? 0)
 
+  // Derived from equipment rather than the manually-toggled `conditions` list,
+  // so it can't drift out of sync with the armor that causes it — shown as a
+  // badge next to the character's name in the header, not in ConditionsCard.
+  const stealthDisadvantageArmor = (data.items ?? []).some(
+    i => i.equipped && (i.equipKind ?? "armor") === "armor" && i.itemMeta?.stealthDisadvantage
+  )
+
   // Concentration check: any HP loss while "Concentrating" is active prompts a save
   useEffect(() => {
     const prevHp = prevHpRef.current
@@ -1137,6 +1144,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-base font-bold tracking-wide truncate">{character.name}</p>
+            {stealthDisadvantageArmor && (
+              <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-amber-500/15 text-amber-200/90 border border-amber-500/30 border-dashed" title="Equipped armor imposes disadvantage on Stealth checks">
+                Stealth Disadvantage
+              </span>
+            )}
             {totalWeight > 0 && (
               <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${encumbered ? "bg-red-500/20 text-red-300" : "bg-white/10 text-white/40"}`} title="Carrying capacity: STR score × 15 lb">
                 ⚖ {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} / {carryCapacity} lb

@@ -11,9 +11,18 @@ export interface DropTarget {
   position: DropPosition
 }
 
-function getItemData(item: userInfo.Objects): any {
+export function getItemData(item: userInfo.Objects): any {
   if (!item.data) return {}
   try { return typeof item.data === "string" ? JSON.parse(item.data) : item.data } catch { return {} }
+}
+
+/**
+ * The object's creation date — a user-set override (data.customCreatedAt)
+ * if one has been set via the sidebar's "Set Creation Date" action,
+ * otherwise the real database created_at (immutable, DB-assigned on insert).
+ */
+export function getCreatedDate(item: userInfo.Objects): string {
+  return getItemData(item)?.customCreatedAt || item.created_at
 }
 
 export function sortByPosition(a: userInfo.Objects, b: userInfo.Objects) {

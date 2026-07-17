@@ -137,6 +137,8 @@ export interface Feature {
     armorBaseAc?: number               // base AC value while equipped, only used when armorMode === "base"
     armorDexMode?: "full" | "half" | "none"  // how the Dex modifier applies on top of armorBaseAc — full (light),
                                               // half/max +2 (medium), or none (heavy); only used when armorMode === "base"
+    stealthDisadvantage?: boolean  // this armor piece imposes disadvantage on Stealth checks while equipped —
+                                    // surfaces as an auto (non-removable) pill in ConditionsCard, see character.tsx
     weaponKind?: "melee" | "ranged"  // only meaningful when equipKind === "weapon"
     meleeRange?: string       // e.g. "5 ft."
     throwRange?: string       // e.g. "20/60 ft." — thrown melee weapons

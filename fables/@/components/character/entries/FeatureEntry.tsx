@@ -461,6 +461,14 @@ export function FeatureEntry({
                         </div>
                       </div>
                     </PopTransition>
+
+                    <label className="flex items-center gap-2 text-white/50 cursor-pointer select-none whitespace-nowrap">
+                      <input type="checkbox" checked={feature.itemMeta?.stealthDisadvantage ?? false}
+                        onChange={e => onChange({ itemMeta: { ...feature.itemMeta, stealthDisadvantage: e.target.checked } })}
+                        className="accent-white"
+                      />
+                      Disadvantage on Stealth
+                    </label>
                   </div>
                 </PopTransition>
 

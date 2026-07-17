@@ -1,6 +1,6 @@
 // ----- Imports -----
 import * as React from "react"
-import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search, PanelRight } from "lucide-react"
+import { GripVertical, ImageIcon, Pin, XIcon, ChevronRight, Search, PanelRight, CalendarClock, Info } from "lucide-react"
 
 // ----- UI & Helper Imports -----
 import { SearchForm } from "@/components/search-form"
@@ -8,7 +8,7 @@ import { VersionSwitcher } from "@/components/version-switcher"
 import { Sidebar, SidebarContent, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useUserContext } from "../../src/contexts/UserContext"
 import type { userInfo } from "../types/userInfo"
-import { buildObjectTree, applyDrop, moveToRoot, isNoNesting, isPinned } from "@/components/sidebar-utils"
+import { buildObjectTree, applyDrop, moveToRoot, isNoNesting, isPinned, getItemData, getCreatedDate } from "@/components/sidebar-utils"
 import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
 import { supabase } from "../../src/supabase"
 import { NOTE_DRAG_TYPE } from "@/components/party/partyTypes"
@@ -38,6 +38,18 @@ const typeColors: Record<ObjectType, string> = {
 
 const LONG_PRESS_MS = 500
 
+// Formats a YYYY-MM-DD (or ISO timestamp — the first 10 characters are the
+// same shape) as a calendar date without reinterpreting it through UTC.
+// `new Date("2024-06-01")` parses as UTC midnight, which `toLocaleDateString`
+// then renders a day early in timezones behind UTC — reading the Y/M/D
+// digits directly and building a local Date avoids that round-trip.
+function formatDateOnly(dateStr: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr)
+  if (!m) return dateStr
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+}
+
 // ----- Component -----
 interface BgImage {
   name: string
@@ -57,6 +69,13 @@ export function AppSidebar({ onSelectObject, onShowRosterSidebar, ...props }: Ap
   // Background image picker state
   const [bgPickerItem, setBgPickerItem] = React.useState<SidebarObject | null>(null)
   const [bgImages, setBgImages] = React.useState<BgImage[]>([])
+
+  // View Details panel state
+  const [detailsItem, setDetailsItem] = React.useState<SidebarObject | null>(null)
+
+  // Creation-date editor modal state
+  const [dateEditItem, setDateEditItem] = React.useState<SidebarObject | null>(null)
+  const [dateEditValue, setDateEditValue] = React.useState("")
 
   // Desktop drag state
   const [draggedId, setDraggedId] = React.useState<string | null>(null)
@@ -386,6 +405,27 @@ export function AppSidebar({ onSelectObject, onShowRosterSidebar, ...props }: Ap
     try { await updateObject(item.id, { data: newData }) } catch { setItems(previousItems) }
   }
 
+  // A custom, user-editable creation date — distinct from the real (immutable,
+  // DB-assigned) created_at — e.g. to date an in-fiction document. Stored in
+  // `data` like pinned/backgroundImage/noNesting rather than as its own column.
+  const openDateEditor = (item: SidebarObject) => {
+    const currentData = getItemData(item)
+    const existing: string = currentData?.customCreatedAt ?? getCreatedDate(item)?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+    setDateEditValue(existing)
+    setDateEditItem(item)
+  }
+
+  const saveCreatedDate = async () => {
+    const item = dateEditItem
+    if (!item || !dateEditValue) { setDateEditItem(null); return }
+    setDateEditItem(null)
+    const currentData = getItemData(item)
+    const newData = { ...currentData, customCreatedAt: dateEditValue }
+    const previousItems = items
+    setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, data: newData } : entry))
+    try { await updateObject(item.id, { data: newData }) } catch { setItems(previousItems) }
+  }
+
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const activeDragId = draggedId ?? touchDragId
@@ -582,6 +622,13 @@ export function AppSidebar({ onSelectObject, onShowRosterSidebar, ...props }: Ap
             className="block w-full rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
             Delete
           </button>
+          <div className="my-1 border-t border-border" />
+          <button type="button"
+            onClick={() => { setDetailsItem(contextMenu.item); setContextMenu(null) }}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground">
+            <Info className="size-3.5" />
+            View Details
+          </button>
           {contextMenu.item.type === "folder" && (
             <>
               <div className="my-1 border-t border-border" />
@@ -668,6 +715,84 @@ export function AppSidebar({ onSelectObject, onShowRosterSidebar, ...props }: Ap
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* View Details panel */}
+      {detailsItem && (() => {
+        const meta = typeMeta[(detailsItem.type as ObjectType) ?? "note"] || typeMeta.note
+        const colorCls = typeColors[(detailsItem.type as ObjectType) ?? "note"] || typeColors.note
+        const isCustomDate = !!getItemData(detailsItem)?.customCreatedAt
+        const formattedDate = formatDateOnly(getCreatedDate(detailsItem))
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailsItem(null)}>
+            <div className="rounded-xl border border-border bg-popover p-4 shadow-xl w-80" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium">Details</span>
+                <button type="button" onClick={() => setDetailsItem(null)}
+                  className="size-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground">
+                  <XIcon className="size-4" />
+                </button>
+              </div>
+              <div className="flex flex-col gap-2.5 text-sm">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold">Name</div>
+                  <div className="text-sidebar-foreground truncate">{detailsItem.name}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold">Type</div>
+                  <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${colorCls}`}>{meta.label}</span>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold">Creation Date</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sidebar-foreground">{formattedDate}</span>
+                    {isCustomDate && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sidebar-foreground/10 text-muted-foreground/70">custom</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button type="button"
+                onClick={() => { openDateEditor(detailsItem); setDetailsItem(null) }}
+                className="mt-3 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground hover:bg-accent hover:text-accent-foreground">
+                <CalendarClock className="size-3.5" />
+                Change Creation Date
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Creation-date editor */}
+      {dateEditItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDateEditItem(null)}>
+          <div className="rounded-xl border border-border bg-popover p-4 shadow-xl w-72" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium">Set Creation Date</span>
+              <button type="button" onClick={() => setDateEditItem(null)}
+                className="size-6 flex items-center justify-center rounded-md hover:bg-accent text-muted-foreground">
+                <XIcon className="size-4" />
+              </button>
+            </div>
+            <input
+              type="date"
+              value={dateEditValue}
+              onChange={(e) => setDateEditValue(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-sidebar-foreground outline-none focus:border-primary"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" onClick={() => setDateEditItem(null)}
+                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+                Cancel
+              </button>
+              <button type="button" onClick={saveCreatedDate}
+                className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90">
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}
