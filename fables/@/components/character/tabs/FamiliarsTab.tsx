@@ -88,7 +88,7 @@ export function FamiliarsTab({
           const label     = fam.nickname || monster?.name || "Familiar"
 
           return (
-            <div key={fam.id} className={`${card} overflow-hidden`}>
+            <div key={fam.id} className={`${card} shrink-0 overflow-hidden`}>
               <div className="flex items-center gap-3 px-3 py-2.5"
                 draggable={!readOnly}
                 onDragStart={e => {

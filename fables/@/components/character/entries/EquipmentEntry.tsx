@@ -338,7 +338,7 @@ export function EquipmentEntry({
       {/* ── Row + expandable detail ──────────────────────────────────────── */}
       <div
         {...dragAttrs}
-        className={`rounded-xl ${theme.box} border transition-all overflow-hidden ${isExpanded ? "border-white/20" : "border-white/10"}`}
+        className={`shrink-0 rounded-xl ${theme.box} border transition-all overflow-hidden ${isExpanded ? "border-white/20" : "border-white/10"}`}
       >
         {/* Compact row */}
         <div
