@@ -940,7 +940,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           </div>
 
           {/* Col 2: Abilities → Saves → Skills */}
-          <div className="lg:w-56 shrink-0 flex flex-col gap-3 overflow-y-auto">
+          <div className="lg:w-56 shrink-0 flex flex-col gap-3">
             <AbilitiesCard card={card} data={data} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} />
             <SavesCard card={card} data={data} readOnly={readOnly} getSaveMod={getSaveMod} onShowModal={() => setShowSavesModal(true)} />
             <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} />
@@ -960,7 +960,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           </div>
 
           {/* Col 3: Favorites */}
-          <div className="flex-1 flex flex-col gap-3 min-h-0 min-w-0">
+          <div className="flex-1 flex flex-col gap-3">
             <FavoritesPanel {...favPanelProps} />
           </div>
         </div>
@@ -986,7 +986,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-hidden ${effectiveBody}`}>
+    <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-auto ${effectiveBody}`}>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
@@ -1130,6 +1130,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         />
       )}
 
+      <div className="shrink-0">
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
 
@@ -1249,8 +1251,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <div className="w-full sm:w-auto sm:ml-auto">{activeTab !== "chat" && renderQuickSearch()}</div>
       </div>
 
+      </div>{/* ── end sticky wrapper ── */}
+
       {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div className={`flex flex-col flex-1 min-h-0 ${activeTab === "chat" ? "overflow-hidden" : "overflow-auto p-4"} ${effectiveBody}`}>
+      <div className={`flex flex-col ${activeTab === "chat" ? "flex-1 min-h-0 overflow-hidden" : "shrink-0 p-4"} ${effectiveBody}`}>
         {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
