@@ -7,6 +7,7 @@ import { createPortal } from "react-dom"
 import type { userInfo } from "@/types/userInfo"
 import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
+import type { FavoriteCategory, CardStyle } from "../../character-constants"
 import { nanoid, profBonus, safeParseJson, uniqueName } from "../../character-utils"
 import { useUserContext } from "../../../../src/contexts/UserContext"
 import { Markdown } from "../../ui/Markdown"
@@ -65,12 +66,14 @@ interface FeatureListProps {
   showItemExtras?: boolean
   showMagicStar?: boolean
   magicItemStyle?: "none" | "outline" | "galaxy"
+  accentColor?: string
+  accentStyle?: CardStyle
   sortable?: boolean
 }
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, sortable }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, accentColor, accentStyle, sortable }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -134,6 +137,8 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             showItemExtras={showItemExtras}
             showMagicStar={showMagicStar}
             magicItemStyle={magicItemStyle}
+            accentColor={accentColor}
+            accentStyle={accentStyle}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -579,6 +584,13 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
 
   const pb = profBonus(data.level ?? 1)
 
+  // Feature Stylings (Settings) applied sheet-wide — same source of truth
+  // FavoritesPanel.tsx reads, just resolved per fixed list here since each of
+  // these lists is a single, known category. "item" (the Items tab) is
+  // deliberately never looked up — it already has its own Magic Item styling.
+  const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
+  const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
+
   // All features across all lists (for linking UI)
   const allFeatures: Feature[] = [
     ...(data.racialTraits  ?? []),
@@ -686,6 +698,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             suggestionSource="race" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
+            accentColor={favAccentColor("race")} accentStyle={favAccentStyle("race")}
           />
           <FeatureList
             items={data.feats ?? []} allFeatures={allFeatures} label="Feats"
@@ -696,6 +709,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             suggestionSource="feat" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
+            accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")}
           />
           {isWarlock && (
             <FeatureList
@@ -707,6 +721,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
               theme={theme} card={card} readOnly={readOnly} pb={pb}
               suggestionSource="invocation" userId={userId}
               favorites={favorites} onToggleFavorite={onToggleFavorite}
+              accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")}
             />
           )}
         </div>
@@ -724,6 +739,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           suggestionSource="class" userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
+          accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")}
           sortable
         />
       )}

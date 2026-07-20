@@ -11,6 +11,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "July 20, 2026",
+    title: "Feature Stylings",
+    description: "Settings now has a Feature Stylings section — pick None, Outline, or an Animated Background (with its own color) for Racial Traits, Class Features, Feats, Invocations, Spells, Martial, and Familiars. Applies everywhere that category shows up on the sheet, not just when favorited.",
+  },
+  {
+    date: "July 20, 2026",
+    title: "Sliders require holding the thumb",
+    description: "Clicking anywhere on a slider's track no longer jumps the value — you have to grab and drag the dot itself, which now has a larger touch target.",
+  },
+  {
+    date: "July 20, 2026",
+    title: "Max HP Modifier sign toggle",
+    description: "Replaced the free-typed +/- number with a −/+ button next to the amount, since some mobile keyboards don't offer a minus-sign key on a numeric field.",
+  },
+  {
+    date: "July 20, 2026",
+    title: "DM roster stays current",
+    description: "The DM's party roster now polls every 20 seconds as a backup to its live updates, so it catches up on its own if a realtime update ever gets missed.",
+  },
+  {
     date: "July 17, 2026",
     title: "Familiars now require opt-in",
     description: "Monsters need \"Available as a Familiar\" checked (Edit Stat Block) before they show up in a character's Add Familiar picker.",

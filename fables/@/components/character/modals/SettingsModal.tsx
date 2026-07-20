@@ -1,7 +1,7 @@
 import { Modal } from "../ui/Modal"
 import type { CharacterData } from "../../character-types"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "../../character-themes"
-import { FAVORITE_ACCENT_COLORS, FAVORITE_CATEGORY_LABELS, type FavoriteCategory } from "../../character-constants"
+import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, type CardStyle } from "../../character-constants"
 
 interface Props {
   data: CharacterData
@@ -141,38 +141,36 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
             </div>
           </div>
 
-          {/* Favorite accent colors — one color per category (Racial Trait,
-              Class Feature, Feat, Item, Invocation, Spell, Martial, Familiar),
-              applied automatically to every favorited card of that category —
-              see FavoritesPanel.tsx. No per-item picking; set it once here. */}
+          {/* Feature Stylings — per category (Racial Traits, Class Features,
+              Feats, Invocations, Spells, Martial, Familiars — "Items" is left
+              out since Magic Items right above already styles that list),
+              the exact same None/Outline/Animated Background choice as Magic
+              Items, plus a color picker since it isn't tied to one fixed
+              purple like the magic-item treatment is. Applies automatically
+              to every card of that category everywhere it renders, not just
+              when favorited — see FeatureEntry.tsx's categoryAccentStyle. */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Favorites</p>
-            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-              <input type="checkbox" checked={data.showFavoriteAccents ?? true}
-                onChange={e => onUpdate({ showFavoriteAccents: e.target.checked })}
-                className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Accent colors by category</span>
-            </label>
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Feature Stylings</p>
             <div className="flex flex-col gap-1">
-              {(Object.keys(FAVORITE_CATEGORY_LABELS) as FavoriteCategory[]).map(cat => {
-                const active = data.favoriteCategoryColors?.[cat]
+              {STYLING_CATEGORIES.map(cat => {
+                const style = data.favoriteCategoryStyle?.[cat] ?? "none"
+                const color = data.favoriteCategoryColors?.[cat] ?? DEFAULT_ACCENT_COLOR
                 return (
-                  <div key={cat} className="flex items-center justify-between px-1 py-1">
-                    <span className="text-sm text-white/70">{FAVORITE_CATEGORY_LABELS[cat]}</span>
-                    <div className="flex items-center gap-1">
-                      <button type="button" title="None"
-                        onClick={() => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: undefined } })}
-                        className={`size-5 rounded-full border flex items-center justify-center text-[9px] transition-colors shrink-0 ${
-                          !active ? "border-white/50 text-white/70" : "border-white/15 text-white/20 hover:border-white/30"
-                        }`}>
-                        ✕
-                      </button>
-                      {FAVORITE_ACCENT_COLORS.map(c => (
-                        <button key={c.name} type="button" title={c.name}
-                          onClick={() => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: c.value } })}
-                          className={`size-5 rounded-full border-2 shrink-0 transition-transform ${active === c.value ? "border-white scale-110" : "border-transparent hover:scale-105"}`}
-                          style={{ backgroundColor: c.value }} />
-                      ))}
+                  <div key={cat} className="flex items-center justify-between px-1 py-1 gap-2">
+                    <span className="text-sm text-white/70 shrink-0">{FAVORITE_CATEGORY_LABELS[cat]}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
+                        {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
+                          <button key={s} type="button" title={s === "galaxy" ? "Animated Background" : undefined}
+                            onClick={() => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })}
+                            className={`px-2 py-1 rounded-full text-[10px] font-semibold transition-colors ${style === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
+                            {s === "none" ? "None" : s === "outline" ? "Outline" : "Animated"}
+                          </button>
+                        ))}
+                      </div>
+                      <input type="color" value={color} title="Accent color"
+                        onChange={e => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: e.target.value } })}
+                        className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
                     </div>
                   </div>
                 )

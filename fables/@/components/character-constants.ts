@@ -70,21 +70,20 @@ export const RARITY_COLORS: Record<string, string> = {
   "Wondrous":  "bg-teal-500/15 text-teal-300",
 }
 
-// ── Favorites accent colors ──────────────────────────────────────────────────
-// Configured once per category in Settings (CharacterData.favoriteCategoryColors)
-// and applied automatically to every favorited card of that category — see
-// FavoritesPanel.tsx. "feature" refType favorites are further split by which
-// list they came from (race/class/feat/item/invocation); the other refTypes
-// (spell/equipment/familiar) are each their own category.
+// ── Feature Stylings (category accent colors) ────────────────────────────────
+// Configured once per category in Settings (CharacterData.favoriteCategoryColors
+// + favoriteCategoryStyle) and applied automatically to every card of that
+// category everywhere it's rendered, not just when favorited — see
+// FeatureEntry.tsx's categoryAccentStyle/coloredNebulaBg and their callers.
+// "feature" refType favorites are further split by which list they came from
+// (race/class/feat/item/invocation); the other refTypes (spell/equipment/
+// familiar) are each their own category.
 
-export const FAVORITE_ACCENT_COLORS = [
-  { name: "Violet", value: "#8b5cf6" },
-  { name: "Blue",   value: "#3b82f6" },
-  { name: "Green",  value: "#22c55e" },
-  { name: "Amber",  value: "#f59e0b" },
-  { name: "Red",    value: "#ef4444" },
-  { name: "Pink",   value: "#ec4899" },
-] as const
+// Same 3-state shape as the Magic Item card style, reused here so a category
+// accent renders with the exact same options: no treatment, just a colored
+// border, or the full animated nebula background (in the category's color
+// instead of the fixed magic-item purple).
+export type CardStyle = "none" | "outline" | "galaxy"
 
 export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "spell" | "equipment" | "familiar"
 
@@ -98,6 +97,14 @@ export const FAVORITE_CATEGORY_LABELS: Record<FavoriteCategory, string> = {
   equipment:  "Martial",
   familiar:   "Familiars",
 }
+
+// Rendered in Settings — "item" is deliberately excluded: it's the Items tab,
+// which already has its own dedicated Magic Item styling section right above
+// this one, so a second color-by-category control for the same list would
+// just be two competing ways to style the same cards.
+export const STYLING_CATEGORIES: FavoriteCategory[] = ["race", "class", "feat", "invocation", "spell", "equipment", "familiar"]
+
+export const DEFAULT_ACCENT_COLOR = "#8b5cf6"
 
 export const SKILLS = [
   { name: "Acrobatics",       ability: "dex" },

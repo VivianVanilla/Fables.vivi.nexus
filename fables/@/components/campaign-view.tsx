@@ -216,20 +216,29 @@ function useCampaignRoster(campaign: SidebarObject) {
     updateObject(campaign.id, { data: { ...campaignData, dmDeathSaves: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
   }
 
+  // Polls every 20s as a safety net on top of the realtime subscription below —
+  // if postgres_changes ever misses an event (dropped connection, a realtime
+  // config gap on the `objects` table, etc.) the roster still catches up on
+  // its own within a few seconds instead of staying stale until someone
+  // happens to reload the whole page.
   useEffect(() => {
     if (!partyCode) return
     let cancelled = false
-    supabase
-      .from("objects")
-      .select("*")
-      .eq("type", "character")
-      .filter("data->>partyCode", "eq", partyCode)
-      .then(({ data, error }) => {
-        if (cancelled) return
-        if (error) { console.error("party fetch error:", error); return }
-        setPartyMembers((data ?? []) as SidebarObject[])
-      })
-    return () => { cancelled = true }
+    function fetchRoster() {
+      supabase
+        .from("objects")
+        .select("*")
+        .eq("type", "character")
+        .filter("data->>partyCode", "eq", partyCode)
+        .then(({ data, error }) => {
+          if (cancelled) return
+          if (error) { console.error("party fetch error:", error); return }
+          setPartyMembers((data ?? []) as SidebarObject[])
+        })
+    }
+    fetchRoster()
+    const interval = setInterval(fetchRoster, 20000)
+    return () => { cancelled = true; clearInterval(interval) }
   }, [partyCode])
 
   // Keeps the roster live without a page refresh: a player's own edits (HP,

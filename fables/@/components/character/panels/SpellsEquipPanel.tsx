@@ -6,7 +6,7 @@ import { TracingSlider }  from "../../ui/tracing-slider"
 import { slotLevelColor } from "../../character-themes"
 import type { Theme }     from "../../character-themes"
 import { profBonus } from "../../character-utils"
-import { SAVE_TO_ABILITY } from "../../character-constants"
+import { SAVE_TO_ABILITY, type FavoriteCategory } from "../../character-constants"
 
 interface Props {
   card: string
@@ -43,6 +43,9 @@ export function SpellsEquipPanel({
   pendingSpellId, onAutoEditConsumed,
 }: Props) {
   const showSpells = activeSubTab === "spells"
+  // Feature Stylings (Settings) applied sheet-wide, mirrors InfoTab.tsx's favAccentColor/favAccentStyle.
+  const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
+  const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
@@ -280,6 +283,7 @@ export function SpellsEquipPanel({
                           <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
                             compact={spellsDisplay === "bubbles"}
                             autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
+                            accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
                             onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
                         )
                       }
@@ -306,6 +310,7 @@ export function SpellsEquipPanel({
                 userId={userId}
                 showMagicStar={data.showMagicItemStar}
                 magicItemStyle={data.magicItemStyle}
+                accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")}
               />
             ))}
             {!readOnly && (

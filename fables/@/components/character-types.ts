@@ -1,6 +1,6 @@
 // All data shapes used by the character sheet
 
-import type { FavoriteCategory } from "./character-constants"
+import type { FavoriteCategory, CardStyle } from "./character-constants"
 
 // One damage instance ("2d6" fire, "1d4" cold, etc.) — the base damage/damageType
 // fields on weapons/actions/items stay as the single/primary instance for backward
@@ -248,8 +248,8 @@ export interface CharacterData {
   items?: Feature[]
   invocations?: Feature[]  // Eldritch Invocations (Warlock)
   favorites?: FavoriteRef[]
-  favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent ring/glow color per favorite category (race/class/feat/item/invocation/spell/equipment/familiar), see FavoritesPanel.tsx
-  showFavoriteAccents?: boolean  // Settings toggle (default true) — off hides all favorite accent rings sheet-wide
+  favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category (race/class/feat/invocation/spell/equipment/familiar — "item" is deliberately excluded, see STYLING_CATEGORIES), applied everywhere that category renders, not just Favorites
+  favoriteCategoryStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: "none" (default/off), "outline" (colored border), or "galaxy" (animated background in that color) — mirrors magicItemStyle
   conditions?: ActiveCondition[]
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">

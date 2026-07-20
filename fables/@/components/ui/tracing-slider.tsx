@@ -45,14 +45,15 @@ function TracingSlider({
     return Math.round(ratio * max)
   }
 
-  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+  // Dragging only starts from the thumb itself — clicking elsewhere on the
+  // track no longer jumps the value straight there, it has to be grabbed.
+  function handleThumbPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (disabled) return
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
-    onChange(valueFromPointer(e.clientX))
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+  function handleThumbPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (disabled || !e.buttons) return
     onChange(valueFromPointer(e.clientX))
   }
@@ -78,15 +79,10 @@ function TracingSlider({
           </button>
         )}
 
-        {/* Custom animated track */}
+        {/* Custom animated track — display only, no longer click-to-jump */}
         <div
           ref={trackRef}
-          className={cn(
-            "relative flex-1 min-w-0 h-5 flex items-center",
-            disabled ? "cursor-default" : "cursor-pointer"
-          )}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
+          className="relative flex-1 min-w-0 h-5 flex items-center"
         >
           {/* Track background */}
           <div className="absolute inset-x-0 h-1.5 rounded-full bg-white/10">
@@ -101,15 +97,24 @@ function TracingSlider({
             />
           </div>
 
-          {/* Animated thumb */}
+          {/* Draggable thumb — hit area is bigger than the visible 12px dot
+              (easier to grab, especially on touch) but must be held to move;
+              the track around it no longer responds to pointer events at all. */}
           <div
-            className="absolute size-3 rounded-full bg-white shadow pointer-events-none"
+            onPointerDown={handleThumbPointerDown}
+            onPointerMove={handleThumbPointerMove}
+            className={cn(
+              "absolute size-5 rounded-full flex items-center justify-center touch-none",
+              disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+            )}
             style={{
               left: `${pct}%`,
               transform: "translateX(-50%)",
               transition: "left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
             }}
-          />
+          >
+            <div className="size-3 rounded-full bg-white shadow pointer-events-none" />
+          </div>
         </div>
 
         {showButtons && (

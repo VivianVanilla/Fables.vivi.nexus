@@ -12,7 +12,8 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "../ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
 import { computeDamageSegments, type DamageSegment } from "../../character-damage-types"
-import { getSuggestions, type Suggestion, STAT_OPTIONS, MAGIC_ITEM_BG } from "./FeatureEntry"
+import { getSuggestions, type Suggestion, STAT_OPTIONS, MAGIC_ITEM_BG, categoryAccentStyle } from "./FeatureEntry"
+import type { CardStyle } from "../../character-constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,8 @@ interface EquipmentEntryProps {
   onToggleFavorite?: () => void  // omit to hide the star
   showMagicStar?:  boolean                        // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
   magicItemStyle?: "none" | "outline" | "galaxy"   // Settings choice (default "galaxy") — sheet-wide card treatment, mirrors FeatureEntry.tsx
+  accentColor?:    string                         // Settings — this item's category color (category is "equipment" — the Martial tab), see FeatureEntry.tsx's categoryAccentStyle
+  accentStyle?:    CardStyle                      // Settings — "none" (default), "outline", or "galaxy" for the category accent above
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ function computeDamageSegmentsForItem(
 export function EquipmentEntry({
   item, onChange, onRemove, theme, readOnly = false,
   statMods = {}, pb = 2, userId, isFavorite, onToggleFavorite,
-  showMagicStar = true, magicItemStyle = "galaxy",
+  showMagicStar = true, magicItemStyle = "galaxy", accentColor, accentStyle,
 }: EquipmentEntryProps) {
   const [editing,    setEditing]    = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -342,7 +345,7 @@ export function EquipmentEntry({
       <div
         {...dragAttrs}
         className={`rounded-xl border transition-all overflow-hidden shrink-0 ${magicStyle ? "border-purple-400/50" : (isExpanded ? "border-white/20" : "border-white/10")} ${magicStyle === "galaxy" ? "" : theme.box}`}
-        style={cardStyle}
+        style={{ ...cardStyle, ...categoryAccentStyle(accentColor, accentStyle) }}
       >
         {/* Compact row */}
         <div

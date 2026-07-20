@@ -13,6 +13,8 @@ import { FamiliarMonsterView } from "../../monster"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "../../character-utils"
+import { categoryAccentStyle } from "../entries/FeatureEntry"
+import type { CardStyle } from "../../character-constants"
 
 interface FamiliarsTabProps {
   familiars: FamiliarRef[]
@@ -26,6 +28,8 @@ interface FamiliarsTabProps {
   onRemove: (id: string) => void
   onToggleFavorite: (id: string, label: string) => void
   onPopOut: (id: string) => void
+  accentColor?: string     // Settings — the "Familiars" category color, see FeatureEntry.tsx's categoryAccentStyle
+  accentStyle?: CardStyle  // Settings — "none" (default), "outline", or "galaxy" for the category accent above
 }
 
 function getMonsterData(monster: userInfo.Objects): MonsterData {
@@ -34,7 +38,7 @@ function getMonsterData(monster: userInfo.Objects): MonsterData {
 
 export function FamiliarsTab({
   familiars, monsters, favorites, card, readOnly, poppedOutIds,
-  onAdd, onUpdate, onRemove, onToggleFavorite, onPopOut,
+  onAdd, onUpdate, onRemove, onToggleFavorite, onPopOut, accentColor, accentStyle,
 }: FamiliarsTabProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [pickerValue, setPickerValue] = useState("")
@@ -99,7 +103,7 @@ export function FamiliarsTab({
           const label     = fam.nickname || monster?.name || "Familiar"
 
           return (
-            <div key={fam.id} className={`${card} shrink-0 overflow-hidden`}>
+            <div key={fam.id} className={`${card} shrink-0 overflow-hidden`} style={categoryAccentStyle(accentColor, accentStyle)}>
               <div className="flex items-center gap-3 px-3 py-2.5"
                 draggable={!readOnly}
                 onDragStart={e => {

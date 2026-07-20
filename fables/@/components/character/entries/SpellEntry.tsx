@@ -14,6 +14,8 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 import { spellItemFieldsFromSpell } from "../../character-spell-utils"
+import { categoryAccentStyle } from "./FeatureEntry"
+import type { CardStyle } from "../../character-constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,8 @@ interface SpellEntryProps {
   onAutoEditConsumed?: () => void
   isFavorite?: boolean
   onToggleFavorite?: () => void  // omit to hide the star
+  accentColor?: string     // Settings — this spell's category color (category is "spell"), see FeatureEntry.tsx's categoryAccentStyle
+  accentStyle?: CardStyle  // Settings — "none" (default), "outline", or "galaxy" for the category accent above
 }
 
 // ── Spell name input with autofill ────────────────────────────────────────────
@@ -194,7 +198,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, accentColor, accentStyle }: SpellEntryProps) {
   const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -398,7 +402,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
       <div
         {...dragAttrs}
         onClick={() => setShowDetail(true)}
-        className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors ${compact ? "w-auto max-w-72 shrink-0" : ""}`}
+        className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors ${compact ? "w-auto max-w-72 shrink-0" : "shrink-0"}`}
+        style={categoryAccentStyle(accentColor, accentStyle)}
       >
         {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells and cantrips have no mark at all */}
         {showPrepToggle && !spell.alwaysPrepared && spell.level !== 0 && (

@@ -722,7 +722,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle,
     featureCategoryById,
     favoriteCategoryColors: data.favoriteCategoryColors,
-    showFavoriteAccents: data.showFavoriteAccents,
+    favoriteCategoryStyle: data.favoriteCategoryStyle,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),
@@ -1310,6 +1310,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             onRemove={removeFamiliar}
             onToggleFavorite={toggleFamiliarFavorite}
             onPopOut={togglePopout}
+            accentColor={data.favoriteCategoryColors?.familiar}
+            accentStyle={data.favoriteCategoryStyle?.familiar}
           />
         )}
         {activeTab === "chat" && data.partyCode && !readOnly && (
