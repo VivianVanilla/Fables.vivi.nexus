@@ -830,11 +830,11 @@ export function FeatureEntry({
         className="flex flex-col px-2.5 py-1.5 cursor-pointer hover:bg-white/5 transition-colors select-none"
         onClick={() => setExpanded(v => !v)}>
 
-        {/* Top row: expand chevron + name + desktop bar */}
-        <div className="flex items-center gap-2">
+        {/* Top row: expand chevron + name + badges (wraps rather than squishing) */}
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] text-white/30 shrink-0 w-3">{expanded ? "▼" : "▶"}</span>
 
-          <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
+          <span className="min-w-24 flex-1 text-sm font-semibold text-white truncate">
             {feature.isContainer && "🎒 "}
             {magicStar && "✨ "}
             {feature.name || <span className="text-white/30 italic">{unnamedLabel}</span>}
@@ -881,29 +881,17 @@ export function FeatureEntry({
             </span>
           )}
 
-          {/* Desktop bar (sm and up) */}
-          {hasUses && (
-            <div className="hidden sm:flex shrink-0 items-center gap-1.5 w-[50%]" onClick={e => e.stopPropagation()}>
-              <TracingSlider
-                value={usesRemaining} max={effectiveMax}
-                disabled={readOnly} color={feature.sliderColor}
-                showButtons buttonSize="sm" className="flex-1 min-w-0"
-                onChange={val => onChange({ usesUsed: effectiveMax - val })}
-              />
-              <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
-                {usesRemaining}/{effectiveMax}
-              </span>
-            </div>
-          )}
-
           {(feature.linkedTo?.length ?? 0) > 0 && (
             <span className="text-[9px] text-primary/60 shrink-0" title="Synced with other feature(s)">⟳</span>
           )}
         </div>
 
-        {/* Mobile bar — full width below name */}
+        {/* Uses-tracking bar — always its own full-width row below the name,
+            so it never has to fight the name/badges for space (these cards
+            often sit in narrow grid columns, where a viewport-based sm:
+            breakpoint would still apply the wide desktop layout). */}
         {hasUses && (
-          <div className="sm:hidden flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
             <TracingSlider
               value={usesRemaining} max={effectiveMax}
               disabled={readOnly} color={feature.sliderColor}
