@@ -304,6 +304,8 @@ export function SpellsEquipPanel({
                 statMods={statMods}
                 pb={profBonus(data.level ?? 1)}
                 userId={userId}
+                showMagicStar={data.showMagicItemStar}
+                magicItemStyle={data.magicItemStyle}
               />
             ))}
             {!readOnly && (

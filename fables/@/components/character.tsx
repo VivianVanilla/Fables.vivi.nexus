@@ -13,6 +13,7 @@ import type {
   SpellSlot, FavoriteRef, Feature, FamiliarRef,
 } from "./character-types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
+import type { FavoriteCategory } from "./character-constants"
 import { profBonus, nanoid, safeParseJson, computeAc } from "./character-utils"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "./character-themes"
 import { loadUserImages, uploadUserImage } from "./imageGallery"
@@ -233,12 +234,23 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.invocations   ?? []),
   ]
 
+  // Which of the five Feature lists a given feature id came from — used only
+  // to resolve its Favorites accent category (see FavoritesPanel.tsx); a
+  // Feature itself carries no such tag since nothing else needs to tell these
+  // lists apart once merged.
+  const featureCategoryById: Record<string, FavoriteCategory> = {}
+  ;(data.racialTraits  ?? []).forEach(f => { featureCategoryById[f.id] = "race" })
+  ;(data.feats         ?? []).forEach(f => { featureCategoryById[f.id] = "feat" })
+  ;(data.classFeatures ?? []).forEach(f => { featureCategoryById[f.id] = "class" })
+  ;(data.items         ?? []).forEach(f => { featureCategoryById[f.id] = "item" })
+  ;(data.invocations   ?? []).forEach(f => { featureCategoryById[f.id] = "invocation" })
+
   // AC = 10 + chosen ability mod(s) (dual-stat aware), overridden by an equipped "base
   // armor" piece's own base+Dex formula, plus flat bonuses from equipped shields/rings/etc.
   const acResult = computeAc(data)
 
   // Items sent over to the Martial list keep a `sourceFeatureId` link — used both to render
-  // "+ Equipment" as a toggle (on/off, not a repeatable spawn) and to avoid double-counting
+  // "+ Martial Tab" as a toggle (on/off, not a repeatable spawn) and to avoid double-counting
   // their weight below (it's already counted via the source Feature in data.items).
   const equipmentLinkedIds = new Set(
     (data.equipmentItems ?? []).map(i => i.sourceFeatureId).filter((id): id is string => !!id)
@@ -285,10 +297,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       type: kind === "weapon" ? (meta?.weaponKind ?? "melee") : kind,
       damage: meta?.damage,
       damageType: meta?.damageType,
+      multiDamage: meta?.multiDamage,
+      damages: meta?.damages,
       properties: meta?.properties,
       meleeRange: meta?.meleeRange,
       throwRange: meta?.throwRange,
       range: meta?.range,
+      attackStat: meta?.attackStat,
+      magicBonus: meta?.magicBonus,
+      toHit: meta?.toHit,
+      extraToHit: meta?.extraToHit,
+      extraDamage: meta?.extraDamage,
+      proficient: meta?.proficient,
+      isMagicItem: feature.isMagicItem,
     }
   }
 
@@ -301,15 +322,24 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       description: equip.notes ?? "",
       weight: equip.weight,
       equipKind: kind,
+      isMagicItem: equip.isMagicItem,
       itemMeta: {
         ...existingFeature.itemMeta,
         damage: equip.damage,
         damageType: equip.damageType,
+        multiDamage: equip.multiDamage,
+        damages: equip.damages,
         properties: equip.properties,
         meleeRange: equip.meleeRange,
         throwRange: equip.throwRange,
         range: equip.range,
         weaponKind: kind === "weapon" ? (equip.type as "melee" | "ranged") : existingFeature.itemMeta?.weaponKind,
+        attackStat: equip.attackStat,
+        magicBonus: equip.magicBonus,
+        toHit: equip.toHit,
+        extraToHit: equip.extraToHit,
+        extraDamage: equip.extraDamage,
+        proficient: equip.proficient,
       },
     }
   }
@@ -690,6 +720,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     onPopOutFamiliar: togglePopout,
     theme: { ...theme, box: effectiveBox }, card, readOnly,
     showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle,
+    featureCategoryById,
+    favoriteCategoryColors: data.favoriteCategoryColors,
+    showFavoriteAccents: data.showFavoriteAccents,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),

@@ -513,6 +513,13 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
             className="w-32 shrink-0 bg-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white/80 outline-none placeholder:text-white/20 transition-colors focus:bg-white/10" />
         </div>
 
+        {/* Familiar availability — gates whether this monster shows up in a
+            character's "Add Familiar" picker (see FamiliarsTab.tsx) */}
+        <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
+          <input type="checkbox" checked={data.isFamiliar ?? false} onChange={e => onUpdate({ isFamiliar: e.target.checked })} />
+          Available as a Familiar (shows up when adding familiars to a character)
+        </label>
+
         {/* Display — trims the sheet down for a quicker read, doesn't touch the underlying data */}
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">

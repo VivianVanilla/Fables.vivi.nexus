@@ -39,6 +39,12 @@ export function FamiliarsTab({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [pickerValue, setPickerValue] = useState("")
 
+  // Only monsters flagged "Available as a Familiar" (Edit Stat Block, on the
+  // Monster itself) show up here — `monsters` stays the full list since it's
+  // also used below to resolve already-added familiars' source data, which
+  // must keep resolving even if the flag is later unchecked.
+  const familiarCandidates = monsters.filter(m => getMonsterData(m).isFamiliar)
+
   const isFavorited = (id: string) => favorites.some(f => f.refId === id)
   const sorted = [...familiars].sort((a, b) => (isFavorited(b.id) ? 1 : 0) - (isFavorited(a.id) ? 1 : 0))
 
@@ -58,12 +64,17 @@ export function FamiliarsTab({
             <p className="text-xs text-white/30 italic">
               No monsters in your library yet — create one from the sidebar "+" menu, then add it here.
             </p>
+          ) : familiarCandidates.length === 0 ? (
+            <p className="text-xs text-white/30 italic">
+              None of your monsters are marked as familiars yet — open a monster's Edit Stat Block and check
+              "Available as a Familiar" to add it here.
+            </p>
           ) : (
             <>
               <select value={pickerValue} onChange={e => setPickerValue(e.target.value)}
                 className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-sm text-white outline-none">
                 <option value="" className="bg-zinc-800 text-white">Choose a monster to add as a familiar…</option>
-                {monsters.map(m => <option key={m.id} value={m.id} className="bg-zinc-800 text-white">{m.name}</option>)}
+                {familiarCandidates.map(m => <option key={m.id} value={m.id} className="bg-zinc-800 text-white">{m.name}</option>)}
               </select>
               <button type="button" onClick={handleAdd} disabled={!pickerValue}
                 className="text-sm px-3 py-2 rounded-lg bg-primary/80 hover:bg-primary disabled:opacity-30 disabled:cursor-default text-white font-semibold transition-colors shrink-0">

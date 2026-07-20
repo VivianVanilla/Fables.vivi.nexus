@@ -70,6 +70,35 @@ export const RARITY_COLORS: Record<string, string> = {
   "Wondrous":  "bg-teal-500/15 text-teal-300",
 }
 
+// ── Favorites accent colors ──────────────────────────────────────────────────
+// Configured once per category in Settings (CharacterData.favoriteCategoryColors)
+// and applied automatically to every favorited card of that category — see
+// FavoritesPanel.tsx. "feature" refType favorites are further split by which
+// list they came from (race/class/feat/item/invocation); the other refTypes
+// (spell/equipment/familiar) are each their own category.
+
+export const FAVORITE_ACCENT_COLORS = [
+  { name: "Violet", value: "#8b5cf6" },
+  { name: "Blue",   value: "#3b82f6" },
+  { name: "Green",  value: "#22c55e" },
+  { name: "Amber",  value: "#f59e0b" },
+  { name: "Red",    value: "#ef4444" },
+  { name: "Pink",   value: "#ec4899" },
+] as const
+
+export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "spell" | "equipment" | "familiar"
+
+export const FAVORITE_CATEGORY_LABELS: Record<FavoriteCategory, string> = {
+  race:       "Racial Traits",
+  class:      "Class Features",
+  feat:       "Feats",
+  item:       "Items",
+  invocation: "Invocations",
+  spell:      "Spells",
+  equipment:  "Martial",
+  familiar:   "Familiars",
+}
+
 export const SKILLS = [
   { name: "Acrobatics",       ability: "dex" },
   { name: "Animal Handling",  ability: "wis" },

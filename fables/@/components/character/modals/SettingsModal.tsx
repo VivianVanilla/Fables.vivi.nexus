@@ -1,6 +1,7 @@
 import { Modal } from "../ui/Modal"
 import type { CharacterData } from "../../character-types"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "../../character-themes"
+import { FAVORITE_ACCENT_COLORS, FAVORITE_CATEGORY_LABELS, type FavoriteCategory } from "../../character-constants"
 
 interface Props {
   data: CharacterData
@@ -137,6 +138,45 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Favorite accent colors — one color per category (Racial Trait,
+              Class Feature, Feat, Item, Invocation, Spell, Martial, Familiar),
+              applied automatically to every favorited card of that category —
+              see FavoritesPanel.tsx. No per-item picking; set it once here. */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Favorites</p>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.showFavoriteAccents ?? true}
+                onChange={e => onUpdate({ showFavoriteAccents: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Accent colors by category</span>
+            </label>
+            <div className="flex flex-col gap-1">
+              {(Object.keys(FAVORITE_CATEGORY_LABELS) as FavoriteCategory[]).map(cat => {
+                const active = data.favoriteCategoryColors?.[cat]
+                return (
+                  <div key={cat} className="flex items-center justify-between px-1 py-1">
+                    <span className="text-sm text-white/70">{FAVORITE_CATEGORY_LABELS[cat]}</span>
+                    <div className="flex items-center gap-1">
+                      <button type="button" title="None"
+                        onClick={() => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: undefined } })}
+                        className={`size-5 rounded-full border flex items-center justify-center text-[9px] transition-colors shrink-0 ${
+                          !active ? "border-white/50 text-white/70" : "border-white/15 text-white/20 hover:border-white/30"
+                        }`}>
+                        ✕
+                      </button>
+                      {FAVORITE_ACCENT_COLORS.map(c => (
+                        <button key={c.name} type="button" title={c.name}
+                          onClick={() => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: c.value } })}
+                          className={`size-5 rounded-full border-2 shrink-0 transition-transform ${active === c.value ? "border-white scale-110" : "border-transparent hover:scale-105"}`}
+                          style={{ backgroundColor: c.value }} />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 

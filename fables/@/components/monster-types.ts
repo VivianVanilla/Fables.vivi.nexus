@@ -27,6 +27,7 @@ export interface MonsterData {
   description?: string
   hideDescription?: boolean // display setting — hides the flavor text to make the sheet more compact
   collapsibleAbilities?: boolean // display setting — traits/actions/spellcasting start collapsed to name+badges, click to expand
+  isFamiliar?: boolean    // gate — only monsters with this on appear in a character's "Add Familiar" picker (see FamiliarsTab.tsx)
   creatureType?: string   // e.g. "Medium beast, unaligned"
   alignment?: string
 

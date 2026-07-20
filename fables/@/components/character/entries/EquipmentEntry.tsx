@@ -12,7 +12,7 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "../ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
 import { computeDamageSegments, type DamageSegment } from "../../character-damage-types"
-import { getSuggestions, type Suggestion } from "./FeatureEntry"
+import { getSuggestions, type Suggestion, STAT_OPTIONS, MAGIC_ITEM_BG } from "./FeatureEntry"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,17 +27,9 @@ interface EquipmentEntryProps {
   userId?: string | null
   isFavorite?: boolean
   onToggleFavorite?: () => void  // omit to hide the star
+  showMagicStar?:  boolean                        // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
+  magicItemStyle?: "none" | "outline" | "galaxy"   // Settings choice (default "galaxy") — sheet-wide card treatment, mirrors FeatureEntry.tsx
 }
-
-const STAT_OPTIONS = [
-  { value: "",    label: "None" },
-  { value: "str", label: "STR" },
-  { value: "dex", label: "DEX" },
-  { value: "con", label: "CON" },
-  { value: "int", label: "INT" },
-  { value: "wis", label: "WIS" },
-  { value: "cha", label: "CHA" },
-] as const
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,6 +71,7 @@ function computeDamageSegmentsForItem(
 export function EquipmentEntry({
   item, onChange, onRemove, theme, readOnly = false,
   statMods = {}, pb = 2, userId, isFavorite, onToggleFavorite,
+  showMagicStar = true, magicItemStyle = "galaxy",
 }: EquipmentEntryProps) {
   const [editing,    setEditing]    = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -88,6 +81,9 @@ export function EquipmentEntry({
   const toHit    = computeToHit(item, statMods, pb)
   const segments = computeDamageSegmentsForItem(item, statMods)
   const isWeapon = item.type === "melee" || item.type === "ranged" || !item.type
+  const magicStar  = item.isMagicItem && showMagicStar
+  const magicStyle = item.isMagicItem && magicItemStyle !== "none" ? magicItemStyle : null
+  const cardStyle  = magicStyle === "galaxy" ? MAGIC_ITEM_BG : undefined
 
   // ── Drag source ─────────────────────────────────────────────────────────
 
@@ -297,6 +293,13 @@ export function EquipmentEntry({
                     className="accent-primary size-4 rounded" />
                   <span className="text-sm text-white/70">Proficient with this weapon</span>
                 </label>
+
+                <label className="flex items-center gap-2 col-span-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={item.isMagicItem ?? false} onChange={e => onChange({ isMagicItem: e.target.checked })}
+                    className="accent-purple-500 size-4 rounded" />
+                  <span className="text-sm text-purple-300">Magic Item</span>
+                  <span className="text-xs text-white/25 italic">(style is set sheet-wide in Settings)</span>
+                </label>
               </div>
 
               {/* Computed preview */}
@@ -338,7 +341,8 @@ export function EquipmentEntry({
       {/* ── Row + expandable detail ──────────────────────────────────────── */}
       <div
         {...dragAttrs}
-        className={`rounded-xl ${theme.box} border transition-all overflow-hidden ${isExpanded ? "border-white/20" : "border-white/10"}`}
+        className={`rounded-xl border transition-all overflow-hidden shrink-0 ${magicStyle ? "border-purple-400/50" : (isExpanded ? "border-white/20" : "border-white/10")} ${magicStyle === "galaxy" ? "" : theme.box}`}
+        style={cardStyle}
       >
         {/* Compact row */}
         <div
@@ -348,6 +352,7 @@ export function EquipmentEntry({
           {/* Name + tags */}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">
+              {magicStar && "✨ "}
               {item.name || <span className="text-white/30 italic">Unnamed</span>}
             </p>
             <div className="flex gap-1 mt-0.5 flex-wrap">

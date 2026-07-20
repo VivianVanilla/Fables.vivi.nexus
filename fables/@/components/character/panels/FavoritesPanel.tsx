@@ -18,6 +18,7 @@ import { FeatureEntry } from "../entries/FeatureEntry"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "../../character-utils"
 import type { Theme } from "../../character-themes"
+import type { FavoriteCategory } from "../../character-constants"
 
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 
@@ -65,6 +66,9 @@ interface FavoritesPanelProps {
   classes:           string[]
   onRemove:          (refId: string) => void
   onReorder:         (fromIdx: number, toIdx: number) => void
+  featureCategoryById:     Record<string, FavoriteCategory>  // resolves which of the 5 Feature lists a "feature"-type favorite came from
+  favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category
+  showFavoriteAccents?:    boolean  // Settings toggle (default true)
   onChangeSpell:     (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell:     (id: string) => void
   onChangeEquip:     (id: string, patch: Partial<EquipmentItem>) => void
@@ -89,6 +93,7 @@ interface FavoritesPanelProps {
 export function FavoritesPanel({
   favorites, spellItems, equipItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
+  featureCategoryById, favoriteCategoryColors, showFavoriteAccents = true,
   onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
   theme, card, readOnly, showMagicStar, magicItemStyle,
@@ -103,6 +108,15 @@ export function FavoritesPanel({
   function resolveEquip(refId: string)    { return equipItems.find(i => i.id === refId) }
   function resolveFeature(refId: string)  { return features.find(f => f.id === refId) }
   function resolveFamiliar(refId: string) { return familiars.find(f => f.id === refId) }
+
+  function resolveCategory(fav: FavoriteRef): FavoriteCategory {
+    if (fav.refType === "feature") return featureCategoryById[fav.refId] ?? "item"
+    return fav.refType
+  }
+  function accentColorFor(fav: FavoriteRef): string | undefined {
+    if (!showFavoriteAccents) return undefined
+    return favoriteCategoryColors?.[resolveCategory(fav)]
+  }
 
   // ── Reorder drag handlers ────────────────────────────────────────────────
 
@@ -186,6 +200,8 @@ export function FavoritesPanel({
               entry = item
                 ? <EquipmentEntry item={item} theme={theme} readOnly={readOnly} statMods={statMods} pb={pb}
                     isFavorite onToggleFavorite={onToggleFavorite}
+                    showMagicStar={showMagicStar}
+                    magicItemStyle={magicItemStyle}
                     onChange={p => onChangeEquip(fav.refId, p)}
                     onRemove={() => onRemoveEquip(fav.refId)} />
                 : <p className="text-sm text-white/30 italic px-3 py-2.5">Item not found.</p>
@@ -234,7 +250,18 @@ export function FavoritesPanel({
                     title="Drag to reorder">⠿</span>
                 )}
 
-                <div className="flex-1 min-w-0">{entry}</div>
+                {/* Accent ring/glow — color comes from the favorite's category
+                    (Settings), only ever applied here, never on the underlying
+                    item's own card elsewhere in the sheet. */}
+                {(() => {
+                  const accent = accentColorFor(fav)
+                  return (
+                    <div className="flex-1 min-w-0 rounded-xl"
+                      style={accent ? { boxShadow: `0 0 0 1.5px ${accent}80, 0 0 14px -4px ${accent}` } : undefined}>
+                      {entry}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}

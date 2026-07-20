@@ -1,5 +1,7 @@
 // All data shapes used by the character sheet
 
+import type { FavoriteCategory } from "./character-constants"
+
 // One damage instance ("2d6" fire, "1d4" cold, etc.) — the base damage/damageType
 // fields on weapons/actions/items stay as the single/primary instance for backward
 // compatibility; `damages` holds any additional ones once `multiDamage` is toggled on
@@ -33,6 +35,9 @@ export interface EquipmentItem {
   weight?: number      // lb — rolled into the character's total carried weight
   sourceFeatureId?: string  // set when toggled in from an Armor & Equipment item — its weight is
                              // already counted via that Feature, so it's excluded here to avoid double-counting
+  isMagicItem?: boolean  // mirrors Feature.isMagicItem — mirrored both ways by equipmentFieldsFromFeature/
+                          // featureFieldsFromEquipment (character.tsx) so the Martial tab shows the same
+                          // ✨ badge / card treatment as the Items tab for the same physical item
 }
 
 export interface SpellItem {
@@ -143,6 +148,16 @@ export interface Feature {
     meleeRange?: string       // e.g. "5 ft."
     throwRange?: string       // e.g. "20/60 ft." — thrown melee weapons
     range?: string            // e.g. "80/320 ft." — ranged weapons
+    // The rest mirror EquipmentItem's attack-roll fields 1:1 so a weapon edited
+    // here and one edited on the Martial tab (EquipmentEntry.tsx) offer the
+    // exact same options — see equipmentFieldsFromFeature/featureFieldsFromEquipment
+    // in character.tsx, which mirror edits made on either side onto the other.
+    attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
+    magicBonus?: string       // e.g. "+1", "+2"
+    toHit?: string            // manual override when attackStat is not set
+    extraToHit?: number       // flat bonus added to computed to-hit, only used when attackStat is set
+    extraDamage?: number      // flat bonus added to computed damage, only used when attackStat is set
+    proficient?: boolean
   }
 }
 
@@ -233,6 +248,8 @@ export interface CharacterData {
   items?: Feature[]
   invocations?: Feature[]  // Eldritch Invocations (Warlock)
   favorites?: FavoriteRef[]
+  favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent ring/glow color per favorite category (race/class/feat/item/invocation/spell/equipment/familiar), see FavoritesPanel.tsx
+  showFavoriteAccents?: boolean  // Settings toggle (default true) — off hides all favorite accent rings sheet-wide
   conditions?: ActiveCondition[]
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">

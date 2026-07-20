@@ -33,6 +33,18 @@ export interface Suggestion {
   meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; prerequisite?: string }
 }
 
+// Shared with EquipmentEntry.tsx (the Martial tab) so a weapon's Attack Stat
+// options are identical whichever side it's edited from.
+export const STAT_OPTIONS = [
+  { value: "",    label: "None" },
+  { value: "str", label: "STR" },
+  { value: "dex", label: "DEX" },
+  { value: "con", label: "CON" },
+  { value: "int", label: "INT" },
+  { value: "wis", label: "WIS" },
+  { value: "cha", label: "CHA" },
+] as const
+
 const cacheMap   = new Map<string, Suggestion[]>()
 const promiseMap = new Map<string, Promise<Suggestion[]>>()
 
@@ -192,7 +204,9 @@ const STAR_TILE = [
   "radial-gradient(circle 1px at 90% 90%, #fff 35%, transparent 45%)",
 ].join(", ")
 
-const MAGIC_ITEM_BG: CSSProperties = {
+// Shared with EquipmentEntry.tsx (the Martial tab) so an item flagged Magic
+// Item gets the exact same "galaxy" card treatment whichever side it's viewed from.
+export const MAGIC_ITEM_BG: CSSProperties = {
   backgroundImage: `linear-gradient(rgba(10,6,22,0.7), rgba(10,6,22,0.7)), ${STAR_TILE}, linear-gradient(135deg, #140a2c, #241250 45%, #3b1f6b 75%, #140a2c)`,
   backgroundRepeat: "no-repeat, repeat, no-repeat",
   backgroundSize: "100% 100%, 90px 90px, 100% 100%",
@@ -484,11 +498,68 @@ export function FeatureEntry({
                         Ranged
                       </button>
                     </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                        Attack Stat
+                        <select value={feature.itemMeta?.attackStat ?? ""}
+                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, attackStat: (e.target.value || undefined) as NonNullable<Feature["itemMeta"]>["attackStat"] } })}
+                          className="bg-zinc-800 rounded px-2 py-1 text-white text-xs outline-none">
+                          {STAT_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value} className="bg-zinc-800 text-white">{o.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-2 text-white/50 cursor-pointer select-none whitespace-nowrap">
+                        <input type="checkbox" checked={feature.itemMeta?.proficient ?? false}
+                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, proficient: e.target.checked } })}
+                          className="accent-white"
+                        />
+                        Proficient
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                        Magic Bonus
+                        <input value={feature.itemMeta?.magicBonus ?? ""} placeholder="+1"
+                          onChange={e => onChange({ itemMeta: { ...feature.itemMeta, magicBonus: e.target.value } })}
+                          className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
+                      </label>
+                      {!feature.itemMeta?.attackStat && (
+                        <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                          To Hit
+                          <input value={feature.itemMeta?.toHit ?? ""} placeholder="+5"
+                            onChange={e => onChange({ itemMeta: { ...feature.itemMeta, toHit: e.target.value } })}
+                            className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none placeholder:text-white/20" />
+                        </label>
+                      )}
+                      {feature.itemMeta?.attackStat && (
+                        <>
+                          <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                            Extra To Hit
+                            <NumInput value={feature.itemMeta?.extraToHit ?? ""} placeholder="0"
+                              onChange={e => onChange({ itemMeta: { ...feature.itemMeta, extraToHit: parseInt(e.target.value) || 0 } })}
+                              className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                          </label>
+                          <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                            Extra Damage
+                            <NumInput value={feature.itemMeta?.extraDamage ?? ""} placeholder="0"
+                              onChange={e => onChange({ itemMeta: { ...feature.itemMeta, extraDamage: parseInt(e.target.value) || 0 } })}
+                              className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                          </label>
+                        </>
+                      )}
+                    </div>
                     <DamageEditor
                       value={feature.itemMeta ?? {}}
                       onChange={patch => onChange({ itemMeta: { ...feature.itemMeta, ...patch } })}
                       damagePlaceholder="1d8"
                     />
+                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                      Properties
+                      <input value={feature.itemMeta?.properties ?? ""} placeholder="Versatile, Finesse…"
+                        onChange={e => onChange({ itemMeta: { ...feature.itemMeta, properties: e.target.value } })}
+                        className="flex-1 min-w-32 bg-white/10 rounded px-2 py-1 text-white outline-none placeholder:text-white/20" />
+                    </label>
                     <div className="flex flex-wrap items-center gap-3">
                       <PopTransition show={(feature.itemMeta?.weaponKind ?? "melee") === "melee"}>
                         <div className="flex flex-wrap items-center gap-3">
@@ -751,7 +822,7 @@ export function FeatureEntry({
   const cardStyle  = magicStyle === "galaxy" ? MAGIC_ITEM_BG : undefined
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${magicStyle ? "border-purple-400/50" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
+    <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "border-purple-400/50" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
       style={cardStyle}>
 
       {/* Header row */}
@@ -888,7 +959,7 @@ export function FeatureEntry({
                   className={`text-[10px] px-2 py-1 rounded-full transition-colors shrink-0 ${
                     inEquipment ? "bg-primary/30 text-primary hover:bg-primary/20" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
                   }`}>
-                  {inEquipment ? "◯ In Martial" : "+ Equipment"}
+                  {inEquipment ? "◯ In Martial" : "+ Martial Tab"}
                 </button>
               )}
               {onToggleFavorite && (
