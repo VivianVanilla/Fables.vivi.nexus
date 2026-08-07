@@ -3,7 +3,8 @@ import { Modal } from "../ui/Modal"
 import { NumInput } from "../ui/NumInput"
 import type { CharacterData, SpellSlot } from "../../character-types"
 import { TracingSlider } from "../../ui/tracing-slider"
-import { slotLevelColor } from "../../character-themes"
+import { slotLevelColor, slotLevelGradient } from "../../character-themes"
+import type { SlotTheme } from "../../character-themes"
 import { profBonus } from "../../character-utils"
 import { SAVE_TO_ABILITY } from "../../character-constants"
 
@@ -11,7 +12,8 @@ interface Props {
   data: CharacterData
   spellSlots: SpellSlot[]
   readOnly?: boolean
-  slotAccent: string
+  slotTheme: SlotTheme
+  slotAnimated?: boolean
   onUpdate: (patch: Partial<CharacterData>) => void
   onChangeSlot: (id: string, patch: Partial<SpellSlot>) => void
   onAddSlot: (level: number, total: number, resetsOn: "short" | "long") => void
@@ -20,7 +22,7 @@ interface Props {
 }
 
 export function SpellcastingModal({
-  data, spellSlots, readOnly, slotAccent,
+  data, spellSlots, readOnly, slotTheme, slotAnimated,
   onUpdate, onChangeSlot, onAddSlot, onRemoveSlot, onClose,
 }: Props) {
   const [newSlotLevel, setNewSlotLevel] = useState(1)
@@ -162,7 +164,8 @@ export function SpellcastingModal({
                     <TracingSlider
                       value={rem} max={slot.total} disabled={readOnly}
                       showButtons buttonSize="sm"
-                      color={slotLevelColor(slotAccent, slot.level)}
+                      color={slotAnimated ? slotLevelGradient(slotTheme, slot.level) : slotLevelColor(slotTheme, slot.level)}
+                      animated={slotAnimated}
                       onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
                     />
                     {!readOnly && (

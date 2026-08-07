@@ -403,7 +403,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
         {...dragAttrs}
         onClick={() => setShowDetail(true)}
         className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors ${compact ? "w-auto max-w-72 shrink-0" : "shrink-0"}`}
-        style={categoryAccentStyle(accentColor, accentStyle)}
+        style={categoryAccentStyle(accentColor, accentStyle, theme.boxHex)}
       >
         {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells and cantrips have no mark at all */}
         {showPrepToggle && !spell.alwaysPrepared && spell.level !== 0 && (

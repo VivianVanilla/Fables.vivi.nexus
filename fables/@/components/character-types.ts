@@ -97,7 +97,6 @@ export interface UseTracker {
   maxUsesFormula?: "pb"
   usesUsed?: number
   resetsOn?: "short" | "long" | "dawn" | "manual"
-  sliderColor?: string
 }
 
 export interface Feature {
@@ -107,11 +106,11 @@ export interface Feature {
   level?: number             // character level this was gained at
   description?: string
   trackable?: boolean
+  trackerLabel?: string      // name for the primary tracker's bar (e.g. "Charges") — mirrors UseTracker.label, mainly useful once multiTracking adds more bars so it's clear which is which
   maxUses?: number
   maxUsesFormula?: "pb"      // when set, max uses = proficiency bonus
   usesUsed?: number
   resetsOn?: "short" | "long" | "dawn" | "manual"
-  sliderColor?: string
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
   multiTracking?: boolean    // toggle — on splits use-tracking across `trackers` instead of just the single trackable/maxUses/usesUsed triplet
   trackers?: UseTracker[]    // additional tracked bars beyond the primary trackable/maxUses/usesUsed, only used when multiTracking is on
@@ -233,11 +232,15 @@ export interface CharacterData {
   hideDiceRoller?: boolean       // true = hide the dice roller panel on the Combat tab
   hideJumpCalculator?: boolean   // true = hide the jump distance calculator on the Combat tab
   showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
-  magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card treatment applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge
+  magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy" is labeled "Animated" in the UI
+  magicItemColor?: string  // accent color for both magicItemStyle and magicItemSliderStyle — default DEFAULT_ACCENT_COLOR
+  magicItemSliderStyle?: "none" | "outline" | "galaxy"  // default "none" — separate look for magic items' own "Track uses" bars, independent of magicItemStyle (the card background)
   notes?: string
   backgroundImage?: string
   theme?: string
   slotTheme?: string
+  slotCustomColor?: string  // accent color for slotTheme "custom" — see character-themes.ts SLOT_THEMES
+  slotAnimated?: boolean    // Settings — shimmering iridescent slot bars instead of a flat color
   equipmentItems?: EquipmentItem[]
   spellItems?: SpellItem[]
   hitDicePools?: HitDicePool[]
@@ -250,6 +253,7 @@ export interface CharacterData {
   favorites?: FavoriteRef[]
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category (race/class/feat/invocation/spell/equipment/familiar — "item" is deliberately excluded, see STYLING_CATEGORIES), applied everywhere that category renders, not just Favorites
   favoriteCategoryStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: "none" (default/off), "outline" (colored border), or "galaxy" (animated background in that color) — mirrors magicItemStyle
+  favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: separate look for that category's own "Track uses" bars, independent of favoriteCategoryStyle (the card background) — mirrors magicItemSliderStyle
   conditions?: ActiveCondition[]
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">

@@ -3,8 +3,8 @@ import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "../../c
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
-import { slotLevelColor } from "../../character-themes"
-import type { Theme }     from "../../character-themes"
+import { slotLevelColor, slotLevelGradient } from "../../character-themes"
+import type { Theme, SlotTheme } from "../../character-themes"
 import { profBonus } from "../../character-utils"
 import { SAVE_TO_ABILITY, type FavoriteCategory } from "../../character-constants"
 
@@ -17,7 +17,8 @@ interface Props {
   spellItems: SpellItem[]
   equipItems: EquipmentItem[]
   spellSlots: SpellSlot[]
-  slotAccent: string
+  slotTheme: SlotTheme
+  slotAnimated?: boolean
   characterId: string
   activeSubTab: "spells" | "martial"
   onChangeSubTab: (v: "spells" | "martial") => void
@@ -35,7 +36,7 @@ interface Props {
 
 export function SpellsEquipPanel({
   card, theme, data, readOnly, userId,
-  spellItems, equipItems, spellSlots, slotAccent, characterId,
+  spellItems, equipItems, spellSlots, slotTheme, slotAnimated, characterId,
   activeSubTab, onChangeSubTab,
   onShowSpellcastingModal, onChangeSlot,
   onAddSpell, onChangeSpell, onRemoveSpell,
@@ -177,7 +178,8 @@ export function SpellsEquipPanel({
                   value={rem} max={slot.total} disabled={readOnly}
                   showButtons buttonSize="sm"
                   className=""
-                  color={slotLevelColor(slotAccent, slot.level)}
+                  color={slotAnimated ? slotLevelGradient(slotTheme, slot.level) : slotLevelColor(slotTheme, slot.level)}
+                  animated={slotAnimated}
                   onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
                 />
                 <span className="text-xs text-white/30 w-8 text-right tabular-nums shrink-0">{rem}/{slot.total}</span>
@@ -265,7 +267,8 @@ export function SpellsEquipPanel({
                                   <TracingSlider
                                     value={rem} max={slot.total} disabled={readOnly}
                                     showButtons buttonSize="sm"
-                                    color={slotLevelColor(slotAccent, slot.level)}
+                                    color={slotAnimated ? slotLevelGradient(slotTheme, slot.level) : slotLevelColor(slotTheme, slot.level)}
+                                    animated={slotAnimated}
                                     onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
                                     className="flex-1 min-w-0"
                                   />
@@ -310,6 +313,7 @@ export function SpellsEquipPanel({
                 userId={userId}
                 showMagicStar={data.showMagicItemStar}
                 magicItemStyle={data.magicItemStyle}
+                magicItemColor={data.magicItemColor}
                 accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")}
               />
             ))}

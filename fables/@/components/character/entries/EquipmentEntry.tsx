@@ -12,8 +12,8 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "../ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
 import { computeDamageSegments, type DamageSegment } from "../../character-damage-types"
-import { getSuggestions, type Suggestion, STAT_OPTIONS, MAGIC_ITEM_BG, categoryAccentStyle } from "./FeatureEntry"
-import type { CardStyle } from "../../character-constants"
+import { getSuggestions, type Suggestion, STAT_OPTIONS, coloredNebulaBg, categoryAccentStyle } from "./FeatureEntry"
+import { DEFAULT_ACCENT_COLOR, type CardStyle } from "../../character-constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,8 @@ interface EquipmentEntryProps {
   isFavorite?: boolean
   onToggleFavorite?: () => void  // omit to hide the star
   showMagicStar?:  boolean                        // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
-  magicItemStyle?: "none" | "outline" | "galaxy"   // Settings choice (default "galaxy") — sheet-wide card treatment, mirrors FeatureEntry.tsx
+  magicItemStyle?: "none" | "outline" | "galaxy"   // Settings choice (default "galaxy") — sheet-wide card treatment, mirrors FeatureEntry.tsx; "galaxy" is labeled "Animated" in Settings
+  magicItemColor?: string                         // Settings — accent color for magicItemStyle "galaxy"/Animated, default DEFAULT_ACCENT_COLOR
   accentColor?:    string                         // Settings — this item's category color (category is "equipment" — the Martial tab), see FeatureEntry.tsx's categoryAccentStyle
   accentStyle?:    CardStyle                      // Settings — "none" (default), "outline", or "galaxy" for the category accent above
 }
@@ -74,7 +75,7 @@ function computeDamageSegmentsForItem(
 export function EquipmentEntry({
   item, onChange, onRemove, theme, readOnly = false,
   statMods = {}, pb = 2, userId, isFavorite, onToggleFavorite,
-  showMagicStar = true, magicItemStyle = "galaxy", accentColor, accentStyle,
+  showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, accentColor, accentStyle,
 }: EquipmentEntryProps) {
   const [editing,    setEditing]    = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -86,7 +87,7 @@ export function EquipmentEntry({
   const isWeapon = item.type === "melee" || item.type === "ranged" || !item.type
   const magicStar  = item.isMagicItem && showMagicStar
   const magicStyle = item.isMagicItem && magicItemStyle !== "none" ? magicItemStyle : null
-  const cardStyle  = magicStyle === "galaxy" ? MAGIC_ITEM_BG : undefined
+  const cardStyle  = magicStyle === "galaxy" ? coloredNebulaBg(magicItemColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex) : undefined
 
   // ── Drag source ─────────────────────────────────────────────────────────
 
@@ -344,8 +345,12 @@ export function EquipmentEntry({
       {/* ── Row + expandable detail ──────────────────────────────────────── */}
       <div
         {...dragAttrs}
-        className={`rounded-xl border transition-all overflow-hidden shrink-0 ${magicStyle ? "border-purple-400/50" : (isExpanded ? "border-white/20" : "border-white/10")} ${magicStyle === "galaxy" ? "" : theme.box}`}
-        style={{ ...cardStyle, ...categoryAccentStyle(accentColor, accentStyle) }}
+        className={`rounded-xl border transition-all overflow-hidden shrink-0 ${magicStyle ? "" : (isExpanded ? "border-white/20" : "border-white/10")} ${magicStyle === "galaxy" ? "" : theme.box}`}
+        style={{
+          ...cardStyle,
+          ...(magicStyle ? { borderColor: magicItemColor ?? DEFAULT_ACCENT_COLOR } : {}),
+          ...categoryAccentStyle(accentColor, accentStyle, theme.boxHex),
+        }}
       >
         {/* Compact row */}
         <div

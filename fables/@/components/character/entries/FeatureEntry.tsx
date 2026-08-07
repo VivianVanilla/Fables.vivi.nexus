@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react"
 import type { Feature, UseTracker } from "../../character-types"
 import type { Theme } from "../../character-themes"
+import { accentShimmerGradient } from "../../character-themes"
 import { nanoid } from "../../character-utils"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
@@ -19,7 +20,7 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "../ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
 import { computeDamageSegments } from "../../character-damage-types"
-import { ITEM_RARITIES, RARITY_COLORS, type CardStyle } from "../../character-constants"
+import { ITEM_RARITIES, RARITY_COLORS, DEFAULT_ACCENT_COLOR, type CardStyle } from "../../character-constants"
 import { classColorClasses } from "../../character-class-colors"
 import { supabase } from "../../../../src/supabase"
 
@@ -175,10 +176,15 @@ interface FeatureEntryProps {
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
   showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
+  containerOptions?: { id: string; name: string }[]  // Carried Items only — other containers this item could be moved into; omit/empty hides the control
+  onMoveToContainer?: (containerId: string | undefined) => void  // Carried Items only — button-based fallback for the drag-and-drop reparenting ContainerItemsList's handleDrop does, since touch drag can be unreliable on mobile
   showMagicStar?:    boolean            // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
-  magicItemStyle?:   "none" | "outline" | "galaxy"  // Settings choice (default "galaxy") — sheet-wide card treatment for items flagged Magic Item
+  magicItemStyle?:   "none" | "outline" | "galaxy"  // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy" is labeled "Animated" in Settings
+  magicItemColor?:   string             // Settings — accent color for magicItemStyle/magicItemSliderStyle, default DEFAULT_ACCENT_COLOR
+  magicItemSliderStyle?: "none" | "outline" | "galaxy"  // Settings choice (default "none") — separate look for magic items' own "Track uses" bars, independent of the card background above
   accentColor?:      string             // Settings — this feature's category color (Feature Stylings); resolved by the caller from its category (race/class/feat/invocation), applies everywhere it's rendered, not just Favorites
-  accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" for the category accent above
+  accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" for the category card background above
+  sliderStyle?:      CardStyle          // Settings — separate look for this category's own "Track uses" bars, independent of accentStyle (the card background)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -206,23 +212,13 @@ const STAR_TILE = [
   "radial-gradient(circle 1px at 90% 90%, #fff 35%, transparent 45%)",
 ].join(", ")
 
-// Shared with EquipmentEntry.tsx (the Martial tab) so an item flagged Magic
-// Item gets the exact same "galaxy" card treatment whichever side it's viewed from.
-export const MAGIC_ITEM_BG: CSSProperties = {
-  backgroundImage: `linear-gradient(rgba(10,6,22,0.7), rgba(10,6,22,0.7)), ${STAR_TILE}, linear-gradient(135deg, #140a2c, #241250 45%, #3b1f6b 75%, #140a2c)`,
-  backgroundRepeat: "no-repeat, repeat, no-repeat",
-  backgroundSize: "100% 100%, 90px 90px, 100% 100%",
-  backgroundPosition: "0 0, 0 0, 0 0",
-  animation: "fables-item-cosmos 20s linear infinite",
-}
-
 function clamp255(n: number): number {
   return Math.max(0, Math.min(255, Math.round(n)))
 }
 
-// amt < 0 darkens toward black, amt > 0 lightens toward white — used to build
-// a nebula gradient's dark/mid stops from a single chosen accent color, the
-// same way MAGIC_ITEM_BG's fixed purple stops relate to each other.
+// amt < 0 darkens toward black, amt > 0 lightens toward white — fallback for
+// when no real card background color is known (see mixHex below, which is
+// preferred whenever it is).
 function shade(hex: string, amt: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   const [r, g, b] = m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [139, 92, 246]
@@ -230,13 +226,30 @@ function shade(hex: string, amt: number): string {
   return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`
 }
 
+// Blends the chosen accent color toward the sheet's actual current card
+// color (theme.boxHex/lightBoxHex) instead of always crushing toward black —
+// t=1 is pure bg, t=0 is pure accent. Used so "Animated Background" cards
+// visually sit on whichever theme/mode is active rather than always fading
+// to a fixed near-black corner regardless of it.
+function mixHex(color: string, bg: string, t: number): string {
+  const cm = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color)
+  const bm = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(bg)
+  const [cr, cg, cb] = cm ? [parseInt(cm[1], 16), parseInt(cm[2], 16), parseInt(cm[3], 16)] : [139, 92, 246]
+  const [br, bgc, bb] = bm ? [parseInt(bm[1], 16), parseInt(bm[2], 16), parseInt(bm[3], 16)] : [10, 6, 22]
+  return `rgb(${clamp255(cr + (br - cr) * t)}, ${clamp255(cg + (bgc - cg) * t)}, ${clamp255(cb + (bb - cb) * t)})`
+}
+
 // The "Animated Background" category style — same 3-layer starfield/nebula
-// treatment as MAGIC_ITEM_BG, but with the gradient stops derived from
-// whichever color the category was given in Settings instead of a fixed purple.
-function coloredNebulaBg(color: string): CSSProperties {
-  const darkest = shade(color, -0.85)
-  const dark    = shade(color, -0.55)
-  const mid     = shade(color, -0.15)
+// treatment as the Magic Items "Animated" style below, but with the gradient
+// stops derived from whichever color the category was given in Settings
+// instead of a fixed purple, blended toward the sheet's actual current card
+// color (bgHex) when
+// known so the effect reads as tinting the real background rather than
+// always fading to black.
+export function coloredNebulaBg(color: string, bgHex?: string): CSSProperties {
+  const darkest = bgHex ? mixHex(color, bgHex, 0.85) : shade(color, -0.85)
+  const dark    = bgHex ? mixHex(color, bgHex, 0.55) : shade(color, -0.55)
+  const mid     = bgHex ? mixHex(color, bgHex, 0.15) : shade(color, -0.15)
   return {
     backgroundImage: `linear-gradient(rgba(10,6,22,0.7), rgba(10,6,22,0.7)), ${STAR_TILE}, linear-gradient(135deg, ${darkest}, ${dark} 45%, ${mid} 75%, ${darkest})`,
     backgroundRepeat: "no-repeat, repeat, no-repeat",
@@ -260,10 +273,10 @@ function coloredNebulaBg(color: string): CSSProperties {
 // neighboring cards' edges melt into each other, whereas a solid border/ring
 // color never blurs, so the seam between cards stays visible no matter how
 // tightly packed the list is.
-export function categoryAccentStyle(color?: string, style?: CardStyle): CSSProperties | undefined {
+export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: string): CSSProperties | undefined {
   if (!color || !style || style === "none") return undefined
   const base = { borderColor: color, "--tw-ring-color": color } as CSSProperties
-  return style === "galaxy" ? { ...base, ...coloredNebulaBg(color) } : base
+  return style === "galaxy" ? { ...base, ...coloredNebulaBg(color, bgHex) } : base
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -271,7 +284,9 @@ export function categoryAccentStyle(color?: string, style?: CardStyle): CSSPrope
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
   isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras, showWeightColumn,
-  showMagicStar = true, magicItemStyle = "galaxy", accentColor, accentStyle,
+  containerOptions, onMoveToContainer,
+  showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
+  accentColor, accentStyle, sliderStyle,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(false)
@@ -671,6 +686,23 @@ export function FeatureEntry({
                 </div>
               </PopTransition>
 
+              {/* Fallback for dragging this item into/out of a container —
+                  touch drag-and-drop is unreliable on some mobile browsers,
+                  so this button-based move is always available too. */}
+              {containerOptions && containerOptions.length > 0 && (
+                <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                  Store in
+                  <select value={feature.parentId ?? ""}
+                    onChange={e => onMoveToContainer?.(e.target.value || undefined)}
+                    className="bg-zinc-800 rounded px-2 py-1 text-white outline-none">
+                    <option value="" className="bg-zinc-800 text-white">— Top Level —</option>
+                    {containerOptions.map(c => (
+                      <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name || "Unnamed"}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
               <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                 Weight (lb)
                 <NumInput min={0} step="0.1" value={feature.weight ?? ""}
@@ -709,6 +741,12 @@ export function FeatureEntry({
 
           {feature.trackable && (
             <>
+              <label className="flex items-center gap-1.5 text-xs text-white/50">
+                Bar label
+                <input value={feature.trackerLabel ?? ""} placeholder={feature.multiTracking ? "e.g. Charges" : "optional"}
+                  onChange={e => onChange({ trackerLabel: e.target.value })}
+                  className="flex-1 min-w-0 bg-white/10 rounded px-2 py-1 text-white outline-none placeholder:text-white/20" />
+              </label>
               <div className="flex items-center gap-3 text-xs flex-wrap">
                 {/* Max uses — either PB or manual */}
                 <label className="flex items-center gap-1.5 text-white/50">
@@ -738,13 +776,6 @@ export function FeatureEntry({
                     <option value="dawn" className="bg-zinc-800 text-white">Dawn</option>
                     <option value="manual" className="bg-zinc-800 text-white">Manual</option>
                   </select>
-                </label>
-                <label className="flex items-center gap-1.5 text-white/50 cursor-pointer">
-                  Bar color
-                  <input type="color" value={feature.sliderColor ?? "#6366f1"}
-                    onChange={e => onChange({ sliderColor: e.target.value })}
-                    className="size-4 cursor-pointer rounded border-0 bg-transparent p-0"
-                  />
                 </label>
               </div>
 
@@ -836,13 +867,6 @@ export function FeatureEntry({
                             <option value="manual" className="bg-zinc-800 text-white">Manual</option>
                           </select>
                         </label>
-                        <label className="flex items-center gap-1.5 text-white/50 cursor-pointer">
-                          Bar color
-                          <input type="color" value={t.sliderColor ?? "#6366f1"}
-                            onChange={e => changeTracker(t.id, { sliderColor: e.target.value })}
-                            className="size-4 cursor-pointer rounded border-0 bg-transparent p-0"
-                          />
-                        </label>
                       </div>
                     </div>
                   ))}
@@ -871,11 +895,33 @@ export function FeatureEntry({
   // not per item — an item only decides whether it's magic at all.
   const magicStar  = feature.isMagicItem && showMagicStar
   const magicStyle = feature.isMagicItem && magicItemStyle !== "none" ? magicItemStyle : null
-  const cardStyle  = magicStyle === "galaxy" ? MAGIC_ITEM_BG : undefined
+  const cardStyle  = magicStyle === "galaxy" ? coloredNebulaBg(magicItemColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex) : undefined
+
+  // Uses-tracking bar look is its own Settings choice per category (Feature
+  // Stylings — "Tracking Slider" row), so it CAN be set independently of the
+  // card background above — but until someone actually opens that control
+  // and picks something, it mirrors the Background choice (falls back to
+  // accentStyle/magicItemStyle) rather than silently defaulting to "off".
+  // That way turning on a category's Background + color colors everything
+  // (border, card, bar) immediately, the way picking one color for a row is
+  // expected to; Tracking Slider only needs touching to diverge from that.
+  // feature.isMagicItem is the same direct switch the card background/border
+  // above uses to pick magicItem* vs accent*/category props — deliberately
+  // NOT inferred from whether accentColor/accentStyle happen to be defined,
+  // since a feature can be both magic-flagged AND category-styled at once.
+  const sliderSource = feature.isMagicItem
+    ? { style: magicItemSliderStyle ?? magicItemStyle, color: magicItemColor ?? DEFAULT_ACCENT_COLOR }
+    : { style: sliderStyle ?? accentStyle, color: accentColor }
+  const barAnimated = sliderSource.style === "galaxy" && !!sliderSource.color
+  const barColor     = sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1"
 
   return (
-    <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "border-purple-400/50" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
-      style={{ ...cardStyle, ...categoryAccentStyle(accentColor, accentStyle) }}>
+    <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
+      style={{
+        ...cardStyle,
+        ...(magicStyle ? { borderColor: magicItemColor ?? DEFAULT_ACCENT_COLOR } : {}),
+        ...categoryAccentStyle(accentColor, accentStyle, theme.boxHex),
+      }}>
 
       {/* Header row */}
       <div {...dragAttrs}
@@ -944,9 +990,12 @@ export function FeatureEntry({
             breakpoint would still apply the wide desktop layout). */}
         {hasUses && (
           <div className="flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
+            {feature.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{feature.trackerLabel}</span>}
             <TracingSlider
               value={usesRemaining} max={effectiveMax}
-              disabled={readOnly} color={feature.sliderColor}
+              disabled={readOnly}
+              color={barAnimated ? accentShimmerGradient(barColor) : barColor}
+              animated={barAnimated}
               showButtons buttonSize="sm" className="flex-1 min-w-0"
               onChange={val => onChange({ usesUsed: effectiveMax - val })}
             />
@@ -955,6 +1004,32 @@ export function FeatureEntry({
             </span>
           </div>
         )}
+
+        {/* Extra tracker bars — e.g. a staff with both "Charges" (the primary
+            bar above) and a separate "1/Day Recall". Each gets its own row
+            so a multi-tracking item shows every bar it's configured with,
+            not just the primary one. */}
+        {feature.multiTracking && (feature.trackers ?? []).map(t => {
+          const trMax = t.maxUsesFormula === "pb" ? pb : (t.maxUses ?? 0)
+          if (trMax <= 0) return null
+          const trRemaining = Math.max(0, trMax - (t.usesUsed ?? 0))
+          return (
+            <div key={t.id} className="flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
+              {t.label && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{t.label}</span>}
+              <TracingSlider
+                value={trRemaining} max={trMax}
+                disabled={readOnly}
+                color={barAnimated ? accentShimmerGradient(barColor) : barColor}
+                animated={barAnimated}
+                showButtons buttonSize="sm" className="flex-1 min-w-0"
+                onChange={val => onChange({ trackers: (feature.trackers ?? []).map(x => x.id === t.id ? { ...x, usesUsed: trMax - val } : x) })}
+              />
+              <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
+                {trRemaining}/{trMax}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       {/* Expanded content */}

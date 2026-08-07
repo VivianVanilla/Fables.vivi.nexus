@@ -23,15 +23,15 @@ import type { FavoriteCategory, CardStyle } from "../../character-constants"
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 
 function FamiliarFavoriteEntry({
-  fam, monster, poppedOut, onPopOut, isFavorite, onToggleFavorite, accentColor, accentStyle,
+  fam, monster, poppedOut, onPopOut, isFavorite, onToggleFavorite, accentColor, accentStyle, bgHex,
 }: {
   fam: FamiliarRef; monster: userInfo.Objects; poppedOut: boolean; onPopOut: () => void
-  isFavorite?: boolean; onToggleFavorite?: () => void; accentColor?: string; accentStyle?: CardStyle
+  isFavorite?: boolean; onToggleFavorite?: () => void; accentColor?: string; accentStyle?: CardStyle; bgHex?: string
 }) {
   const mData = safeParseJson(monster.data) as MonsterData
   return (
     <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 flex items-center gap-2.5 min-h-11"
-      style={categoryAccentStyle(accentColor, accentStyle)}>
+      style={categoryAccentStyle(accentColor, accentStyle, bgHex)}>
       <div className="size-8 rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10 shrink-0 flex items-center justify-center">
         {mData.portrait
           ? <img src={mData.portrait} alt="" className="w-full h-full object-cover" />
@@ -69,7 +69,8 @@ interface FavoritesPanelProps {
   onReorder:         (fromIdx: number, toIdx: number) => void
   featureCategoryById:     Record<string, FavoriteCategory>  // resolves which of the 5 Feature lists a "feature"-type favorite came from
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings (Feature Stylings) — accent color per category
-  favoriteCategoryStyle?:  Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category
+  favoriteCategoryStyle?:  Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (card background)
+  favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (tracking slider, independent of the card background)
   onChangeSpell:     (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell:     (id: string) => void
   onChangeEquip:     (id: string, patch: Partial<EquipmentItem>) => void
@@ -83,6 +84,8 @@ interface FavoritesPanelProps {
   readOnly:          boolean
   showMagicStar?:    boolean
   magicItemStyle?:   "none" | "outline" | "galaxy"
+  magicItemColor?:   string
+  magicItemSliderStyle?: "none" | "outline" | "galaxy"
   dragOver:          boolean
   onDragOver:        (e: React.DragEvent) => void
   onDragLeave:       () => void
@@ -94,10 +97,10 @@ interface FavoritesPanelProps {
 export function FavoritesPanel({
   favorites, spellItems, equipItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
-  featureCategoryById, favoriteCategoryColors, favoriteCategoryStyle,
+  featureCategoryById, favoriteCategoryColors, favoriteCategoryStyle, favoriteCategorySliderStyle,
   onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
-  theme, card, readOnly, showMagicStar, magicItemStyle,
+  theme, card, readOnly, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle,
   dragOver, onDragOver, onDragLeave, onDrop,
 }: FavoritesPanelProps) {
   const [reorderDragIdx, setReorderDragIdx] = useState<number | null>(null)
@@ -122,6 +125,9 @@ export function FavoritesPanel({
   }
   function accentStyleFor(fav: FavoriteRef): CardStyle | undefined {
     return favoriteCategoryStyle?.[resolveCategory(fav)]
+  }
+  function sliderStyleFor(fav: FavoriteRef): CardStyle | undefined {
+    return favoriteCategorySliderStyle?.[resolveCategory(fav)]
   }
 
   // ── Reorder drag handlers ────────────────────────────────────────────────
@@ -198,6 +204,7 @@ export function FavoritesPanel({
             // layer to keep in sync.
             const accentColor = accentColorFor(fav)
             const accentStyle = accentStyleFor(fav)
+            const sliderStyle = sliderStyleFor(fav)
 
             // Resolve the entry to render — falls through to a "not found" row
             let entry: React.ReactNode
@@ -217,6 +224,7 @@ export function FavoritesPanel({
                     isFavorite onToggleFavorite={onToggleFavorite}
                     showMagicStar={showMagicStar}
                     magicItemStyle={magicItemStyle}
+                    magicItemColor={magicItemColor}
                     accentColor={accentColor} accentStyle={accentStyle}
                     onChange={p => onChangeEquip(fav.refId, p)}
                     onRemove={() => onRemoveEquip(fav.refId)} />
@@ -229,7 +237,7 @@ export function FavoritesPanel({
                     poppedOut={poppedOutIds.has(fam.id)}
                     onPopOut={() => onPopOutFamiliar(fam.id)}
                     isFavorite onToggleFavorite={onToggleFavorite}
-                    accentColor={accentColor} accentStyle={accentStyle} />
+                    accentColor={accentColor} accentStyle={accentStyle} bgHex={theme.boxHex} />
                 : <p className="text-sm text-white/30 italic px-3 py-2.5">Familiar not found.</p>
             } else {
               const feat = resolveFeature(fav.refId)
@@ -243,7 +251,9 @@ export function FavoritesPanel({
                     isFavorite onToggleFavorite={onToggleFavorite}
                     showMagicStar={showMagicStar}
                     magicItemStyle={magicItemStyle}
-                    accentColor={accentColor} accentStyle={accentStyle}
+                    magicItemColor={magicItemColor}
+                    magicItemSliderStyle={magicItemSliderStyle}
+                    accentColor={accentColor} accentStyle={accentStyle} sliderStyle={sliderStyle}
                     onChange={patch => onUpdateFeature(fav.refId, patch)}
                     onRemove={() => onRemoveFeature(fav.refId)}
                     onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}

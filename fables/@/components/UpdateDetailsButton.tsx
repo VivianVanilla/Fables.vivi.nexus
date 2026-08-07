@@ -15,7 +15,7 @@ export function UpdateDetailsButton() {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const pos = usePopoverPosition(open, triggerRef)
+  const pos = usePopoverPosition(open, triggerRef, contentRef)
   useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
 
   return (
@@ -26,7 +26,7 @@ export function UpdateDetailsButton() {
       </button>
       {open && pos && createPortal(
         <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
-          className="z-50 bg-popover border border-border rounded-lg shadow-xl overflow-hidden w-80 max-h-[70vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+          className="z-50 bg-popover border border-border rounded-lg shadow-xl overflow-hidden w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
           <div className="px-3.5 py-2.5 border-b border-border sticky top-0 bg-popover">
             <span className="text-sm font-semibold text-foreground">What's New</span>
           </div>

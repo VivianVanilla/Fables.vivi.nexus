@@ -66,14 +66,17 @@ interface FeatureListProps {
   showItemExtras?: boolean
   showMagicStar?: boolean
   magicItemStyle?: "none" | "outline" | "galaxy"
+  magicItemColor?: string
+  magicItemSliderStyle?: "none" | "outline" | "galaxy"
   accentColor?: string
   accentStyle?: CardStyle
+  sliderStyle?: CardStyle
   sortable?: boolean
 }
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, accentColor, accentStyle, sortable }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, sortable }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -137,8 +140,11 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             showItemExtras={showItemExtras}
             showMagicStar={showMagicStar}
             magicItemStyle={magicItemStyle}
+            magicItemColor={magicItemColor}
+            magicItemSliderStyle={magicItemSliderStyle}
             accentColor={accentColor}
             accentStyle={accentStyle}
+            sliderStyle={sliderStyle}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -167,9 +173,11 @@ interface ContainerItemsListProps {
   onToggleFavorite: (id: string, label: string) => void
   showMagicStar?: boolean
   magicItemStyle?: "none" | "outline" | "galaxy"
+  magicItemColor?: string
+  magicItemSliderStyle?: "none" | "outline" | "galaxy"
 }
 
-function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle }: ContainerItemsListProps) {
+function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle }: ContainerItemsListProps) {
   const roots = items.filter(i => !i.parentId)
   const totalWeight = items.reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0)
 
@@ -204,6 +212,12 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
     const children     = items.filter(c => c.parentId === f.id)
     const childWeight  = children.reduce((sum, c) => sum + (c.weight ?? 0) * (c.amount ?? 1), 0)
     const overCapacity = f.maxWeight != null && childWeight > f.maxWeight
+    // Same button-based fallback as the drop targets below (handleDrop) —
+    // every other container is a valid destination except this item's own
+    // subtree, which would create a cycle.
+    const containerOptions = readOnly ? undefined : items
+      .filter(i => i.isContainer && i.id !== f.id && !isSelfOrDescendant(i.id, f.id))
+      .map(i => ({ id: i.id, name: i.name }))
     return (
       <div key={f.id} className="flex flex-col gap-1" style={{ marginLeft: depth * 16 }}>
         <FeatureEntry
@@ -220,6 +234,10 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           showWeightColumn
           showMagicStar={showMagicStar}
           magicItemStyle={magicItemStyle}
+          magicItemColor={magicItemColor}
+          magicItemSliderStyle={magicItemSliderStyle}
+          containerOptions={containerOptions}
+          onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
           onChange={patch => onChange(f.id, patch)}
           onRemove={() => onRemove(f.id)}
           onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -351,7 +369,7 @@ function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: st
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const pos = usePopoverPosition(open, triggerRef)
+  const pos = usePopoverPosition(open, triggerRef, contentRef)
   useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
 
   return (
@@ -590,6 +608,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
   // deliberately never looked up — it already has its own Magic Item styling.
   const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
   const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
+  const favSliderStyle = (cat: FavoriteCategory) => data.favoriteCategorySliderStyle?.[cat]
 
   // All features across all lists (for linking UI)
   const allFeatures: Feature[] = [
@@ -698,7 +717,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             suggestionSource="race" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
-            accentColor={favAccentColor("race")} accentStyle={favAccentStyle("race")}
+            accentColor={favAccentColor("race")} accentStyle={favAccentStyle("race")} sliderStyle={favSliderStyle("race")}
           />
           <FeatureList
             items={data.feats ?? []} allFeatures={allFeatures} label="Feats"
@@ -709,7 +728,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             suggestionSource="feat" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
-            accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")}
+            accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")} sliderStyle={favSliderStyle("feat")}
           />
           {isWarlock && (
             <FeatureList
@@ -721,7 +740,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
               theme={theme} card={card} readOnly={readOnly} pb={pb}
               suggestionSource="invocation" userId={userId}
               favorites={favorites} onToggleFavorite={onToggleFavorite}
-              accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")}
+              accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")} sliderStyle={favSliderStyle("invocation")}
             />
           )}
         </div>
@@ -739,7 +758,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           suggestionSource="class" userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
-          accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")}
+          accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
           sortable
         />
       )}
@@ -761,7 +780,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             equipmentLinkedIds={equipmentLinkedIds}
             showAttunement
             showItemExtras
-            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle}
+            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
           />
           {/* Everything not equipped lands here — armor/weapons you own but
               aren't wearing, and every generic item (which has no Equip
@@ -775,7 +794,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             theme={theme} card={card} readOnly={readOnly} pb={pb}
             userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
-            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle}
+            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
           />
         </div>
       )}

@@ -9,6 +9,7 @@ interface TracingSliderProps {
   max: number
   disabled?: boolean
   color?: string
+  animated?: boolean  // shimmering iridescent fill instead of a flat color — pair with a gradient `color`
   showButtons?: boolean
   showLabel?: boolean
   label?: React.ReactNode
@@ -23,6 +24,7 @@ function TracingSlider({
   max,
   disabled = false,
   color,
+  animated = false,
   showButtons = false,
   showLabel = false,
   label,
@@ -86,9 +88,9 @@ function TracingSlider({
         >
           {/* Track background */}
           <div className="absolute inset-x-0 h-1.5 rounded-full bg-white/10">
-            {/* Animated fill */}
+            {/* Fill — "animated" adds a shimmering hue shift on top of the width transition */}
             <div
-              className="absolute inset-y-0 left-0 rounded-full"
+              className={cn("absolute inset-y-0 left-0 rounded-full", animated && "fables-slot-shimmer")}
               style={{
                 width: `${pct}%`,
                 background: fill,

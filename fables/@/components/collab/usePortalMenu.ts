@@ -12,7 +12,11 @@
 
 import { useEffect, useState, type RefObject } from "react"
 
-export function usePopoverPosition(open: boolean, triggerRef: RefObject<HTMLElement | null>) {
+export function usePopoverPosition(
+  open: boolean,
+  triggerRef: RefObject<HTMLElement | null>,
+  contentRef?: RefObject<HTMLElement | null>,
+) {
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
   useEffect(() => {
     if (!open || !triggerRef.current) { setPos(null); return }
@@ -20,6 +24,22 @@ export function usePopoverPosition(open: boolean, triggerRef: RefObject<HTMLElem
     setPos({ top: rect.bottom + 4, right: Math.max(4, window.innerWidth - rect.right) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Second pass, once the popover has actually rendered so its real width is
+  // known: the first pass only knows where the trigger sits, so on a narrow/
+  // mobile viewport a trigger near the left edge (e.g. the header's "i"
+  // Updates button, right next to the sidebar toggle) can position a wide
+  // popover mostly or entirely off-screen to the left. Pull it back on-screen
+  // if that happened.
+  useEffect(() => {
+    if (!open || !pos || !contentRef?.current) return
+    const rect = contentRef.current.getBoundingClientRect()
+    if (rect.left < 4) {
+      const adjustedRight = Math.max(4, window.innerWidth - (rect.width + 4))
+      setPos(p => (p && p.right !== adjustedRight ? { ...p, right: adjustedRight } : p))
+    }
+  }, [open, pos, contentRef])
+
   return pos
 }
 

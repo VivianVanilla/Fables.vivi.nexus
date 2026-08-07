@@ -1,6 +1,6 @@
 import { Modal } from "../ui/Modal"
 import type { CharacterData } from "../../character-types"
-import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "../../character-themes"
+import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS } from "../../character-themes"
 import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, type CardStyle } from "../../character-constants"
 
 interface Props {
@@ -9,11 +9,32 @@ interface Props {
   onClose: () => void
 }
 
+// One None/Outline(or Flat)/Animated toggle group, shared by every Feature
+// Styling row's Background and Tracking Slider sub-controls — "outline"
+// reads as "Flat" for the slider since there's no border to outline there.
+function StyleToggle({ label, value, onChange, slider }: { label: string; value: CardStyle; onChange: (s: CardStyle) => void; slider?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 pl-2">
+      <span className="text-[10px] text-white/40 shrink-0">{label}</span>
+      <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
+        {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
+          <button key={s} type="button" title={s === "galaxy" ? "Animated" : undefined}
+            onClick={() => onChange(s)}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${value === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
+            {s === "none" ? "None" : s === "outline" ? (slider ? "Flat" : "Outline") : "Animated"}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function SettingsModal({ data, onUpdate, onClose }: Props) {
   const activeThemeKey = data.theme     ?? DEFAULT_THEME
   const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
   const activeBgKey    = data.themeBg   ?? "default"
   const mode           = data.themeMode ?? "dark"
+  const slotCustomColor = data.slotCustomColor ?? DEFAULT_ACCENT_COLOR
 
   return (
     <Modal onClose={onClose}>
@@ -91,6 +112,32 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
                   </button>
                 )
               })}
+              {(() => {
+                const isActive = activeSlotKey === CUSTOM_SLOT_THEME_KEY
+                return (
+                  <button type="button" onClick={() => onUpdate({ slotTheme: CUSTOM_SLOT_THEME_KEY })}
+                    className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                    <div className="size-6 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: slotCustomColor }} />
+                    <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>Custom</span>
+                  </button>
+                )
+              })()}
+            </div>
+            <div className="flex items-center justify-between px-1">
+              {activeSlotKey === CUSTOM_SLOT_THEME_KEY ? (
+                <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer">
+                  Custom color
+                  <input type="color" value={slotCustomColor}
+                    onChange={e => onUpdate({ slotCustomColor: e.target.value })}
+                    className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                </label>
+              ) : <span />}
+              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
+                <input type="checkbox" checked={data.slotAnimated ?? false}
+                  onChange={e => onUpdate({ slotAnimated: e.target.checked })}
+                  className="accent-primary size-4 rounded" />
+                Animated
+              </label>
             </div>
           </div>
 
@@ -117,61 +164,58 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
             </label>
           </div>
 
-          {/* Magic item display — sheet-wide. Individual items only decide
-              whether they're magic at all (their own edit form); the style
-              every flagged item renders with is chosen once, here. */}
+          {/* Feature Styling — one row per category, Magical Items first
+              (its style only ever applies to items individually flagged
+              Magic Item in their own edit form; every other row applies to
+              every card of that category automatically, not just when
+              favorited — see FeatureEntry.tsx's categoryAccentStyle). Each
+              row has its own Background (card) look and a separate Tracking
+              Slider look for that category's "Track uses" bars — the two
+              are independent (e.g. an outlined card with an animated bar),
+              sharing one accent color. No more setting a bar color per
+              individual feature. */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Magic Items</p>
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Feature Styling</p>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.showMagicItemStar ?? true}
                 onChange={e => onUpdate({ showMagicItemStar: e.target.checked })}
                 className="accent-primary size-4 rounded" />
               <span className="text-sm text-white/70">✨ Star on magic items</span>
             </label>
-            <div className="flex items-center justify-between px-1 py-1">
-              <span className="text-sm text-white/70">Card style</span>
-              <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-                {(["none", "outline", "galaxy"] as const).map(s => (
-                  <button key={s} type="button" onClick={() => onUpdate({ magicItemStyle: s })}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize transition-colors ${(data.magicItemStyle ?? "galaxy") === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
-                    {s}
-                  </button>
-                ))}
+            <div className="flex flex-col gap-2">
+              {/* Magical Items row */}
+              <div className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-white/70 shrink-0">Magical Items</span>
+                  <input type="color" value={data.magicItemColor ?? DEFAULT_ACCENT_COLOR} title="Accent color"
+                    onChange={e => onUpdate({ magicItemColor: e.target.value })}
+                    className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                </div>
+                <StyleToggle label="Background" value={data.magicItemStyle ?? "galaxy"}
+                  onChange={s => onUpdate({ magicItemStyle: s })} />
+                {/* Mirrors Background until explicitly set otherwise — see
+                    FeatureEntry.tsx's sliderSource for why. */}
+                <StyleToggle label="Tracking Slider" value={data.magicItemSliderStyle ?? data.magicItemStyle ?? "galaxy"}
+                  onChange={s => onUpdate({ magicItemSliderStyle: s })} slider />
               </div>
-            </div>
-          </div>
 
-          {/* Feature Stylings — per category (Racial Traits, Class Features,
-              Feats, Invocations, Spells, Martial, Familiars — "Items" is left
-              out since Magic Items right above already styles that list),
-              the exact same None/Outline/Animated Background choice as Magic
-              Items, plus a color picker since it isn't tied to one fixed
-              purple like the magic-item treatment is. Applies automatically
-              to every card of that category everywhere it renders, not just
-              when favorited — see FeatureEntry.tsx's categoryAccentStyle. */}
-          <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Feature Stylings</p>
-            <div className="flex flex-col gap-1">
+              {/* One row per Feature Stylings category */}
               {STYLING_CATEGORIES.map(cat => {
-                const style = data.favoriteCategoryStyle?.[cat] ?? "none"
-                const color = data.favoriteCategoryColors?.[cat] ?? DEFAULT_ACCENT_COLOR
+                const style       = data.favoriteCategoryStyle?.[cat] ?? "none"
+                const sliderStyle = data.favoriteCategorySliderStyle?.[cat] ?? style
+                const color       = data.favoriteCategoryColors?.[cat] ?? DEFAULT_ACCENT_COLOR
                 return (
-                  <div key={cat} className="flex items-center justify-between px-1 py-1 gap-2">
-                    <span className="text-sm text-white/70 shrink-0">{FAVORITE_CATEGORY_LABELS[cat]}</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-                        {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
-                          <button key={s} type="button" title={s === "galaxy" ? "Animated Background" : undefined}
-                            onClick={() => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })}
-                            className={`px-2 py-1 rounded-full text-[10px] font-semibold transition-colors ${style === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
-                            {s === "none" ? "None" : s === "outline" ? "Outline" : "Animated"}
-                          </button>
-                        ))}
-                      </div>
+                  <div key={cat} className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-white/70 shrink-0">{FAVORITE_CATEGORY_LABELS[cat]}</span>
                       <input type="color" value={color} title="Accent color"
                         onChange={e => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: e.target.value } })}
                         className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
                     </div>
+                    <StyleToggle label="Background" value={style}
+                      onChange={s => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })} />
+                    <StyleToggle label="Tracking Slider" value={sliderStyle}
+                      onChange={s => onUpdate({ favoriteCategorySliderStyle: { ...data.favoriteCategorySliderStyle, [cat]: s } })} slider />
                   </div>
                 )
               })}

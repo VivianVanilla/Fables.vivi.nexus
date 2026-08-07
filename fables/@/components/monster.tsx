@@ -12,7 +12,7 @@
 // any of the other rarely-used toggles) until someone deliberately turns it on.
 // ════════════════════════════════════════════════════════════════════════════
 
-import React, { useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import type { SidebarObject } from "@/components/sidebar-utils"
 import type { userInfo } from "@/types/userInfo"
@@ -28,6 +28,7 @@ import { spellItemFieldsFromSpell } from "./character-spell-utils"
 import type { Spell } from "../../src/spells/types"
 import { copyMonsterMarkdown, downloadMonsterMarkdown } from "./monster-export"
 import { usePopoverPosition, useClickOutside } from "./collab/usePortalMenu"
+import { isEncryptedMonsterPayload, encryptMonsterData, decryptMonsterData, type EncryptedMonsterPayload } from "@/lib/monsterCrypto"
 
 import { MarkdownTextarea } from "./ui/MarkdownTextarea"
 import { Markdown } from "./ui/Markdown"
@@ -80,6 +81,7 @@ const NEUTRAL_THEME: Theme = {
   label: "Neutral",
   body: "bg-zinc-950", box: "bg-zinc-800", lightBody: "bg-zinc-800", lightBox: "bg-zinc-700",
   ring: "ring-zinc-700", header: "bg-zinc-950", color: "text-white", accent: "#F59E0B",
+  boxHex: "#27272a", lightBoxHex: "#3f3f46",
 }
 
 function abilityMod(score: number): string {
@@ -457,6 +459,7 @@ function EntryListEditor({
 }
 
 function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpdate: (patch: Partial<MonsterData>) => void; onClose: () => void }) {
+  const [showPrivacyConfirm, setShowPrivacyConfirm] = useState(false)
   const speeds = data.speeds ?? {}
   function setSpeed(key: typeof SPEED_FIELDS[number], v: number) {
     onUpdate({ speeds: { ...speeds, [key]: v || undefined } })
@@ -519,6 +522,36 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
           <input type="checkbox" checked={data.isFamiliar ?? false} onChange={e => onUpdate({ isFamiliar: e.target.checked })} />
           Available as a Familiar (shows up when adding familiars to a character)
         </label>
+
+        {/* Privacy — encrypts this monster's data client-side (see @/lib/monsterCrypto.ts).
+            Turning it on needs a beat of explanation since it's one-way in spirit
+            (only this account can ever read it back); turning it off doesn't. */}
+        <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
+          <input type="checkbox" checked={data.isPrivate ?? false}
+            onChange={e => e.target.checked ? setShowPrivacyConfirm(true) : onUpdate({ isPrivate: false })} />
+          🔒 Set to Private (encrypt this monster's data)
+        </label>
+
+        {showPrivacyConfirm && (
+          <Modal onClose={() => setShowPrivacyConfirm(false)}>
+            <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,calc(100vw-2rem))] p-5 flex flex-col gap-3 text-white animate-in fade-in zoom-in-95 duration-150">
+              <p className="text-sm font-bold">Set to Private?</p>
+              <p className="text-xs text-white/60 leading-relaxed">
+                This will encrypt your monster data. Once encrypted, only you will be able to see the plain text.
+              </p>
+              <div className="flex justify-end gap-2 mt-1">
+                <button type="button" onClick={() => setShowPrivacyConfirm(false)}
+                  className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => { onUpdate({ isPrivate: true }); setShowPrivacyConfirm(false) }}
+                  className="text-xs px-3 py-1.5 rounded-full bg-purple-500/30 hover:bg-purple-500/40 text-purple-200 font-semibold transition-colors">
+                  Encrypt it
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
 
         {/* Display — trims the sheet down for a quicker read, doesn't touch the underlying data */}
         <div className="flex items-center gap-4">
@@ -1087,10 +1120,30 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
 // a familiar's stat block writes straight back to the shared Monster object.
 
 export function useMonsterData(monster: userInfo.Objects, readOnly = false) {
-  const { updateObject } = useUserContext()
-  const [data, setData] = useState<MonsterData>(() => safeParseJson(monster.data) as MonsterData)
+  const { updateObject, user } = useUserContext()
+  const rawInitial = safeParseJson(monster.data)
+  const initiallyEncrypted = isEncryptedMonsterPayload(rawInitial)
+  const [data, setData] = useState<MonsterData>(() => initiallyEncrypted ? {} : rawInitial as MonsterData)
   const [saving, setSaving] = useState(false)
+  const [decrypting, setDecrypting] = useState(initiallyEncrypted)
+  const [decryptError, setDecryptError] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Transparently decrypts a private monster's data once we know who's
+  // asking — the row itself only ever holds { __encrypted, iv, ciphertext }
+  // on the wire/in the DB, never the plain fields, when isPrivate is on. Only
+  // runs at all for a monster that started out encrypted, so there's nothing
+  // to do (and no setState) on every render for the common, unencrypted case.
+  useEffect(() => {
+    if (!initiallyEncrypted || !user?.id) return
+    let cancelled = false
+    decryptMonsterData(user.id, rawInitial as EncryptedMonsterPayload)
+      .then(plain => { if (!cancelled) { setData(plain as MonsterData); setDecryptError(false) } })
+      .catch(e => { console.error("Failed to decrypt monster data:", e); if (!cancelled) setDecryptError(true) })
+      .finally(() => { if (!cancelled) setDecrypting(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monster.id, user?.id])
 
   function update(patch: Partial<MonsterData>) {
     if (readOnly) return
@@ -1099,19 +1152,26 @@ export function useMonsterData(monster: userInfo.Objects, readOnly = false) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       setSaving(true)
-      try { await updateObject(monster.id, { data: next as unknown as JSON }) }
+      try {
+        const payload = next.isPrivate && user?.id
+          ? await encryptMonsterData(user.id, next)
+          : next
+        await updateObject(monster.id, { data: payload as unknown as JSON })
+      }
       catch (e) { console.error(e) }
       setSaving(false)
     }, 700)
   }
 
-  return { data, update, saving }
+  return { data, update, saving, decrypting, decryptError }
 }
 
 // ── Compact editable view for a familiar's shortcut (Familiars tab / pop-out) ─
 
 export function FamiliarMonsterView({ monster, readOnly = false }: { monster: userInfo.Objects; readOnly?: boolean }) {
-  const { data, update } = useMonsterData(monster, readOnly)
+  const { data, update, decrypting, decryptError } = useMonsterData(monster, readOnly)
+  if (decrypting) return <p className="text-xs text-white/40 animate-pulse p-3">🔒 Decrypting…</p>
+  if (decryptError) return <p className="text-xs text-red-300 p-3">Couldn't decrypt this monster's data.</p>
   return <MonsterStatBlock data={data} onUpdate={update} readOnly={readOnly} />
 }
 
@@ -1120,7 +1180,7 @@ export function FamiliarMonsterView({ monster, readOnly = false }: { monster: us
 export function MonsterSheet({ monster, readOnly = false }: Props) {
   const { user, updateObject } = useUserContext()
 
-  const { data, update, saving } = useMonsterData(monster, readOnly)
+  const { data, update, saving, decrypting, decryptError } = useMonsterData(monster, readOnly)
   const [uploading, setUploading] = useState(false)
   const [showLighting, setShowLighting] = useState(false)
   const [name, setName] = useState(monster.name)
@@ -1177,11 +1237,28 @@ export function MonsterSheet({ monster, readOnly = false }: Props) {
         {readOnly && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40 uppercase tracking-widest shrink-0">View Only</span>
         )}
+        {data.isPrivate && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 shrink-0" title="Encrypted — only you can see the plain text">
+            🔒 Private
+          </span>
+        )}
         {saving && <span className="text-xs text-white/40 shrink-0 animate-pulse">saving…</span>}
         <MarkdownExportMenu name={name} data={data} />
       </div>
 
       {/* Body */}
+      {decrypting ? (
+        <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-white/40 animate-pulse">
+          🔒 Decrypting…
+        </div>
+      ) : decryptError ? (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1.5 text-center px-6">
+          <p className="text-sm text-red-300">Couldn't decrypt this monster.</p>
+          <p className="text-xs text-white/40 max-w-sm">
+            This data was encrypted by a different account, or the browser you're using doesn't support the Web Crypto API. It's still safely stored — you just can't read it here.
+          </p>
+        </div>
+      ) : (
       <div className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2.5">
 
         {/* Description + artwork — creature type/alignment now live in the stat block summary/modal.
@@ -1263,6 +1340,7 @@ export function MonsterSheet({ monster, readOnly = false }: Props) {
 
         <MonsterStatBlock data={data} onUpdate={update} readOnly={readOnly} />
       </div>
+      )}
     </div>
   )
 }

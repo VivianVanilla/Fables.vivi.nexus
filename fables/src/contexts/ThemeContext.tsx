@@ -7,7 +7,9 @@
 // live in src/index.css as overrides of the same shadcn CSS variables
 // (--background, --sidebar, --card, --border, etc.) the app already uses,
 // so anything already styled with the semantic bg-background/bg-sidebar/
-// bg-card classes re-themes for free.
+// bg-card classes re-themes for free. The "custom" theme is the one
+// exception — its CSS reads a single `--app-custom-color` variable (set here
+// from the color wheel picker) via color-mix(), instead of fixed hex values.
 //
 // Persisted twice: localStorage for an instant, offline-friendly first paint,
 // and Supabase auth's user_metadata (via supabase.auth.updateUser) so the
@@ -19,13 +21,8 @@ import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "../supabase"
 
 export type AppTheme =
-  | "abyss" | "midnight" | "light" | "trippy" | "vaporwave" | "synthwave" | "gold" | "toxic"
-  | "eightbit" | "flashlight" | "disco" | "matrix" | "bubblegum"
-
-// Free themes are always selectable. Everything past "light" is locked
-// behind gamVIVIling (see @/components/gambling) — gating happens in
-// profile-settings-modal.tsx, not here.
-export const FREE_THEMES: AppTheme[] = ["abyss", "midnight", "light"]
+  | "abyss" | "midnight" | "light" | "trippy" | "vaporwave" | "synthwave" | "gold"
+  | "eightbit" | "bubblegum" | "custom"
 
 export const APP_THEMES: { id: AppTheme; label: string; swatch: string }[] = [
   { id: "abyss",      label: "Abyss",        swatch: "#000000" },
@@ -35,20 +32,21 @@ export const APP_THEMES: { id: AppTheme; label: string; swatch: string }[] = [
   { id: "vaporwave",  label: "Vaporwave",    swatch: "linear-gradient(90deg, #ff71ce, #b967ff, #01cdfe)" },
   { id: "synthwave",  label: "Synthwave",    swatch: "linear-gradient(90deg, #ff2079, #ff8c42, #7b2ff7)" },
   { id: "gold",       label: "High Roller",  swatch: "linear-gradient(90deg, #1a1400, #d4af37, #1a1400)" },
-  { id: "toxic",      label: "Toxic",        swatch: "linear-gradient(90deg, #0a1a00, #aaff00, #0a1a00)" },
   { id: "eightbit",   label: "8-Bit",        swatch: "linear-gradient(90deg, #0f0f1a, #38b764, #0f0f1a)" },
-  { id: "flashlight", label: "Flashlight",   swatch: "radial-gradient(circle, #ffffff 0%, #000000 75%)" },
-  { id: "disco",      label: "Disco",        swatch: "linear-gradient(90deg, #ff2ec4, #ffd23f, #2ec4ff, #ff2ec4)" },
-  { id: "matrix",     label: "Matrix",       swatch: "linear-gradient(90deg, #000000, #00ff41, #000000)" },
   { id: "bubblegum",  label: "Bubblegum",    swatch: "linear-gradient(90deg, #ff9ecd, #a0e7ff, #ff9ecd)" },
+  { id: "custom",     label: "Custom",       swatch: "conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)" },
 ]
 
-const STORAGE_KEY = "fables-app-theme"
+const STORAGE_KEY        = "fables-app-theme"
+const CUSTOM_COLOR_KEY   = "fables-app-theme-custom-color"
 const DEFAULT_THEME: AppTheme = "midnight"
+const DEFAULT_CUSTOM_COLOR = "#8b5cf6"
 
 interface ThemeContextType {
   theme: AppTheme
   setTheme: (t: AppTheme) => void
+  customColor: string
+  setCustomColor: (c: string) => void
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null)
@@ -65,26 +63,28 @@ function readStoredTheme(): AppTheme {
   return DEFAULT_THEME
 }
 
+function readStoredCustomColor(): string {
+  try {
+    const raw = localStorage.getItem(CUSTOM_COLOR_KEY)
+    if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw
+  } catch { /* ignore */ }
+  return DEFAULT_CUSTOM_COLOR
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<AppTheme>(readStoredTheme)
+  const [customColor, setCustomColorState] = useState<string>(readStoredCustomColor)
 
   useEffect(() => {
     document.documentElement.setAttribute("data-app-theme", theme)
   }, [theme])
 
-  // Flashlight theme blacks out the whole page except a circle around the
-  // cursor (see [data-app-theme="flashlight"] in index.css, which paints
-  // that circle as a radial-gradient hole centered on these two CSS vars).
-  // Only tracks the mouse while the theme is actually active.
+  // Drives the custom theme's whole palette via color-mix() in index.css —
+  // see [data-app-theme="custom"]. Kept set at all times (not just while the
+  // custom theme is active) so switching to it never shows a stale color.
   useEffect(() => {
-    if (theme !== "flashlight") return
-    function onMove(e: MouseEvent) {
-      document.documentElement.style.setProperty("--flashlight-x", `${e.clientX}px`)
-      document.documentElement.style.setProperty("--flashlight-y", `${e.clientY}px`)
-    }
-    window.addEventListener("mousemove", onMove)
-    return () => window.removeEventListener("mousemove", onMove)
-  }, [theme])
+    document.documentElement.style.setProperty("--app-custom-color", customColor)
+  }, [customColor])
 
   // Once we know who's logged in, prefer the theme saved on their account —
   // this is what actually makes it follow you across devices instead of
@@ -96,6 +96,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeState(remote)
         try { localStorage.setItem(STORAGE_KEY, remote) } catch { /* ignore */ }
       }
+      const remoteColor = data.user?.user_metadata?.app_theme_custom_color
+      if (typeof remoteColor === "string" && /^#[0-9a-fA-F]{6}$/.test(remoteColor)) {
+        setCustomColorState(remoteColor)
+        try { localStorage.setItem(CUSTOM_COLOR_KEY, remoteColor) } catch { /* ignore */ }
+      }
     }).catch(() => { /* not logged in yet / offline — local theme stands */ })
   }, [])
 
@@ -106,7 +111,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       .catch(e => console.error("Failed to sync theme to account:", e))
   }
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>
+  function setCustomColor(c: string) {
+    setCustomColorState(c)
+    try { localStorage.setItem(CUSTOM_COLOR_KEY, c) } catch { /* ignore */ }
+    supabase.auth.updateUser({ data: { app_theme_custom_color: c } })
+      .catch(e => console.error("Failed to sync custom theme color to account:", e))
+  }
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme, customColor, setCustomColor }}>
+      {children}
+    </ThemeContext.Provider>
+  )
 }
 
 export function useAppTheme() {

@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppSidebar } from "@/components/app-sidebar";
 import type { SidebarObject } from "@/components/sidebar-utils";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { EquippedTagBadge } from "@/components/gambling/EquippedTagBadge";
 import { UpdateDetailsButton } from "@/components/UpdateDetailsButton";
 import { PaneLayoutView } from "@/components/workspace/PaneLayoutView";
 import { useWorkspace } from "@/components/workspace/useWorkspace";
@@ -60,11 +58,6 @@ export default function Dashboard() {
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <UpdateDetailsButton />
-          <Separator
-            orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:h-4"
-          />
-          <EquippedTagBadge />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 bg-background overflow-hidden min-h-0">
           {loading ? (

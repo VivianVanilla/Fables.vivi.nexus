@@ -12,10 +12,11 @@ import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
   SpellSlot, FavoriteRef, Feature, FamiliarRef,
 } from "./character-types"
-import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS } from "./character-constants"
+import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "./character-constants"
 import type { FavoriteCategory } from "./character-constants"
 import { profBonus, nanoid, safeParseJson, computeAc } from "./character-utils"
-import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, BG_OPTIONS } from "./character-themes"
+import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS } from "./character-themes"
+import type { SlotTheme } from "./character-themes"
 import { loadUserImages, uploadUserImage } from "./imageGallery"
 
 // UI primitives
@@ -655,6 +656,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const theme      = THEMES[data.theme ?? DEFAULT_THEME] ?? THEMES[DEFAULT_THEME]
   const isLight    = data.themeMode === "light"
   const effectiveBox  = isLight ? theme.lightBox  : theme.box
+  const effectiveBoxHex = isLight ? theme.lightBoxHex : theme.boxHex
   const effectiveBody = (() => {
     const bgKey = data.themeBg ?? "default"
     const bgOverride = bgKey !== "default" ? (BG_OPTIONS[bgKey]?.body ?? "") : ""
@@ -662,7 +664,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     return isLight ? theme.lightBody : theme.body
   })()
   const card       = `rounded-xl ${effectiveBox} ring-1 ${theme.ring}`
-  const slotAccent = (SLOT_THEMES[data.slotTheme ?? DEFAULT_SLOT_THEME] ?? SLOT_THEMES[DEFAULT_SLOT_THEME]).accent
+  const activeSlotKey = data.slotTheme ?? DEFAULT_SLOT_THEME
+  const slotTheme: SlotTheme = activeSlotKey === CUSTOM_SLOT_THEME_KEY
+    ? { label: "Custom", accent: data.slotCustomColor ?? DEFAULT_ACCENT_COLOR }
+    : (SLOT_THEMES[activeSlotKey] ?? SLOT_THEMES[DEFAULT_SLOT_THEME])
+  const slotAnimated = data.slotAnimated ?? false
 
   // ── PROFICIENCY BONUS ─────────────────────────────────────────────────────
 
@@ -718,11 +724,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     onRemoveFeature: removeFeatureGlobal,
     onLinkToggle: toggleFeatureLink,
     onPopOutFamiliar: togglePopout,
-    theme: { ...theme, box: effectiveBox }, card, readOnly,
-    showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle,
+    theme: { ...theme, box: effectiveBox, boxHex: effectiveBoxHex }, card, readOnly,
+    showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle, magicItemColor: data.magicItemColor,
+    magicItemSliderStyle: data.magicItemSliderStyle,
     featureCategoryById,
     favoriteCategoryColors: data.favoriteCategoryColors,
     favoriteCategoryStyle: data.favoriteCategoryStyle,
+    favoriteCategorySliderStyle: data.favoriteCategorySliderStyle,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),
@@ -1002,7 +1010,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <SpellsEquipPanel
           card={card} theme={theme} data={data} readOnly={readOnly} userId={user?.id ?? null}
           spellItems={spellItems} equipItems={equipItems} spellSlots={spellSlots}
-          slotAccent={slotAccent} characterId={character.id}
+          slotTheme={slotTheme} slotAnimated={slotAnimated} characterId={character.id}
           activeSubTab={spellsSubTab} onChangeSubTab={setSpellsSubTab}
           onShowSpellcastingModal={() => setShowSpellcastingModal(true)}
           onChangeSlot={changeSlot}
@@ -1042,7 +1050,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       )}
       {showSpellcastingModal && (
         <SpellcastingModal
-          data={data} spellSlots={spellSlots} readOnly={readOnly} slotAccent={slotAccent}
+          data={data} spellSlots={spellSlots} readOnly={readOnly} slotTheme={slotTheme} slotAnimated={slotAnimated}
           onUpdate={update} onChangeSlot={changeSlot}
           onAddSlot={addSlot} onRemoveSlot={removeSlot}
           onClose={() => setShowSpellcastingModal(false)}
