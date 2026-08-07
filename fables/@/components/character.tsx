@@ -736,6 +736,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     favoriteCategoryColors: data.favoriteCategoryColors,
     favoriteCategoryStyle: data.favoriteCategoryStyle,
     favoriteCategorySliderStyle: data.favoriteCategorySliderStyle,
+    classFeatureColorsByClass: data.classFeatureColorsByClass,
+    classFeatureColors: data.classFeatureColors,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),

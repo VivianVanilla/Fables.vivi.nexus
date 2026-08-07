@@ -17,6 +17,7 @@ import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { FeatureEntry, categoryAccentStyle } from "../entries/FeatureEntry"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "../../character-utils"
+import { matchClassKey } from "../../character-class-colors"
 import type { Theme } from "../../character-themes"
 import type { FavoriteCategory, CardStyle } from "../../character-constants"
 
@@ -71,6 +72,8 @@ interface FavoritesPanelProps {
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings (Feature Stylings) — accent color per category
   favoriteCategoryStyle?:  Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (card background)
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (tracking slider, independent of the card background)
+  classFeatureColorsByClass?: boolean            // Settings — when true, favorited Class Features resolve their color from classFeatureColors (by source) instead of the shared favoriteCategoryColors.class
+  classFeatureColors?: Record<string, string>    // Settings — accent color per class key, only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey
   onChangeSpell:     (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell:     (id: string) => void
   onChangeEquip:     (id: string, patch: Partial<EquipmentItem>) => void
@@ -98,6 +101,7 @@ export function FavoritesPanel({
   favorites, spellItems, equipItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
   featureCategoryById, favoriteCategoryColors, favoriteCategoryStyle, favoriteCategorySliderStyle,
+  classFeatureColorsByClass, classFeatureColors,
   onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
   theme, card, readOnly, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle,
@@ -120,8 +124,20 @@ export function FavoritesPanel({
   // "item" never has a color/style set (Settings deliberately excludes it —
   // see STYLING_CATEGORIES), so this naturally resolves to undefined/"none"
   // for Items-tab favorites without any special-casing here.
+  //
+  // Class Features are the one category that can instead be colored per-class
+  // (Settings' "Separate color per class") — when that's on, a favorited
+  // Class Feature resolves its color from its own `source` (e.g. "Fighter")
+  // the same way InfoTab.tsx's Class Features list does, instead of the one
+  // shared favoriteCategoryColors.class swatch.
   function accentColorFor(fav: FavoriteRef): string | undefined {
-    return favoriteCategoryColors?.[resolveCategory(fav)]
+    const category = resolveCategory(fav)
+    if (category === "class" && classFeatureColorsByClass) {
+      const key = matchClassKey(resolveFeature(fav.refId)?.source)
+      const perClass = key ? classFeatureColors?.[key] : undefined
+      if (perClass) return perClass
+    }
+    return favoriteCategoryColors?.[category]
   }
   function accentStyleFor(fav: FavoriteRef): CardStyle | undefined {
     return favoriteCategoryStyle?.[resolveCategory(fav)]

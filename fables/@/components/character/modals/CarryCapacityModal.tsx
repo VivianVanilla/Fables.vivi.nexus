@@ -35,7 +35,7 @@ export function CarryCapacityModal({ data, readOnly, onUpdate, onClose, accentCo
                 onChange={e => onUpdate({ carryCapacityBonus: parseInt(e.target.value) || 0 })}
                 className="w-full text-center bg-white/10 rounded-xl px-3 py-2 text-white outline-none text-lg font-bold"
               />
-              <p className="text-[10px] text-white/30">Bags of Holding, Belts of Giant Strength, feats, homebrew — anything that raises your carrying capacity by a flat amount.</p>
+             
             </div>
           )}
         </div>
