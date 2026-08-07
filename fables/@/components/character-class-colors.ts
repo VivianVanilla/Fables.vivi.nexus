@@ -2,6 +2,8 @@
 // rendered (feature "source" tags, etc.) so the same class always reads as
 // the same color across the app.
 
+import type { CharacterData } from "./character-types"
+
 interface ClassColor {
   text: string  // Tailwind text-* class
   bg: string    // Tailwind bg-*/opacity class
@@ -25,6 +27,25 @@ const CLASS_COLORS: Record<string, ClassColor> = {
 
 const DEFAULT_COLOR: ClassColor = { text: "text-white/50", bg: "bg-white/10" }
 
+// Every known class key, in the fixed order above — used to populate the
+// per-class swatch grid in Settings when a character has no matchable class
+// of their own yet.
+export const CLASS_NAMES = Object.keys(CLASS_COLORS)
+
+export function classLabel(key: string): string {
+  return key.charAt(0).toUpperCase() + key.slice(1)
+}
+
+/**
+ * Finds a known class key (e.g. "fighter") inside a (often free-text) source
+ * string — e.g. "Fighter (Champion)" or "Variant Human, Wizard" both match.
+ * Returns undefined when no known class name appears in the source.
+ */
+export function matchClassKey(source?: string): string | undefined {
+  const key = source?.toLowerCase() ?? ""
+  return Object.keys(CLASS_COLORS).find(cls => new RegExp(`\\b${cls}\\b`).test(key))
+}
+
 /**
  * Returns "bg-* text-*" classes for a class name found inside a (often
  * free-text) source string — e.g. "Fighter (Champion)" or "Variant Human,
@@ -32,8 +53,25 @@ const DEFAULT_COLOR: ClassColor = { text: "text-white/50", bg: "bg-white/10" }
  * name appears in the source.
  */
 export function classColorClasses(source?: string): string {
-  const key = source?.toLowerCase() ?? ""
-  const match = Object.keys(CLASS_COLORS).find(cls => new RegExp(`\\b${cls}\\b`).test(key))
+  const match = matchClassKey(source)
   const color = match ? CLASS_COLORS[match] : DEFAULT_COLOR
   return `${color.bg} ${color.text}`
+}
+
+// Which classes to show a color swatch for in Settings' "Separate color per
+// class" grid — prefers the character's actual class(es) (single-class or
+// multiclass), falls back to whatever class names appear in their Class
+// Features list, and finally lists every known class so the control is never
+// empty on a freshly-created sheet.
+export function deriveCharacterClassNames(data: Pick<CharacterData, "class" | "classes" | "classFeatures">): string[] {
+  const picked = data.classes && data.classes.length > 0
+    ? data.classes.map(c => c.cls)
+    : data.class ? data.class.split("/").map(s => s.trim()) : []
+  const matched = picked.map(matchClassKey).filter((k): k is string => !!k)
+  if (matched.length > 0) return [...new Set(matched)]
+
+  const fromFeatures = (data.classFeatures ?? []).map(f => matchClassKey(f.source)).filter((k): k is string => !!k)
+  if (fromFeatures.length > 0) return [...new Set(fromFeatures)]
+
+  return CLASS_NAMES
 }

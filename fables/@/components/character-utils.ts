@@ -1,6 +1,6 @@
 // Small helper functions used throughout the character sheet
 
-import type { CharacterData } from "./character-types"
+import type { CharacterData, Feature } from "./character-types"
 
 /** Returns the ability modifier as a signed string, e.g. "+2" or "-1" */
 export function abilityMod(score: number): string {
@@ -111,4 +111,33 @@ export function maxSpellLevelForClass(cls: string, level: number): number {
   if (HALF_CASTERS.has(c)) return level < 2 ? 0 : Math.min(5, Math.floor((level - 1) / 4) + 1)
   if (c === "warlock")     return Math.min(5, Math.ceil(level / 2))
   return 0
+}
+
+/**
+ * IDs of items that shouldn't count toward the character's total carried
+ * weight because they sit (at any depth) inside a container flagged
+ * "Bag of Holding" (Feature.containerIgnoresWeight) — the container itself
+ * still counts its own weight, and its own maxWeight capacity check still
+ * uses each child's real weight; only the sheet-wide carry-weight total is
+ * affected. See character.tsx's totalWeight and InfoTab.tsx's ContainerItemsList.
+ */
+export function weightExemptItemIds(items: Feature[]): Set<string> {
+  const childrenOf = new Map<string, Feature[]>()
+  items.forEach(i => {
+    if (!i.parentId) return
+    const list = childrenOf.get(i.parentId) ?? []
+    list.push(i)
+    childrenOf.set(i.parentId, list)
+  })
+
+  const exempt = new Set<string>()
+  function markDescendants(id: string) {
+    for (const child of childrenOf.get(id) ?? []) {
+      if (exempt.has(child.id)) continue // guards against cyclic parentId data
+      exempt.add(child.id)
+      markDescendants(child.id)
+    }
+  }
+  items.filter(i => i.containerIgnoresWeight).forEach(i => markDescendants(i.id))
+  return exempt
 }

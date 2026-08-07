@@ -1,7 +1,8 @@
 import { Modal } from "../ui/Modal"
 import type { CharacterData } from "../../character-types"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS } from "../../character-themes"
-import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, type CardStyle } from "../../character-constants"
+import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, UI_SCALES, type CardStyle } from "../../character-constants"
+import { deriveCharacterClassNames, classLabel } from "../../character-class-colors"
 
 interface Props {
   data: CharacterData
@@ -35,6 +36,8 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
   const activeBgKey    = data.themeBg   ?? "default"
   const mode           = data.themeMode ?? "dark"
   const slotCustomColor = data.slotCustomColor ?? DEFAULT_ACCENT_COLOR
+  const classNames      = deriveCharacterClassNames(data)
+  const uiScale         = data.uiScale ?? 100
 
   return (
     <Modal onClose={onClose}>
@@ -204,14 +207,37 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
                 const style       = data.favoriteCategoryStyle?.[cat] ?? "none"
                 const sliderStyle = data.favoriteCategorySliderStyle?.[cat] ?? style
                 const color       = data.favoriteCategoryColors?.[cat] ?? DEFAULT_ACCENT_COLOR
+                const perClass    = cat === "class" && (data.classFeatureColorsByClass ?? false)
                 return (
                   <div key={cat} className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-white/70 shrink-0">{FAVORITE_CATEGORY_LABELS[cat]}</span>
-                      <input type="color" value={color} title="Accent color"
-                        onChange={e => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: e.target.value } })}
-                        className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                      {!perClass && (
+                        <input type="color" value={color} title="Accent color"
+                          onChange={e => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: e.target.value } })}
+                          className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                      )}
                     </div>
+                    {cat === "class" && (
+                      <label className="flex items-center gap-2 text-[11px] text-white/50 cursor-pointer select-none pl-2">
+                        <input type="checkbox" checked={data.classFeatureColorsByClass ?? false}
+                          onChange={e => onUpdate({ classFeatureColorsByClass: e.target.checked })}
+                          className="accent-primary size-3.5 rounded" />
+                        Separate color per class
+                      </label>
+                    )}
+                    {perClass && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 pl-2 py-1">
+                        {classNames.map(key => (
+                          <label key={key} className="flex items-center gap-1.5 text-[10px] text-white/50 cursor-pointer select-none">
+                            <input type="color" value={data.classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR} title={`${classLabel(key)} accent color`}
+                              onChange={e => onUpdate({ classFeatureColors: { ...data.classFeatureColors, [key]: e.target.value } })}
+                              className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                            {classLabel(key)}
+                          </label>
+                        ))}
+                      </div>
+                    )}
                     <StyleToggle label="Background" value={style}
                       onChange={s => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })} />
                     <StyleToggle label="Tracking Slider" value={sliderStyle}
@@ -219,6 +245,21 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          {/* Modules and Font Size — shrinks the whole sheet (fonts, padding,
+              cards — everything) so more fits on screen at once. 100% is the
+              default/current size; 75%/50% zoom out from there. */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Modules and Font Size</p>
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+              {UI_SCALES.map(scale => (
+                <button key={scale} type="button" onClick={() => onUpdate({ uiScale: scale })}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${uiScale === scale ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                  {scale}%{scale === 100 ? " (Default)" : ""}
+                </button>
+              ))}
             </div>
           </div>
 

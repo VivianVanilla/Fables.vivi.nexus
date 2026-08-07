@@ -106,6 +106,11 @@ export const STYLING_CATEGORIES: FavoriteCategory[] = ["race", "class", "feat", 
 
 export const DEFAULT_ACCENT_COLOR = "#8b5cf6"
 
+// Settings — "Modules and Font Size": sheet-wide zoom level. 100% is the
+// current/default size; 75%/50% shrink everything (fonts, padding, cards) to
+// fit more on screen at once.
+export const UI_SCALES = [100, 75, 50] as const
+
 export const SKILLS = [
   { name: "Acrobatics",       ability: "dex" },
   { name: "Animal Handling",  ability: "wis" },

@@ -178,6 +178,8 @@ interface FeatureEntryProps {
   showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
   containerOptions?: { id: string; name: string }[]  // Carried Items only — other containers this item could be moved into; omit/empty hides the control
   onMoveToContainer?: (containerId: string | undefined) => void  // Carried Items only — button-based fallback for the drag-and-drop reparenting ContainerItemsList's handleDrop does, since touch drag can be unreliable on mobile
+  containerContentsOpen?: boolean       // Carried Items only, containers only — whether this container's held items are currently shown below it; omit to hide the toggle button entirely
+  onToggleContainerContents?: () => void // Carried Items only, containers only — flips containerContentsOpen
   showMagicStar?:    boolean            // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
   magicItemStyle?:   "none" | "outline" | "galaxy"  // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy" is labeled "Animated" in Settings
   magicItemColor?:   string             // Settings — accent color for magicItemStyle/magicItemSliderStyle, default DEFAULT_ACCENT_COLOR
@@ -284,7 +286,7 @@ export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: s
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
   isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras, showWeightColumn,
-  containerOptions, onMoveToContainer,
+  containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
   accentColor, accentStyle, sliderStyle,
 }: FeatureEntryProps) {
@@ -674,13 +676,20 @@ export function FeatureEntry({
                     />
                     Is a Container (drag items onto it to store them)
                   </label>
-                  <PopTransition show={!!feature.isContainer}>
+                  <PopTransition show={!!feature.isContainer} className="flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                       Max Weight (lb)
                       <NumInput min={0} step="0.1" value={feature.maxWeight ?? ""}
                         onChange={e => onChange({ maxWeight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
                         placeholder="—"
                         className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                    </label>
+                    <label className="flex items-center gap-2 text-emerald-300 cursor-pointer select-none whitespace-nowrap">
+                      <input type="checkbox" checked={feature.containerIgnoresWeight ?? false}
+                        onChange={e => onChange({ containerIgnoresWeight: e.target.checked })}
+                        className="accent-emerald-500"
+                      />
+                      Don't count contained items' weight (Bag of Holding)
                     </label>
                   </PopTransition>
                 </div>
@@ -938,6 +947,12 @@ export function FeatureEntry({
             {feature.name || <span className="text-white/30 italic">{unnamedLabel}</span>}
           </span>
 
+          {showItemExtras && feature.isContainer && feature.containerIgnoresWeight && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 shrink-0" title="Items placed inside don't count toward carried weight">
+              ♾ Weightless
+            </span>
+          )}
+
           {!showItemExtras && feature.source && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${classColorClasses(feature.source)}`} title={feature.source}>
               {feature.source}
@@ -977,6 +992,14 @@ export function FeatureEntry({
             <span className="text-[10px] text-white/40 shrink-0 w-14 text-right tabular-nums">
               {feature.weight ? `${feature.weight * (feature.amount ?? 1)} lb` : ""}
             </span>
+          )}
+
+          {onToggleContainerContents && (
+            <button type="button" onClick={e => { e.stopPropagation(); onToggleContainerContents() }}
+              title={containerContentsOpen ? "Hide items in this container" : "Show items in this container"}
+              className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors shrink-0">
+              {containerContentsOpen ? "Hide Items" : "Show Items"}
+            </button>
           )}
 
           {(feature.linkedTo?.length ?? 0) > 0 && (

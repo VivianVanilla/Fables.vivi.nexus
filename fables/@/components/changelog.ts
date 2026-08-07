@@ -11,6 +11,31 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "August 7, 2026",
+    title: "Carrying capacity bonus",
+    description: "Click your ⚖ carry-weight badge (next to your name) to add a flat bonus to your carrying capacity — Belts of Giant Strength, feats, homebrew, etc.",
+  },
+  {
+    date: "August 7, 2026",
+    title: "Bag of Holding — items that don't count toward weight",
+    description: "Any container (Items tab → Is a Container) can now be flagged \"Don't count contained items' weight\" so whatever's stashed inside stops counting toward your total carried weight. The container's own weight and its own capacity limit are unaffected.",
+  },
+  {
+    date: "August 7, 2026",
+    title: "Hide a container's contents",
+    description: "Containers on the Items tab now have their own Show/Hide Items button, so a full backpack or bag doesn't have to take up space on screen when you don't need to see what's inside.",
+  },
+  {
+    date: "August 7, 2026",
+    title: "Modules and Font Size",
+    description: "New Settings section to shrink the whole character sheet — fonts, padding, cards, everything — to 100%, 75%, or 50%, so more fits on screen at once.",
+  },
+  {
+    date: "August 7, 2026",
+    title: "Separate color per class",
+    description: "Settings → Feature Styling → Class Features now has a \"Separate color per class\" checkbox — pick a different accent color for each class on a multiclass (or single-class) sheet instead of one shared color.",
+  },
+  {
     date: "July 20, 2026",
     title: "Feature Stylings",
     description: "Settings now has a Feature Stylings section — pick None, Outline, or an Animated Background (with its own color) for Racial Traits, Class Features, Feats, Invocations, Spells, Martial, and Familiars. Applies everywhere that category shows up on the sheet, not just when favorited.",

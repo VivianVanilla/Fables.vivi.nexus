@@ -125,6 +125,7 @@ export interface Feature {
   equipKind?: "armor" | "weapon" | "misc" // Armor & Equipment section only — which stat fields apply
   isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
   maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
+  containerIgnoresWeight?: boolean  // Items tab, containers only — "Bag of Holding": items placed inside don't count toward the character's total carried weight (the container's own weight, and its own maxWeight capacity check, are unaffected)
   parentId?: string          // Items tab only — id of the containing item, when nested inside a container
   rarity?: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact" | "Wondrous"  // Items tab only
   itemMeta?: {                // set when created from an Items-tab documentation suggestion, or edited directly
@@ -254,6 +255,10 @@ export interface CharacterData {
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category (race/class/feat/invocation/spell/equipment/familiar — "item" is deliberately excluded, see STYLING_CATEGORIES), applied everywhere that category renders, not just Favorites
   favoriteCategoryStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: "none" (default/off), "outline" (colored border), or "galaxy" (animated background in that color) — mirrors magicItemStyle
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: separate look for that category's own "Track uses" bars, independent of favoriteCategoryStyle (the card background) — mirrors magicItemSliderStyle
+  classFeatureColorsByClass?: boolean  // Settings — when true, Class Features cards are colored per-class (classFeatureColors) instead of the single favoriteCategoryColors.class accent
+  classFeatureColors?: Record<string, string>  // Settings — accent color per class key (e.g. "fighter"), only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey/deriveCharacterClassNames
+  uiScale?: 100 | 75 | 50  // Settings — "Modules and Font Size": sheet-wide zoom level, default 100
+  carryCapacityBonus?: number  // flat lb bonus added on top of the computed STR × 15 carrying capacity — set via clicking the ⚖ carry-weight badge
   conditions?: ActiveCondition[]
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">

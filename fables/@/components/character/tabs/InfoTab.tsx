@@ -8,13 +8,14 @@ import type { userInfo } from "@/types/userInfo"
 import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef } from "../../character-types"
 import type { Theme } from "../../character-themes"
 import type { FavoriteCategory, CardStyle } from "../../character-constants"
-import { nanoid, profBonus, safeParseJson, uniqueName } from "../../character-utils"
+import { nanoid, profBonus, safeParseJson, uniqueName, weightExemptItemIds } from "../../character-utils"
 import { useUserContext } from "../../../../src/contexts/UserContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "../ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 import { usePopoverPosition, useClickOutside } from "../../collab/usePortalMenu"
+import { matchClassKey } from "../../character-class-colors"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,12 +72,13 @@ interface FeatureListProps {
   accentColor?: string
   accentStyle?: CardStyle
   sliderStyle?: CardStyle
+  perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — only used for Class Features when "Separate color per class" is on; falls back to accentColor when it returns undefined
   sortable?: boolean
 }
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, sortable }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, perItemAccentColor, sortable }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -142,7 +144,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             magicItemStyle={magicItemStyle}
             magicItemColor={magicItemColor}
             magicItemSliderStyle={magicItemSliderStyle}
-            accentColor={accentColor}
+            accentColor={perItemAccentColor?.(f) ?? accentColor}
             accentStyle={accentStyle}
             sliderStyle={sliderStyle}
             onChange={patch => onChange(f.id, patch)}
@@ -178,8 +180,23 @@ interface ContainerItemsListProps {
 }
 
 function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle }: ContainerItemsListProps) {
+  // Which containers (isContainer feature ids) have their contents shown —
+  // per-container, not a whole-panel toggle; hidden by default; ephemeral
+  // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
+  const [openContainers, setOpenContainers] = useState<Set<string>>(new Set())
+  function toggleContainerOpen(id: string) {
+    setOpenContainers(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
   const roots = items.filter(i => !i.parentId)
-  const totalWeight = items.reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0)
+  // Items inside a "Bag of Holding" container (containerIgnoresWeight) don't
+  // count toward this total — see character-utils.ts's weightExemptItemIds.
+  const weightExempt = weightExemptItemIds(items)
+  const totalWeight = items.reduce((sum, i) => sum + (weightExempt.has(i.id) ? 0 : (i.weight ?? 0) * (i.amount ?? 1)), 0)
 
   // A container can't be dropped into itself or into one of its own descendants
   function isSelfOrDescendant(candidateId: string, movingId: string): boolean {
@@ -212,6 +229,7 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
     const children     = items.filter(c => c.parentId === f.id)
     const childWeight  = children.reduce((sum, c) => sum + (c.weight ?? 0) * (c.amount ?? 1), 0)
     const overCapacity = f.maxWeight != null && childWeight > f.maxWeight
+    const contentsOpen = openContainers.has(f.id)
     // Same button-based fallback as the drop targets below (handleDrop) —
     // every other container is a valid destination except this item's own
     // subtree, which would create a cycle.
@@ -238,6 +256,8 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           magicItemSliderStyle={magicItemSliderStyle}
           containerOptions={containerOptions}
           onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
+          containerContentsOpen={f.isContainer ? contentsOpen : undefined}
+          onToggleContainerContents={f.isContainer ? () => toggleContainerOpen(f.id) : undefined}
           onChange={patch => onChange(f.id, patch)}
           onRemove={() => onRemove(f.id)}
           onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -251,11 +271,15 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
                 {childWeight % 1 === 0 ? childWeight : childWeight.toFixed(1)}{f.maxWeight != null ? `/${f.maxWeight}` : ""} lb
               </span>
             )}
-            {children.map(c => renderItem(c, depth + 1))}
-            {children.length === 0 && (
-              <p className="text-[10px] text-white/20 italic text-center py-2 border border-dashed border-white/10 rounded-lg">
-                Drag items here
-              </p>
+            {contentsOpen && (
+              <>
+                {children.map(c => renderItem(c, depth + 1))}
+                {children.length === 0 && (
+                  <p className="text-[10px] text-white/20 italic text-center py-2 border border-dashed border-white/10 rounded-lg">
+                    Drag items here
+                  </p>
+                )}
+              </>
             )}
           </div>
         </PopTransition>
@@ -610,6 +634,16 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
   const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
   const favSliderStyle = (cat: FavoriteCategory) => data.favoriteCategorySliderStyle?.[cat]
 
+  // Settings' "Separate color per class" — resolves each Class Feature's own
+  // accent from its `source` (e.g. "Fighter (Champion)") instead of the one
+  // shared favoriteCategoryColors.class swatch.
+  const classFeatureAccentColor = data.classFeatureColorsByClass
+    ? (f: Feature) => {
+        const key = matchClassKey(f.source)
+        return key ? data.classFeatureColors?.[key] : undefined
+      }
+    : undefined
+
   // All features across all lists (for linking UI)
   const allFeatures: Feature[] = [
     ...(data.racialTraits  ?? []),
@@ -759,6 +793,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           suggestionSource="class" userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
           accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
+          perItemAccentColor={classFeatureAccentColor}
           sortable
         />
       )}

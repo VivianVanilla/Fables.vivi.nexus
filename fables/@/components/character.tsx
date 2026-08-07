@@ -14,7 +14,7 @@ import type {
 } from "./character-types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "./character-constants"
 import type { FavoriteCategory } from "./character-constants"
-import { profBonus, nanoid, safeParseJson, computeAc } from "./character-utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds } from "./character-utils"
 import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS } from "./character-themes"
 import type { SlotTheme } from "./character-themes"
 import { loadUserImages, uploadUserImage } from "./imageGallery"
@@ -45,6 +45,7 @@ import { SkillModal }            from "./character/modals/SkillModal"
 import { InitiativeModal }       from "./character/modals/InitiativeModal"
 import { ArmorClassModal }       from "./character/modals/ArmorClassModal"
 import { SpeedModal }            from "./character/modals/SpeedModal"
+import { CarryCapacityModal }    from "./character/modals/CarryCapacityModal"
 import { ConditionPickerModal }  from "./character/modals/ConditionPickerModal"
 import { SettingsModal }         from "./character/modals/SettingsModal"
 import { PortraitModal }         from "./character/modals/PortraitModal"
@@ -95,6 +96,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [showInitiativeModal,   setShowInitiativeModal]   = useState(false)
   const [showAcModal,           setShowAcModal]           = useState(false)
   const [showSpeedModal,        setShowSpeedModal]        = useState(false)
+  const [showCarryModal,        setShowCarryModal]        = useState(false)
   const [showClassPicker,       setShowClassPicker]       = useState(false)
   const [showRacePicker,        setShowRacePicker]        = useState(false)
 
@@ -257,13 +259,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     (data.equipmentItems ?? []).map(i => i.sourceFeatureId).filter((id): id is string => !!id)
   )
 
-  // Total carried weight — items (× amount for stacked generics) + equipment (weapons/armor/gear)
+  // Total carried weight — items (× amount for stacked generics) + equipment (weapons/armor/gear),
+  // excluding anything stashed inside a "Bag of Holding" container (Feature.containerIgnoresWeight)
+  const weightExemptIds = weightExemptItemIds(data.items ?? [])
   const totalWeight =
-    (data.items ?? []).reduce((sum, i) => sum + (i.weight ?? 0) * (i.amount ?? 1), 0) +
+    (data.items ?? []).reduce((sum, i) => sum + (weightExemptIds.has(i.id) ? 0 : (i.weight ?? 0) * (i.amount ?? 1)), 0) +
     (data.equipmentItems ?? []).reduce((sum, i) => sum + (i.sourceFeatureId ? 0 : (i.weight ?? 0)), 0)
 
-  // Carrying capacity (PHB) — STR score × 15 lb
-  const carryCapacity = (data.strength ?? 10) * 15
+  // Carrying capacity (PHB) — STR score × 15 lb, plus any flat bonus set via
+  // the ⚖ badge (Bags of Holding, Belts of Giant Strength, feats, homebrew…)
+  const carryCapacity = (data.strength ?? 10) * 15 + (data.carryCapacityBonus ?? 0)
   const encumbered     = totalWeight > carryCapacity
 
   function addSpell() {
@@ -1026,8 +1031,15 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // MAIN RENDER
   // ══════════════════════════════════════════════════════════════════════════
 
+  // Settings' "Modules and Font Size" — CSS zoom (not transform: scale)
+  // deliberately, since it shrinks fonts/padding/everything in lockstep like
+  // browser zoom while leaving position:fixed modals sized to the real
+  // viewport instead of the scaled container.
+  const uiScale = data.uiScale ?? 100
+
   return (
-    <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-auto ${effectiveBody}`}>
+    <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-auto ${effectiveBody}`}
+      style={uiScale !== 100 ? { zoom: uiScale / 100 } : undefined}>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
@@ -1080,6 +1092,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <SpeedModal
           data={data} readOnly={readOnly} overrideReason={speedOverrideReason}
           onUpdate={update} onClose={() => setShowSpeedModal(false)}
+        />
+      )}
+      {showCarryModal && (
+        <CarryCapacityModal
+          data={data} readOnly={readOnly}
+          onUpdate={update} onClose={() => setShowCarryModal(false)}
+          accentColor={theme.accent}
         />
       )}
       {showConditionPicker && (
@@ -1193,9 +1212,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               </span>
             )}
             {totalWeight > 0 && (
-              <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${encumbered ? "bg-red-500/20 text-red-300" : "bg-white/10 text-white/40"}`} title="Carrying capacity: STR score × 15 lb">
+              <button type="button" onClick={() => setShowCarryModal(true)}
+                className={`text-xs px-2 py-0.5 rounded-full shrink-0 transition-colors ${encumbered ? "bg-red-500/20 text-red-300 hover:bg-red-500/30" : "bg-white/10 text-white/40 hover:bg-white/20 hover:text-white/70"}`}
+                title="Carrying capacity: STR score × 15 lb, plus any flat bonus — click to set a bonus">
                 ⚖ {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} / {carryCapacity} lb
-              </span>
+              </button>
             )}
            
             {readOnly && (
