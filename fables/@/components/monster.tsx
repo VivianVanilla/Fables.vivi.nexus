@@ -79,9 +79,9 @@ const CARD = "rounded-xl bg-zinc-900 ring-1 ring-zinc-700 transition-colors"
 
 const NEUTRAL_THEME: Theme = {
   label: "Neutral",
-  body: "bg-zinc-950", box: "bg-zinc-800", lightBody: "bg-zinc-800", lightBox: "bg-zinc-700",
+  body: "bg-zinc-950", box: "bg-zinc-800",
   ring: "ring-zinc-700", header: "bg-zinc-950", color: "text-white", accent: "#F59E0B",
-  boxHex: "#27272a", lightBoxHex: "#3f3f46",
+  boxHex: "#27272a",
 }
 
 function abilityMod(score: number): string {

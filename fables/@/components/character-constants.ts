@@ -85,7 +85,7 @@ export const RARITY_COLORS: Record<string, string> = {
 // instead of the fixed magic-item purple).
 export type CardStyle = "none" | "outline" | "galaxy"
 
-export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "spell" | "equipment" | "familiar"
+export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "infusion" | "spell" | "equipment" | "familiar"
 
 export const FAVORITE_CATEGORY_LABELS: Record<FavoriteCategory, string> = {
   race:       "Racial Traits",
@@ -93,6 +93,7 @@ export const FAVORITE_CATEGORY_LABELS: Record<FavoriteCategory, string> = {
   feat:       "Feats",
   item:       "Items",
   invocation: "Invocations",
+  infusion:   "Infusions",
   spell:      "Spells",
   equipment:  "Martial",
   familiar:   "Familiars",
@@ -101,8 +102,10 @@ export const FAVORITE_CATEGORY_LABELS: Record<FavoriteCategory, string> = {
 // Rendered in Settings — "item" is deliberately excluded: it's the Items tab,
 // which already has its own dedicated Magic Item styling section right above
 // this one, so a second color-by-category control for the same list would
-// just be two competing ways to style the same cards.
-export const STYLING_CATEGORIES: FavoriteCategory[] = ["race", "class", "feat", "invocation", "spell", "equipment", "familiar"]
+// just be two competing ways to style the same cards. "invocation"/"infusion"
+// rows are further hidden unless the character's class spread actually
+// includes Warlock/Artificer — see SettingsModal.tsx.
+export const STYLING_CATEGORIES: FavoriteCategory[] = ["race", "class", "feat", "invocation", "infusion", "spell", "equipment", "familiar"]
 
 export const DEFAULT_ACCENT_COLOR = "#8b5cf6"
 

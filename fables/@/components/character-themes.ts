@@ -2,97 +2,53 @@
 
 export interface Theme {
   label: string
-  body: string       // dark mode outer background
-  box: string        // dark mode card background
-  lightBody: string  // light mode outer background
-  lightBox: string   // light mode card background
+  body: string   // outer background
+  box: string    // card background
   ring: string
   header: string
   color: string
-  accent: string     // hex for spell slot bars and UI accents
-  boxHex: string      // hex equivalent of `box` — lets cosmetic gradients (e.g. FeatureEntry's
-  lightBoxHex: string  // "Animated Background" nebula) blend into the real card color instead
-                        // of crushing to a fixed near-black, in both dark and light/"Bright" mode
+  accent: string  // hex for spell slot bars and UI accents
+  boxHex: string  // hex equivalent of `box` — lets cosmetic gradients (e.g. FeatureEntry's
+                   // "Animated Background" nebula) blend into the real card color instead
+                   // of crushing to a fixed near-black
 }
+
+// key of the Card Style / Background entry whose colors are picked by the
+// user via <input type="color"> instead of a fixed swatch — see SettingsModal.tsx
+export const CUSTOM_THEME_KEY = "custom"
 
 export const THEMES: Record<string, Theme> = {
   dark: {
     label: "Dark",
-    body: "bg-zinc-950",     box: "bg-zinc-900",     lightBody: "bg-zinc-800",     lightBox: "bg-zinc-700",
-    ring: "ring-zinc-700",   header: "bg-zinc-950",  color: "text-white",          accent: "#64748B",
-    boxHex: "#18181b",       lightBoxHex: "#3f3f46",
+    body: "bg-zinc-950",   box: "bg-zinc-900",
+    ring: "ring-zinc-700", header: "bg-zinc-950", color: "text-white", accent: "#64748B",
+    boxHex: "#18181b",
   },
-  midnight: {
-    label: "Midnight",
-    body: "bg-slate-900",    box: "bg-slate-800",    lightBody: "bg-slate-700",    lightBox: "bg-slate-600",
-    ring: "ring-slate-700",  header: "bg-slate-900", color: "text-white",          accent: "#94A3B8",
-    boxHex: "#1e293b",       lightBoxHex: "#475569",
-  },
-  ash: {
-    label: "Ash",
-    body: "bg-zinc-800",     box: "bg-zinc-700",     lightBody: "bg-zinc-600",     lightBox: "bg-zinc-500",
-    ring: "ring-zinc-600",   header: "bg-zinc-800",  color: "text-white",          accent: "#A1A1AA",
-    boxHex: "#3f3f46",       lightBoxHex: "#71717a",
-  },
-  wizard: {
-    label: "Wizard",
-    body: "bg-slate-950",    box: "bg-blue-950",     lightBody: "bg-blue-900",     lightBox: "bg-blue-800",
-    ring: "ring-blue-900",   header: "bg-slate-950", color: "text-white",          accent: "#3B82F6",
-    boxHex: "#172554",       lightBoxHex: "#1e40af",
-  },
-  warlock: {
-    label: "Warlock",
-    body: "bg-violet-950",   box: "bg-violet-900",   lightBody: "bg-violet-800",   lightBox: "bg-violet-700",
-    ring: "ring-violet-800", header: "bg-violet-950",color: "text-white",          accent: "#8B5CF6",
-    boxHex: "#4c1d95",       lightBoxHex: "#6d28d9",
+  white: {
+    label: "White",
+    body: "bg-zinc-700",   box: "bg-zinc-600",
+    ring: "ring-zinc-400", header: "bg-zinc-700", color: "text-white", accent: "#E4E4E7",
+    boxHex: "#52525b",
   },
   sorcerer: {
-    label: "Sorcerer",
-    body: "bg-red-950",      box: "bg-red-900",      lightBody: "bg-red-800",      lightBox: "bg-red-700",
-    ring: "ring-red-800",    header: "bg-red-950",   color: "text-white",          accent: "#EF4444",
-    boxHex: "#7f1d1d",       lightBoxHex: "#b91c1c",
+    label: "Sorcerer Red",
+    body: "bg-red-950",    box: "bg-red-900",
+    ring: "ring-red-800",  header: "bg-red-950",  color: "text-white", accent: "#EF4444",
+    boxHex: "#7f1d1d",
   },
-  druid: {
-    label: "Druid",
-    body: "bg-emerald-950",  box: "bg-emerald-900",  lightBody: "bg-emerald-800",  lightBox: "bg-emerald-700",
-    ring: "ring-emerald-800",header: "bg-emerald-950",color: "text-white",         accent: "#4ADE80",
-    boxHex: "#064e3b",       lightBoxHex: "#047857",
+  wizard: {
+    label: "Wizard Blue",
+    body: "bg-blue-950",   box: "bg-blue-800",
+    ring: "ring-blue-600", header: "bg-blue-950", color: "text-white", accent: "#60A5FA",
+    boxHex: "#1e40af",
   },
-  cleric: {
-    label: "Cleric",
-    body: "bg-stone-900",    box: "bg-stone-800",    lightBody: "bg-stone-700",    lightBox: "bg-stone-600",
-    ring: "ring-stone-700",  header: "bg-stone-900", color: "text-white",          accent: "#D4AF37",
-    boxHex: "#292524",       lightBoxHex: "#57534e",
-  },
-  bard: {
-    label: "Bard",
-    body: "bg-fuchsia-950",  box: "bg-fuchsia-900",  lightBody: "bg-fuchsia-800",  lightBox: "bg-fuchsia-700",
-    ring: "ring-fuchsia-800",header: "bg-fuchsia-950",color: "text-white",         accent: "#E879F9",
-    boxHex: "#701a75",       lightBoxHex: "#a21caf",
-  },
-  ranger: {
-    label: "Ranger",
-    body: "bg-green-950",    box: "bg-green-900",    lightBody: "bg-green-800",    lightBox: "bg-green-700",
-    ring: "ring-green-800",  header: "bg-green-950", color: "text-white",          accent: "#22C55E",
-    boxHex: "#14532d",       lightBoxHex: "#15803d",
-  },
-  artificer: {
-    label: "Artificer",
-    body: "bg-amber-950",    box: "bg-stone-900",    lightBody: "bg-amber-800",    lightBox: "bg-stone-700",
-    ring: "ring-stone-700",  header: "bg-amber-950", color: "text-white",          accent: "#F59E0B",
-    boxHex: "#1c1917",       lightBoxHex: "#44403c",
-  },
-  paladin: {
-    label: "Paladin",
-    body: "bg-amber-950",    box: "bg-amber-900",    lightBody: "bg-amber-800",    lightBox: "bg-amber-700",
-    ring: "ring-amber-800",  header: "bg-amber-950", color: "text-white",          accent: "#EAB308",
-    boxHex: "#78350f",       lightBoxHex: "#b45309",
-  },
-  witch: {
-    label: "Witch",
-    body: "bg-teal-950",     box: "bg-teal-900",     lightBody: "bg-teal-800",     lightBox: "bg-teal-700",
-    ring: "ring-teal-800",   header: "bg-teal-950",  color: "text-white",          accent: "#14B8A6",
-    boxHex: "#134e4a",       lightBoxHex: "#0f766e",
+  [CUSTOM_THEME_KEY]: {
+    label: "Custom",
+    // resolved from CharacterData.themeCustomColor at render time (see character.tsx),
+    // which sets --theme-custom-box/--theme-custom-body on the sheet's root element
+    body: "bg-[var(--theme-custom-body)]", box: "bg-[var(--theme-custom-box)]",
+    ring: "ring-white/20", header: "bg-[var(--theme-custom-body)]", color: "text-white", accent: "#8b5cf6",
+    boxHex: "#3f3f46",
   },
 }
 
@@ -100,14 +56,14 @@ export const DEFAULT_THEME = "dark"
 
 // ── Background overrides (body only, independent of card style) ───────────────
 
+export const DEFAULT_BG_THEME = "dark"
+
 export const BG_OPTIONS: Record<string, { label: string; body: string }> = {
-  default:  { label: "Theme",   body: "" },
-  black:    { label: "Black",   body: "bg-black" },
-  zinc950:  { label: "Steel",   body: "bg-zinc-950" },
-  zinc900:  { label: "Ash",     body: "bg-zinc-900" },
-  slate950: { label: "Night",   body: "bg-slate-950" },
-  stone950: { label: "Stone",   body: "bg-stone-950" },
-  neutral:  { label: "Warm",    body: "bg-neutral-900" },
+  dark:     { label: "Dark",         body: "bg-zinc-950" },
+  white:    { label: "White",        body: "bg-zinc-700" },
+  sorcerer: { label: "Sorcerer Red", body: "bg-red-950" },
+  wizard:   { label: "Wizard Blue",  body: "bg-blue-950" },
+  [CUSTOM_THEME_KEY]: { label: "Custom", body: "bg-[var(--bg-custom-color)]" },
 }
 
 // ── Slot bar color palette (independent of background theme) ──────────────────
@@ -134,6 +90,15 @@ export const CUSTOM_SLOT_THEME_KEY = "custom"
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "")
   return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
+}
+
+// Darkens a hex color toward black by `amt` (0–1) — used to derive the
+// Custom theme's outer background from the single color the user picks for
+// the card, so it keeps the same body/box depth every fixed theme has.
+export function darkenHex(hex: string, amt: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c * (1 - amt)))).toString(16).padStart(2, "0")
+  return `#${mix(r)}${mix(g)}${mix(b)}`
 }
 
 function rgbToHue(r: number, g: number, b: number): number {

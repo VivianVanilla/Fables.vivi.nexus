@@ -35,7 +35,7 @@ export const DEFAULT_CHANNEL: Channel = { id: "general", name: "general" }
 
 export type ShareKind = "feature" | "spell" | "familiar"
 
-export type FeatureBucket = "racialTraits" | "feats" | "classFeatures" | "items" | "invocations"
+export type FeatureBucket = "racialTraits" | "feats" | "classFeatures" | "items" | "invocations" | "infusions"
 
 export interface SharePayload {
   kind: ShareKind

@@ -22,6 +22,7 @@ const FEATURE_BUCKETS: { id: FeatureBucket; label: string }[] = [
   { id: "classFeatures", label: "Class Features" },
   { id: "items", label: "Items" },
   { id: "invocations", label: "Invocations" },
+  { id: "infusions", label: "Infusions" },
 ]
 
 export function ShareComposer({ partyCode, onAttach, onClose }: {

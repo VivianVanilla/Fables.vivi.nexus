@@ -239,6 +239,7 @@ export interface CharacterData {
   notes?: string
   backgroundImage?: string
   theme?: string
+  themeCustomColor?: string  // accent color for theme "custom" — see character-themes.ts THEMES
   slotTheme?: string
   slotCustomColor?: string  // accent color for slotTheme "custom" — see character-themes.ts SLOT_THEMES
   slotAnimated?: boolean    // Settings — shimmering iridescent slot bars instead of a flat color
@@ -251,6 +252,7 @@ export interface CharacterData {
   classFeatures?: Feature[]
   items?: Feature[]
   invocations?: Feature[]  // Eldritch Invocations (Warlock)
+  infusions?: Feature[]    // Infusions (Artificer)
   favorites?: FavoriteRef[]
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category (race/class/feat/invocation/spell/equipment/familiar — "item" is deliberately excluded, see STYLING_CATEGORIES), applied everywhere that category renders, not just Favorites
   favoriteCategoryStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: "none" (default/off), "outline" (colored border), or "galaxy" (animated background in that color) — mirrors magicItemStyle
@@ -267,8 +269,8 @@ export interface CharacterData {
   spellsPrepared?: number
   initiativeStat?: string  // ability key e.g. "dex"; default "dex"
   initiativeBonus?: number // flat bonus added to the mod
-  themeMode?: "dark" | "light"
-  themeBg?: string         // background override key from BG_OPTIONS
+  themeBg?: string             // background override key from BG_OPTIONS
+  themeBgCustomColor?: string  // background color for themeBg "custom" — see character-themes.ts BG_OPTIONS
   plainSkills?: boolean    // when true, disable ability-color-coding on skills
   // Proficiencies — entry lists per category (legacy characters may still have
   // these as a single free-text string; components normalize on read).

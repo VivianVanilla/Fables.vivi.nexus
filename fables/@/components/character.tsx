@@ -15,7 +15,7 @@ import type {
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "./character-constants"
 import type { FavoriteCategory } from "./character-constants"
 import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds } from "./character-utils"
-import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS } from "./character-themes"
+import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "./character-themes"
 import type { SlotTheme } from "./character-themes"
 import { loadUserImages, uploadUserImage } from "./imageGallery"
 
@@ -235,9 +235,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.classFeatures ?? []),
     ...(data.items         ?? []),
     ...(data.invocations   ?? []),
+    ...(data.infusions     ?? []),
   ]
 
-  // Which of the five Feature lists a given feature id came from — used only
+  // Which of the six Feature lists a given feature id came from — used only
   // to resolve its Favorites accent category (see FavoritesPanel.tsx); a
   // Feature itself carries no such tag since nothing else needs to tell these
   // lists apart once merged.
@@ -247,6 +248,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   ;(data.classFeatures ?? []).forEach(f => { featureCategoryById[f.id] = "class" })
   ;(data.items         ?? []).forEach(f => { featureCategoryById[f.id] = "item" })
   ;(data.invocations   ?? []).forEach(f => { featureCategoryById[f.id] = "invocation" })
+  ;(data.infusions     ?? []).forEach(f => { featureCategoryById[f.id] = "infusion" })
 
   // AC = 10 + chosen ability mod(s) (dual-stat aware), overridden by an equipped "base
   // armor" piece's own base+Dex formula, plus flat bonuses from equipped shields/rings/etc.
@@ -478,7 +480,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function toggleFeatureLink(featureId: string, otherId: string) {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations", "infusions"] as const
     let featureKey: typeof KEYS[number] | null = null
     let otherKey:   typeof KEYS[number] | null = null
     for (const k of KEYS) {
@@ -506,7 +508,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function handleRest(type: "long" | "short" | "dawn") {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations", "infusions"] as const
     const patch: Partial<CharacterData> = {}
     for (const key of KEYS) {
       const features = data[key] ?? []
@@ -538,7 +540,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function patchFeature(id: string, patch: Partial<Feature>) {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations", "infusions"] as const
     const combinedPatch: Partial<CharacterData> = {}
     let linkedIds: string[] = []
     let patchedFeature: Feature | undefined
@@ -576,7 +578,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function removeFeatureGlobal(id: string) {
-    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations"] as const
+    const KEYS = ["racialTraits", "feats", "classFeatures", "items", "invocations", "infusions"] as const
     const patch: Partial<CharacterData> = {}
 
     // Cascade: removing a container also removes everything nested inside it (recursively)
@@ -651,6 +653,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(data.classFeatures ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Feature", refType: "feature" as const })),
     ...(data.items         ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Gear",    refType: "feature" as const })),
     ...(data.invocations   ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Invocation", refType: "feature" as const })),
+    ...(data.infusions     ?? []).filter(f => f.name.toLowerCase().includes(q)).map(f => ({ id: f.id, label: f.name, category: "Infusion",   refType: "feature" as const })),
     ...familiars
       .map(f => ({ id: f.id, label: f.nickname || monsters.find(m => m.id === f.monsterId)?.name || "Familiar", category: "Familiar", refType: "familiar" as const }))
       .filter(f => f.label.toLowerCase().includes(q)),
@@ -658,17 +661,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── COMPUTED THEME / CARD ─────────────────────────────────────────────────
 
-  const theme      = THEMES[data.theme ?? DEFAULT_THEME] ?? THEMES[DEFAULT_THEME]
-  const isLight    = data.themeMode === "light"
-  const effectiveBox  = isLight ? theme.lightBox  : theme.box
-  const effectiveBoxHex = isLight ? theme.lightBoxHex : theme.boxHex
-  const effectiveBody = (() => {
-    const bgKey = data.themeBg ?? "default"
-    const bgOverride = bgKey !== "default" ? (BG_OPTIONS[bgKey]?.body ?? "") : ""
-    if (bgOverride) return bgOverride
-    return isLight ? theme.lightBody : theme.body
-  })()
-  const card       = `rounded-xl ${effectiveBox} ring-1 ${theme.ring}`
+  const baseTheme  = THEMES[data.theme ?? DEFAULT_THEME] ?? THEMES[DEFAULT_THEME]
+  const isCustomTheme = data.theme === CUSTOM_THEME_KEY
+  const customBoxHex  = data.themeCustomColor ?? DEFAULT_ACCENT_COLOR
+  // Custom overrides boxHex/accent with the real picked color (consumers like
+  // FeatureEntry's nebula gradient parse this as a literal hex); box/body
+  // stay the CSS-var-backed classes from THEMES, resolved via the root
+  // element's inline style below.
+  const theme      = isCustomTheme ? { ...baseTheme, boxHex: customBoxHex, accent: customBoxHex } : baseTheme
+  const bgKey       = data.themeBg ?? DEFAULT_BG_THEME
+  const isCustomBg  = bgKey === CUSTOM_THEME_KEY
+  const effectiveBody = BG_OPTIONS[bgKey]?.body || theme.body
+  const card       = `rounded-xl ${theme.box} ring-1 ${theme.ring}`
   const activeSlotKey = data.slotTheme ?? DEFAULT_SLOT_THEME
   const slotTheme: SlotTheme = activeSlotKey === CUSTOM_SLOT_THEME_KEY
     ? { label: "Custom", accent: data.slotCustomColor ?? DEFAULT_ACCENT_COLOR }
@@ -713,7 +717,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ? data.classes.map(c => c.cls).filter(Boolean)
     : (data.class ? [data.class] : [])
 
-  const isWarlock = availableClasses.some(c => c.toLowerCase() === "warlock")
+  const isWarlock   = availableClasses.some(c => c.toLowerCase() === "warlock")
+  const isArtificer = availableClasses.some(c => c.toLowerCase() === "artificer")
 
   const favPanelProps = {
     favorites, spellItems, equipItems, features: allFeatures, familiars, monsters,
@@ -729,7 +734,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     onRemoveFeature: removeFeatureGlobal,
     onLinkToggle: toggleFeatureLink,
     onPopOutFamiliar: togglePopout,
-    theme: { ...theme, box: effectiveBox, boxHex: effectiveBoxHex }, card, readOnly,
+    theme, card, readOnly,
     showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle, magicItemColor: data.magicItemColor,
     magicItemSliderStyle: data.magicItemSliderStyle,
     featureCategoryById,
@@ -1039,9 +1044,25 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // viewport instead of the scaled container.
   const uiScale = data.uiScale ?? 100
 
+  // Custom Card Style / Background colors are picked as plain hex, but `theme.box`
+  // and BG_OPTIONS.custom.body reference these as CSS custom properties (Tailwind
+  // arbitrary-value classes) so the single computed color can flow down to every
+  // card/panel that shares the `card`/`effectiveBody` class strings without
+  // threading an inline style through each one individually.
+  const rootStyle: React.CSSProperties = {
+    ...(uiScale !== 100 ? { zoom: uiScale / 100 } : {}),
+    ...(isCustomTheme ? {
+      "--theme-custom-box": customBoxHex,
+      "--theme-custom-body": darkenHex(customBoxHex, 0.35),
+    } as React.CSSProperties : {}),
+    ...(isCustomBg ? {
+      "--bg-custom-color": data.themeBgCustomColor ?? DEFAULT_ACCENT_COLOR,
+    } as React.CSSProperties : {}),
+  }
+
   return (
     <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-auto ${effectiveBody}`}
-      style={uiScale !== 100 ? { zoom: uiScale / 100 } : undefined}>
+      style={rootStyle}>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
@@ -1109,7 +1130,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         />
       )}
       {showSettingsModal && (
-        <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)} />
+        <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)}
+          isWarlock={isWarlock} isArtificer={isArtificer} />
       )}
 
       {showRestModal && (
@@ -1326,7 +1348,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment}
-            equipmentLinkedIds={equipmentLinkedIds} isWarlock={isWarlock} />
+            equipmentLinkedIds={equipmentLinkedIds} isWarlock={isWarlock} isArtificer={isArtificer} />
         )}
         {activeTab === "familiars" && (
           <FamiliarsTab

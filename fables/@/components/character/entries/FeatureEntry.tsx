@@ -26,7 +26,7 @@ import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
 
-export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation"
+export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation" | "infusion"
 
 export interface Suggestion {
   name: string
@@ -76,9 +76,9 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
 
       homebrew = [...(ownRows ?? [])]
 
-      // Library homebrew — invocations have no "add to library" flow (they're
-      // browsed/created directly under Feats in Documentation), so skip this lookup.
-      if (docType !== "invocation") {
+      // Library homebrew — invocations/infusions have no "add to library" flow
+      // (they'd be browsed/created directly in Documentation), so skip this lookup.
+      if (docType !== "invocation" && docType !== "infusion") {
         const objType = docType === "race" ? "doc_race" : docType === "class" ? "doc_class" : docType === "item" ? "doc_item" : "doc_feat"
         const { data: libObjs } = await supabase
           .from("objects").select("data").eq("type", objType).eq("owner_id", userId)
@@ -105,7 +105,7 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
         if (row.name) results.push({ name: row.name, description: row.data?.description ?? "" })
         continue
       }
-      if (docType === "invocation") {
+      if (docType === "invocation" || docType === "infusion") {
         if (row.name) results.push({
           name: row.name,
           description: row.data?.description ?? "",

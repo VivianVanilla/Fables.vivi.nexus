@@ -41,6 +41,7 @@ interface InfoTabProps {
   subTab: InfoSubTab
   onSubTabChange: (tab: InfoSubTab) => void
   isWarlock: boolean
+  isArtificer: boolean
 }
 
 // ── Sub-component: FeatureList ────────────────────────────────────────────────
@@ -622,7 +623,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
   ["profs",      "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange, isWarlock }: InfoTabProps) {
+export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange, isWarlock, isArtificer }: InfoTabProps) {
 
   const pb = profBonus(data.level ?? 1)
 
@@ -651,11 +652,12 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
     ...(data.classFeatures ?? []),
     ...(data.items         ?? []),
     ...(data.invocations   ?? []),
+    ...(data.infusions     ?? []),
   ]
 
   // ── Feature list helpers ─────────────────────────────────────────────────
 
-  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "items" | "invocations"
+  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "items" | "invocations" | "infusions"
 
   function addFeature(key: FeatureKey, patch?: Partial<Feature>) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "", ...patch }] })
@@ -740,8 +742,10 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
 
       {/* ── Race & Feats (tiled, side-by-side) ───────────────────────────────── */}
 
-      {subTab === "raceFeats" && (
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${isWarlock ? "lg:grid-cols-3" : ""} gap-3 flex-1 min-h-0`}>
+      {subTab === "raceFeats" && (() => {
+        const extraCols = (isWarlock ? 1 : 0) + (isArtificer ? 1 : 0)
+        return (
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${extraCols === 1 ? "lg:grid-cols-3" : extraCols === 2 ? "lg:grid-cols-4" : ""} gap-3 flex-1 min-h-0`}>
           <FeatureList
             items={data.racialTraits ?? []} allFeatures={allFeatures} label="Racial Traits"
             onAdd={() => addFeature("racialTraits")}
@@ -777,8 +781,22 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
               accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")} sliderStyle={favSliderStyle("invocation")}
             />
           )}
+          {isArtificer && (
+            <FeatureList
+              items={data.infusions ?? []} allFeatures={allFeatures} label="Infusions"
+              onAdd={() => addFeature("infusions")}
+              onChange={onChangeFeature}
+              onRemove={onRemoveFeature}
+              onLinkToggle={onLinkToggle}
+              theme={theme} card={card} readOnly={readOnly} pb={pb}
+              suggestionSource="infusion" userId={userId}
+              favorites={favorites} onToggleFavorite={onToggleFavorite}
+              accentColor={favAccentColor("infusion")} accentStyle={favAccentStyle("infusion")} sliderStyle={favSliderStyle("infusion")}
+            />
+          )}
         </div>
-      )}
+        )
+      })()}
 
       {/* ── Class Features ─────────────────────────────────────────────────── */}
 

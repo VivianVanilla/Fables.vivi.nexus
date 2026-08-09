@@ -11,6 +11,7 @@ const BUCKET_LABEL: Record<FeatureBucket, string> = {
   classFeatures: "Class Feature",
   items: "Item",
   invocations: "Invocation",
+  infusions: "Infusion",
 }
 
 function kindLabel(payload: SharePayload) {

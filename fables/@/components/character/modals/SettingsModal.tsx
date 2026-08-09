@@ -1,6 +1,6 @@
 import { Modal } from "../ui/Modal"
 import type { CharacterData } from "../../character-types"
-import { THEMES, DEFAULT_THEME, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS } from "../../character-themes"
+import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME } from "../../character-themes"
 import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, UI_SCALES, type CardStyle } from "../../character-constants"
 import { deriveCharacterClassNames, classLabel } from "../../character-class-colors"
 
@@ -8,6 +8,8 @@ interface Props {
   data: CharacterData
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
+  isWarlock: boolean    // gates the Invocations Feature Styling row below
+  isArtificer: boolean  // gates the Infusions Feature Styling row below
 }
 
 // One None/Outline(or Flat)/Animated toggle group, shared by every Feature
@@ -30,11 +32,12 @@ function StyleToggle({ label, value, onChange, slider }: { label: string; value:
   )
 }
 
-export function SettingsModal({ data, onUpdate, onClose }: Props) {
+export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer }: Props) {
   const activeThemeKey = data.theme     ?? DEFAULT_THEME
   const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
-  const activeBgKey    = data.themeBg   ?? "default"
-  const mode           = data.themeMode ?? "dark"
+  const activeBgKey    = data.themeBg   ?? DEFAULT_BG_THEME
+  const themeCustomColor = data.themeCustomColor ?? DEFAULT_ACCENT_COLOR
+  const themeBgCustomColor = data.themeBgCustomColor ?? DEFAULT_ACCENT_COLOR
   const slotCustomColor = data.slotCustomColor ?? DEFAULT_ACCENT_COLOR
   const classNames      = deriveCharacterClassNames(data)
   const uiScale         = data.uiScale ?? 100
@@ -45,16 +48,6 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
 
         <div className="px-5 py-3 border-b border-white/10 shrink-0 flex items-center justify-between gap-3">
           <p className="text-base font-bold text-white">Settings</p>
-          <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-            <button type="button" onClick={() => onUpdate({ themeMode: "dark" })}
-              className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "dark" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              🌙 Dark
-            </button>
-            <button type="button" onClick={() => onUpdate({ themeMode: "light" })}
-              className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${mode === "light" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              ☀ Bright
-            </button>
-          </div>
           <button type="button" onClick={onClose}
             className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">✕</button>
         </div>
@@ -66,21 +59,37 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Card Style</p>
             <div className="grid grid-cols-5 gap-1.5">
               {Object.entries(THEMES).map(([key, t]) => {
-                const isActive  = key === activeThemeKey
-                const bodyClass = mode === "light" ? t.lightBody : t.body
-                const boxClass  = mode === "light" ? t.lightBox  : t.box
+                const isActive = key === activeThemeKey
+                const isCustom = key === CUSTOM_THEME_KEY
                 return (
                   <button key={key} type="button" onClick={() => onUpdate({ theme: key })}
                     className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
                     <div className="size-6 rounded-full border border-white/20 shrink-0 relative overflow-hidden">
-                      <div className={`absolute inset-0 ${bodyClass}`} />
-                      <div className={`absolute inset-0.5 rounded-full ${boxClass}`} />
+                      {isCustom ? (
+                        <>
+                          <div className="absolute inset-0" style={{ backgroundColor: themeCustomColor }} />
+                          <div className="absolute inset-0.5 rounded-full" style={{ backgroundColor: themeCustomColor }} />
+                        </>
+                      ) : (
+                        <>
+                          <div className={`absolute inset-0 ${t.body}`} />
+                          <div className={`absolute inset-0.5 rounded-full ${t.box}`} />
+                        </>
+                      )}
                     </div>
                     <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{t.label}</span>
                   </button>
                 )
               })}
             </div>
+            {activeThemeKey === CUSTOM_THEME_KEY && (
+              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer px-1">
+                Custom color
+                <input type="color" value={themeCustomColor}
+                  onChange={e => onUpdate({ themeCustomColor: e.target.value })}
+                  className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+              </label>
+            )}
           </div>
 
           {/* Background */}
@@ -88,17 +97,26 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Background</p>
             <div className="grid grid-cols-5 gap-1.5">
               {Object.entries(BG_OPTIONS).map(([key, bg]) => {
-                const isActive    = key === activeBgKey
-                const swatchClass = bg.body || (mode === "light" ? THEMES[activeThemeKey]?.lightBody : THEMES[activeThemeKey]?.body) || "bg-zinc-950"
+                const isActive = key === activeBgKey
+                const isCustom = key === CUSTOM_THEME_KEY
                 return (
                   <button key={key} type="button" onClick={() => onUpdate({ themeBg: key })}
                     className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
-                    <div className={`size-6 rounded-full border border-white/20 shrink-0 ${swatchClass}`} />
+                    <div className={`size-6 rounded-full border border-white/20 shrink-0 ${isCustom ? "" : bg.body}`}
+                      style={isCustom ? { backgroundColor: themeBgCustomColor } : undefined} />
                     <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{bg.label}</span>
                   </button>
                 )
               })}
             </div>
+            {activeBgKey === CUSTOM_THEME_KEY && (
+              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer px-1">
+                Custom color
+                <input type="color" value={themeBgCustomColor}
+                  onChange={e => onUpdate({ themeBgCustomColor: e.target.value })}
+                  className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+              </label>
+            )}
           </div>
 
           {/* Spell slot color */}
@@ -203,7 +221,7 @@ export function SettingsModal({ data, onUpdate, onClose }: Props) {
               </div>
 
               {/* One row per Feature Stylings category */}
-              {STYLING_CATEGORIES.map(cat => {
+              {STYLING_CATEGORIES.filter(cat => (cat !== "invocation" || isWarlock) && (cat !== "infusion" || isArtificer)).map(cat => {
                 const style       = data.favoriteCategoryStyle?.[cat] ?? "none"
                 const sliderStyle = data.favoriteCategorySliderStyle?.[cat] ?? style
                 const color       = data.favoriteCategoryColors?.[cat] ?? DEFAULT_ACCENT_COLOR
