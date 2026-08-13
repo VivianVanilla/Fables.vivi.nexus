@@ -18,13 +18,31 @@ import { PortraitModal } from "../character/modals/PortraitModal"
 import { Modal } from "../character/ui/Modal"
 import type { MapPinNote } from "./useMapBoard"
 
-const NOTE_COLORS = ["bg-amber-200", "bg-rose-200", "bg-sky-200", "bg-lime-200", "bg-violet-200", "bg-orange-200", "bg-cyan-200", "bg-fuchsia-200"]
+// `fade` mirrors `bg` (as a gradient "from" stop) so a long note's cutoff
+// fades into its own card color instead of a mismatched one.
+const NOTE_STYLES = [
+  { bg: "bg-amber-200", fade: "from-amber-200" },
+  { bg: "bg-rose-200", fade: "from-rose-200" },
+  { bg: "bg-sky-200", fade: "from-sky-200" },
+  { bg: "bg-lime-200", fade: "from-lime-200" },
+  { bg: "bg-violet-200", fade: "from-violet-200" },
+  { bg: "bg-orange-200", fade: "from-orange-200" },
+  { bg: "bg-cyan-200", fade: "from-cyan-200" },
+  { bg: "bg-fuchsia-200", fade: "from-fuchsia-200" },
+]
 const ROTATIONS = ["-rotate-2", "rotate-1", "-rotate-1", "rotate-2", "rotate-0", "rotate-2"]
 function pick<T>(arr: T[], seed: string): T {
   let h = 0
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
   return arr[h % arr.length]
 }
+
+// A long note left unclipped would grow the card to match, and flex's
+// default cross-axis stretch would then blow up every other card in that
+// row to match it — the "ruins the board" case. Past this length, clip the
+// preview and fade it out; the card is still a click away from the full
+// text (see the expanded-note modal below).
+const LONG_NOTE_THRESHOLD = 280
 
 function insertImageMd(draft: string, url: string) {
   return draft + (draft && !draft.endsWith("\n") ? "\n" : "") + `![image](${url})`
@@ -88,6 +106,25 @@ export function MapNotesPanel({
     if (!body) return
     onEditNote(id, body)
     setEditingNoteId(null)
+  }
+
+  function renderNoteContent(note: MapPinNote) {
+    const long = note.content.length > LONG_NOTE_THRESHOLD
+    return (
+      <div onClick={e => handleContentClick(e, note)}
+        className={`cursor-pointer [&_img]:cursor-zoom-in ${long ? "relative max-h-52 overflow-y-auto" : ""}`}>
+        <Markdown text={note.content} tone="paper" size="xs" />
+        {/* Scrollbar chrome is hidden globally (see index.css) — content is
+            still scrollable, just without a visible track/thumb. This hint
+            fades with the rest of the content as soon as you start
+            scrolling, rather than sitting pinned over it. */}
+        {long && (
+          <div className={`absolute inset-x-0 bottom-0 h-10 flex items-end justify-center pb-1 bg-gradient-to-t ${pick(NOTE_STYLES, note.id).fade} to-transparent pointer-events-none rounded-b-md`}>
+            <span className="text-[10px] font-semibold text-zinc-700/70">Scroll for more…</span>
+          </div>
+        )}
+      </div>
+    )
   }
 
   // Right-click (or the always-visible "⋮" on touch) opens a small Edit/
@@ -178,13 +215,13 @@ export function MapNotesPanel({
         <p className="text-sm text-white/40 italic text-center mt-6">No notes here yet — be the first to leave one.</p>
       )}
 
-      <div className="flex flex-wrap gap-4 pb-4">
+      <div className="flex flex-wrap items-start gap-4 pb-4">
         {sortedNotes.map(note => {
           const isEditingNote = editingNoteId === note.id
           const isConfirmingDeleteNote = confirmingDeleteNoteId === note.id
           return (
             <div key={note.id} onContextMenu={e => onCardContextMenu(e, note)}
-              className={`w-60 shrink-0 rounded-lg shadow-lg p-3 ${pick(NOTE_COLORS, note.id)} ${isEditingNote ? "rotate-0" : pick(ROTATIONS, note.id)} hover:rotate-0 hover:scale-[1.03] transition-transform`}>
+              className={`w-60 shrink-0 rounded-lg shadow-lg p-3 ${pick(NOTE_STYLES, note.id).bg} ${isEditingNote ? "rotate-0" : pick(ROTATIONS, note.id)} hover:rotate-0 hover:scale-[1.03] transition-transform`}>
               <div className="flex items-baseline gap-1.5 mb-1.5">
                 <span className="text-xs font-bold text-zinc-800 truncate">{note.owner_name}</span>
                 <span className="text-[10px] text-zinc-600/70 shrink-0 ml-auto">
@@ -221,7 +258,7 @@ export function MapNotesPanel({
                 </div>
               ) : isConfirmingDeleteNote ? (
                 <div>
-                  <Markdown text={note.content} tone="paper" size="xs" />
+                  {renderNoteContent(note)}
                   <div className="flex items-center gap-1.5 mt-2">
                     <span className="text-[10px] text-zinc-700">Delete note?</span>
                     <button type="button" onClick={() => { onDeleteNote(note.id); setConfirmingDeleteNoteId(null) }}
@@ -232,11 +269,7 @@ export function MapNotesPanel({
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div onClick={e => handleContentClick(e, note)} className="cursor-pointer [&_img]:cursor-zoom-in">
-                  <Markdown text={note.content} tone="paper" size="xs" />
-                </div>
-              )}
+              ) : renderNoteContent(note)}
             </div>
           )
         })}
@@ -283,7 +316,7 @@ export function MapNotesPanel({
           clicking one opens a much bigger, easier-to-read version. */}
       {expandedNote && (
         <Modal onClose={() => setExpandedNoteId(null)}>
-          <div className={`w-[min(90vw,42rem)] max-h-[85vh] overflow-y-auto rounded-xl shadow-2xl p-6 ${pick(NOTE_COLORS, expandedNote.id)}`}>
+          <div className={`w-[min(90vw,42rem)] max-h-[85vh] overflow-y-auto rounded-xl shadow-2xl p-6 ${pick(NOTE_STYLES, expandedNote.id).bg}`}>
             <div className="flex items-baseline gap-2 mb-3">
               <span className="text-sm font-bold text-zinc-800">{expandedNote.owner_name}</span>
               <span className="text-xs text-zinc-600/70">
