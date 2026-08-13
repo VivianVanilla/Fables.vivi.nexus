@@ -1,14 +1,3 @@
-// ════════════════════════════════════════════════════════════════════════════
-// MapOverlay.tsx — full-screen "mountain range map" surface for party KOQK21,
-// opened from the "Mountain Range Map" button in PartyServer.tsx's rail
-// (only rendered for that party). Renders hjolland.svg as a
-// pannable/zoomable backdrop (piggybacking on the old Party Notes canvas's
-// pan/zoom + drag mechanics, see useMapPanZoom), with draggable pins
-// ("pings") that open MapPinViewer on click, a single shared "currently
-// here" token any party member can drag, and a freehand paint layer for
-// color-coding regions underneath the (white) linework. All state is live
-// via useMapBoard.
-// ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus } from "lucide-react"
@@ -63,7 +52,7 @@ export function MapOverlay({
   onClose: () => void
 }) {
   const { members, dmUserId } = usePartyRoster(partyCode)
-  const { pins, notes, token, strokes, createPin, movePin, renamePin, recolorPin, deletePin, addNote, deleteNote, moveToken, addStroke, deleteStroke } = useMapBoard(partyCode, currentUserId)
+  const { pins, notes, token, strokes, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote, moveToken, addStroke, deleteStroke } = useMapBoard(partyCode, currentUserId)
   const pz = useMapPanZoom({ x: 0, y: 0 })
 
   // "move" gates pin dragging behind a deliberate toggle — without it, a
@@ -466,6 +455,7 @@ export function MapOverlay({
           onChangeColor={color => recolorPin(openPin.id, color)}
           onDeletePin={() => { deletePin(openPin.id); setOpenPinId(null) }}
           onAddNote={content => addNote(openPin.id, currentUserName, content)}
+          onEditNote={editNote}
           onDeleteNote={deleteNote}
         />
       )}

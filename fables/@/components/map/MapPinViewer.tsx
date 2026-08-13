@@ -23,7 +23,7 @@ function avatarColor(seed: string) {
 }
 
 export function MapPinViewer({
-  pin, notes, currentUserId, isDM, onClose, onRename, onChangeColor, onDeletePin, onAddNote, onDeleteNote,
+  pin, notes, currentUserId, isDM, onClose, onRename, onChangeColor, onDeletePin, onAddNote, onEditNote, onDeleteNote,
 }: {
   pin: MapPin
   notes: MapPinNote[]
@@ -34,6 +34,7 @@ export function MapPinViewer({
   onChangeColor: (color: string) => void
   onDeletePin: () => void
   onAddNote: (content: string) => void
+  onEditNote: (id: string, content: string) => void
   onDeleteNote: (id: string) => void
 }) {
   const canManagePin = pin.owner_id === currentUserId || isDM
@@ -43,6 +44,9 @@ export function MapPinViewer({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [noteDraft, setNoteDraft] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteEditDraft, setNoteEditDraft] = useState("")
+  const [confirmingDeleteNoteId, setConfirmingDeleteNoteId] = useState<string | null>(null)
 
   const sortedNotes = [...notes].sort((a, b) => a.created_at.localeCompare(b.created_at))
 
@@ -57,6 +61,19 @@ export function MapPinViewer({
     if (!body) return
     onAddNote(body)
     setNoteDraft("")
+  }
+
+  function startEditNote(note: MapPinNote) {
+    setConfirmingDeleteNoteId(null)
+    setEditingNoteId(note.id)
+    setNoteEditDraft(note.content)
+  }
+
+  function saveEditNote(id: string) {
+    const body = noteEditDraft.trim()
+    if (!body) return
+    onEditNote(id, body)
+    setEditingNoteId(null)
   }
 
   // Paste an image straight from the clipboard into a note — uploads it to
@@ -144,28 +161,71 @@ export function MapPinViewer({
             <p className="text-sm text-white/40 italic text-center mt-10">No notes here yet — be the first to leave one.</p>
           )}
           <div className="flex flex-col gap-3 pb-4">
-            {sortedNotes.map(note => (
-              <div key={note.id} className="group flex items-start gap-2.5">
-                <div className={`size-7 shrink-0 rounded-full ${avatarColor(note.owner_id)} flex items-center justify-center text-[10px] font-bold text-white mt-0.5`}>
-                  {initials(note.owner_name)}
-                </div>
-                <div className="flex-1 min-w-0 bg-zinc-900 rounded-xl px-3 py-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-semibold text-white">{note.owner_name}</span>
-                    <span className="text-[10px] text-white/35">
-                      {new Date(note.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    {(note.owner_id === currentUserId || isDM) && (
-                      <button type="button" onClick={() => onDeleteNote(note.id)} title="Delete note"
-                        className="ml-auto text-white/30 hover:text-red-300 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity">
-                        <Trash2 className="size-3.5" />
-                      </button>
+            {sortedNotes.map(note => {
+              const canManageNote = note.owner_id === currentUserId || isDM
+              const isEditingNote = editingNoteId === note.id
+              const isConfirmingDeleteNote = confirmingDeleteNoteId === note.id
+              return (
+                <div key={note.id} className="group flex items-start gap-2.5">
+                  <div className={`size-7 shrink-0 rounded-full ${avatarColor(note.owner_id)} flex items-center justify-center text-[10px] font-bold text-white mt-0.5`}>
+                    {initials(note.owner_name)}
+                  </div>
+                  <div className="flex-1 min-w-0 bg-zinc-900 rounded-xl px-3 py-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-semibold text-white">{note.owner_name}</span>
+                      <span className="text-[10px] text-white/35">
+                        {new Date(note.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      {canManageNote && !isEditingNote && (
+                        isConfirmingDeleteNote ? (
+                          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] text-white/60">Delete note?</span>
+                            <button type="button" onClick={() => { onDeleteNote(note.id); setConfirmingDeleteNoteId(null) }}
+                              className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-500/80 hover:bg-red-500 text-white font-semibold transition-colors">Delete</button>
+                            <button type="button" onClick={() => setConfirmingDeleteNoteId(null)} title="Cancel"
+                              className="text-white/40 hover:text-white transition-colors">
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="ml-auto flex items-center gap-1.5 opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity">
+                            <button type="button" onClick={() => startEditNote(note)} title="Edit note"
+                              className="text-white/30 hover:text-white transition-colors">
+                              <Pencil className="size-3.5" />
+                            </button>
+                            <button type="button" onClick={() => setConfirmingDeleteNoteId(note.id)} title="Delete note"
+                              className="text-white/30 hover:text-red-300 transition-colors">
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        )
+                      )}
+                    </div>
+                    {isEditingNote ? (
+                      <div className="mt-1">
+                        <textarea
+                          autoFocus value={noteEditDraft} onChange={e => setNoteEditDraft(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEditNote(note.id) }
+                            if (e.key === "Escape") setEditingNoteId(null)
+                          }}
+                          rows={1}
+                          className="w-full resize-none max-h-32 overflow-y-auto bg-white/10 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:bg-white/15 transition-colors leading-snug"
+                        />
+                        <div className="flex justify-end gap-2 mt-1">
+                          <button type="button" onClick={() => setEditingNoteId(null)}
+                            className="text-[10px] px-2 py-1 rounded-lg text-white/50 hover:text-white transition-colors">Cancel</button>
+                          <button type="button" onClick={() => saveEditNote(note.id)} disabled={!noteEditDraft.trim()}
+                            className="text-[10px] px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold disabled:opacity-30 transition-colors">Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Markdown text={note.content} tone="dark" size="sm" />
                     )}
                   </div>
-                  <Markdown text={note.content} tone="dark" size="sm" />
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

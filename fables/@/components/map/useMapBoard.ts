@@ -107,6 +107,8 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
         payload => { const old = payload.old as Partial<MapPin>; if (old.id) setPins(prev => prev.filter(p => p.id !== old.id)) })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "map_pin_notes", filter },
         payload => { const row = payload.new as MapPinNote; setNotes(prev => prev.some(n => n.id === row.id) ? prev : [...prev, row]) })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "map_pin_notes", filter },
+        payload => { const row = payload.new as MapPinNote; setNotes(prev => prev.map(n => n.id === row.id ? row : n)) })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "map_pin_notes", filter },
         payload => { const old = payload.old as Partial<MapPinNote>; if (old.id) setNotes(prev => prev.filter(n => n.id !== old.id)) })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "map_tokens", filter },
@@ -166,6 +168,12 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     return row
   }
 
+  async function editNote(id: string, content: string) {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, content } : n))
+    const { error } = await supabase.from("map_pin_notes").update({ content }).eq("id", id)
+    if (error) console.error("edit note error:", error)
+  }
+
   async function deleteNote(id: string) {
     setNotes(prev => prev.filter(n => n.id !== id))
     const { error } = await supabase.from("map_pin_notes").delete().eq("id", id)
@@ -198,5 +206,5 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     if (error) console.error("delete stroke error:", error)
   }
 
-  return { pins, notes, token, strokes, loaded, createPin, movePin, renamePin, recolorPin, deletePin, addNote, deleteNote, moveToken, addStroke, deleteStroke }
+  return { pins, notes, token, strokes, loaded, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote, moveToken, addStroke, deleteStroke }
 }
