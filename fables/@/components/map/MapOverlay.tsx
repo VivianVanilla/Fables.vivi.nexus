@@ -432,6 +432,9 @@ export function MapOverlay({
                     style={{ backgroundColor: color }}
                     className={`size-5 rounded-full transition-transform ${pinColorDraft === color ? "ring-2 ring-offset-2 ring-offset-card ring-foreground scale-110" : "hover:scale-110"}`} />
                 ))}
+                <input type="color" value={pinColorDraft} title="Custom color"
+                  onChange={e => setPinColorDraft(e.target.value)}
+                  className="size-6 rounded-md border border-border bg-transparent cursor-pointer p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none" />
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setPendingPin(null)}

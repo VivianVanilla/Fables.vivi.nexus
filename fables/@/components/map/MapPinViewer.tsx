@@ -131,6 +131,9 @@ export function MapPinViewer({
                       style={{ backgroundColor: color }}
                       className={`size-5 rounded-full transition-transform ${pin.color === color ? "ring-2 ring-offset-2 ring-offset-zinc-900 ring-white scale-110" : "hover:scale-110"}`} />
                   ))}
+                  <input type="color" value={pin.color} title="Custom color"
+                    onChange={e => onChangeColor(e.target.value)}
+                    className="size-6 rounded-md border border-white/10 bg-transparent cursor-pointer p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none" />
                 </div>
               )}
             </>
