@@ -36,8 +36,16 @@ export interface MapPinNote {
   created_at: string
 }
 
+// `kind` distinguishes the one-per-party "currently here" dot ("here",
+// name/image_url unused) from user-created trackers ("tracker" — any
+// number per party, each with a name and an uploaded image).
 export interface MapToken {
+  id: string
   party_code: string
+  kind: "here" | "tracker"
+  name: string | null
+  image_url: string | null
+  owner_id: string | null
   x: number
   y: number
   updated_by: string | null
@@ -65,7 +73,7 @@ export interface MapStroke {
 export function useMapBoard(partyCode: string, currentUserId: string) {
   const [pins, setPins] = useState<MapPin[]>([])
   const [notes, setNotes] = useState<MapPinNote[]>([])
-  const [token, setToken] = useState<MapToken | null>(null)
+  const [tokens, setTokens] = useState<MapToken[]>([])
   const [strokes, setStrokes] = useState<MapStroke[]>([])
   const [loaded, setLoaded] = useState(false)
   const suffix = useChannelSuffix()
@@ -77,17 +85,17 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     Promise.all([
       supabase.from("map_pins").select("*").eq("party_code", partyCode),
       supabase.from("map_pin_notes").select("*").eq("party_code", partyCode),
-      supabase.from("map_tokens").select("*").eq("party_code", partyCode).maybeSingle(),
+      supabase.from("map_tokens").select("*").eq("party_code", partyCode),
       supabase.from("map_strokes").select("*").eq("party_code", partyCode).order("created_at", { ascending: true }),
     ]).then(([p, n, t, s]) => {
       if (cancelled) return
       if (p.error) console.error("map pins load error:", p.error)
       if (n.error) console.error("map pin notes load error:", n.error)
-      if (t.error) console.error("map token load error:", t.error)
+      if (t.error) console.error("map tokens load error:", t.error)
       if (s.error) console.error("map strokes load error:", s.error)
       if (p.data) setPins(p.data as MapPin[])
       if (n.data) setNotes(n.data as MapPinNote[])
-      if (t.data) setToken(t.data as MapToken)
+      if (t.data) setTokens(t.data as MapToken[])
       if (s.data) setStrokes(s.data as MapStroke[])
       setLoaded(true)
     })
@@ -112,9 +120,11 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "map_pin_notes", filter },
         payload => { const old = payload.old as Partial<MapPinNote>; if (old.id) setNotes(prev => prev.filter(n => n.id !== old.id)) })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "map_tokens", filter },
-        payload => { setToken(payload.new as MapToken) })
+        payload => { const row = payload.new as MapToken; setTokens(prev => prev.some(t => t.id === row.id) ? prev : [...prev, row]) })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "map_tokens", filter },
-        payload => { setToken(payload.new as MapToken) })
+        payload => { const row = payload.new as MapToken; setTokens(prev => prev.map(t => t.id === row.id ? row : t)) })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "map_tokens", filter },
+        payload => { const old = payload.old as Partial<MapToken>; if (old.id) setTokens(prev => prev.filter(t => t.id !== old.id)) })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "map_strokes", filter },
         payload => { const row = payload.new as MapStroke; setStrokes(prev => prev.some(s => s.id === row.id) ? prev : [...prev, row]) })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "map_strokes", filter },
@@ -180,14 +190,51 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     if (error) console.error("delete note error:", error)
   }
 
-  // Upserted (not inserted) — there's only ever one token row per party.
-  async function moveToken(x: number, y: number) {
-    setToken(prev => ({ party_code: partyCode, x, y, updated_by: currentUserId, updated_at: prev?.updated_at ?? new Date().toISOString() }))
-    const { data, error } = await supabase.from("map_tokens")
-      .upsert({ party_code: partyCode, x, y, updated_by: currentUserId, updated_at: new Date().toISOString() })
-      .select().single()
-    if (error) { console.error("move token error:", error); return }
-    setToken(data as MapToken)
+  // Repositions any existing token row (the "here" dot or a tracker) — the
+  // row already exists by this point, so a plain UPDATE by id is enough.
+  async function moveToken(id: string, x: number, y: number) {
+    setTokens(prev => prev.map(t => t.id === id ? { ...t, x, y, updated_by: currentUserId, updated_at: new Date().toISOString() } : t))
+    const { error } = await supabase.from("map_tokens")
+      .update({ x, y, updated_by: currentUserId, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) console.error("move token error:", error)
+  }
+
+  // First placement of the one-per-party "here" dot — inserts it, since
+  // unlike moveToken there's no existing row/id yet. Once placed, dragging
+  // it goes through moveToken like everything else.
+  async function placeHereToken(x: number, y: number) {
+    const { data, error } = await supabase.from("map_tokens").insert({
+      party_code: partyCode, kind: "here", x, y, updated_by: currentUserId,
+    }).select().single()
+    if (error) { console.error("place token error:", error); return }
+    setTokens(prev => [...prev, data as MapToken])
+  }
+
+  // User-created trackers (name + uploaded image) — any number per party,
+  // each an independent draggable marker synced the same way as the "here"
+  // dot. Rename/delete are gated client-side (see MapOverlay) to the
+  // tracker's creator or the DM.
+  async function createTracker(name: string, imageUrl: string, x: number, y: number) {
+    const { data, error } = await supabase.from("map_tokens").insert({
+      party_code: partyCode, kind: "tracker", name, image_url: imageUrl, owner_id: currentUserId, x, y, updated_by: currentUserId,
+    }).select().single()
+    if (error) { console.error("create tracker error:", error); return null }
+    const row = data as MapToken
+    setTokens(prev => [...prev, row])
+    return row
+  }
+
+  async function renameTracker(id: string, name: string) {
+    setTokens(prev => prev.map(t => t.id === id ? { ...t, name } : t))
+    const { error } = await supabase.from("map_tokens").update({ name }).eq("id", id)
+    if (error) console.error("rename tracker error:", error)
+  }
+
+  async function deleteTracker(id: string) {
+    setTokens(prev => prev.filter(t => t.id !== id))
+    const { error } = await supabase.from("map_tokens").delete().eq("id", id)
+    if (error) console.error("delete tracker error:", error)
   }
 
   async function addStroke(color: string, size: number, erase: boolean, points: StrokePoint[]) {
@@ -206,5 +253,10 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     if (error) console.error("delete stroke error:", error)
   }
 
-  return { pins, notes, token, strokes, loaded, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote, moveToken, addStroke, deleteStroke }
+  return {
+    pins, notes, tokens, strokes, loaded,
+    createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
+    moveToken, placeHereToken, createTracker, renameTracker, deleteTracker,
+    addStroke, deleteStroke,
+  }
 }

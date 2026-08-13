@@ -1,10 +1,12 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus } from "lucide-react"
+import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Check, Trash2 } from "lucide-react"
 import { usePartyRoster } from "../party/usePartyServer"
 import { useMapPanZoom } from "./useMapPanZoom"
 import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint } from "./useMapBoard"
 import { MapPinViewer } from "./MapPinViewer"
+import { uploadUserImage, loadUserImages, type GalleryImage } from "../imageGallery"
+import { PortraitModal } from "../character/modals/PortraitModal"
 
 // Served straight from public/ (like favicon.svg — see index.html) rather
 // than imported, since Vite copies public/ assets as-is instead of
@@ -52,18 +54,30 @@ export function MapOverlay({
   onClose: () => void
 }) {
   const { members, dmUserId } = usePartyRoster(partyCode)
-  const { pins, notes, token, strokes, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote, moveToken, addStroke, deleteStroke } = useMapBoard(partyCode, currentUserId)
+  const {
+    pins, notes, tokens, strokes, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
+    moveToken, placeHereToken, createTracker, renameTracker, deleteTracker, addStroke, deleteStroke,
+  } = useMapBoard(partyCode, currentUserId)
   const pz = useMapPanZoom({ x: 0, y: 0 })
 
-  // "move" gates pin dragging behind a deliberate toggle — without it, a
-  // stray drag while just trying to click a pin open was repositioning it,
-  // which was annoying. The token is unaffected: it's meant to be freely
-  // draggable at all times. "paint" click-drags a freehand brush stroke
-  // instead of panning.
-  const [mode, setMode] = useState<"idle" | "drop" | "move" | "paint">("idle")
+  // "move" gates pin/tracker dragging behind a deliberate toggle — without
+  // it, a stray drag while just trying to click one open was repositioning
+  // it, which was annoying. The "here" token is unaffected: it's meant to be
+  // freely draggable at all times. "paint" click-drags a freehand brush
+  // stroke instead of panning. "track" click-places a new image tracker.
+  const [mode, setMode] = useState<"idle" | "drop" | "move" | "paint" | "track">("idle")
   const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null)
   const [pinNameDraft, setPinNameDraft] = useState("")
   const [pinColorDraft, setPinColorDraft] = useState(DEFAULT_PIN_COLOR)
+  const [pendingTracker, setPendingTracker] = useState<{ x: number; y: number } | null>(null)
+  const [trackerNameDraft, setTrackerNameDraft] = useState("")
+  const [trackerImageUrl, setTrackerImageUrl] = useState("")
+  const [uploadingTrackerImage, setUploadingTrackerImage] = useState(false)
+  const [showTrackerImagePicker, setShowTrackerImagePicker] = useState(false)
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
+  const [openTrackerMenuId, setOpenTrackerMenuId] = useState<string | null>(null)
+  const [trackerRenameDraft, setTrackerRenameDraft] = useState("")
   const [brushColor, setBrushColor] = useState(DEFAULT_PIN_COLOR)
   const [erasing, setErasing] = useState(false)
   const [brushSize, setBrushSize] = useState(() => {
@@ -77,9 +91,12 @@ export function MapOverlay({
   const dragStart = useRef<{ x: number; y: number } | null>(null)
   const paintCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const currentStroke = useRef<StrokePoint[] | null>(null)
+  const trackerImageInputRef = useRef<HTMLInputElement | null>(null)
 
   const openPin = pins.find(p => p.id === openPinId) ?? null
   const myLastStroke = [...strokes].reverse().find(s => s.owner_id === currentUserId)
+  const hereToken = tokens.find(t => t.kind === "here") ?? null
+  const trackerTokens = tokens.filter(t => t.kind === "tracker")
 
   function resolveOwnerName(ownerId: string) {
     if (ownerId === currentUserId) return "You"
@@ -167,12 +184,14 @@ export function MapOverlay({
     function handler(e: KeyboardEvent) {
       if (e.key !== "Escape") return
       if (pendingPin) { setPendingPin(null); return }
+      if (pendingTracker) { setPendingTracker(null); return }
+      if (openTrackerMenuId) { setOpenTrackerMenuId(null); return }
       if (openPinId) { setOpenPinId(null); return }
       onClose()
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [pendingPin, openPinId, onClose])
+  }, [pendingPin, pendingTracker, openTrackerMenuId, openPinId, onClose])
 
   // dragStart tracks the background mousedown/touchstart that a click needs
   // to trace back to before it's trusted as "drop a pin here" — pins/token
@@ -213,14 +232,20 @@ export function MapOverlay({
     pz.onSurfaceTouchMove(e)
   }
   function onSurfaceClick(e: React.MouseEvent) {
-    if (mode !== "drop") return
+    if (mode !== "drop" && mode !== "track") return
     const start = dragStart.current
     dragStart.current = null
     if (!start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return
     const { x, y } = pz.toWorld(e.clientX, e.clientY)
-    setPendingPin({ x: x - PIN_SIZE / 2, y: y - PIN_SIZE / 2 })
-    setPinNameDraft("")
-    setPinColorDraft(DEFAULT_PIN_COLOR)
+    if (mode === "drop") {
+      setPendingPin({ x: x - PIN_SIZE / 2, y: y - PIN_SIZE / 2 })
+      setPinNameDraft("")
+      setPinColorDraft(DEFAULT_PIN_COLOR)
+    } else {
+      setPendingTracker({ x: x - TOKEN_SIZE / 2, y: y - TOKEN_SIZE / 2 })
+      setTrackerNameDraft("")
+      setTrackerImageUrl("")
+    }
   }
   async function confirmPendingPin() {
     const name = pinNameDraft.trim()
@@ -230,13 +255,50 @@ export function MapOverlay({
     setPinNameDraft("")
     setMode("idle")
   }
+  async function confirmPendingTracker() {
+    const name = trackerNameDraft.trim()
+    if (!name || !trackerImageUrl || !pendingTracker) return
+    await createTracker(name, trackerImageUrl, pendingTracker.x, pendingTracker.y)
+    setPendingTracker(null)
+    setTrackerNameDraft("")
+    setTrackerImageUrl("")
+    setMode("idle")
+  }
+  // "Upload new" inside the gallery picker below — still goes through the
+  // account's shared image storage (see imageGallery.ts), just reached via
+  // the same gallery-picker UX every other picture picker in the app uses
+  // (PortraitModal) rather than a bare file input.
+  async function openTrackerImagePicker() {
+    setShowTrackerImagePicker(true)
+    setGalleryLoading(true)
+    setGalleryImages(await loadUserImages(currentUserId))
+    setGalleryLoading(false)
+  }
+  async function uploadTrackerImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingTrackerImage(true)
+    const url = await uploadUserImage(currentUserId, file)
+    if (url) setTrackerImageUrl(url)
+    setUploadingTrackerImage(false)
+    setShowTrackerImagePicker(false)
+    e.target.value = ""
+  }
+  function onTrackerClick(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
+    if (pz.shouldSuppressClick(id)) return
+    const t = trackerTokens.find(tt => tt.id === id)
+    if (!t || (t.owner_id !== currentUserId && !isDM)) return
+    setOpenTrackerMenuId(prev => prev === id ? null : id)
+    setTrackerRenameDraft(t.name ?? "")
+  }
 
   function onSurfaceUp() {
     if (currentStroke.current) { endStroke(); return }
     const moved = pz.onSurfaceMouseUp()
     setDraggingId(null)
     if (!moved) return
-    if (moved.id === "token") moveToken(moved.x, moved.y)
+    if (tokens.some(t => t.id === moved.id)) moveToken(moved.id, moved.x, moved.y)
     else movePin(moved.id, moved.x, moved.y)
   }
   function onSurfaceTouchEnd() {
@@ -244,7 +306,7 @@ export function MapOverlay({
     const moved = pz.onSurfaceTouchEnd()
     setDraggingId(null)
     if (!moved) return
-    if (moved.id === "token") moveToken(moved.x, moved.y)
+    if (tokens.some(t => t.id === moved.id)) moveToken(moved.id, moved.x, moved.y)
     else movePin(moved.id, moved.x, moved.y)
   }
 
@@ -267,6 +329,11 @@ export function MapOverlay({
           title="Toggle whether pins can be dragged"
           className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors shrink-0 ${mode === "move" ? "bg-violet-500/25 text-violet-200" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/80"}`}>
           <Move className="size-3.5" /> {mode === "move" ? "Drag pins to reposition…" : "Move Pins"}
+        </button>
+        <button type="button" onClick={() => setMode(m => m === "track" ? "idle" : "track")}
+          title="Drop a named, picture-backed marker — for tracking people, monsters, whatever needs tracking"
+          className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors shrink-0 ${mode === "track" ? "bg-violet-500/25 text-violet-200" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/80"}`}>
+          <ImagePlus className="size-3.5" /> {mode === "track" ? "Click the map to place a tracker…" : "Add Tracker"}
         </button>
         <button type="button" onClick={() => setMode(m => m === "paint" ? "idle" : "paint")}
           title="Freehand color-code regions of the map"
@@ -329,7 +396,7 @@ export function MapOverlay({
       <div className="flex-1 min-h-0 relative overflow-hidden">
         <div
           ref={pz.surfaceRef}
-          className={`absolute inset-0 touch-none ${mode === "drop" ? "cursor-crosshair" : mode === "paint" ? "cursor-cell" : "cursor-grab active:cursor-grabbing"}`}
+          className={`absolute inset-0 touch-none ${mode === "drop" || mode === "track" ? "cursor-crosshair" : mode === "paint" ? "cursor-cell" : "cursor-grab active:cursor-grabbing"}`}
           onMouseDown={onSurfaceMouseDown}
           onMouseMove={onSurfaceMouseMove}
           onMouseUp={onSurfaceUp}
@@ -382,20 +449,20 @@ export function MapOverlay({
             })}
 
             {/* "Currently here" token */}
-            {token && (
+            {hereToken && (
               <div
-                ref={el => pz.setNodeEl("token", el)}
-                onMouseDown={e => { dragStart.current = null; setDraggingId("token"); pz.startNodeDrag(e, { id: "token", x: token.x, y: token.y }) }}
-                onTouchStart={e => { dragStart.current = null; setDraggingId("token"); pz.startNodeDragTouch(e, { id: "token", x: token.x, y: token.y }) }}
+                ref={el => pz.setNodeEl(hereToken.id, el)}
+                onMouseDown={e => { dragStart.current = null; setDraggingId(hereToken.id); pz.startNodeDrag(e, { id: hereToken.id, x: hereToken.x, y: hereToken.y }) }}
+                onTouchStart={e => { dragStart.current = null; setDraggingId(hereToken.id); pz.startNodeDragTouch(e, { id: hereToken.id, x: hereToken.x, y: hereToken.y }) }}
                 onClick={e => e.stopPropagation()}
                 style={{
                   left: 0, top: 0, width: TOKEN_SIZE, height: TOKEN_SIZE,
-                  transform: `translate3d(${token.x}px, ${token.y}px, 0)`,
-                  willChange: draggingId === "token" ? "transform" : undefined,
-                  zIndex: draggingId === "token" ? 11 : 9,
+                  transform: `translate3d(${hereToken.x}px, ${hereToken.y}px, 0)`,
+                  willChange: draggingId === hereToken.id ? "transform" : undefined,
+                  zIndex: draggingId === hereToken.id ? 11 : 9,
                 }}
                 className="group absolute cursor-grab active:cursor-grabbing select-none flex items-center justify-center rounded-full bg-sky-500 border-2 border-white shadow-lg"
-                title={`Currently here${token.updated_by ? ` — moved by ${resolveOwnerName(token.updated_by)}` : ""}`}
+                title={`Currently here${hereToken.updated_by ? ` — moved by ${resolveOwnerName(hereToken.updated_by)}` : ""}`}
               >
                 <LocateFixed className="size-5 text-white" />
                 <span className="absolute top-full mt-0.5 px-1.5 py-0.5 rounded-full bg-black/75 text-white text-[10px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -404,14 +471,67 @@ export function MapOverlay({
               </div>
             )}
 
-            {!token && (
+            {!hereToken && (
               <button type="button"
-                onClick={e => { e.stopPropagation(); moveToken(MAP_W / 2 - TOKEN_SIZE / 2, MAP_H / 2 - TOKEN_SIZE / 2) }}
+                onClick={e => { e.stopPropagation(); placeHereToken(MAP_W / 2 - TOKEN_SIZE / 2, MAP_H / 2 - TOKEN_SIZE / 2) }}
                 style={{ left: MAP_W / 2 - 60, top: MAP_H / 2 - 14 }}
                 className="absolute px-2.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[11px] font-semibold shadow-lg transition-colors">
                 Place "currently here"
               </button>
             )}
+
+            {/* Trackers — named, picture-backed markers for anyone/anything
+                the party wants to keep tabs on. Draggable under the same
+                "Move Pins" toggle as city pins; rename/delete popover is
+                gated to the tracker's creator or the DM. */}
+            {trackerTokens.map(t => {
+              const dragging = draggingId === t.id
+              const canManage = t.owner_id === currentUserId || isDM
+              return (
+                <div
+                  key={t.id}
+                  ref={el => pz.setNodeEl(t.id, el)}
+                  onMouseDown={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(t.id); pz.startNodeDrag(e, t) }}
+                  onTouchStart={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(t.id); pz.startNodeDragTouch(e, t) }}
+                  onClick={e => onTrackerClick(e, t.id)}
+                  style={{
+                    left: 0, top: 0, width: TOKEN_SIZE, height: TOKEN_SIZE,
+                    transform: `translate3d(${t.x}px, ${t.y}px, 0)`,
+                    willChange: dragging ? "transform" : undefined,
+                    zIndex: dragging ? 12 : 8,
+                  }}
+                  className={`group absolute select-none flex items-center justify-center ${mode === "move" ? "cursor-grab active:cursor-grabbing" : canManage ? "cursor-pointer" : "cursor-default"}`}
+                  title={t.name ?? "Tracker"}
+                >
+                  <div className="size-full rounded-full border-2 border-white shadow-lg overflow-hidden bg-black/40">
+                    <img src={t.image_url ?? ""} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                  <span className="absolute top-full mt-0.5 px-1.5 py-0.5 rounded-full bg-black/75 text-white text-[10px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    {t.name}
+                  </span>
+                  {openTrackerMenuId === t.id && (
+                    <div style={{ left: "100%", top: 0 }} className="absolute z-20 ml-1.5 flex items-center gap-1.5 p-1.5 rounded-lg bg-popover text-popover-foreground border border-border shadow-xl" onClick={e => e.stopPropagation()}>
+                      <input
+                        autoFocus value={trackerRenameDraft} onChange={e => setTrackerRenameDraft(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") { renameTracker(t.id, trackerRenameDraft.trim() || t.name || ""); setOpenTrackerMenuId(null) }
+                          if (e.key === "Escape") setOpenTrackerMenuId(null)
+                        }}
+                        className="text-xs bg-foreground/8 rounded-md px-2 py-1 outline-none w-28"
+                      />
+                      <button type="button" onClick={() => { renameTracker(t.id, trackerRenameDraft.trim() || t.name || ""); setOpenTrackerMenuId(null) }}
+                        title="Save name" className="size-6 flex items-center justify-center rounded-md hover:bg-foreground/10 text-foreground/70">
+                        <Check className="size-3.5" />
+                      </button>
+                      <button type="button" onClick={() => { deleteTracker(t.id); setOpenTrackerMenuId(null) }}
+                        title="Remove tracker" className="size-6 flex items-center justify-center rounded-md hover:bg-red-500/20 text-foreground/70 hover:text-red-300">
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -445,6 +565,49 @@ export function MapOverlay({
             </div>
           </div>
         )}
+
+        {/* New-tracker prompt */}
+        {pendingTracker && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40" onClick={() => setPendingTracker(null)}>
+            <div className="bg-card border border-border rounded-xl p-4 w-72 shadow-xl" onClick={e => e.stopPropagation()}>
+              <p className="text-xs font-semibold text-foreground mb-2">New tracker</p>
+              <input
+                autoFocus value={trackerNameDraft} onChange={e => setTrackerNameDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") confirmPendingTracker(); if (e.key === "Escape") setPendingTracker(null) }}
+                placeholder="Who or what is this?"
+                className="w-full text-sm bg-foreground/8 rounded-lg px-2.5 py-1.5 outline-none placeholder:text-muted-foreground/40 mb-3"
+              />
+              <button type="button" onClick={openTrackerImagePicker} disabled={uploadingTrackerImage}
+                className="w-full flex items-center justify-center gap-2 text-xs px-2.5 py-2 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/80 transition-colors mb-3 disabled:opacity-50">
+                {trackerImageUrl ? (
+                  <img src={trackerImageUrl} alt="" className="size-6 rounded-full object-cover" />
+                ) : (
+                  <ImagePlus className="size-3.5" />
+                )}
+                {uploadingTrackerImage ? "Uploading…" : trackerImageUrl ? "Change picture" : "Choose picture"}
+              </button>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setPendingTracker(null)}
+                  className="text-xs px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                <button type="button" onClick={confirmPendingTracker} disabled={!trackerNameDraft.trim() || !trackerImageUrl}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-foreground/15 hover:bg-foreground/25 text-foreground font-semibold disabled:opacity-30 transition-colors">Add tracker</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showTrackerImagePicker && (
+          <PortraitModal
+            title="Choose Tracker Image"
+            currentPortrait={trackerImageUrl}
+            galleryImages={galleryImages}
+            galleryLoading={galleryLoading}
+            onChoose={url => { setTrackerImageUrl(url); setShowTrackerImagePicker(false) }}
+            onUploadClick={() => trackerImageInputRef.current?.click()}
+            onClose={() => setShowTrackerImagePicker(false)}
+          />
+        )}
+        <input ref={trackerImageInputRef} type="file" accept="image/*" className="hidden" onChange={uploadTrackerImage} />
       </div>
 
       {openPin && (
