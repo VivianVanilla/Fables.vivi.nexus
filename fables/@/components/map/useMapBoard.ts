@@ -26,9 +26,12 @@ export interface MapPin {
   created_at: string
 }
 
+// `pin_id`/`token_id` are mutually exclusive — a note hangs off either a pin
+// or a tracker, never both (enforced by a DB check constraint).
 export interface MapPinNote {
   id: string
-  pin_id: string
+  pin_id: string | null
+  token_id: string | null
   party_code: string
   owner_id: string
   owner_name: string
@@ -168,9 +171,13 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     if (error) console.error("delete pin error:", error)
   }
 
-  async function addNote(pinId: string, ownerName: string, content: string) {
+  // `target` picks which side of the pin_id/token_id pair gets set — a note
+  // attaches to exactly one of a pin or a tracker.
+  async function addNote(target: { pinId: string } | { tokenId: string }, ownerName: string, content: string) {
     const { data, error } = await supabase.from("map_pin_notes").insert({
-      pin_id: pinId, party_code: partyCode, owner_id: currentUserId, owner_name: ownerName, content,
+      pin_id: "pinId" in target ? target.pinId : null,
+      token_id: "tokenId" in target ? target.tokenId : null,
+      party_code: partyCode, owner_id: currentUserId, owner_name: ownerName, content,
     }).select().single()
     if (error) { console.error("add note error:", error); return null }
     const row = data as MapPinNote
@@ -233,6 +240,7 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
 
   async function deleteTracker(id: string) {
     setTokens(prev => prev.filter(t => t.id !== id))
+    setNotes(prev => prev.filter(n => n.token_id !== id))
     const { error } = await supabase.from("map_tokens").delete().eq("id", id)
     if (error) console.error("delete tracker error:", error)
   }

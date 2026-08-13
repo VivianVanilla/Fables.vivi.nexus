@@ -247,7 +247,6 @@ export function PartyServer({
           partyCode={partyCode}
           currentUserId={currentUserId}
           currentUserName={currentUserName}
-          isDM={isDM}
           onClose={() => setMapOpen(false)}
         />
       )}

@@ -1,10 +1,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Check, Trash2 } from "lucide-react"
+import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus } from "lucide-react"
 import { usePartyRoster } from "../party/usePartyServer"
 import { useMapPanZoom } from "./useMapPanZoom"
 import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint } from "./useMapBoard"
 import { MapPinViewer } from "./MapPinViewer"
+import { MapTrackerViewer } from "./MapTrackerViewer"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "../imageGallery"
 import { PortraitModal } from "../character/modals/PortraitModal"
 
@@ -45,12 +46,11 @@ function drawStroke(ctx: CanvasRenderingContext2D, color: string, size: number, 
 }
 
 export function MapOverlay({
-  partyCode, currentUserId, currentUserName, isDM, onClose,
+  partyCode, currentUserId, currentUserName, onClose,
 }: {
   partyCode: string
   currentUserId: string
   currentUserName: string
-  isDM: boolean
   onClose: () => void
 }) {
   const { members, dmUserId } = usePartyRoster(partyCode)
@@ -76,8 +76,7 @@ export function MapOverlay({
   const [showTrackerImagePicker, setShowTrackerImagePicker] = useState(false)
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
-  const [openTrackerMenuId, setOpenTrackerMenuId] = useState<string | null>(null)
-  const [trackerRenameDraft, setTrackerRenameDraft] = useState("")
+  const [openTrackerId, setOpenTrackerId] = useState<string | null>(null)
   const [brushColor, setBrushColor] = useState(DEFAULT_PIN_COLOR)
   const [erasing, setErasing] = useState(false)
   const [brushSize, setBrushSize] = useState(() => {
@@ -97,6 +96,7 @@ export function MapOverlay({
   const myLastStroke = [...strokes].reverse().find(s => s.owner_id === currentUserId)
   const hereToken = tokens.find(t => t.kind === "here") ?? null
   const trackerTokens = tokens.filter(t => t.kind === "tracker")
+  const openTracker = trackerTokens.find(t => t.id === openTrackerId) ?? null
 
   function resolveOwnerName(ownerId: string) {
     if (ownerId === currentUserId) return "You"
@@ -185,13 +185,13 @@ export function MapOverlay({
       if (e.key !== "Escape") return
       if (pendingPin) { setPendingPin(null); return }
       if (pendingTracker) { setPendingTracker(null); return }
-      if (openTrackerMenuId) { setOpenTrackerMenuId(null); return }
+      if (openTrackerId) { setOpenTrackerId(null); return }
       if (openPinId) { setOpenPinId(null); return }
       onClose()
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [pendingPin, pendingTracker, openTrackerMenuId, openPinId, onClose])
+  }, [pendingPin, pendingTracker, openTrackerId, openPinId, onClose])
 
   // dragStart tracks the background mousedown/touchstart that a click needs
   // to trace back to before it's trusted as "drop a pin here" — pins/token
@@ -287,10 +287,7 @@ export function MapOverlay({
   function onTrackerClick(e: React.MouseEvent, id: string) {
     e.stopPropagation()
     if (pz.shouldSuppressClick(id)) return
-    const t = trackerTokens.find(tt => tt.id === id)
-    if (!t || (t.owner_id !== currentUserId && !isDM)) return
-    setOpenTrackerMenuId(prev => prev === id ? null : id)
-    setTrackerRenameDraft(t.name ?? "")
+    setOpenTrackerId(id)
   }
 
   function onSurfaceUp() {
@@ -482,11 +479,12 @@ export function MapOverlay({
 
             {/* Trackers — named, picture-backed markers for anyone/anything
                 the party wants to keep tabs on. Draggable under the same
-                "Move Pins" toggle as city pins; rename/delete popover is
-                gated to the tracker's creator or the DM. */}
+                "Move Pins" toggle as city pins; clicking one opens the full
+                annotate view (MapTrackerViewer) — rename/delete there are
+                gated to the tracker's creator or the DM, but notes are open
+                to the whole party. */}
             {trackerTokens.map(t => {
               const dragging = draggingId === t.id
-              const canManage = t.owner_id === currentUserId || isDM
               return (
                 <div
                   key={t.id}
@@ -500,7 +498,7 @@ export function MapOverlay({
                     willChange: dragging ? "transform" : undefined,
                     zIndex: dragging ? 12 : 8,
                   }}
-                  className={`group absolute select-none flex items-center justify-center ${mode === "move" ? "cursor-grab active:cursor-grabbing" : canManage ? "cursor-pointer" : "cursor-default"}`}
+                  className={`group absolute select-none flex items-center justify-center ${mode === "move" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
                   title={t.name ?? "Tracker"}
                 >
                   <div className="size-full rounded-full border-2 border-white shadow-lg overflow-hidden bg-black/40">
@@ -509,26 +507,6 @@ export function MapOverlay({
                   <span className="absolute top-full mt-0.5 px-1.5 py-0.5 rounded-full bg-black/75 text-white text-[10px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     {t.name}
                   </span>
-                  {openTrackerMenuId === t.id && (
-                    <div style={{ left: "100%", top: 0 }} className="absolute z-20 ml-1.5 flex items-center gap-1.5 p-1.5 rounded-lg bg-popover text-popover-foreground border border-border shadow-xl" onClick={e => e.stopPropagation()}>
-                      <input
-                        autoFocus value={trackerRenameDraft} onChange={e => setTrackerRenameDraft(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") { renameTracker(t.id, trackerRenameDraft.trim() || t.name || ""); setOpenTrackerMenuId(null) }
-                          if (e.key === "Escape") setOpenTrackerMenuId(null)
-                        }}
-                        className="text-xs bg-foreground/8 rounded-md px-2 py-1 outline-none w-28"
-                      />
-                      <button type="button" onClick={() => { renameTracker(t.id, trackerRenameDraft.trim() || t.name || ""); setOpenTrackerMenuId(null) }}
-                        title="Save name" className="size-6 flex items-center justify-center rounded-md hover:bg-foreground/10 text-foreground/70">
-                        <Check className="size-3.5" />
-                      </button>
-                      <button type="button" onClick={() => { deleteTracker(t.id); setOpenTrackerMenuId(null) }}
-                        title="Remove tracker" className="size-6 flex items-center justify-center rounded-md hover:bg-red-500/20 text-foreground/70 hover:text-red-300">
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -615,12 +593,25 @@ export function MapOverlay({
           pin={openPin}
           notes={notes.filter(n => n.pin_id === openPin.id)}
           currentUserId={currentUserId}
-          isDM={isDM}
           onClose={() => setOpenPinId(null)}
           onRename={name => renamePin(openPin.id, name)}
           onChangeColor={color => recolorPin(openPin.id, color)}
           onDeletePin={() => { deletePin(openPin.id); setOpenPinId(null) }}
-          onAddNote={content => addNote(openPin.id, currentUserName, content)}
+          onAddNote={content => addNote({ pinId: openPin.id }, currentUserName, content)}
+          onEditNote={editNote}
+          onDeleteNote={deleteNote}
+        />
+      )}
+
+      {openTracker && (
+        <MapTrackerViewer
+          tracker={openTracker}
+          notes={notes.filter(n => n.token_id === openTracker.id)}
+          currentUserId={currentUserId}
+          onClose={() => setOpenTrackerId(null)}
+          onRename={name => renameTracker(openTracker.id, name)}
+          onDeleteTracker={() => { deleteTracker(openTracker.id); setOpenTrackerId(null) }}
+          onAddNote={content => addNote({ tokenId: openTracker.id }, currentUserName, content)}
           onEditNote={editNote}
           onDeleteNote={deleteNote}
         />

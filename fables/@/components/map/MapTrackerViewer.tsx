@@ -1,38 +1,36 @@
 // ════════════════════════════════════════════════════════════════════════════
-// MapPinViewer.tsx — full-screen viewer for a single map pin ("ping"), opened
-// by clicking a pin on MapOverlay. Shows the pin's city name plus a corkboard
-// of sticky notes (see MapNotesPanel) — it's a shared party map, so renaming,
-// recoloring, deleting, and annotating are all open to the whole party, not
-// just whoever placed the pin.
+// MapTrackerViewer.tsx — full-screen viewer for a single tracker (an NPC,
+// monster, or anything else the party is keeping tabs on), opened by
+// clicking its marker on MapOverlay. Mirrors MapPinViewer: renaming,
+// deleting, and annotating (MapNotesPanel) are all open to the whole party —
+// that's how you keep tabs on an NPC as a group.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import { Pencil, Trash2, Check, X, Palette } from "lucide-react"
-import { PIN_COLORS, type MapPin, type MapPinNote } from "./useMapBoard"
+import { Pencil, Trash2, Check, X } from "lucide-react"
+import { type MapToken, type MapPinNote } from "./useMapBoard"
 import { MapNotesPanel } from "./MapNotesPanel"
 
-export function MapPinViewer({
-  pin, notes, currentUserId, onClose, onRename, onChangeColor, onDeletePin, onAddNote, onEditNote, onDeleteNote,
+export function MapTrackerViewer({
+  tracker, notes, currentUserId, onClose, onRename, onDeleteTracker, onAddNote, onEditNote, onDeleteNote,
 }: {
-  pin: MapPin
+  tracker: MapToken
   notes: MapPinNote[]
   currentUserId: string
   onClose: () => void
   onRename: (name: string) => void
-  onChangeColor: (color: string) => void
-  onDeletePin: () => void
+  onDeleteTracker: () => void
   onAddNote: (content: string) => void
   onEditNote: (id: string, content: string) => void
   onDeleteNote: (id: string) => void
 }) {
   const [editingName, setEditingName] = useState(false)
-  const [nameDraft, setNameDraft] = useState(pin.name)
-  const [pickingColor, setPickingColor] = useState(false)
+  const [nameDraft, setNameDraft] = useState(tracker.name ?? "")
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   function saveName() {
     const next = nameDraft.trim()
-    if (next && next !== pin.name) onRename(next)
+    if (next && next !== tracker.name) onRename(next)
     setEditingName(false)
   }
 
@@ -43,48 +41,35 @@ export function MapPinViewer({
           <div className="flex items-center gap-1.5">
             <input
               autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { setNameDraft(pin.name); setEditingName(false) } }}
+              onKeyDown={e => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { setNameDraft(tracker.name ?? ""); setEditingName(false) } }}
               className="text-sm font-semibold bg-white/10 text-white rounded-lg px-2.5 py-1.5 outline-none"
             />
             <button type="button" onClick={saveName} className="size-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"><Check className="size-4" /></button>
-            <button type="button" onClick={() => { setNameDraft(pin.name); setEditingName(false) }} className="size-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"><X className="size-4" /></button>
+            <button type="button" onClick={() => { setNameDraft(tracker.name ?? ""); setEditingName(false) }} className="size-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"><X className="size-4" /></button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-white">{pin.name}</span>
+          <div className="flex items-center gap-2.5">
+            <div className="size-7 rounded-full overflow-hidden border border-white/20 shrink-0 bg-black/40">
+              <img src={tracker.image_url ?? ""} alt="" className="w-full h-full object-cover" />
+            </div>
+            <span className="text-sm font-semibold text-white">{tracker.name}</span>
             <button type="button" onClick={() => setEditingName(true)} title="Rename"
               className="text-white/50 hover:text-white transition-colors">
               <Pencil className="size-3.5" />
             </button>
           </div>
         )}
-        <div className="flex items-center gap-1.5 relative">
-          <button type="button" onClick={() => setPickingColor(v => !v)} title="Pin color"
-            className="size-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
-            <Palette className="size-4" style={{ color: pin.color }} />
-          </button>
-          {pickingColor && (
-            <div className="absolute top-full right-0 mt-1.5 flex items-center gap-1.5 p-2 rounded-xl bg-zinc-900 border border-white/10 shadow-xl z-10">
-              {PIN_COLORS.map(color => (
-                <button key={color} type="button" onClick={() => { onChangeColor(color); setPickingColor(false) }} title={color}
-                  style={{ backgroundColor: color }}
-                  className={`size-5 rounded-full transition-transform ${pin.color === color ? "ring-2 ring-offset-2 ring-offset-zinc-900 ring-white scale-110" : "hover:scale-110"}`} />
-              ))}
-              <input type="color" value={pin.color} title="Custom color"
-                onChange={e => onChangeColor(e.target.value)}
-                className="size-6 rounded-md border border-white/10 bg-transparent cursor-pointer p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none" />
-            </div>
-          )}
+        <div className="flex items-center gap-1.5">
           {confirmingDelete ? (
             <div className="flex items-center gap-1 text-xs">
-              <span className="text-white/70 mr-0.5">Delete pin?</span>
-              <button type="button" onClick={onDeletePin}
+              <span className="text-white/70 mr-0.5">Remove tracker?</span>
+              <button type="button" onClick={onDeleteTracker}
                 className="px-2 py-1 rounded-lg bg-red-500/80 hover:bg-red-500 text-white font-semibold transition-colors">Delete</button>
               <button type="button" onClick={() => setConfirmingDelete(false)}
                 className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 transition-colors">Cancel</button>
             </div>
           ) : (
-            <button type="button" onClick={() => setConfirmingDelete(true)} title="Remove pin"
+            <button type="button" onClick={() => setConfirmingDelete(true)} title="Remove tracker"
               className="size-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-red-500/30 text-white/70 hover:text-red-200 transition-colors">
               <Trash2 className="size-4" />
             </button>
@@ -97,7 +82,7 @@ export function MapPinViewer({
         <MapNotesPanel
           notes={notes}
           currentUserId={currentUserId}
-          placeholder={`Leave a note at ${pin.name}…`}
+          placeholder={`Notes about ${tracker.name}…`}
           onAddNote={onAddNote}
           onEditNote={onEditNote}
           onDeleteNote={onDeleteNote}
