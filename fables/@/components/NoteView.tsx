@@ -1,10 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // NoteView.tsx — Simple markdown note: edit (textarea) ↔ preview (rendered)
 //
-// Personal, single-owner notes. Party-wide sharing/collaboration now lives in
-// the Party Server's Party Notes canvas instead of per-note invites — see
-// @/components/party/PartyNotesCanvas.tsx. Drag a note there to bring it into
-// the shared space; it stays your note here either way.
+// Personal, single-owner notes.
 //
 // Preview rendering uses the shared <Markdown> component (react-markdown +
 // remark-gfm) — full CommonMark plus GFM tables/images.

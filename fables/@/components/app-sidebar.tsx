@@ -11,7 +11,6 @@ import type { userInfo } from "../types/userInfo"
 import { buildObjectTree, applyDrop, moveToRoot, isNoNesting, isPinned, getItemData, getCreatedDate } from "@/components/sidebar-utils"
 import type { SidebarObject, DropTarget, DropPosition } from "@/components/sidebar-utils"
 import { supabase } from "../../src/supabase"
-import { NOTE_DRAG_TYPE } from "@/components/party/partyTypes"
 
 const BUCKET = "fableimages"
 
@@ -453,17 +452,10 @@ export function AppSidebar({ onSelectObject, onShowRosterSidebar, ...props }: Ap
 
         <div
           ref={(el) => { if (el) itemRefs.current.set(node.id, el); else itemRefs.current.delete(node.id) }}
-          // Desktop drag — reorder is only active when the grip was mousedown'd;
-          // notes are additionally always draggable so they can be dragged out
-          // onto the Party Notes canvas (see PartyNotesCanvas.tsx) without the grip.
-          draggable={draggableId === node.id || node.type === "note"}
+          // Desktop drag — reorder is only active when the grip was mousedown'd.
+          draggable={draggableId === node.id}
           onDragStart={(e) => {
             if (draggableId === node.id) { setDraggedId(node.id); return }
-            if (node.type === "note") {
-              e.dataTransfer.setData(NOTE_DRAG_TYPE, JSON.stringify({ objectId: node.id, name: node.name }))
-              e.dataTransfer.effectAllowed = "copy"
-              return
-            }
             e.preventDefault()
           }}
           onDragEnd={() => { isDraggable.current = false; setDraggableId(null); setDraggedId(null); setDropTarget(null) }}

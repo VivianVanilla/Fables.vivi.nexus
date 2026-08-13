@@ -1,20 +1,21 @@
 // ════════════════════════════════════════════════════════════════════════════
-// useCanvasPanZoom.ts — pan/zoom/drag mechanics for the Party Notes board
-// (NoteWebBoard / PartyNotesCanvas).
+// useMapPanZoom.ts — pan/zoom/drag mechanics for the Hjolland map overlay
+// (MapOverlay). Moved verbatim from the old Party Notes board (useCanvasPanZoom)
+// since the mechanics are generic — only the caller changed.
 //
 // Perf note: pan and node-drag write DIRECTLY to the DOM (via contentRef /
 // per-node refs) on every move event instead of going through React state.
 // Driving a `setState` off every touchmove was the actual cause of "laggy on
-// mobile" — each one re-ran the whole board's render (every node, every
-// edge) just to move one thing a few pixels. React state is only touched
-// once, when the gesture ends, to persist the final position.
+// mobile" — each one re-ran the whole map's render (every pin, the token)
+// just to move one thing a few pixels. React state is only touched once,
+// when the gesture ends, to persist the final position.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useLayoutEffect, useRef, useState } from "react"
 
 const DRAG_THRESHOLD = 4 // px of movement before a mousedown counts as a drag, not a click
 
-export function useCanvasPanZoom(initial: { x: number; y: number } = { x: 40, y: 40 }) {
+export function useMapPanZoom(initial: { x: number; y: number } = { x: 40, y: 40 }) {
   const [pan, setPan] = useState(initial)
   const [zoom, setZoom] = useState(1)
 
@@ -44,7 +45,7 @@ export function useCanvasPanZoom(initial: { x: number; y: number } = { x: 40, y:
   const justDraggedId = useRef<string | null>(null)
   const nodeEls = useRef(new Map<string, HTMLDivElement>())
 
-  // Attach to each node's root element: `ref={el => setNodeEl(node.id, el)}`
+  // Attach to each draggable element's root: `ref={el => setNodeEl(id, el)}`
   function setNodeEl(id: string, el: HTMLDivElement | null) {
     if (el) nodeEls.current.set(id, el); else nodeEls.current.delete(id)
   }
@@ -106,7 +107,7 @@ export function useCanvasPanZoom(initial: { x: number; y: number } = { x: 40, y:
     // content sits in an absolutely-positioned wrapper that covers the
     // entire surface, so `target` is essentially never the surface element
     // itself even over empty space — that check silently disabled panning
-    // altogether. Nodes already call stopPropagation() in their own
+    // altogether. Pins/token already call stopPropagation() in their own
     // mousedown handler, so anything that reaches here genuinely is a
     // background drag.
     beginPan(e.clientX, e.clientY)
@@ -173,7 +174,7 @@ export function useCanvasPanZoom(initial: { x: number; y: number } = { x: 40, y:
   }
 
   function onWheel(e: React.WheelEvent) {
-    e.preventDefault()
+    // e.preventDefault()
     setZoom(z => Math.min(2.5, Math.max(0.3, +(z - e.deltaY * 0.001).toFixed(2))))
   }
 

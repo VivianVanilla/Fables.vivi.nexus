@@ -57,10 +57,6 @@ export interface Message {
   payload: SharePayload | null
 }
 
-// dataTransfer type used to drag a personal note from the sidebar onto the
-// Party Notes canvas — see app-sidebar.tsx (source) and PartyNotesCanvas.tsx (target).
-export const NOTE_DRAG_TYPE = "x-fable-note"
-
 export function dmThreadKey(otherUserId: string) {
   return `dm:${otherUserId}`
 }

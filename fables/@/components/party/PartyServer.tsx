@@ -1,26 +1,32 @@
 // ════════════════════════════════════════════════════════════════════════════
-// PartyServer.tsx — the "mini Discord" shell: a left rail (channels / Party
-// Notes / private-message member list) plus a main pane that swaps between
-// ChatPane and the PartyNotesCanvas. Replaces the old PartyChat.tsx and the
-// per-note sharing system entirely — rendered from both the player's
-// character-sheet Chat tab and the DM's campaign view Party Chat tab.
+// PartyServer.tsx — the "mini Discord" shell: a left rail (channels /
+// private-message member list) plus a main pane that swaps between channel
+// and DM ChatPanes. Replaces the old PartyChat.tsx and the per-note sharing
+// system entirely — rendered from both the player's character-sheet Chat tab
+// and the DM's campaign view Party Chat tab. (The old Party Notes canvas that
+// used to live here was retired in favor of the Hjolland map — see
+// @/components/map/MapOverlay.tsx, opened below via a rail button rather
+// than the F4 hotkey that turned out unreliable across browsers.)
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react"
-import { Hash, Plus, X, Waypoints, Menu } from "lucide-react"
+import { Hash, Plus, X, Menu, Mountain } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { safeParseJson, nanoid } from "../character-utils"
 import type { SidebarObject } from "../sidebar-utils"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
 import { ChatPane } from "./ChatPane"
-import { PartyNotesCanvas } from "./PartyNotesCanvas"
+import { MapOverlay } from "../map/MapOverlay"
 import { markThreadSeen, isThreadUnread } from "./unread"
 import { channelThreadKey, dmThreadKey, DEFAULT_CHANNEL, type Channel, type PartyMember } from "./partyTypes"
+
+// The Hjolland interactive map is a one-off feature scoped to a single,
+// hardcoded campaign rather than a general per-party tool.
+const MAP_PARTY_CODE = "KOQK21"
 
 type ActiveView =
   | { type: "channel"; id: string }
   | { type: "dm"; userId: string; name: string }
-  | { type: "canvas" }
 
 export function PartyServer({
   partyCode, currentUserId, currentUserName, isDM,
@@ -43,6 +49,7 @@ export function PartyServer({
   // Below `md`, the rail is a slide-over drawer instead of a permanent
   // sidebar — there isn't room for both it and the chat at once on a phone.
   const [railOpen, setRailOpen] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false)
 
   // Everyone in the party can DM everyone else — the rest of the player
   // roster (from `members`, minus yourself) plus the DM, unless you *are*
@@ -61,10 +68,6 @@ export function PartyServer({
   }
   function selectDm(m: PartyMember) {
     setActiveView({ type: "dm", userId: m.userId, name: m.name })
-    setRailOpen(false)
-  }
-  function selectCanvas() {
-    setActiveView({ type: "canvas" })
     setRailOpen(false)
   }
 
@@ -177,13 +180,15 @@ export function PartyServer({
           })}
         </div>
 
-        <div className="px-3 pt-1 pb-1.5 shrink-0 border-t border-border flex flex-col gap-0.5">
-          <button type="button" onClick={selectCanvas}
-            className={`w-full flex items-center gap-1.5 text-[12px] px-2 py-1.5 rounded-md transition-colors mt-1.5 ${activeView.type === "canvas" ? "bg-foreground/15 text-foreground font-semibold" : "text-foreground/60 hover:bg-foreground/8 hover:text-foreground"}`}>
-            <Waypoints className="size-3.5 shrink-0 opacity-70" />
-            Party Notes
-          </button>
-        </div>
+        {partyCode === MAP_PARTY_CODE && (
+          <div className="px-3 pt-1 pb-1.5 shrink-0 border-t border-border flex flex-col gap-0.5">
+            <button type="button" onClick={() => setMapOpen(true)}
+              className="w-full flex items-center gap-1.5 text-[12px] px-2 py-1.5 rounded-md transition-colors mt-1.5 text-foreground/60 hover:bg-foreground/8 hover:text-foreground">
+              <Mountain className="size-3.5 shrink-0 opacity-70" />
+              Mountain Range Map
+            </button>
+          </div>
+        )}
 
         <div className="px-3 pt-2 pb-1.5 border-t border-border shrink-0">
           <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/50">Private Messages</span>
@@ -208,9 +213,6 @@ export function PartyServer({
       </div>
 
       {/* Main pane */}
-      {activeView.type === "canvas" && (
-        <PartyNotesCanvas partyCode={partyCode} currentUserId={currentUserId} isDM={isDM} members={members} dmUserId={dmUserId} leftAccessory={hamburger} />
-      )}
       {activeView.type === "channel" && (
         <ChatPane
           messages={channelMessages(activeView.id)}
@@ -237,6 +239,16 @@ export function PartyServer({
           emptyText={`No private messages with ${activeView.name} yet.`}
           leftAccessory={hamburger}
           headerLabel={activeView.name}
+        />
+      )}
+
+      {mapOpen && (
+        <MapOverlay
+          partyCode={partyCode}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
+          isDM={isDM}
+          onClose={() => setMapOpen(false)}
         />
       )}
     </div>

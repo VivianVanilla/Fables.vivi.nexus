@@ -420,9 +420,7 @@ function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: st
 }
 
 // Note editor embedded inline in the character sheet — a linked note is a
-// plain single-owner note, same model as the standalone NoteView page. Party-
-// wide note sharing now lives in the Party Server's Party Notes canvas
-// instead of per-note invites (see @/components/party/PartyNotesCanvas.tsx).
+// plain single-owner note, same model as the standalone NoteView page.
 function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, onAutoEditConsumed }: {
   note: userInfo.Objects
   expanded: boolean
