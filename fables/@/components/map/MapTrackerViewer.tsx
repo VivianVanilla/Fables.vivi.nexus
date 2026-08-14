@@ -14,7 +14,7 @@ import { Markdown } from "../ui/Markdown"
 import type { NpcTracker } from "../npcTracker/useNpcTrackers"
 
 export function MapTrackerViewer({
-  tracker, notes, npc, currentUserId, onClose, onRename, onDeleteTracker, onAddNote, onEditNote, onDeleteNote,
+  tracker, notes, npc, npcLocationName, currentUserId, onClose, onRename, onDeleteTracker, onAddNote, onEditNote, onDeleteNote,
 }: {
   tracker: MapToken
   notes: MapPinNote[]
@@ -23,6 +23,9 @@ export function MapTrackerViewer({
   // lives on the shared NPC record instead of just the marker's own name/
   // image. Renaming the marker here does NOT rename the NPC entry itself.
   npc: NpcTracker | null
+  // Resolved name of npc.location_pin_id, if any — a plain string rather
+  // than handing this viewer the whole pins list just to look one up.
+  npcLocationName: string | null
   currentUserId: string
   onClose: () => void
   onRename: (name: string) => void
@@ -95,10 +98,12 @@ export function MapTrackerViewer({
               <p className="text-sm text-white/30 italic mb-3">No details yet — add some from the NPC Tracker shelf.</p>
             )}
             <div className="flex gap-6 flex-wrap">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Where were they seen last?</p>
-                <p className="text-xs text-white/80">{npc.last_seen || "—"}</p>
-              </div>
+              {npcLocationName && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Last Seen At</p>
+                  <p className="text-xs text-white/80">{npcLocationName}</p>
+                </div>
+              )}
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Goal? How can they help?</p>
                 <p className="text-xs text-white/80">{npc.goal || "—"}</p>

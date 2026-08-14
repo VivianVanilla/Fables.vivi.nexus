@@ -94,6 +94,8 @@ export function MapOverlay({
   const [confirmingUnify, setConfirmingUnify] = useState(false)
   const [unifying, setUnifying] = useState(false)
   const [npcTrackerOpen, setNpcTrackerOpen] = useState(false)
+  const [npcTrackerFocusId, setNpcTrackerFocusId] = useState<string | null>(null)
+  const [hideNpcs, setHideNpcs] = useState(false)
   const [labelSize, setLabelSize] = useState(() => {
     try { return Number(localStorage.getItem(LABEL_SIZE_KEY)) || 10 } catch { return 10 }
   })
@@ -107,6 +109,8 @@ export function MapOverlay({
   const hereToken = tokens.find(t => t.kind === "here") ?? null
   const trackerTokens = tokens.filter(t => t.kind === "tracker")
   const openTracker = trackerTokens.find(t => t.id === openTrackerId) ?? null
+  const openTrackerNpc = npcs.find(n => n.id === openTracker?.npc_tracker_id) ?? null
+  const openTrackerNpcLocationName = pins.find(p => p.id === openTrackerNpc?.location_pin_id)?.name ?? null
 
   function resolveOwnerName(ownerId: string) {
     if (ownerId === currentUserId) return "You"
@@ -395,11 +399,23 @@ export function MapOverlay({
     setOpenPinId(pinId)
   }
 
+  // "Go to their tracker" from a pin's "NPCs last seen here" list — swaps
+  // the pin viewer for the NPC shelf, expanded straight to that NPC.
+  function openNpcTracker(npcId: string) {
+    setOpenPinId(null)
+    setNpcTrackerFocusId(npcId)
+    setNpcTrackerOpen(true)
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Toolbar */}
       <div className="px-3.5 py-2 border-b border-border shrink-0 flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
         <span className="text-sm font-bold text-foreground mr-1 shrink-0">Mountain Range Map</span>
+        <label className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors shrink-0 cursor-pointer mr-1">
+          <input type="checkbox" checked={hideNpcs} onChange={e => setHideNpcs(e.target.checked)} className="accent-violet-500" />
+          Hide NPCs
+        </label>
         <button type="button" onClick={() => setMode(m => m === "drop" ? "idle" : "drop")}
           className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg transition-colors shrink-0 ${mode === "drop" ? "bg-violet-500/25 text-violet-200" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/80"}`}>
           <MapPinIcon className="size-3.5" /> {mode === "drop" ? "Click the map to name a pin…" : "Drop Pin"}
@@ -483,7 +499,7 @@ export function MapOverlay({
         <button type="button" onClick={() => pz.zoomBy(0.1)} className="size-7 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors shrink-0">
           <ZoomIn className="size-3.5" />
         </button>
-        <button type="button" onClick={() => setNpcTrackerOpen(true)} title="Open NPC Tracker"
+        <button type="button" onClick={() => { setNpcTrackerFocusId(null); setNpcTrackerOpen(true) }} title="Open NPC Tracker"
           className="size-7 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors shrink-0 ml-1">
           <BookOpen className="size-4" />
         </button>
@@ -587,8 +603,9 @@ export function MapOverlay({
                 "Move Pins" toggle as city pins; clicking one opens the full
                 annotate view (MapTrackerViewer) — rename/delete there are
                 gated to the tracker's creator or the DM, but notes are open
-                to the whole party. */}
-            {trackerTokens.map(t => {
+                to the whole party. Hidden entirely (not just dimmed) by the
+                "Hide NPCs" toggle so a crowded map can be read at a glance. */}
+            {!hideNpcs && trackerTokens.map(t => {
               const dragging = draggingId === t.id
               return (
                 <div
@@ -724,12 +741,14 @@ export function MapOverlay({
         <MapPinViewer
           pin={openPin}
           notes={notes.filter(n => n.pin_id === openPin.id)}
+          npcsHere={npcs.filter(n => n.location_pin_id === openPin.id)}
           currentUserId={currentUserId}
           onClose={() => setOpenPinId(null)}
           onRename={name => renamePin(openPin.id, name)}
           onChangeColor={color => recolorPin(openPin.id, color)}
           onChangeType={type => setPinType(openPin.id, type)}
           onDeletePin={() => { deletePin(openPin.id); setOpenPinId(null) }}
+          onOpenNpc={openNpcTracker}
           onAddNote={content => addNote({ pinId: openPin.id }, currentUserName, content)}
           onEditNote={editNote}
           onDeleteNote={deleteNote}
@@ -740,7 +759,8 @@ export function MapOverlay({
         <MapTrackerViewer
           tracker={openTracker}
           notes={notes.filter(n => n.token_id === openTracker.id)}
-          npc={npcs.find(n => n.id === openTracker.npc_tracker_id) ?? null}
+          npc={openTrackerNpc}
+          npcLocationName={openTrackerNpcLocationName}
           currentUserId={currentUserId}
           onClose={() => setOpenTrackerId(null)}
           onRename={name => renameTracker(openTracker.id, name)}
@@ -755,7 +775,8 @@ export function MapOverlay({
         <NpcTrackerOverlay
           partyCode={partyCode}
           currentUserId={currentUserId}
-          onClose={() => setNpcTrackerOpen(false)}
+          focusNpcId={npcTrackerFocusId}
+          onClose={() => { setNpcTrackerOpen(false); setNpcTrackerFocusId(null) }}
         />
       )}
     </div>,

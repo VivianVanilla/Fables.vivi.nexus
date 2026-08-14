@@ -706,7 +706,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Party</span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-white/50 shrink-0">Code</span>
-              <input value={data.partyCode ?? ""} onChange={e => update({ partyCode: e.target.value.toUpperCase() })}
+              <input value={data.partyCode ?? ""} onChange={e => update({ partyCode: e.target.value.trim().toUpperCase() })}
                 placeholder="Enter party code from DM…" maxLength={8} disabled={readOnly}
                 className="flex-1 bg-white/10 rounded px-2 py-1 text-xs font-mono tracking-widest text-white outline-none focus:ring-1 focus:ring-primary placeholder:text-white/20 uppercase disabled:opacity-60" />
             </div>

@@ -13,6 +13,7 @@ import { useEffect, useState } from "react"
 import { Hash, Plus, X, Menu, Mountain, BookOpen } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
+import { MAP_PARTY_CODE } from "@/components/shared/constants"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
 import { ChatPane } from "./ChatPane"
@@ -20,10 +21,6 @@ import { MapOverlay } from "../map/MapOverlay"
 import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
 import { markThreadSeen, isThreadUnread } from "./unread"
 import { channelThreadKey, dmThreadKey, DEFAULT_CHANNEL, type Channel, type PartyMember } from "./partyTypes"
-
-// The Hjolland interactive map is a one-off feature scoped to a single,
-// hardcoded campaign rather than a general per-party tool.
-const MAP_PARTY_CODE = "KOQK21"
 
 type ActiveView =
   | { type: "channel"; id: string }

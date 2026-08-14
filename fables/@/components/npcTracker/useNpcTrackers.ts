@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // useNpcTrackers.ts — data layer for the party's NPC Tracker shelf: a shared
 // reference list of NPCs the party has met (name, art, freeform details,
-// last-seen location, goal). Same shape as useMapBoard.ts's data hooks —
+// goal, last-seen-at map pin link). Same shape as useMapBoard.ts's data hooks —
 // realtime INSERT/UPDATE/DELETE sync, optimistic local writes. Also read
 // directly by map/MapOverlay.tsx, which lets a new map tracker link itself
 // to one of these entries instead of typing a fresh name/image.
@@ -18,17 +18,27 @@ export interface NpcTracker {
   subtitle: string | null
   details: string | null
   image_url: string | null
-  last_seen: string | null
   goal: string | null
+  // "Last seen at" — a live link to a map pin, not freeform text (that's
+  // what this replaced: two DMs had been typing the pin's name in by hand,
+  // which drifts the moment that pin gets renamed). Only meaningful for the
+  // one party with map access — see MAP_PARTY_CODE.
+  location_pin_id: string | null
   owner_id: string
   created_at: string
   updated_at: string
 }
 
-export type NpcTrackerDraft = Pick<NpcTracker, "name" | "subtitle" | "details" | "image_url" | "last_seen" | "goal">
+export type NpcTrackerDraft = Pick<NpcTracker, "name" | "subtitle" | "details" | "image_url" | "goal" | "location_pin_id">
+
+// Just enough of a map pin to populate the "which city" picker — a full
+// useMapBoard() subscription (pins/tokens/notes/strokes/paint layer, several
+// realtime channels) would be a lot of unused weight just for a name list.
+export interface PinOption { id: string; name: string }
 
 export function useNpcTrackers(partyCode: string, currentUserId: string) {
   const [npcs, setNpcs] = useState<NpcTracker[]>([])
+  const [pins, setPins] = useState<PinOption[]>([])
   const [loaded, setLoaded] = useState(false)
   const suffix = useChannelSuffix()
 
@@ -42,6 +52,18 @@ export function useNpcTrackers(partyCode: string, currentUserId: string) {
         if (error) console.error("npc trackers load error:", error)
         if (data) setNpcs(data as NpcTracker[])
         setLoaded(true)
+      })
+    return () => { cancelled = true }
+  }, [partyCode])
+
+  useEffect(() => {
+    if (!partyCode) return
+    let cancelled = false
+    supabase.from("map_pins").select("id, name").eq("party_code", partyCode).order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error("npc trackers: pins load error:", error)
+        if (data) setPins(data as PinOption[])
       })
     return () => { cancelled = true }
   }, [partyCode])
@@ -84,5 +106,5 @@ export function useNpcTrackers(partyCode: string, currentUserId: string) {
     if (error) console.error("delete npc tracker error:", error)
   }
 
-  return { npcs, loaded, createNpc, updateNpc, deleteNpc }
+  return { npcs, pins, loaded, createNpc, updateNpc, deleteNpc }
 }

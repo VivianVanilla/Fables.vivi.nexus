@@ -8,23 +8,28 @@
 
 import { useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { Plus, Pencil, Trash2, X, Check, ImagePlus, Loader2, BookOpen } from "lucide-react"
+import { Plus, Pencil, Trash2, X, Check, ImagePlus, Loader2, BookOpen, MapPin } from "lucide-react"
 import { Markdown } from "../ui/Markdown"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "../shared/imageGallery"
 import { PortraitModal } from "../shared/PortraitModal"
+import { MAP_PARTY_CODE } from "../shared/constants"
 import { useNpcTrackers, type NpcTracker, type NpcTrackerDraft } from "./useNpcTrackers"
 
-const BLANK_DRAFT: NpcTrackerDraft = { name: "New NPC", subtitle: "", details: "", image_url: "", last_seen: "", goal: "" }
+const BLANK_DRAFT: NpcTrackerDraft = { name: "New NPC", subtitle: "", details: "", image_url: "", goal: "", location_pin_id: null }
 
 export function NpcTrackerOverlay({
-  partyCode, currentUserId, onClose,
+  partyCode, currentUserId, onClose, focusNpcId,
 }: {
   partyCode: string
   currentUserId: string
   onClose: () => void
+  // Set when opened via "jump to this NPC's tracker" (see MapPinViewer's
+  // "last seen here" list) — expands straight to that entry instead of
+  // landing on the plain unopened shelf.
+  focusNpcId?: string | null
 }) {
-  const { npcs, createNpc, updateNpc, deleteNpc } = useNpcTrackers(partyCode, currentUserId)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const { npcs, pins, createNpc, updateNpc, deleteNpc } = useNpcTrackers(partyCode, currentUserId)
+  const [expandedId, setExpandedId] = useState<string | null>(focusNpcId ?? null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<NpcTrackerDraft>(BLANK_DRAFT)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
@@ -34,12 +39,24 @@ export function NpcTrackerOverlay({
   const [galleryLoading, setGalleryLoading] = useState(false)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
+  // Adjusted during render (React's sanctioned alternative to a
+  // useEffect-based sync) rather than an effect — jumping here from a
+  // different NPC's "last seen here" list re-mounts a *new* focusNpcId, and
+  // this re-expands to it a render early instead of flashing whatever was
+  // last expanded first.
+  const [lastFocusNpcId, setLastFocusNpcId] = useState(focusNpcId)
+  if (focusNpcId !== lastFocusNpcId) {
+    setLastFocusNpcId(focusNpcId)
+    if (focusNpcId) setExpandedId(focusNpcId)
+  }
+
   const sorted = [...npcs].sort((a, b) => a.name.localeCompare(b.name))
   const expanded = sorted.find(n => n.id === expandedId) ?? null
+  const showLocation = partyCode === MAP_PARTY_CODE
 
   function startEdit(npc: NpcTracker) {
     setEditingId(npc.id)
-    setDraft({ name: npc.name, subtitle: npc.subtitle ?? "", details: npc.details ?? "", image_url: npc.image_url ?? "", last_seen: npc.last_seen ?? "", goal: npc.goal ?? "" })
+    setDraft({ name: npc.name, subtitle: npc.subtitle ?? "", details: npc.details ?? "", image_url: npc.image_url ?? "", goal: npc.goal ?? "", location_pin_id: npc.location_pin_id })
   }
 
   function saveEdit() {
@@ -100,6 +117,7 @@ export function NpcTrackerOverlay({
             const isConfirmingDelete = confirmingDeleteId === npc.id
 
             if (!isExpanded) {
+              const cityName = showLocation ? pins.find(p => p.id === npc.location_pin_id)?.name : undefined
               return (
                 <button key={npc.id} type="button" onClick={() => setExpandedId(npc.id)}
                   className="w-full text-left px-4 py-2.5 rounded-lg bg-foreground/5 hover:bg-foreground/10 border border-border transition-colors flex items-center gap-2.5">
@@ -108,6 +126,11 @@ export function NpcTrackerOverlay({
                   )}
                   <span className="text-sm font-semibold text-foreground truncate">{npc.name}</span>
                   {npc.subtitle && <span className="text-xs text-muted-foreground/60 truncate">— {npc.subtitle}</span>}
+                  {cityName && (
+                    <span className="ml-auto flex items-center gap-1 text-[10px] text-violet-300/80 shrink-0 pl-2">
+                      <MapPin className="size-3" /> {cityName}
+                    </span>
+                  )}
                 </button>
               )
             }
@@ -150,15 +173,29 @@ export function NpcTrackerOverlay({
                         <ImagePlus className="size-5 text-muted-foreground/40" />
                       )}
                     </button>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50 mb-0.5">Where were they seen last?</p>
-                      {isEditing ? (
-                        <input value={draft.last_seen ?? ""} onChange={e => setDraft(d => ({ ...d, last_seen: e.target.value }))}
-                          className="w-full text-xs bg-foreground/8 rounded-md px-2 py-1 outline-none text-foreground" />
-                      ) : (
-                        <p className="text-xs text-foreground/80">{npc.last_seen || "—"}</p>
-                      )}
-                    </div>
+                    {showLocation && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50 mb-0.5">Last Seen At</p>
+                        {isEditing ? (
+                          // Native <select> popups render with their own
+                          // (usually light) system background regardless of
+                          // page theme — force dark <option> text explicitly
+                          // so it doesn't end up light-on-light there even
+                          // though text-foreground reads fine on the closed,
+                          // app-themed control itself.
+                          <select value={draft.location_pin_id ?? ""} onChange={e => setDraft(d => ({ ...d, location_pin_id: e.target.value || null }))}
+                            className="w-full text-xs bg-foreground/8 rounded-md px-2 py-1 outline-none text-foreground">
+                            <option value="" className="text-black">— None —</option>
+                            {pins.map(p => <option key={p.id} value={p.id} className="text-black">{p.name}</option>)}
+                          </select>
+                        ) : (
+                          <p className="flex items-center gap-1 text-xs text-foreground/80">
+                            {npc.location_pin_id && <MapPin className="size-3 text-violet-300/80 shrink-0" />}
+                            {pins.find(p => p.id === npc.location_pin_id)?.name ?? "—"}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50 mb-0.5">Goal? How can they help?</p>
                       {isEditing ? (

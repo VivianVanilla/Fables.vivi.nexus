@@ -7,22 +7,27 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useMemo, useState } from "react"
-import { Pencil, Trash2, Check, X, Palette } from "lucide-react"
+import { Pencil, Trash2, Check, X, Palette, ExternalLink } from "lucide-react"
 import { PIN_COLORS, type MapPin, type MapPinNote, type PinType } from "./useMapBoard"
 import { PIN_TYPES } from "./pinTypes"
 import { MapNotesPanel } from "./MapNotesPanel"
+import type { NpcTracker } from "../npcTracker/useNpcTrackers"
 
 export function MapPinViewer({
-  pin, notes, currentUserId, onClose, onRename, onChangeColor, onChangeType, onDeletePin, onAddNote, onEditNote, onDeleteNote,
+  pin, notes, npcsHere, currentUserId, onClose, onRename, onChangeColor, onChangeType, onDeletePin, onOpenNpc, onAddNote, onEditNote, onDeleteNote,
 }: {
   pin: MapPin
   notes: MapPinNote[]
+  // NPC Tracker entries whose "last seen at" points at this pin — see
+  // useNpcTrackers's location_pin_id.
+  npcsHere: NpcTracker[]
   currentUserId: string
   onClose: () => void
   onRename: (name: string) => void
   onChangeColor: (color: string) => void
   onChangeType: (type: PinType) => void
   onDeletePin: () => void
+  onOpenNpc: (npcId: string) => void
   onAddNote: (content: string) => void
   onEditNote: (id: string, content: string) => void
   onDeleteNote: (id: string) => void
@@ -116,6 +121,28 @@ export function MapPinViewer({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5" onClick={e => e.stopPropagation()}>
+        {npcsHere.length > 0 && (
+          <div className="max-w-xl mx-auto mt-2 mb-5 rounded-xl bg-white/5 border border-white/10 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-2">NPCs last seen here</p>
+            <div className="flex flex-col gap-1.5">
+              {npcsHere.map(npc => (
+                <button key={npc.id} type="button" onClick={() => onOpenNpc(npc.id)} title="Open their tracker"
+                  className="flex items-center gap-2.5 text-left px-2.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                  {npc.image_url ? (
+                    <img src={npc.image_url} alt="" className="size-8 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="size-8 rounded-full bg-white/10 shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white truncate">{npc.name}</p>
+                    {npc.subtitle && <p className="text-xs text-white/50 truncate">{npc.subtitle}</p>}
+                  </div>
+                  <ExternalLink className="size-3.5 text-white/30 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <MapNotesPanel
           notes={notes}
           currentUserId={currentUserId}
