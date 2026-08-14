@@ -1,7 +1,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Layers, Loader2, Skull } from "lucide-react"
+import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Layers, Loader2, Skull, BookOpen } from "lucide-react"
 import { usePartyRoster } from "../party/usePartyServer"
 import { useMapPanZoom } from "./useMapPanZoom"
 import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint } from "./useMapBoard"
@@ -10,6 +10,7 @@ import { MapTrackerViewer } from "./MapTrackerViewer"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { useNpcTrackers } from "../npcTracker/useNpcTrackers"
+import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
 
 // Served straight from public/ (like favicon.svg — see index.html) rather
 // than imported, since Vite copies public/ assets as-is instead of
@@ -91,6 +92,7 @@ export function MapOverlay({
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [confirmingUnify, setConfirmingUnify] = useState(false)
   const [unifying, setUnifying] = useState(false)
+  const [npcTrackerOpen, setNpcTrackerOpen] = useState(false)
   const [labelSize, setLabelSize] = useState(() => {
     try { return Number(localStorage.getItem(LABEL_SIZE_KEY)) || 10 } catch { return 10 }
   })
@@ -480,8 +482,12 @@ export function MapOverlay({
         <button type="button" onClick={() => pz.zoomBy(0.1)} className="size-7 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors shrink-0">
           <ZoomIn className="size-3.5" />
         </button>
-        <button type="button" onClick={onClose} title="Close (Esc)"
+        <button type="button" onClick={() => setNpcTrackerOpen(true)} title="Open NPC Tracker"
           className="size-7 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors shrink-0 ml-1">
+          <BookOpen className="size-4" />
+        </button>
+        <button type="button" onClick={onClose} title="Close (Esc)"
+          className="size-7 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors shrink-0">
           <X className="size-4" />
         </button>
       </div>
@@ -740,6 +746,14 @@ export function MapOverlay({
           onAddNote={content => addNote({ tokenId: openTracker.id }, currentUserName, content)}
           onEditNote={editNote}
           onDeleteNote={deleteNote}
+        />
+      )}
+
+      {npcTrackerOpen && (
+        <NpcTrackerOverlay
+          partyCode={partyCode}
+          currentUserId={currentUserId}
+          onClose={() => setNpcTrackerOpen(false)}
         />
       )}
     </div>,
