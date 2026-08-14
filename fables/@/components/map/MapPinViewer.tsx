@@ -7,12 +7,12 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import { Pencil, Trash2, Check, X, Palette } from "lucide-react"
+import { Pencil, Trash2, Check, X, Palette, Skull } from "lucide-react"
 import { PIN_COLORS, type MapPin, type MapPinNote } from "./useMapBoard"
 import { MapNotesPanel } from "./MapNotesPanel"
 
 export function MapPinViewer({
-  pin, notes, currentUserId, onClose, onRename, onChangeColor, onDeletePin, onAddNote, onEditNote, onDeleteNote,
+  pin, notes, currentUserId, onClose, onRename, onChangeColor, onToggleBoss, onDeletePin, onAddNote, onEditNote, onDeleteNote,
 }: {
   pin: MapPin
   notes: MapPinNote[]
@@ -20,6 +20,7 @@ export function MapPinViewer({
   onClose: () => void
   onRename: (name: string) => void
   onChangeColor: (color: string) => void
+  onToggleBoss: (isBoss: boolean) => void
   onDeletePin: () => void
   onAddNote: (content: string) => void
   onEditNote: (id: string, content: string) => void
@@ -59,6 +60,10 @@ export function MapPinViewer({
           </div>
         )}
         <div className="flex items-center gap-1.5 relative">
+          <button type="button" onClick={() => onToggleBoss(!pin.is_boss)} title={pin.is_boss ? "Boss pin (click to unmark)" : "Mark as boss pin"}
+            className={`size-8 flex items-center justify-center rounded-lg transition-colors ${pin.is_boss ? "bg-violet-500/25 text-violet-200" : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"}`}>
+            <Skull className="size-4" />
+          </button>
           <button type="button" onClick={() => setPickingColor(v => !v)} title="Pin color"
             className="size-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
             <Palette className="size-4" style={{ color: pin.color }} />

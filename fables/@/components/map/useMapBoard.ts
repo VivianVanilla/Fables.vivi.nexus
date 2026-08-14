@@ -21,6 +21,7 @@ export interface MapPin {
   party_code: string
   name: string
   color: string
+  is_boss: boolean
   x: number
   y: number
   owner_id: string
@@ -181,9 +182,9 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     return () => { supabase.removeChannel(ch) }
   }, [partyCode, currentUserId, suffix])
 
-  async function createPin(name: string, x: number, y: number, color: string = DEFAULT_PIN_COLOR) {
+  async function createPin(name: string, x: number, y: number, color: string = DEFAULT_PIN_COLOR, isBoss = false) {
     const { data, error } = await supabase.from("map_pins").insert({
-      party_code: partyCode, name, color, x, y, owner_id: currentUserId,
+      party_code: partyCode, name, color, is_boss: isBoss, x, y, owner_id: currentUserId,
     }).select().single()
     if (error) { console.error("create pin error:", error); return null }
     const row = data as MapPin
@@ -207,6 +208,15 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     setPins(prev => prev.map(p => p.id === id ? { ...p, color } : p))
     const { error } = await supabase.from("map_pins").update({ color }).eq("id", id)
     if (error) console.error("recolor pin error:", error)
+  }
+
+  // Boss pins are the same city-marker row, just flagged to render as a
+  // skull instead of the usual teardrop — no separate table/kind needed for
+  // one extra look.
+  async function setPinBoss(id: string, isBoss: boolean) {
+    setPins(prev => prev.map(p => p.id === id ? { ...p, is_boss: isBoss } : p))
+    const { error } = await supabase.from("map_pins").update({ is_boss: isBoss }).eq("id", id)
+    if (error) console.error("set pin boss error:", error)
   }
 
   async function deletePin(id: string) {
@@ -343,7 +353,7 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
 
   return {
     pins, notes, tokens, strokes, paintLayer, loaded,
-    createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
+    createPin, movePin, renamePin, recolorPin, setPinBoss, deletePin, addNote, editNote, deleteNote,
     moveToken, placeHereToken, createTracker, renameTracker, deleteTracker,
     addStroke, deleteStroke, unifyStrokes,
   }
