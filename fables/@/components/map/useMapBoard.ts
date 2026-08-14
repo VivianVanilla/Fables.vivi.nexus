@@ -304,10 +304,15 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
   // caller — see MapOverlay's canvas, which draws the existing paint layer
   // plus all live strokes into the same buffer, so exporting it is already
   // the correct composite) and retires the strokes that composite
-  // represents. IDs are captured by the caller before the upload starts, so
-  // a stroke someone draws mid-unify isn't swept up and deleted along with
-  // the batch it was never actually part of.
-  async function unifyStrokes(imageBlob: Blob, strokeIds: string[]) {
+  // represents. `cutoff` (the newest created_at among the captured strokes,
+  // picked by the caller before the upload starts) deletes by comparison
+  // instead of an explicit id list — a stroke table can run into the
+  // thousands of rows, and passing that many ids through `.in()` blows well
+  // past the ~8KB URL length Supabase's edge enforces, silently dropping
+  // most of the delete. A `created_at <= cutoff` filter has no such limit
+  // regardless of row count, and still leaves alone anything someone draws
+  // mid-unify (it postdates the cutoff, so it isn't touched).
+  async function unifyStrokes(imageBlob: Blob, cutoff: string) {
     const file = new File([imageBlob], "paint.png", { type: "image/png" })
     const url = await uploadUserImage(currentUserId, file, `map-paint-${partyCode}`)
     if (!url) { console.error("unify strokes: image upload failed"); return }
@@ -317,11 +322,10 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     if (upsertError) { console.error("unify strokes upsert error:", upsertError); return }
     setPaintLayer(row)
 
-    if (strokeIds.length) {
-      setStrokes(prev => prev.filter(s => !strokeIds.includes(s.id)))
-      const { error: deleteError } = await supabase.from("map_strokes").delete().in("id", strokeIds)
-      if (deleteError) console.error("unify strokes cleanup error:", deleteError)
-    }
+    setStrokes(prev => prev.filter(s => s.created_at > cutoff))
+    const { error: deleteError } = await supabase.from("map_strokes").delete()
+      .eq("party_code", partyCode).lte("created_at", cutoff)
+    if (deleteError) console.error("unify strokes cleanup error:", deleteError)
   }
 
   return {

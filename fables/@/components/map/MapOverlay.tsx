@@ -167,14 +167,14 @@ export function MapOverlay({
     const canvas = paintCanvasRef.current
     if (!canvas || strokes.length === 0 || unifying) return
     setUnifying(true)
-    const strokeIds = strokes.map(s => s.id)
+    const cutoff = strokes.reduce((latest, s) => s.created_at > latest ? s.created_at : latest, strokes[0].created_at)
     canvas.toBlob(async blob => {
       if (!blob) {
         console.error("unify: canvas export failed — possibly a tainted canvas from a cross-origin paint layer image")
         setUnifying(false)
         return
       }
-      await unifyStrokes(blob, strokeIds)
+      await unifyStrokes(blob, cutoff)
       setUnifying(false)
       setConfirmingUnify(false)
     }, "image/png")
