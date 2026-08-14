@@ -1,12 +1,12 @@
 import { useState } from "react"
-import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "../../character-types"
+import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "@/components/shared/types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
-import { slotLevelColor, slotLevelGradient } from "../../character-themes"
-import type { Theme, SlotTheme } from "../../character-themes"
-import { profBonus } from "../../character-utils"
-import { SAVE_TO_ABILITY, type FavoriteCategory } from "../../character-constants"
+import { slotLevelColor, slotLevelGradient } from "@/components/shared/themes"
+import type { Theme, SlotTheme } from "@/components/shared/themes"
+import { profBonus } from "@/components/shared/utils"
+import { SAVE_TO_ABILITY, type FavoriteCategory } from "@/components/shared/constants"
 
 interface Props {
   card: string

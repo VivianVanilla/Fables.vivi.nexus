@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { NumInput } from "../ui/NumInput"
+import { NumInput } from "@/components/shared/ui/NumInput"
 
 interface DeathSaves {
   successes: number

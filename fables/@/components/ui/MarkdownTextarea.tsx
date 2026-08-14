@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { Bold, Italic, Code as CodeIcon, Table2, ImageIcon, Loader2 } from "lucide-react"
-import { loadUserImages, uploadUserImage, type GalleryImage } from "../imageGallery"
-import { PortraitModal } from "../character/modals/PortraitModal"
+import { loadUserImages, uploadUserImage, type GalleryImage } from "@/components/shared/imageGallery"
+import { PortraitModal } from "@/components/shared/PortraitModal"
 
 const MARKDOWN_TABLE = `| Header 1 | Header 2 | Header 3 |
 | -------- | -------- | -------- |

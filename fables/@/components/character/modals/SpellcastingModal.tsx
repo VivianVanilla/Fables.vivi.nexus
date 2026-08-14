@@ -1,12 +1,12 @@
 import { useState } from "react"
-import { Modal } from "../ui/Modal"
-import { NumInput } from "../ui/NumInput"
-import type { CharacterData, SpellSlot } from "../../character-types"
+import { Modal } from "@/components/shared/ui/Modal"
+import { NumInput } from "@/components/shared/ui/NumInput"
+import type { CharacterData, SpellSlot } from "@/components/shared/types"
 import { TracingSlider } from "../../ui/tracing-slider"
-import { slotLevelColor, slotLevelGradient } from "../../character-themes"
-import type { SlotTheme } from "../../character-themes"
-import { profBonus } from "../../character-utils"
-import { SAVE_TO_ABILITY } from "../../character-constants"
+import { slotLevelColor, slotLevelGradient } from "@/components/shared/themes"
+import type { SlotTheme } from "@/components/shared/themes"
+import { profBonus } from "@/components/shared/utils"
+import { SAVE_TO_ABILITY } from "@/components/shared/constants"
 
 interface Props {
   data: CharacterData

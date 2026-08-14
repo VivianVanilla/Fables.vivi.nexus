@@ -13,9 +13,9 @@
 import { useRef, useState } from "react"
 import { Pencil, Trash2, X, ImagePlus, Loader2, MoreVertical } from "lucide-react"
 import { Markdown } from "../ui/Markdown"
-import { uploadUserImage, loadUserImages, type GalleryImage } from "../imageGallery"
-import { PortraitModal } from "../character/modals/PortraitModal"
-import { Modal } from "../character/ui/Modal"
+import { uploadUserImage, loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
+import { PortraitModal } from "@/components/shared/PortraitModal"
+import { Modal } from "@/components/shared/ui/Modal"
 import type { MapPinNote } from "./useMapBoard"
 
 // `fade` mirrors `bg` (as a gradient "from" stop) so a long note's cutoff

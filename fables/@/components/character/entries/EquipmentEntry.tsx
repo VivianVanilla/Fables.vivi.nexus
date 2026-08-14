@@ -3,17 +3,17 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import type { EquipmentItem } from "../../character-types"
-import type { Theme } from "../../character-themes"
-import { Modal } from "../ui/Modal"
+import type { EquipmentItem } from "@/components/shared/types"
+import type { Theme } from "@/components/shared/themes"
+import { Modal } from "@/components/shared/ui/Modal"
 import { Markdown } from "../../ui/Markdown"
-import { PopTransition } from "../ui/PopTransition"
+import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
-import { NumInput } from "../ui/NumInput"
+import { NumInput } from "@/components/shared/ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
-import { computeDamageSegments, type DamageSegment } from "../../character-damage-types"
+import { computeDamageSegments, type DamageSegment } from "@/components/shared/damageTypes"
 import { getSuggestions, type Suggestion, STAT_OPTIONS, coloredNebulaBg, categoryAccentStyle } from "./FeatureEntry"
-import { DEFAULT_ACCENT_COLOR, type CardStyle } from "../../character-constants"
+import { DEFAULT_ACCENT_COLOR, type CardStyle } from "@/components/shared/constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

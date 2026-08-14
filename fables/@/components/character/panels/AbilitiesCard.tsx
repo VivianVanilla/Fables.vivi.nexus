@@ -1,6 +1,6 @@
-import type { CharacterData } from "../../character-types"
-import { ABILITY_KEYS, ABILITY_ABBR } from "../../character-constants"
-import { abilityMod } from "../../character-utils"
+import type { CharacterData } from "@/components/shared/types"
+import { ABILITY_KEYS, ABILITY_ABBR } from "@/components/shared/constants"
+import { abilityMod } from "@/components/shared/utils"
 
 interface Props {
   card: string

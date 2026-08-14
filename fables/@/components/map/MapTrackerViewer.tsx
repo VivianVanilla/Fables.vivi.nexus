@@ -10,12 +10,19 @@ import { useState } from "react"
 import { Pencil, Trash2, Check, X } from "lucide-react"
 import { type MapToken, type MapPinNote } from "./useMapBoard"
 import { MapNotesPanel } from "./MapNotesPanel"
+import { Markdown } from "../ui/Markdown"
+import type { NpcTracker } from "../npcTracker/useNpcTrackers"
 
 export function MapTrackerViewer({
-  tracker, notes, currentUserId, onClose, onRename, onDeleteTracker, onAddNote, onEditNote, onDeleteNote,
+  tracker, notes, npc, currentUserId, onClose, onRename, onDeleteTracker, onAddNote, onEditNote, onDeleteNote,
 }: {
   tracker: MapToken
   notes: MapPinNote[]
+  // Set when this tracker was placed by linking an entry from the NPC
+  // Tracker shelf (see @/components/npcTracker) — pulls in the info that
+  // lives on the shared NPC record instead of just the marker's own name/
+  // image. Renaming the marker here does NOT rename the NPC entry itself.
+  npc: NpcTracker | null
   currentUserId: string
   onClose: () => void
   onRename: (name: string) => void
@@ -79,6 +86,26 @@ export function MapTrackerViewer({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5" onClick={e => e.stopPropagation()}>
+        {npc && (
+          <div className="max-w-xl mx-auto mt-2 mb-5 rounded-xl bg-white/5 border border-white/10 p-4">
+            {npc.subtitle && <p className="text-sm italic text-white/60 mb-2">{npc.subtitle}</p>}
+            {npc.details ? (
+              <Markdown text={npc.details} tone="dark" size="sm" className="mb-3" />
+            ) : (
+              <p className="text-sm text-white/30 italic mb-3">No details yet — add some from the NPC Tracker shelf.</p>
+            )}
+            <div className="flex gap-6 flex-wrap">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Where were they seen last?</p>
+                <p className="text-xs text-white/80">{npc.last_seen || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Goal? How can they help?</p>
+                <p className="text-xs text-white/80">{npc.goal || "—"}</p>
+              </div>
+            </div>
+          </div>
+        )}
         <MapNotesPanel
           notes={notes}
           currentUserId={currentUserId}

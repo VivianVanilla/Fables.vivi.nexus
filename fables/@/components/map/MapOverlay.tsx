@@ -7,8 +7,9 @@ import { useMapPanZoom } from "./useMapPanZoom"
 import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint } from "./useMapBoard"
 import { MapPinViewer } from "./MapPinViewer"
 import { MapTrackerViewer } from "./MapTrackerViewer"
-import { uploadUserImage, loadUserImages, type GalleryImage } from "../imageGallery"
-import { PortraitModal } from "../character/modals/PortraitModal"
+import { uploadUserImage, loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
+import { PortraitModal } from "@/components/shared/PortraitModal"
+import { useNpcTrackers } from "../npcTracker/useNpcTrackers"
 
 // Served straight from public/ (like favicon.svg — see index.html) rather
 // than imported, since Vite copies public/ assets as-is instead of
@@ -59,6 +60,7 @@ export function MapOverlay({
     pins, notes, tokens, strokes, paintLayer, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
     moveToken, placeHereToken, createTracker, renameTracker, deleteTracker, addStroke, deleteStroke, unifyStrokes,
   } = useMapBoard(partyCode, currentUserId)
+  const { npcs } = useNpcTrackers(partyCode, currentUserId)
   const pz = useMapPanZoom({ x: 0, y: 0 })
 
   // "move" gates pin/tracker dragging behind a deliberate toggle — without
@@ -73,6 +75,7 @@ export function MapOverlay({
   const [pendingTracker, setPendingTracker] = useState<{ x: number; y: number } | null>(null)
   const [trackerNameDraft, setTrackerNameDraft] = useState("")
   const [trackerImageUrl, setTrackerImageUrl] = useState("")
+  const [linkedNpcId, setLinkedNpcId] = useState<string | null>(null)
   const [uploadingTrackerImage, setUploadingTrackerImage] = useState(false)
   const [showTrackerImagePicker, setShowTrackerImagePicker] = useState(false)
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
@@ -303,6 +306,7 @@ export function MapOverlay({
       setPendingTracker({ x: x - TOKEN_SIZE / 2, y: y - TOKEN_SIZE / 2 })
       setTrackerNameDraft("")
       setTrackerImageUrl("")
+      setLinkedNpcId(null)
     }
   }
   async function confirmPendingPin() {
@@ -316,11 +320,25 @@ export function MapOverlay({
   async function confirmPendingTracker() {
     const name = trackerNameDraft.trim()
     if (!name || !trackerImageUrl || !pendingTracker) return
-    await createTracker(name, trackerImageUrl, pendingTracker.x, pendingTracker.y)
+    await createTracker(name, trackerImageUrl, pendingTracker.x, pendingTracker.y, linkedNpcId)
     setPendingTracker(null)
     setTrackerNameDraft("")
     setTrackerImageUrl("")
+    setLinkedNpcId(null)
     setMode("idle")
+  }
+  // Picking an NPC from the shelf auto-fills the tracker's name/image from
+  // it (so the marker still looks right even before the link resolves) and
+  // records the link — MapTrackerViewer pulls the rest (details, last-seen,
+  // goal) from the NPC record itself once placed. Clicking the same NPC
+  // again unlinks, dropping back to a plain manually-named tracker.
+  function selectNpcForTracker(npcId: string) {
+    if (linkedNpcId === npcId) { setLinkedNpcId(null); return }
+    const npc = npcs.find(n => n.id === npcId)
+    if (!npc) return
+    setLinkedNpcId(npc.id)
+    setTrackerNameDraft(npc.name)
+    setTrackerImageUrl(npc.image_url ?? "")
   }
   // "Upload new" inside the gallery picker below — still goes through the
   // account's shared image storage (see imageGallery.ts), just reached via
@@ -626,6 +644,24 @@ export function MapOverlay({
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40" onClick={() => setPendingTracker(null)}>
             <div className="bg-card border border-border rounded-xl p-4 w-72 shadow-xl" onClick={e => e.stopPropagation()}>
               <p className="text-xs font-semibold text-foreground mb-2">New tracker</p>
+              {npcs.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50 mb-1.5">Link an NPC from the shelf</p>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {npcs.map(npc => (
+                      <button key={npc.id} type="button" onClick={() => selectNpcForTracker(npc.id)}
+                        className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border transition-colors ${linkedNpcId === npc.id ? "bg-violet-500/25 border-violet-400 text-violet-200" : "bg-foreground/8 border-transparent hover:bg-foreground/15 text-foreground/70"}`}>
+                        {npc.image_url && <img src={npc.image_url} alt="" className="size-4 rounded-full object-cover" />}
+                        {npc.name}
+                      </button>
+                    ))}
+                  </div>
+                  {linkedNpcId && (
+                    <p className="text-[10px] text-violet-300/80 mt-1.5">Linked — click it again to unlink, or just edit the name/picture below for this marker only.</p>
+                  )}
+                  <div className="h-px bg-border my-3" />
+                </div>
+              )}
               <input
                 autoFocus value={trackerNameDraft} onChange={e => setTrackerNameDraft(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") confirmPendingTracker(); if (e.key === "Escape") setPendingTracker(null) }}
@@ -684,6 +720,7 @@ export function MapOverlay({
         <MapTrackerViewer
           tracker={openTracker}
           notes={notes.filter(n => n.token_id === openTracker.id)}
+          npc={npcs.find(n => n.id === openTracker.npc_tracker_id) ?? null}
           currentUserId={currentUserId}
           onClose={() => setOpenTrackerId(null)}
           onRename={name => renameTracker(openTracker.id, name)}

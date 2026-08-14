@@ -1,5 +1,5 @@
-import type { CharacterData } from "../../character-types"
-import { SAVE_KEYS, ABILITY_ABBR, SAVE_TO_ABILITY } from "../../character-constants"
+import type { CharacterData } from "@/components/shared/types"
+import { SAVE_KEYS, ABILITY_ABBR, SAVE_TO_ABILITY } from "@/components/shared/constants"
 
 interface Props {
   card: string

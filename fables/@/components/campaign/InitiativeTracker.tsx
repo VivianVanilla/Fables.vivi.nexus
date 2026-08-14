@@ -8,12 +8,12 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react"
-import type { SidebarObject } from "@/components/sidebar-utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import type { userInfo } from "@/types/userInfo"
 import { useUserContext } from "../../../src/contexts/UserContext"
-import { safeParseJson, nanoid } from "../character-utils"
-import { FloatingPanel } from "../character/ui/FloatingPanel"
-import { FamiliarMonsterView } from "../monster"
+import { safeParseJson, nanoid } from "@/components/shared/utils"
+import { FloatingPanel } from "@/components/shared/ui/FloatingPanel"
+import { FamiliarMonsterView } from "@/components/shared/monster/monster"
 
 interface Combatant {
   id: string

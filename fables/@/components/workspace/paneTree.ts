@@ -13,7 +13,7 @@
 // state (useWorkspace.ts) can stay a thin useState wrapper.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { nanoid } from "../character-utils"
+import { nanoid } from "@/components/shared/utils"
 
 export interface LeafNode {
   type: "leaf"

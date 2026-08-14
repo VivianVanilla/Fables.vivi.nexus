@@ -9,9 +9,9 @@
 // back into the single pair so nothing already typed is lost either way.
 // ════════════════════════════════════════════════════════════════════════════
 
-import type { DamageEntry } from "../../character-types"
-import { damageTypeClasses, DAMAGE_TYPES, type DamageSegment } from "../../character-damage-types"
-import { nanoid } from "../../character-utils"
+import type { DamageEntry } from "@/components/shared/types"
+import { damageTypeClasses, DAMAGE_TYPES, type DamageSegment } from "@/components/shared/damageTypes"
+import { nanoid } from "@/components/shared/utils"
 
 export interface MultiDamageFields {
   damage?: string

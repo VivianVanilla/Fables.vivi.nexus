@@ -18,10 +18,10 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import type { MonsterAction, ActionCategory } from "../../monster-types"
+import type { MonsterAction, ActionCategory } from "@/components/shared/monster/monster-types"
 import { Markdown } from "../../ui/Markdown"
 import { DamagePills } from "../ui/DamageFields"
-import { computeDamageSegments } from "../../character-damage-types"
+import { computeDamageSegments } from "@/components/shared/damageTypes"
 import { CATEGORY_STYLE } from "./actionCategoryStyle"
 
 interface ActionEntryProps {

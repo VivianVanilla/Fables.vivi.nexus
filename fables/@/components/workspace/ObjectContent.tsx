@@ -5,11 +5,11 @@
 // once behaves exactly like opening it in one.
 // ════════════════════════════════════════════════════════════════════════════
 
-import type { SidebarObject } from "@/components/sidebar-utils"
-import { CharacterSheet } from "@/components/character"
-import { CampaignView } from "@/components/campaign-view"
-import { NoteView } from "@/components/NoteView"
-import { MonsterSheet } from "@/components/monster"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
+import { CharacterSheet } from "@/components/character/CharacterSheet"
+import { CampaignView } from "@/components/campaign/CampaignView"
+import { NoteView } from "@/components/shared/NoteView"
+import { MonsterSheet } from "@/components/shared/monster/monster"
 
 export function ObjectContent({ object }: { object: SidebarObject }) {
   if (object.type === "character") {

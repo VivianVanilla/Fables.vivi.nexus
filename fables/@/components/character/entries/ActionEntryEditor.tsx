@@ -6,10 +6,10 @@
 // ActionEntry.tsx, which is now display-only.
 // ════════════════════════════════════════════════════════════════════════════
 
-import type { MonsterAction, ActionCategory } from "../../monster-types"
+import type { MonsterAction, ActionCategory } from "@/components/shared/monster/monster-types"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { DamageEditor } from "../ui/DamageFields"
-import { NumInput } from "../ui/NumInput"
+import { NumInput } from "@/components/shared/ui/NumInput"
 import { CATEGORY_STYLE } from "./actionCategoryStyle"
 
 interface ActionEntryEditorProps {

@@ -6,7 +6,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
-import type { SidebarObject } from "@/components/sidebar-utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import {
   type LayoutNode, type Edge,
   createLeaf, firstLeafId, findLeaf, findLeafContaining,

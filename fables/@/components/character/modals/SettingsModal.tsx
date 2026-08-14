@@ -1,8 +1,8 @@
-import { Modal } from "../ui/Modal"
-import type { CharacterData } from "../../character-types"
-import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME } from "../../character-themes"
-import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, UI_SCALES, type CardStyle } from "../../character-constants"
-import { deriveCharacterClassNames, classLabel } from "../../character-class-colors"
+import { Modal } from "@/components/shared/ui/Modal"
+import type { CharacterData } from "@/components/shared/types"
+import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME } from "@/components/shared/themes"
+import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, UI_SCALES, type CardStyle } from "@/components/shared/constants"
+import { deriveCharacterClassNames, classLabel } from "@/components/shared/classColors"
 
 interface Props {
   data: CharacterData

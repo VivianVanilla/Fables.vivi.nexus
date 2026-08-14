@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Settings2, X } from "lucide-react"
-import { Modal } from "../ui/Modal"
-import type { CharacterData } from "../../character-types"
+import { Modal } from "@/components/shared/ui/Modal"
+import type { CharacterData } from "@/components/shared/types"
 
 // ── Types & constants ─────────────────────────────────────────────────────────
 

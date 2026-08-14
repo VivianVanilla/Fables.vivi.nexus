@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { ImageIcon, Paperclip, Trash2 } from "lucide-react"
-import { loadUserImages } from "../imageGallery"
+import { loadUserImages } from "@/components/shared/imageGallery"
 import { Markdown } from "../ui/Markdown"
 import { ShareCard } from "./ShareCard"
 import { ShareComposer } from "./ShareComposer"

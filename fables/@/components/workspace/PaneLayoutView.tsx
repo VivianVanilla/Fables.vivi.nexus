@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useRef, type RefObject } from "react"
-import type { SidebarObject } from "@/components/sidebar-utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { PaneView } from "./PaneView"
 import type { LayoutNode, Edge } from "./paneTree"
 

@@ -1,5 +1,5 @@
 import { EncryptedText } from "@/components/ui/encrypted-text"
-import { LoginForm } from "@/components/login-form"
+import { LoginForm } from "@/components/shell/login-form"
 import "./App.css"
 import Dashboard from "./Dashboard"
 import { Routes, Route, useNavigate } from "react-router-dom"

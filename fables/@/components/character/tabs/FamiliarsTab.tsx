@@ -7,14 +7,14 @@
 
 import { useState } from "react"
 import type { userInfo } from "@/types/userInfo"
-import type { FamiliarRef, FavoriteRef } from "../../character-types"
-import type { MonsterData } from "../../monster-types"
-import { FamiliarMonsterView } from "../../monster"
+import type { FamiliarRef, FavoriteRef } from "@/components/shared/types"
+import type { MonsterData } from "@/components/shared/monster/monster-types"
+import { FamiliarMonsterView } from "@/components/shared/monster/monster"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { FavoriteStar } from "../ui/FavoriteStar"
-import { safeParseJson } from "../../character-utils"
+import { safeParseJson } from "@/components/shared/utils"
 import { categoryAccentStyle } from "../entries/FeatureEntry"
-import type { CardStyle } from "../../character-constants"
+import type { CardStyle } from "@/components/shared/constants"
 
 interface FamiliarsTabProps {
   familiars: FamiliarRef[]

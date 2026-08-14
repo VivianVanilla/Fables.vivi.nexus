@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AppSidebar } from "@/components/app-sidebar";
-import type { SidebarObject } from "@/components/sidebar-utils";
+import { AppSidebar } from "@/components/shell/app-sidebar";
+import type { SidebarObject } from "@/components/shell/sidebar-utils";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { UpdateDetailsButton } from "@/components/UpdateDetailsButton";
+import { UpdateDetailsButton } from "@/components/shell/UpdateDetailsButton";
 import { PaneLayoutView } from "@/components/workspace/PaneLayoutView";
 import { useWorkspace } from "@/components/workspace/useWorkspace";
-import { CampaignRosterSidebar } from "@/components/campaign-view";
+import { CampaignRosterSidebar } from "@/components/campaign/CampaignView";
 import { useUserContext } from "./contexts/UserContext";
 import "./index.css";
 

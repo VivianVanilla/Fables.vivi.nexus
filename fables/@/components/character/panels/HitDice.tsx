@@ -1,6 +1,6 @@
 import { useState } from "react"
-import type { HitDicePool } from "../../character-types"
-import { PopTransition } from "../ui/PopTransition"
+import type { HitDicePool } from "@/components/shared/types"
+import { PopTransition } from "@/components/shared/ui/PopTransition"
 
 interface Props {
   card: string

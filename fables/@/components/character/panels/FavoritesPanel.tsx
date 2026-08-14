@@ -10,16 +10,16 @@
 
 import { useState } from "react"
 import type { userInfo } from "@/types/userInfo"
-import type { FavoriteRef, SpellItem, EquipmentItem, Feature, FamiliarRef } from "../../character-types"
-import type { MonsterData } from "../../monster-types"
+import type { FavoriteRef, SpellItem, EquipmentItem, Feature, FamiliarRef } from "@/components/shared/types"
+import type { MonsterData } from "@/components/shared/monster/monster-types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { FeatureEntry, categoryAccentStyle } from "../entries/FeatureEntry"
 import { FavoriteStar } from "../ui/FavoriteStar"
-import { safeParseJson } from "../../character-utils"
-import { matchClassKey } from "../../character-class-colors"
-import type { Theme } from "../../character-themes"
-import type { FavoriteCategory, CardStyle } from "../../character-constants"
+import { safeParseJson } from "@/components/shared/utils"
+import { matchClassKey } from "@/components/shared/classColors"
+import type { Theme } from "@/components/shared/themes"
+import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
 
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 

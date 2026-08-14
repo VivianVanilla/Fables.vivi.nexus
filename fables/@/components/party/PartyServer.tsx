@@ -10,13 +10,14 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react"
-import { Hash, Plus, X, Menu, Mountain } from "lucide-react"
+import { Hash, Plus, X, Menu, Mountain, BookOpen } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
-import { safeParseJson, nanoid } from "../character-utils"
-import type { SidebarObject } from "../sidebar-utils"
+import { safeParseJson, nanoid } from "@/components/shared/utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
 import { ChatPane } from "./ChatPane"
 import { MapOverlay } from "../map/MapOverlay"
+import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
 import { markThreadSeen, isThreadUnread } from "./unread"
 import { channelThreadKey, dmThreadKey, DEFAULT_CHANNEL, type Channel, type PartyMember } from "./partyTypes"
 
@@ -50,6 +51,7 @@ export function PartyServer({
   // sidebar — there isn't room for both it and the chat at once on a phone.
   const [railOpen, setRailOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
+  const [npcTrackerOpen, setNpcTrackerOpen] = useState(false)
 
   // Everyone in the party can DM everyone else — the rest of the player
   // roster (from `members`, minus yourself) plus the DM, unless you *are*
@@ -180,6 +182,14 @@ export function PartyServer({
           })}
         </div>
 
+        <div className="px-3 pt-1 pb-1.5 shrink-0 border-t border-border flex flex-col gap-0.5">
+          <button type="button" onClick={() => setNpcTrackerOpen(true)}
+            className="w-full flex items-center gap-1.5 text-[12px] px-2 py-1.5 rounded-md transition-colors mt-1.5 text-foreground/60 hover:bg-foreground/8 hover:text-foreground">
+            <BookOpen className="size-3.5 shrink-0 opacity-70" />
+            NPC Tracker
+          </button>
+        </div>
+
         {partyCode === MAP_PARTY_CODE && (
           <div className="px-3 pt-1 pb-1.5 shrink-0 border-t border-border flex flex-col gap-0.5">
             <button type="button" onClick={() => setMapOpen(true)}
@@ -248,6 +258,14 @@ export function PartyServer({
           currentUserId={currentUserId}
           currentUserName={currentUserName}
           onClose={() => setMapOpen(false)}
+        />
+      )}
+
+      {npcTrackerOpen && (
+        <NpcTrackerOverlay
+          partyCode={partyCode}
+          currentUserId={currentUserId}
+          onClose={() => setNpcTrackerOpen(false)}
         />
       )}
     </div>

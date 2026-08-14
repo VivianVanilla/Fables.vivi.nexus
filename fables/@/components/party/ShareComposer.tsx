@@ -7,9 +7,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useUserContext } from "../../../src/contexts/UserContext"
-import { safeParseJson } from "../character-utils"
-import type { SidebarObject } from "../sidebar-utils"
-import type { CharacterData, Feature } from "../character-types"
+import { safeParseJson } from "@/components/shared/utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
+import type { CharacterData, Feature } from "@/components/shared/types"
 import type { FeatureBucket, SharePayload } from "./partyTypes"
 
 function normalizedPartyCode(code: string) {

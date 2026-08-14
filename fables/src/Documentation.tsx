@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
-import { AppSidebar } from "@/components/app-sidebar";
-import type { SidebarObject } from "@/components/sidebar-utils";
+import { AppSidebar } from "@/components/shell/app-sidebar";
+import type { SidebarObject } from "@/components/shell/sidebar-utils";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
   BreadcrumbPage, BreadcrumbSeparator,

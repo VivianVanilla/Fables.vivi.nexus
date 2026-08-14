@@ -1,6 +1,6 @@
 import { useState } from "react"
-import type { CharacterData } from "../../character-types"
-import { SKILLS } from "../../character-constants"
+import type { CharacterData } from "@/components/shared/types"
+import { SKILLS } from "@/components/shared/constants"
 
 const ABILITY_COLORS: Record<string, { text: string; subtle: string }> = {
   str: { text: "text-red-400",    subtle: "bg-red-500/8"    },

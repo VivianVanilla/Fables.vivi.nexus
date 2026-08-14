@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { useChannelSuffix } from "../party/partyTypes"
-import { uploadUserImage } from "../imageGallery"
+import { SUPABASE_BUCKET } from "@/components/shared/constants"
 
 // Shared with the avatar-color wheel elsewhere in Party Chat (see
 // MapPinViewer's `avatarColor`) so pins and people read as one palette.
@@ -43,6 +43,11 @@ export interface MapPinNote {
 // `kind` distinguishes the one-per-party "currently here" dot ("here",
 // name/image_url unused) from user-created trackers ("tracker" — any
 // number per party, each with a name and an uploaded image).
+// `npc_tracker_id` optionally links a tracker to an entry on the party's NPC
+// Tracker shelf (see @/components/npcTracker) — set at creation time by
+// picking an existing NPC instead of typing a fresh name/image. ON DELETE
+// SET NULL server-side, so removing the NPC entry un-links rather than
+// deleting the map marker.
 export interface MapToken {
   id: string
   party_code: string
@@ -50,6 +55,7 @@ export interface MapToken {
   name: string | null
   image_url: string | null
   owner_id: string | null
+  npc_tracker_id: string | null
   x: number
   y: number
   updated_by: string | null
@@ -261,9 +267,10 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
   // each an independent draggable marker synced the same way as the "here"
   // dot. Rename/delete are gated client-side (see MapOverlay) to the
   // tracker's creator or the DM.
-  async function createTracker(name: string, imageUrl: string, x: number, y: number) {
+  async function createTracker(name: string, imageUrl: string, x: number, y: number, npcTrackerId: string | null = null) {
     const { data, error } = await supabase.from("map_tokens").insert({
       party_code: partyCode, kind: "tracker", name, image_url: imageUrl, owner_id: currentUserId, x, y, updated_by: currentUserId,
+      npc_tracker_id: npcTrackerId,
     }).select().single()
     if (error) { console.error("create tracker error:", error); return null }
     const row = data as MapToken
@@ -313,9 +320,15 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
   // regardless of row count, and still leaves alone anything someone draws
   // mid-unify (it postdates the cutoff, so it isn't touched).
   async function unifyStrokes(imageBlob: Blob, cutoff: string) {
-    const file = new File([imageBlob], "paint.png", { type: "image/png" })
-    const url = await uploadUserImage(currentUserId, file, `map-paint-${partyCode}`)
-    if (!url) { console.error("unify strokes: image upload failed"); return }
+    // Uploaded under the shared `mappaints/` path, not `${currentUserId}/...`
+    // like imageGallery.ts's uploadUserImage — this is a background map
+    // asset, not a personal picture, so whoever happens to click Unify
+    // shouldn't see it show up in their own "choose a picture" gallery.
+    const path = `mappaints/map-paint-${partyCode}.png`
+    const { error: uploadError } = await supabase.storage.from(SUPABASE_BUCKET)
+      .upload(path, imageBlob, { upsert: true, contentType: "image/png" })
+    if (uploadError) { console.error("unify strokes: image upload failed:", uploadError); return }
+    const url = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path).data.publicUrl
 
     const row: MapPaintLayer = { party_code: partyCode, image_url: url, updated_by: currentUserId, updated_at: new Date().toISOString() }
     const { error: upsertError } = await supabase.from("map_paint_layer").upsert(row, { onConflict: "party_code" })

@@ -1,4 +1,4 @@
-import type { ActiveCondition } from "../../character-types"
+import type { ActiveCondition } from "@/components/shared/types"
 
 const CONDITION_COLOR: Record<string, string> = {
   Concentrating: "bg-blue-500/25 text-blue-200 border-blue-500/40",

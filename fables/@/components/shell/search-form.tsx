@@ -1,0 +1,668 @@
+import { Label } from "@/components/ui/label"
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+} from "@/components/ui/sidebar"
+import { BookOpenText } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Field, FieldGroup } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { useUserContext } from "../../../src/contexts/UserContext"
+import { uniqueName } from "@/components/shared/utils"
+import { parseMonsterStatBlock } from "@/components/shared/monster/monster-import"
+import { supabase } from "../../../src/supabase"
+import { Link } from "react-router-dom"
+
+
+
+// ── Race data (fetched from documentation — see useRaceEntries below) ─────────
+interface RaceEntry { name: string }
+
+function useRaceEntries(userId?: string | null) {
+  const [raceEntries, setRaceEntries] = useState<RaceEntry[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: coreRows } = await supabase
+        .from("documentation").select("name")
+        .eq("type", "race").eq("is_homebrew", false)
+
+      let extraRows: any[] = []
+      if (userId) {
+        const { data: ownRows } = await supabase
+          .from("documentation").select("name")
+          .eq("type", "race").eq("is_homebrew", true).eq("owner_id", userId)
+
+        const { data: libObjs } = await supabase
+          .from("objects").select("data")
+          .eq("type", "doc_race").eq("owner_id", userId)
+        const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
+        let libRows: any[] = []
+        if (libIds.length) {
+          const { data: lr } = await supabase
+            .from("documentation").select("name").in("id", libIds)
+          libRows = lr ?? []
+        }
+        extraRows = [...(ownRows ?? []), ...libRows]
+      }
+
+      const seen = new Set<string>()
+      const entries: RaceEntry[] = []
+      for (const r of [...(coreRows ?? []), ...extraRows]) {
+        if (seen.has(r.name)) continue
+        seen.add(r.name)
+        entries.push({ name: r.name })
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name))
+      entries.push({ name: "Other" })
+      if (!cancelled) setRaceEntries(entries)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  return raceEntries
+}
+
+const CLASSES = [
+  "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
+  "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard", "Artificer",
+]
+
+// ── Tiny helpers ──────────────────────────────────────────────────────────────
+function clampLevel(n: number) {
+  return Math.min(20, Math.max(1, Math.floor(n) || 1))
+}
+
+function generatePartyCode(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase()
+}
+
+interface ClassEntry { cls: string; level: number }
+
+// ── Sub-forms ─────────────────────────────────────────────────────────────────
+
+function FolderForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [name, setName] = useState("New Folder")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      await createObject({ name, type: "folder" })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create folder")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>Create a Folder</DialogTitle>
+        <DialogDescription>Choose a name. You can change this later.</DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <Label htmlFor="folder-name">Name</Label>
+          <Input id="folder-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+
+      </FieldGroup>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim()}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+function CharacterForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject, user } = useUserContext()
+  const raceEntries = useRaceEntries(user?.id)
+  const [name, setName] = useState("New Character")
+  const [race, setRace] = useState("")
+  const [multiclass, setMulticlass] = useState(false)
+  const [classes, setClasses] = useState<ClassEntry[]>([{ cls: CLASSES[0], level: 1 }])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const totalLevel = classes.reduce((sum, c) => sum + c.level, 0)
+
+  useEffect(() => {
+    if (!race && raceEntries.length > 0) setRace(raceEntries[0].name)
+  }, [raceEntries, race])
+
+  function setClassEntry(index: number, field: keyof ClassEntry, value: string | number) {
+    setClasses((prev) =>
+      prev.map((entry, i) =>
+        i === index ? { ...entry, [field]: field === "level" ? clampLevel(Number(value)) : value } : entry
+      )
+    )
+  }
+
+  function addClass() {
+    if (totalLevel >= 20) return
+    setClasses((prev) => [...prev, { cls: CLASSES[0], level: 1 }])
+  }
+
+  function removeClass(index: number) {
+    setClasses((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      // Build a display string for class (e.g. "Fighter 3 / Rogue 2" or just "Fighter")
+      const classDisplay = multiclass
+        ? classes.map(c => `${c.cls} ${c.level}`).join(" / ")
+        : classes[0]?.cls ?? ""
+
+      await createObject({
+        name,
+        type: "character",
+        data: {
+          race,
+          class: classDisplay,
+          level: totalLevel,
+          multiclass,
+          classes,
+        },
+      })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create character")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Create a Character</DialogTitle>
+        <DialogDescription>Fill in the basics. Everything can be edited later.</DialogDescription>
+      </DialogHeader>
+
+      <FieldGroup>
+        {/* Name */}
+        <Field>
+          <Label htmlFor="char-name">Name</Label>
+          <Input id="char-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+
+        {/* Race */}
+        <Field>
+          <Label htmlFor="char-race">Race</Label>
+          <select
+            id="char-race"
+            value={race}
+            onChange={(e) => setRace(e.target.value)}
+            disabled={raceEntries.length === 0}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+          >
+            {raceEntries.length === 0 && <option>Loading…</option>}
+            {raceEntries.map((r) => <option key={r.name} className="bg-zinc-800 text-white">{r.name}</option>)}
+          </select>
+        </Field>
+
+        {/* Multiclass toggle */}
+        <Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={multiclass}
+              onChange={(e) => {
+                setMulticlass(e.target.checked)
+                if (!e.target.checked) setClasses([classes[0]])
+              }}
+              className="rounded border-input"
+            />
+            Multiclass
+          </label>
+        </Field>
+
+        {/* Class entries */}
+        <div className="flex flex-col gap-2">
+          {classes.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                value={entry.cls}
+                onChange={(e) => setClassEntry(i, "cls", e.target.value)}
+                className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {CLASSES.map((c) => <option key={c} className="bg-zinc-800 text-white">{c}</option>)}
+              </select>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline" size="sm" type="button"
+                  onClick={() => setClassEntry(i, "level", entry.level - 1)}
+                  disabled={entry.level <= 1}
+                >−</Button>
+                <Input
+                  type="number" min={1} max={20}
+                  value={entry.level}
+                  onChange={(e) => setClassEntry(i, "level", e.target.value)}
+                  className="w-14 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <Button
+                  variant="outline" size="sm" type="button"
+                  onClick={() => setClassEntry(i, "level", entry.level + 1)}
+                  disabled={totalLevel >= 20}
+                >+</Button>
+              </div>
+              {multiclass && classes.length > 1 && (
+                <Button variant="ghost" size="sm" type="button" onClick={() => removeClass(i)}>✕</Button>
+              )}
+            </div>
+          ))}
+
+          {multiclass && totalLevel < 20 && (
+            <Button variant="outline" size="sm" type="button" onClick={addClass}>
+              + Add Class
+            </Button>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Total level: <span className={totalLevel > 20 ? "text-destructive font-bold" : "font-medium"}>{totalLevel}</span>
+            {totalLevel > 20 && " — exceeds level 20 cap"}
+          </p>
+        </div>
+      </FieldGroup>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim() || totalLevel > 20}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+async function isPartyCodeTaken(code: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("objects")
+    .select("id")
+    .filter("data->>partyCode", "eq", code)
+    .limit(1)
+  if (error) { console.error("party code check failed:", error); return false }
+  return (data ?? []).length > 0
+}
+
+function CampaignForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [name, setName] = useState("New Campaign")
+  const [partyCode, setPartyCode] = useState(() => generatePartyCode())
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [codeTaken, setCodeTaken] = useState(false)
+  const [checkingCode, setCheckingCode] = useState(false)
+
+  // Live-check as the user types/regenerates, plus a final check on submit —
+  // codes are otherwise just random strings with no uniqueness guarantee.
+  useEffect(() => {
+    const code = partyCode.trim().toUpperCase()
+    if (!code) { setCodeTaken(false); return }
+    setCheckingCode(true)
+    const t = setTimeout(() => {
+      isPartyCodeTaken(code).then(taken => { setCodeTaken(taken); setCheckingCode(false) })
+    }, 300)
+    return () => clearTimeout(t)
+  }, [partyCode])
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      const code = partyCode.trim().toUpperCase()
+      if (await isPartyCodeTaken(code)) {
+        setCodeTaken(true)
+        setError("That code is already in use — try a different one.")
+        return
+      }
+      await createObject({
+        name,
+        type: "campaign",
+        data: { partyCode: code },
+      })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create campaign")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>Create a Campaign</DialogTitle>
+        <DialogDescription>Share the party code with your players so they can link their characters.</DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <Label htmlFor="campaign-name">Campaign Name</Label>
+          <Input id="campaign-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field>
+          <Label htmlFor="party-code">Party Code</Label>
+          <div className="flex gap-2">
+            <Input
+              id="party-code"
+              value={partyCode}
+              onChange={(e) => setPartyCode(e.target.value.toUpperCase().slice(0, 8))}
+              className={`font-mono tracking-widest ${codeTaken ? "border-destructive" : ""}`}
+              placeholder="ABC123"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPartyCode(generatePartyCode())}
+              title="Generate new code"
+            >
+              ↺
+            </Button>
+          </div>
+          {checkingCode ? (
+            <p className="text-xs text-muted-foreground mt-1">Checking availability…</p>
+          ) : codeTaken ? (
+            <p className="text-xs text-destructive mt-1">This code is already in use — try another or regenerate.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">Players enter this code in the Info tab of their character sheet.</p>
+          )}
+        </Field>
+      </FieldGroup>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || checkingCode || codeTaken || !name.trim() || !partyCode.trim()}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+function SimpleForm({
+  title,
+  description,
+  type,
+  defaultName,
+  onCreated,
+}: {
+  title: string
+  description: string
+  type: string
+  defaultName: string
+  onCreated: () => void
+}) {
+  const { createObject, objects } = useUserContext()
+  const [name, setName] = useState(defaultName)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      // Avoid two notes silently sharing the same default name.
+      const finalName = type === "note"
+        ? uniqueName(name, objects.filter(o => o.type === "note").map(o => o.name))
+        : name
+      await createObject({ name: finalName, type, data: {} })
+      onCreated()
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <DialogContent className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <Label htmlFor={`${type}-name`}>Name</Label>
+          <Input
+            id={`${type}-name`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+      </FieldGroup>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || !name.trim()}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+// Monsters get their own form (rather than the generic SimpleForm above) so
+// creation can offer a second path: paste a stat block and have it parsed
+// into the sheet instead of starting blank. See monster-import.ts for the
+// parser itself and why it's a heuristic parser rather than an LLM call.
+function MonsterForm({ onCreated }: { onCreated: () => void }) {
+  const { createObject } = useUserContext()
+  const [mode, setMode] = useState<"new" | "import">("new")
+  const [name, setName] = useState("New Monster")
+  const [importText, setImportText] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const preview = mode === "import" && importText.trim() ? parseMonsterStatBlock(importText) : null
+
+  async function handleCreate() {
+    setSaving(true)
+    setError(null)
+    try {
+      if (mode === "import") {
+        if (!preview) return
+        await createObject({ name: preview.name || "Imported Monster", type: "monster", data: preview.data })
+      } else {
+        await createObject({ name, type: "monster", data: {} })
+      }
+      onCreated()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create monster")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const actionCount = (preview?.data.actions?.length ?? 0) + (preview?.data.bonusActions?.length ?? 0)
+    + (preview?.data.reactions?.length ?? 0) + (preview?.data.legendaryActions?.length ?? 0) + (preview?.data.lairActions?.length ?? 0)
+
+  return (
+    <DialogContent className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Create a Monster</DialogTitle>
+        <DialogDescription>
+          {mode === "new"
+            ? "Choose a name for your monster. You can edit details later."
+            : "Paste a stat block and Fables will do its best to fill in the sheet. This is a best-effort parse, not magic — skim the result afterward."}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="flex items-center gap-1 rounded-md bg-muted p-0.5 w-fit">
+        <button type="button" onClick={() => setMode("new")}
+          className={`text-xs px-3 py-1.5 rounded-sm font-medium transition-colors ${mode === "new" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          Create New
+        </button>
+        <button type="button" onClick={() => setMode("import")}
+          className={`text-xs px-3 py-1.5 rounded-sm font-medium transition-colors ${mode === "import" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          Import from Text
+        </button>
+      </div>
+
+      {mode === "new" ? (
+        <FieldGroup>
+          <Field>
+            <Label htmlFor="monster-name">Name</Label>
+            <Input id="monster-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+        </FieldGroup>
+      ) : (
+        <FieldGroup>
+          <Field>
+            <Label htmlFor="monster-import-text">Stat block text</Label>
+            <textarea
+              id="monster-import-text"
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={10}
+              placeholder="Paste a full stat block — name, AC, HP, speed, ability scores, traits, actions…"
+              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 resize-y font-mono"
+            />
+          </Field>
+          {preview && (
+            <p className="text-xs text-muted-foreground">
+              Parsed: <span className="font-medium text-foreground">{preview.name}</span>
+              {preview.data.ac != null ? ` · AC ${preview.data.ac}` : ""}
+              {preview.data.maxHp != null ? ` · ${preview.data.maxHp} HP` : ""}
+              {preview.data.traits?.length ? ` · ${preview.data.traits.length} trait${preview.data.traits.length === 1 ? "" : "s"}` : ""}
+              {actionCount ? ` · ${actionCount} action${actionCount === 1 ? "" : "s"}` : ""}
+            </p>
+          )}
+        </FieldGroup>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={handleCreate} disabled={saving || (mode === "new" ? !name.trim() : !importText.trim())}>
+          {saving ? "Creating…" : "Create"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+export function SearchForm({ ...props }: React.ComponentProps<"div">) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+
+  function closeAll() {
+    setMenuOpen(false)
+  }
+
+  return (
+    <div {...props} className="relative">
+      <div className="flex items-center gap-2">
+        <SidebarGroup className="py-0">
+          <SidebarGroupContent className="relative">
+
+              <Link to="/documentation" className="flex items-center gap-2 w-full px-2 py-1 text-sm text-muted-foreground hover:bg-muted/50 rounded-md" >
+            <BookOpenText className="" />
+            <p>Documentation</p>
+           </Link>
+
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          +
+        </Button>
+      </div>
+
+      {menuOpen && (
+        <div className="absolute top-full right-0 z-50 mt-2 w-56 overflow-hidden rounded-md bg-card shadow-lg ring-1 ring-border">
+          <div className="p-3">
+            <h3 className="text-sm font-medium text-foreground mb-2">Create New</h3>
+            <div className="flex flex-col gap-1">
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full">Folder</Button>
+                </DialogTrigger>
+                <FolderForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Character</Button>
+                </DialogTrigger>
+                <CharacterForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Campaign</Button>
+                </DialogTrigger>
+                <CampaignForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Monster</Button>
+                </DialogTrigger>
+                <MonsterForm onCreated={closeAll} />
+              </Dialog>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-start w-full"> Note</Button>
+                </DialogTrigger>
+                <SimpleForm
+                  title="Create a Note"
+                  description="Choose a name for your note."
+                  type="note"
+                  defaultName="New Note"
+                  onCreated={closeAll}
+                />
+              </Dialog>
+
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

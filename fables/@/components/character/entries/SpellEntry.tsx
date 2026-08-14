@@ -3,19 +3,19 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
-import type { SpellItem } from "../../character-types"
-import type { Theme } from "../../character-themes"
-import { Modal } from "../ui/Modal"
+import type { SpellItem } from "@/components/shared/types"
+import type { Theme } from "@/components/shared/themes"
+import { Modal } from "@/components/shared/ui/Modal"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
-import { damageTypeClasses, DAMAGE_TYPES } from "../../character-damage-types"
-import { PopTransition } from "../ui/PopTransition"
+import { damageTypeClasses, DAMAGE_TYPES } from "@/components/shared/damageTypes"
+import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
-import { spellItemFieldsFromSpell } from "../../character-spell-utils"
+import { spellItemFieldsFromSpell } from "@/components/shared/spellUtils"
 import { categoryAccentStyle } from "./FeatureEntry"
-import type { CardStyle } from "../../character-constants"
+import type { CardStyle } from "@/components/shared/constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

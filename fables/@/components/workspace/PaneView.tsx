@@ -8,7 +8,7 @@
 
 import { useRef, useState } from "react"
 import { X, SplitSquareHorizontal, SplitSquareVertical } from "lucide-react"
-import type { SidebarObject } from "@/components/sidebar-utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { ObjectContent } from "./ObjectContent"
 import type { LeafNode, Edge } from "./paneTree"
 

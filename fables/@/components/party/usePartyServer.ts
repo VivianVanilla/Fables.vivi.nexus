@@ -6,8 +6,8 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "../../../src/supabase"
-import { safeParseJson, nanoid } from "../character-utils"
-import type { SidebarObject } from "../sidebar-utils"
+import { safeParseJson, nanoid } from "@/components/shared/utils"
+import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { DEFAULT_CHANNEL, useChannelSuffix, type Channel, type Message, type PartyMember, type SharePayload } from "./partyTypes"
 
 // ── Roster (campaign + members + channels) ───────────────────────────────────
