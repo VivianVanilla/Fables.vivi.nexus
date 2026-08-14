@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react"
 import { Pencil, Trash2, Check, X, Palette } from "lucide-react"
 import { PIN_COLORS, type MapPin, type MapPinNote, type PinType } from "./useMapBoard"
-import { PIN_TYPES, pinTypeIcon } from "./pinTypes"
+import { PIN_TYPES } from "./pinTypes"
 import { MapNotesPanel } from "./MapNotesPanel"
 
 export function MapPinViewer({
@@ -32,7 +32,11 @@ export function MapPinViewer({
   const [pickingColor, setPickingColor] = useState(false)
   const [pickingType, setPickingType] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const TypeIcon = useMemo(() => pinTypeIcon(pin.pin_type), [pin.pin_type])
+  // A member expression (`typeEntry.Icon`) in JSX tag position, not a bare
+  // capitalized variable — the latter trips react-hooks/static-components
+  // ("component created during render") even though the underlying icon
+  // reference is always one of the same few stable, module-level imports.
+  const typeEntry = useMemo(() => PIN_TYPES.find(t => t.value === pin.pin_type) ?? PIN_TYPES[0], [pin.pin_type])
 
   function saveName() {
     const next = nameDraft.trim()
@@ -65,7 +69,7 @@ export function MapPinViewer({
         <div className="flex items-center gap-1.5 relative">
           <button type="button" onClick={() => { setPickingType(v => !v); setPickingColor(false) }} title="Pin style"
             className="size-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
-            <TypeIcon className="size-4" style={{ color: pin.color }} />
+            <typeEntry.Icon className="size-4" style={{ color: pin.color }} />
           </button>
           {pickingType && (
             <div className="absolute top-full right-0 mt-1.5 flex items-center gap-1.5 p-2 rounded-xl bg-zinc-900 border border-white/10 shadow-xl z-10">
