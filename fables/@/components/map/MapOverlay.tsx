@@ -1,10 +1,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Layers, Loader2, Skull, BookOpen } from "lucide-react"
+import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Layers, Loader2, BookOpen } from "lucide-react"
 import { usePartyRoster } from "../party/usePartyServer"
 import { useMapPanZoom } from "./useMapPanZoom"
-import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint } from "./useMapBoard"
+import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint, type PinType } from "./useMapBoard"
+import { PIN_TYPES, pinTypeIcon } from "./pinTypes"
 import { MapPinViewer } from "./MapPinViewer"
 import { MapTrackerViewer } from "./MapTrackerViewer"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
@@ -58,7 +59,7 @@ export function MapOverlay({
 }) {
   const { members, dmUserId } = usePartyRoster(partyCode)
   const {
-    pins, notes, tokens, strokes, paintLayer, createPin, movePin, renamePin, recolorPin, setPinBoss, deletePin, addNote, editNote, deleteNote,
+    pins, notes, tokens, strokes, paintLayer, createPin, movePin, renamePin, recolorPin, setPinType, deletePin, addNote, editNote, deleteNote,
     moveToken, placeHereToken, createTracker, renameTracker, deleteTracker, addStroke, deleteStroke, unifyStrokes,
   } = useMapBoard(partyCode, currentUserId)
   const { npcs } = useNpcTrackers(partyCode, currentUserId)
@@ -73,7 +74,7 @@ export function MapOverlay({
   const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null)
   const [pinNameDraft, setPinNameDraft] = useState("")
   const [pinColorDraft, setPinColorDraft] = useState(DEFAULT_PIN_COLOR)
-  const [pinBossDraft, setPinBossDraft] = useState(false)
+  const [pinTypeDraft, setPinTypeDraft] = useState<PinType>("city")
   const [pendingTracker, setPendingTracker] = useState<{ x: number; y: number } | null>(null)
   const [trackerNameDraft, setTrackerNameDraft] = useState("")
   const [trackerImageUrl, setTrackerImageUrl] = useState("")
@@ -305,7 +306,7 @@ export function MapOverlay({
       setPendingPin({ x: x - PIN_SIZE / 2, y: y - PIN_SIZE / 2 })
       setPinNameDraft("")
       setPinColorDraft(DEFAULT_PIN_COLOR)
-      setPinBossDraft(false)
+      setPinTypeDraft("city")
     } else {
       setPendingTracker({ x: x - TOKEN_SIZE / 2, y: y - TOKEN_SIZE / 2 })
       setTrackerNameDraft("")
@@ -316,7 +317,7 @@ export function MapOverlay({
   async function confirmPendingPin() {
     const name = pinNameDraft.trim()
     if (!name || !pendingPin) return
-    await createPin(name, pendingPin.x, pendingPin.y, pinColorDraft, pinBossDraft)
+    await createPin(name, pendingPin.x, pendingPin.y, pinColorDraft, pinTypeDraft)
     setPendingPin(null)
     setPinNameDraft("")
     setMode("idle")
@@ -524,6 +525,7 @@ export function MapOverlay({
             {/* Pins */}
             {pins.map(pin => {
               const dragging = draggingId === pin.id
+              const PinIcon = pinTypeIcon(pin.pin_type)
               return (
                 <div
                   key={pin.id}
@@ -540,11 +542,7 @@ export function MapOverlay({
                   className={`group absolute select-none flex items-center justify-center ${mode === "move" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
                   title={pin.name}
                 >
-                  {pin.is_boss ? (
-                    <Skull size={PIN_ICON_SIZE - 6} strokeWidth={2} color={pin.color} fill={pin.color} fillOpacity={0.6} className="drop-shadow-md" />
-                  ) : (
-                    <MapPinIcon size={PIN_ICON_SIZE} strokeWidth={2} color={pin.color} fill={pin.color} fillOpacity={0.6} className="drop-shadow-md" />
-                  )}
+                  <PinIcon size={pin.pin_type === "city" ? PIN_ICON_SIZE : PIN_ICON_SIZE - 6} strokeWidth={2} color={pin.color} fill={pin.color} fillOpacity={0.6} className="drop-shadow-md" />
                   <span style={{ fontSize: labelSize }} className="absolute top-full mt-0.5 px-1.5 py-0.5 rounded-full bg-black/75 text-white font-semibold whitespace-nowrap pointer-events-none">
                     {pin.name}
                   </span>
@@ -641,11 +639,15 @@ export function MapOverlay({
                   onChange={e => setPinColorDraft(e.target.value)}
                   className="size-6 rounded-md border border-border bg-transparent cursor-pointer p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none" />
               </div>
-              <button type="button" onClick={() => setPinBossDraft(v => !v)}
-                title="Marks this pin as a boss encounter — renders as a skull instead of the usual pin"
-                className={`w-full flex items-center justify-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg mb-3 transition-colors ${pinBossDraft ? "bg-violet-500/25 text-violet-200" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/70"}`}>
-                <Skull className="size-3.5" /> Boss pin
-              </button>
+              <div className="flex items-center gap-1.5 mb-3">
+                {PIN_TYPES.map(({ value, label, Icon }) => (
+                  <button key={value} type="button" onClick={() => setPinTypeDraft(value)} title={label}
+                    className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg text-[10px] transition-colors ${pinTypeDraft === value ? "bg-violet-500/25 text-violet-200" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/70"}`}>
+                    <Icon className="size-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setPendingPin(null)}
                   className="text-xs px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
@@ -726,7 +728,7 @@ export function MapOverlay({
           onClose={() => setOpenPinId(null)}
           onRename={name => renamePin(openPin.id, name)}
           onChangeColor={color => recolorPin(openPin.id, color)}
-          onToggleBoss={isBoss => setPinBoss(openPin.id, isBoss)}
+          onChangeType={type => setPinType(openPin.id, type)}
           onDeletePin={() => { deletePin(openPin.id); setOpenPinId(null) }}
           onAddNote={content => addNote({ pinId: openPin.id }, currentUserName, content)}
           onEditNote={editNote}

@@ -6,13 +6,14 @@
 // just whoever placed the pin.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react"
-import { Pencil, Trash2, Check, X, Palette, Skull } from "lucide-react"
-import { PIN_COLORS, type MapPin, type MapPinNote } from "./useMapBoard"
+import { useMemo, useState } from "react"
+import { Pencil, Trash2, Check, X, Palette } from "lucide-react"
+import { PIN_COLORS, type MapPin, type MapPinNote, type PinType } from "./useMapBoard"
+import { PIN_TYPES, pinTypeIcon } from "./pinTypes"
 import { MapNotesPanel } from "./MapNotesPanel"
 
 export function MapPinViewer({
-  pin, notes, currentUserId, onClose, onRename, onChangeColor, onToggleBoss, onDeletePin, onAddNote, onEditNote, onDeleteNote,
+  pin, notes, currentUserId, onClose, onRename, onChangeColor, onChangeType, onDeletePin, onAddNote, onEditNote, onDeleteNote,
 }: {
   pin: MapPin
   notes: MapPinNote[]
@@ -20,7 +21,7 @@ export function MapPinViewer({
   onClose: () => void
   onRename: (name: string) => void
   onChangeColor: (color: string) => void
-  onToggleBoss: (isBoss: boolean) => void
+  onChangeType: (type: PinType) => void
   onDeletePin: () => void
   onAddNote: (content: string) => void
   onEditNote: (id: string, content: string) => void
@@ -29,7 +30,9 @@ export function MapPinViewer({
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(pin.name)
   const [pickingColor, setPickingColor] = useState(false)
+  const [pickingType, setPickingType] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const TypeIcon = useMemo(() => pinTypeIcon(pin.pin_type), [pin.pin_type])
 
   function saveName() {
     const next = nameDraft.trim()
@@ -60,11 +63,21 @@ export function MapPinViewer({
           </div>
         )}
         <div className="flex items-center gap-1.5 relative">
-          <button type="button" onClick={() => onToggleBoss(!pin.is_boss)} title={pin.is_boss ? "Boss pin (click to unmark)" : "Mark as boss pin"}
-            className={`size-8 flex items-center justify-center rounded-lg transition-colors ${pin.is_boss ? "bg-violet-500/25 text-violet-200" : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"}`}>
-            <Skull className="size-4" />
+          <button type="button" onClick={() => { setPickingType(v => !v); setPickingColor(false) }} title="Pin style"
+            className="size-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+            <TypeIcon className="size-4" style={{ color: pin.color }} />
           </button>
-          <button type="button" onClick={() => setPickingColor(v => !v)} title="Pin color"
+          {pickingType && (
+            <div className="absolute top-full right-0 mt-1.5 flex items-center gap-1.5 p-2 rounded-xl bg-zinc-900 border border-white/10 shadow-xl z-10">
+              {PIN_TYPES.map(({ value, label, Icon }) => (
+                <button key={value} type="button" onClick={() => { onChangeType(value); setPickingType(false) }} title={label}
+                  className={`size-8 flex items-center justify-center rounded-lg transition-colors ${pin.pin_type === value ? "bg-violet-500/25 text-violet-200" : "text-white/60 hover:bg-white/10 hover:text-white"}`}>
+                  <Icon className="size-4" />
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={() => { setPickingColor(v => !v); setPickingType(false) }} title="Pin color"
             className="size-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
             <Palette className="size-4" style={{ color: pin.color }} />
           </button>
