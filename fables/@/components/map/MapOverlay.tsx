@@ -1,6 +1,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus } from "lucide-react"
+import { createPortal } from "react-dom"
+import { MapPin as MapPinIcon, LocateFixed, Move, Paintbrush, Eraser, Undo2, X, ZoomIn, ZoomOut, Minus, Plus, ImagePlus, Layers, Loader2 } from "lucide-react"
 import { usePartyRoster } from "../party/usePartyServer"
 import { useMapPanZoom } from "./useMapPanZoom"
 import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint } from "./useMapBoard"
@@ -55,8 +56,8 @@ export function MapOverlay({
 }) {
   const { members, dmUserId } = usePartyRoster(partyCode)
   const {
-    pins, notes, tokens, strokes, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
-    moveToken, placeHereToken, createTracker, renameTracker, deleteTracker, addStroke, deleteStroke,
+    pins, notes, tokens, strokes, paintLayer, createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
+    moveToken, placeHereToken, createTracker, renameTracker, deleteTracker, addStroke, deleteStroke, unifyStrokes,
   } = useMapBoard(partyCode, currentUserId)
   const pz = useMapPanZoom({ x: 0, y: 0 })
 
@@ -84,6 +85,8 @@ export function MapOverlay({
   })
   const [openPinId, setOpenPinId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [confirmingUnify, setConfirmingUnify] = useState(false)
+  const [unifying, setUnifying] = useState(false)
   const [labelSize, setLabelSize] = useState(() => {
     try { return Number(localStorage.getItem(LABEL_SIZE_KEY)) || 10 } catch { return 10 }
   })
@@ -120,19 +123,62 @@ export function MapOverlay({
     })
   }
 
-  // Redraws the whole paint layer from the synced stroke list — runs on
-  // initial load and whenever a stroke arrives (from us or, live, from
-  // anyone else in the party). Cheap at the stroke counts a tabletop map
-  // actually accumulates, so a full clear+redraw is simpler and more
-  // obviously correct than patching in just the delta.
+  // Loads the flattened "Unify" snapshot (if any) as a plain Image object —
+  // not rendered as its own <img>, but drawn into the paint canvas itself
+  // (see the redraw effect below) so an eraser stroke can still punch a hole
+  // through baked-in color exactly like it does through a live one.
+  // crossOrigin is required so the canvas isn't "tainted" — reading it back
+  // out via toBlob() (for the next Unify) would otherwise be refused.
+  const bakedImageRef = useRef<HTMLImageElement | null>(null)
+  const [bakedImageTick, setBakedImageTick] = useState(0)
+  useEffect(() => {
+    bakedImageRef.current = null
+    if (!paintLayer) return
+    let cancelled = false
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => { if (!cancelled) { bakedImageRef.current = img; setBakedImageTick(t => t + 1) } }
+    img.onerror = () => console.error("failed to load map paint layer image")
+    img.src = paintLayer.image_url
+    return () => { cancelled = true }
+  }, [paintLayer])
+
+  // Redraws the whole paint layer — the baked image (if any) as a base,
+  // then the synced stroke list on top of it. Runs on initial load and
+  // whenever a stroke arrives (from us or, live, from anyone else in the
+  // party). Cheap at the stroke counts a tabletop map actually accumulates
+  // between Unifies, so a full clear+redraw is simpler and more obviously
+  // correct than patching in just the delta.
   useEffect(() => {
     const canvas = paintCanvasRef.current
     const ctx = canvas?.getContext("2d")
     if (!canvas || !ctx) return
     ctx.clearRect(0, 0, MAP_W, MAP_H)
+    ctx.globalCompositeOperation = "source-over"
+    if (bakedImageRef.current) ctx.drawImage(bakedImageRef.current, 0, 0, MAP_W, MAP_H)
     for (const s of strokes) drawStroke(ctx, s.color, s.size, s.erase, s.points)
     ctx.globalCompositeOperation = "source-over"
-  }, [strokes])
+  }, [strokes, bakedImageTick])
+
+  // Flattens the canvas as it currently reads (baked image + every live
+  // stroke — already the correct composite, see above) into one image, then
+  // retires exactly the strokes captured in that snapshot.
+  async function handleUnify() {
+    const canvas = paintCanvasRef.current
+    if (!canvas || strokes.length === 0 || unifying) return
+    setUnifying(true)
+    const strokeIds = strokes.map(s => s.id)
+    canvas.toBlob(async blob => {
+      if (!blob) {
+        console.error("unify: canvas export failed — possibly a tainted canvas from a cross-origin paint layer image")
+        setUnifying(false)
+        return
+      }
+      await unifyStrokes(blob, strokeIds)
+      setUnifying(false)
+      setConfirmingUnify(false)
+    }, "image/png")
+  }
 
   // Live drawing during an active gesture writes straight to the canvas
   // (same "direct DOM write during a gesture" philosophy useMapPanZoom uses
@@ -193,12 +239,23 @@ export function MapOverlay({
     return () => window.removeEventListener("keydown", handler)
   }, [pendingPin, pendingTracker, openTrackerId, openPinId, onClose])
 
+  // Middle-mouse-button drag always pans, no matter what mode (paint, move,
+  // drop, track…) is otherwise doing with left-click — a mid-paint-stroke
+  // "let me just nudge the camera" without switching tools first.
+  const middlePanning = useRef(false)
+
   // dragStart tracks the background mousedown/touchstart that a click needs
   // to trace back to before it's trusted as "drop a pin here" — pins/token
   // clear it in their own mousedown/touchstart (see below) since those stop
   // propagation before it would otherwise be set, so a drag-release that
   // happens to end up back over bare map never gets misread as a tap.
   function onSurfaceMouseDown(e: React.MouseEvent) {
+    if (e.button === 1) {
+      e.preventDefault() // suppresses the browser's native autoscroll icon/mode
+      middlePanning.current = true
+      pz.onSurfaceMouseDown(e)
+      return
+    }
     if (mode === "paint") {
       const { x, y } = pz.toWorld(e.clientX, e.clientY)
       beginStroke(x, y)
@@ -208,6 +265,7 @@ export function MapOverlay({
     pz.onSurfaceMouseDown(e)
   }
   function onSurfaceMouseMove(e: React.MouseEvent) {
+    if (middlePanning.current) { pz.onSurfaceMouseMove(e); return }
     if (mode === "paint") {
       if (currentStroke.current) { const { x, y } = pz.toWorld(e.clientX, e.clientY); extendStroke(x, y) }
       return
@@ -291,6 +349,7 @@ export function MapOverlay({
   }
 
   function onSurfaceUp() {
+    if (middlePanning.current) { middlePanning.current = false; pz.onSurfaceMouseUp(); return }
     if (currentStroke.current) { endStroke(); return }
     const moved = pz.onSurfaceMouseUp()
     setDraggingId(null)
@@ -313,7 +372,7 @@ export function MapOverlay({
     setOpenPinId(pinId)
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Toolbar */}
       <div className="px-3.5 py-2 border-b border-border shrink-0 flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
@@ -364,6 +423,24 @@ export function MapOverlay({
               className="size-6 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors disabled:opacity-30">
               <Undo2 className="size-3.5" />
             </button>
+            <div className="w-px h-4 bg-foreground/15 mx-0.5" />
+            {confirmingUnify ? (
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <span className="text-foreground/70">Flatten {strokes.length} strokes into one image? Old ones can't be individually undone after.</span>
+                <button type="button" onClick={handleUnify} disabled={unifying}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-500/80 hover:bg-violet-500 text-white font-semibold transition-colors disabled:opacity-50">
+                  {unifying && <Loader2 className="size-3 animate-spin" />} {unifying ? "Unifying…" : "Unify"}
+                </button>
+                <button type="button" onClick={() => setConfirmingUnify(false)} disabled={unifying}
+                  className="px-2 py-1 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors disabled:opacity-50">Cancel</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setConfirmingUnify(true)} disabled={strokes.length === 0}
+                title="Flatten every stroke into one background image — frees up map load time, but old strokes can no longer be undone individually"
+                className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/80 transition-colors disabled:opacity-30 shrink-0">
+                <Layers className="size-3.5" /> Unify ({strokes.length})
+              </button>
+            )}
           </div>
         )}
         <div className="flex-1" />
@@ -616,6 +693,7 @@ export function MapOverlay({
           onDeleteNote={deleteNote}
         />
       )}
-    </div>
+    </div>,
+    document.body
   )
 }

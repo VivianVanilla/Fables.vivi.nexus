@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { useChannelSuffix } from "../party/partyTypes"
+import { uploadUserImage } from "../imageGallery"
 
 // Shared with the avatar-color wheel elsewhere in Party Chat (see
 // MapPinViewer's `avatarColor`) so pins and people read as one palette.
@@ -73,11 +74,42 @@ export interface MapStroke {
   created_at: string
 }
 
+// One row per party — the "Unify" flattened snapshot that individual
+// strokes older than `updated_at` get baked into (see unifyStrokes below).
+// Upserted in place, so unifying again just replaces the image.
+export interface MapPaintLayer {
+  party_code: string
+  image_url: string
+  updated_by: string | null
+  updated_at: string
+}
+
+// Supabase's API layer caps any single response at 1000 rows regardless of
+// what the query asks for. map_strokes gets a new row per brush drag, so an
+// actively-painted party map blows past that within a session or two — a
+// plain `.select()` there silently drops whatever doesn't fit, and since the
+// query sorts oldest-first, what gets dropped is always the newest strokes.
+// Page through with `.range()` until a page comes back short instead.
+async function fetchAllStrokes(partyCode: string) {
+  const PAGE_SIZE = 1000
+  const rows: MapStroke[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase.from("map_strokes").select("*")
+      .eq("party_code", partyCode).order("created_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) return { data: null, error }
+    if (data) rows.push(...(data as MapStroke[]))
+    if (!data || data.length < PAGE_SIZE) break
+  }
+  return { data: rows, error: null }
+}
+
 export function useMapBoard(partyCode: string, currentUserId: string) {
   const [pins, setPins] = useState<MapPin[]>([])
   const [notes, setNotes] = useState<MapPinNote[]>([])
   const [tokens, setTokens] = useState<MapToken[]>([])
   const [strokes, setStrokes] = useState<MapStroke[]>([])
+  const [paintLayer, setPaintLayer] = useState<MapPaintLayer | null>(null)
   const [loaded, setLoaded] = useState(false)
   const suffix = useChannelSuffix()
 
@@ -89,17 +121,20 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
       supabase.from("map_pins").select("*").eq("party_code", partyCode),
       supabase.from("map_pin_notes").select("*").eq("party_code", partyCode),
       supabase.from("map_tokens").select("*").eq("party_code", partyCode),
-      supabase.from("map_strokes").select("*").eq("party_code", partyCode).order("created_at", { ascending: true }),
-    ]).then(([p, n, t, s]) => {
+      fetchAllStrokes(partyCode),
+      supabase.from("map_paint_layer").select("*").eq("party_code", partyCode).maybeSingle(),
+    ]).then(([p, n, t, s, l]) => {
       if (cancelled) return
       if (p.error) console.error("map pins load error:", p.error)
       if (n.error) console.error("map pin notes load error:", n.error)
       if (t.error) console.error("map tokens load error:", t.error)
       if (s.error) console.error("map strokes load error:", s.error)
+      if (l.error) console.error("map paint layer load error:", l.error)
       if (p.data) setPins(p.data as MapPin[])
       if (n.data) setNotes(n.data as MapPinNote[])
       if (t.data) setTokens(t.data as MapToken[])
-      if (s.data) setStrokes(s.data as MapStroke[])
+      if (s.data) setStrokes(s.data)
+      setPaintLayer(l.data as MapPaintLayer | null)
       setLoaded(true)
     })
     return () => { cancelled = true }
@@ -132,6 +167,10 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
         payload => { const row = payload.new as MapStroke; setStrokes(prev => prev.some(s => s.id === row.id) ? prev : [...prev, row]) })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "map_strokes", filter },
         payload => { const old = payload.old as Partial<MapStroke>; if (old.id) setStrokes(prev => prev.filter(s => s.id !== old.id)) })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "map_paint_layer", filter },
+        payload => { setPaintLayer(payload.new as MapPaintLayer) })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "map_paint_layer", filter },
+        payload => { setPaintLayer(payload.new as MapPaintLayer) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [partyCode, currentUserId, suffix])
@@ -261,10 +300,34 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
     if (error) console.error("delete stroke error:", error)
   }
 
+  // Flattens every current stroke into `imageBlob` (already rendered by the
+  // caller — see MapOverlay's canvas, which draws the existing paint layer
+  // plus all live strokes into the same buffer, so exporting it is already
+  // the correct composite) and retires the strokes that composite
+  // represents. IDs are captured by the caller before the upload starts, so
+  // a stroke someone draws mid-unify isn't swept up and deleted along with
+  // the batch it was never actually part of.
+  async function unifyStrokes(imageBlob: Blob, strokeIds: string[]) {
+    const file = new File([imageBlob], "paint.png", { type: "image/png" })
+    const url = await uploadUserImage(currentUserId, file, `map-paint-${partyCode}`)
+    if (!url) { console.error("unify strokes: image upload failed"); return }
+
+    const row: MapPaintLayer = { party_code: partyCode, image_url: url, updated_by: currentUserId, updated_at: new Date().toISOString() }
+    const { error: upsertError } = await supabase.from("map_paint_layer").upsert(row, { onConflict: "party_code" })
+    if (upsertError) { console.error("unify strokes upsert error:", upsertError); return }
+    setPaintLayer(row)
+
+    if (strokeIds.length) {
+      setStrokes(prev => prev.filter(s => !strokeIds.includes(s.id)))
+      const { error: deleteError } = await supabase.from("map_strokes").delete().in("id", strokeIds)
+      if (deleteError) console.error("unify strokes cleanup error:", deleteError)
+    }
+  }
+
   return {
-    pins, notes, tokens, strokes, loaded,
+    pins, notes, tokens, strokes, paintLayer, loaded,
     createPin, movePin, renamePin, recolorPin, deletePin, addNote, editNote, deleteNote,
     moveToken, placeHereToken, createTracker, renameTracker, deleteTracker,
-    addStroke, deleteStroke,
+    addStroke, deleteStroke, unifyStrokes,
   }
 }
