@@ -200,6 +200,12 @@ export interface CharacterData {
   level?: number
   background?: string
   alignment?: string
+  age?: string
+  height?: string
+  weight?: string
+  eyes?: string
+  skin?: string
+  hair?: string
   ac?: number          // legacy manual AC — only read as a fallback for characters that predate acAbility (see computeAc)
   acBase?: number      // base number the ability mod(s) are added to (formula is acBase + mods); default 10
   acAbility?: "str" | "dex" | "con" | "int" | "wis" | "cha"   // ability feeding the base AC formula; default "dex"

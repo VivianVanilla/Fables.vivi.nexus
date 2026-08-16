@@ -40,13 +40,14 @@ export const SUPABASE_BUCKET = "fableimages"
 // conditions with a clear, general-purpose combat effect are covered.
 
 export const ALL_CONDITIONS = [
-  "Blinded", "Charmed", "Concentrating", "Deafened", "Exhaustion",
+  "Blinded", "Charmed", "Concentrating", "Deafened", "Deathward", "Exhaustion",
   "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed",
   "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious",
 ]
 
 export const CONDITION_EFFECTS: Record<string, string> = {
   Blinded:       "Disadvantage on attack rolls; attacks against you have advantage.",
+  Deathward:     "The next time you'd drop to 0 HP, you drop to 1 instead — then this condition is removed.",
   Charmed:       "Can't attack the charmer or target them with harmful abilities.",
   Deafened:      "Automatically fails ability checks that require hearing.",
   Frightened:    "Disadvantage on attack rolls and ability checks while the source is in sight.",

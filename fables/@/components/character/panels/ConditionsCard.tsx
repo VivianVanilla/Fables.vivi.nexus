@@ -2,6 +2,7 @@ import type { ActiveCondition } from "@/components/shared/types"
 
 const CONDITION_COLOR: Record<string, string> = {
   Concentrating: "bg-blue-500/25 text-blue-200 border-blue-500/40",
+  Deathward:     "bg-amber-500/25 text-amber-200 border-amber-500/40",
   Exhaustion:    "bg-orange-500/25 text-orange-200 border-orange-500/40",
   Poisoned:      "bg-green-700/25 text-green-200 border-green-700/40",
   Charmed:       "bg-pink-500/25 text-pink-200 border-pink-500/40",

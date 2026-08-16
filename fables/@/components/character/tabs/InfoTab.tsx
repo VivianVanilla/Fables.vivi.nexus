@@ -703,6 +703,23 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
           </div>
 
           <div className={`${card} p-3 flex flex-col gap-2`}>
+            <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Description</span>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {([
+                ["age", "Age"], ["height", "Height"], ["weight", "Weight"],
+                ["eyes", "Eyes"], ["skin", "Skin"], ["hair", "Hair"],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="flex flex-col gap-1">
+                  <span className="text-[9px] uppercase tracking-wider text-white/30">{label}</span>
+                  <input value={data[key] ?? ""} onChange={e => update({ [key]: e.target.value })}
+                    placeholder={label + "…"} disabled={readOnly}
+                    className="bg-white/5 rounded px-2 py-1 outline-none text-xs text-white placeholder:text-white/20 disabled:opacity-60" />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className={`${card} p-3 flex flex-col gap-2`}>
             <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Party</span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-white/50 shrink-0">Code</span>

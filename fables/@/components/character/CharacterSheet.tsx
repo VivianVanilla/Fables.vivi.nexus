@@ -2,7 +2,7 @@
 // character.tsx — CharacterSheet root component
 // ════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useLayoutEffect } from "react"
 import { Shield } from "lucide-react"
 
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
@@ -102,6 +102,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Concentration check prompts (dismissible) — triggered by HP loss while "Concentrating" is active
   const [concentrationPrompts, setConcentrationPrompts] = useState<{ id: string; damage: number; dc: number }[]>([])
+  // Deathward save notices (dismissible) — triggered when Deathward catches a drop to 0 HP
+  const [deathwardTriggers, setDeathwardTriggers] = useState<{ id: string }[]>([])
   const prevHpRef = useRef<number | undefined>(undefined)
 
   // Portrait gallery
@@ -217,9 +219,20 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     i => i.equipped && (i.equipKind ?? "armor") === "armor" && i.itemMeta?.stealthDisadvantage
   )
 
-  // Concentration check: any HP loss while "Concentrating" is active prompts a save
-  useEffect(() => {
+  // Concentration check: any HP loss while "Concentrating" is active prompts a save.
+  // Deathward: catches the transition to 0 HP (or below) and corrects it back to 1,
+  // burning the condition — a useLayoutEffect (not useEffect) so the correction lands
+  // before the browser ever paints the 0-HP frame (which would otherwise flash the
+  // Death Saving Throws panel for one frame before flipping back).
+  useLayoutEffect(() => {
     const prevHp = prevHpRef.current
+    if (prevHp !== undefined && hp <= 0 && prevHp > 0) {
+      const deathward = conditions.find(c => c.name === "Deathward")
+      if (deathward) {
+        update({ hp: 1, conditions: conditions.filter(c => c.id !== deathward.id) })
+        setDeathwardTriggers(prev => [...prev, { id: nanoid() }])
+      }
+    }
     if (prevHp !== undefined && hp < prevHp && activeConditionNames.has("Concentrating")) {
       const damage = prevHp - hp
       const dc     = Math.max(10, Math.floor(damage / 2))
@@ -1285,8 +1298,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           
           </div>
 
-          {(concentrationPrompts.length > 0 || conditions.some(c => CONDITION_EFFECTS[c.name])) && (
+          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => CONDITION_EFFECTS[c.name])) && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {deathwardTriggers.map(t => (
+                <span key={t.id}
+                  className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200">
+                  Deathward saved you — HP set to 1, condition spent.
+                  <button type="button"
+                    onClick={() => setDeathwardTriggers(prev => prev.filter(x => x.id !== t.id))}
+                    className="opacity-60 hover:opacity-100 shrink-0">✕</button>
+                </span>
+              ))}
               {concentrationPrompts.map(p => (
                 <span key={p.id}
                   className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200">

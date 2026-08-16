@@ -106,9 +106,9 @@ export function NpcTrackerOverlay({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-        <div className="max-w-2xl mx-auto flex flex-col gap-3">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
           {sorted.length === 0 && (
-            <p className="text-sm text-muted-foreground/60 italic text-center mt-10">No NPCs tracked yet — add one to start the shelf.</p>
+            <p className="col-span-full text-sm text-muted-foreground/60 italic text-center mt-10">No NPCs tracked yet — add one to start the shelf.</p>
           )}
 
           {sorted.map(npc => {
@@ -120,15 +120,19 @@ export function NpcTrackerOverlay({
               const cityName = showLocation ? pins.find(p => p.id === npc.location_pin_id)?.name : undefined
               return (
                 <button key={npc.id} type="button" onClick={() => setExpandedId(npc.id)}
-                  className="w-full text-left px-4 py-2.5 rounded-lg bg-foreground/5 hover:bg-foreground/10 border border-border transition-colors flex items-center gap-2.5">
-                  {npc.image_url && (
-                    <img src={npc.image_url} alt="" className="size-6 rounded-full object-cover shrink-0" />
-                  )}
-                  <span className="text-sm font-semibold text-foreground truncate">{npc.name}</span>
-                  {npc.subtitle && <span className="text-xs text-muted-foreground/60 truncate">— {npc.subtitle}</span>}
+                  className="flex flex-col items-center text-center gap-1.5 px-3 py-3 rounded-lg bg-foreground/5 hover:bg-foreground/10 border border-border transition-colors">
+                  <div className="size-16 rounded-full overflow-hidden bg-foreground/10 flex items-center justify-center shrink-0">
+                    {npc.image_url ? (
+                      <img src={npc.image_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <BookOpen className="size-6 text-muted-foreground/30" />
+                    )}
+                  </div>
+                  <span className="text-xs font-semibold text-foreground truncate w-full">{npc.name}</span>
+                  {npc.subtitle && <span className="text-[10px] text-muted-foreground/60 truncate w-full">{npc.subtitle}</span>}
                   {cityName && (
-                    <span className="ml-auto flex items-center gap-1 text-[10px] text-violet-300/80 shrink-0 pl-2">
-                      <MapPin className="size-3" /> {cityName}
+                    <span className="flex items-center gap-1 text-[9px] text-violet-300/80 shrink-0">
+                      <MapPin className="size-2.5" /> {cityName}
                     </span>
                   )}
                 </button>
@@ -136,7 +140,7 @@ export function NpcTrackerOverlay({
             }
 
             return (
-              <div key={npc.id} className="rounded-xl bg-foreground/5 border border-border shadow-lg overflow-hidden">
+              <div key={npc.id} className="col-span-full rounded-xl bg-foreground/5 border border-border shadow-lg overflow-hidden">
                 <div className="flex items-start gap-4 p-4">
                   <div className="flex-1 min-w-0">
                     {isEditing ? (
