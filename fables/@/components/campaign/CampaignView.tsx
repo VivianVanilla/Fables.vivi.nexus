@@ -196,47 +196,59 @@ function tallyByOwner(rows: { owner_id: string }[] | null): Record<string, numbe
 function usePartyActivityStats(partyCode: string) {
   const [pingCounts, setPingCounts] = useState<Record<string, number>>({})
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({})
+  const [npcsAddedCounts, setNpcsAddedCounts] = useState<Record<string, number>>({})
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    if (!partyCode) { setPingCounts({}); setNoteCounts({}); setLoaded(true); return }
+    if (!partyCode) { setPingCounts({}); setNoteCounts({}); setNpcsAddedCounts({}); setLoaded(true); return }
     let cancelled = false
     setLoaded(false)
     Promise.all([
       supabase.from("map_pins").select("owner_id").eq("party_code", partyCode),
       supabase.from("map_pin_notes").select("owner_id").eq("party_code", partyCode).not("npc_id", "is", null),
-    ]).then(([pinsRes, notesRes]) => {
+      supabase.from("npc_trackers").select("owner_id").eq("party_code", partyCode),
+    ]).then(([pinsRes, notesRes, npcsRes]) => {
       if (cancelled) return
       if (pinsRes.error) console.error("activity stats: pins load error:", pinsRes.error)
       if (notesRes.error) console.error("activity stats: notes load error:", notesRes.error)
+      if (npcsRes.error) console.error("activity stats: npcs load error:", npcsRes.error)
       setPingCounts(tallyByOwner(pinsRes.data as { owner_id: string }[] | null))
       setNoteCounts(tallyByOwner(notesRes.data as { owner_id: string }[] | null))
+      setNpcsAddedCounts(tallyByOwner(npcsRes.data as { owner_id: string }[] | null))
       setLoaded(true)
     })
     return () => { cancelled = true }
   }, [partyCode])
 
-  return { pingCounts, noteCounts, loaded }
+  return { pingCounts, noteCounts, npcsAddedCounts, loaded }
 }
 
 // "Pings" = map pins dropped; "NPC notes" = Detail Notes written on the NPC
 // Tracker shelf (map_pin_notes rows with npc_id set — including ones that
-// live under a linked tracker's token_id, see useNpcTrackers.notesForNpc).
+// live under a linked tracker's token_id, see useNpcTrackers.notesForNpc);
+// "NPCs added" = new entries created on the NPC Tracker shelf itself.
+// Always lists every current party member (plus the DM) even at zero
+// activity — an owner_id only shows up in the count queries once they've
+// actually done something, so a purely count-driven list would silently
+// drop anyone who hasn't dropped a pin or written a note yet.
 function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
   partyCode: string
   partyMembers: SidebarObject[]
   currentUserId: string
 }) {
-  const { pingCounts, noteCounts, loaded } = usePartyActivityStats(partyCode)
-  const ownerIds = Array.from(new Set([...Object.keys(pingCounts), ...Object.keys(noteCounts)]))
+  const { pingCounts, noteCounts, npcsAddedCounts, loaded } = usePartyActivityStats(partyCode)
+  const knownOwnerIds = Array.from(new Set(partyMembers.map(c => c.owner_id).concat(currentUserId ? [currentUserId] : [])))
+  const activeOwnerIds = Array.from(new Set([...Object.keys(pingCounts), ...Object.keys(noteCounts), ...Object.keys(npcsAddedCounts)]))
+  const ownerIds = Array.from(new Set([...knownOwnerIds, ...activeOwnerIds]))
   const rows = ownerIds
     .map(ownerId => ({
       ownerId,
       name: ownerId === currentUserId ? "Dungeon Master" : partyMembers.find(c => c.owner_id === ownerId)?.name ?? "Unknown",
       pings: pingCounts[ownerId] ?? 0,
       npcNotes: noteCounts[ownerId] ?? 0,
+      npcsAdded: npcsAddedCounts[ownerId] ?? 0,
     }))
-    .sort((a, b) => (b.pings + b.npcNotes) - (a.pings + a.npcNotes))
+    .sort((a, b) => (b.pings + b.npcNotes + b.npcsAdded) - (a.pings + a.npcNotes + a.npcsAdded) || a.name.localeCompare(b.name))
 
   return (
     <div className="flex flex-col gap-2">
@@ -245,7 +257,7 @@ function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
         {!loaded ? (
           <p className="text-xs text-foreground/30 italic text-center py-4">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="text-xs text-foreground/30 italic text-center py-4">No map pins or NPC notes yet.</p>
+          <p className="text-xs text-foreground/30 italic text-center py-4">No party members yet.</p>
         ) : (
           <div className="divide-y divide-foreground/5">
             {rows.map(row => (
@@ -253,6 +265,7 @@ function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
                 <span className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{row.name}</span>
                 <span className="text-[10px] text-foreground/50 tabular-nums">{row.pings} ping{row.pings !== 1 ? "s" : ""}</span>
                 <span className="text-[10px] text-foreground/50 tabular-nums">{row.npcNotes} npc note{row.npcNotes !== 1 ? "s" : ""}</span>
+                <span className="text-[10px] text-foreground/50 tabular-nums">{row.npcsAdded} npc{row.npcsAdded !== 1 ? "s" : ""} added</span>
               </div>
             ))}
           </div>
