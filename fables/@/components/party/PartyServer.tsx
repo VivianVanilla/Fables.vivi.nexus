@@ -262,6 +262,7 @@ export function PartyServer({
         <NpcTrackerOverlay
           partyCode={partyCode}
           currentUserId={currentUserId}
+          currentUserName={currentUserName}
           onClose={() => setNpcTrackerOpen(false)}
         />
       )}

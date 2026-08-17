@@ -8,27 +8,30 @@
 
 import { useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { Plus, Pencil, Trash2, X, Check, ImagePlus, Loader2, BookOpen, MapPin } from "lucide-react"
+import { Plus, Pencil, Trash2, X, Check, ImagePlus, Loader2, BookOpen, MapPin, StickyNote } from "lucide-react"
 import { Markdown } from "../ui/Markdown"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "../shared/imageGallery"
 import { PortraitModal } from "../shared/PortraitModal"
 import { MAP_PARTY_CODE } from "../shared/constants"
+import { MapNotesPanel } from "../map/MapNotesPanel"
 import { useNpcTrackers, type NpcTracker, type NpcTrackerDraft } from "./useNpcTrackers"
 
 const BLANK_DRAFT: NpcTrackerDraft = { name: "New NPC", subtitle: "", details: "", image_url: "", goal: "", location_pin_id: null }
 
 export function NpcTrackerOverlay({
-  partyCode, currentUserId, onClose, focusNpcId,
+  partyCode, currentUserId, currentUserName, onClose, focusNpcId,
 }: {
   partyCode: string
   currentUserId: string
+  currentUserName: string
   onClose: () => void
   // Set when opened via "jump to this NPC's tracker" (see MapPinViewer's
   // "last seen here" list) — expands straight to that entry instead of
   // landing on the plain unopened shelf.
   focusNpcId?: string | null
 }) {
-  const { npcs, pins, createNpc, updateNpc, deleteNpc } = useNpcTrackers(partyCode, currentUserId)
+  const { npcs, pins, notesForNpc, createNpc, updateNpc, deleteNpc, addNpcNote, editNpcNote, deleteNpcNote } = useNpcTrackers(partyCode, currentUserId)
+  const [detailNotesId, setDetailNotesId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(focusNpcId ?? null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<NpcTrackerDraft>(BLANK_DRAFT)
@@ -53,6 +56,7 @@ export function NpcTrackerOverlay({
   const sorted = [...npcs].sort((a, b) => a.name.localeCompare(b.name))
   const expanded = sorted.find(n => n.id === expandedId) ?? null
   const showLocation = partyCode === MAP_PARTY_CODE
+  const detailNotesNpc = sorted.find(n => n.id === detailNotesId) ?? null
 
   function startEdit(npc: NpcTracker) {
     setEditingId(npc.id)
@@ -166,6 +170,11 @@ export function NpcTrackerOverlay({
                     ) : (
                       <p className="text-sm text-muted-foreground/40 italic">No details yet.</p>
                     )}
+                    <button type="button" onClick={() => setDetailNotesId(npc.id)}
+                      className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 mt-3 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors">
+                      <StickyNote className="size-3.5" />
+                      Detail Notes {notesForNpc(npc.id).length > 0 && `(${notesForNpc(npc.id).length})`}
+                    </button>
                   </div>
 
                   <div className="w-40 shrink-0 flex flex-col gap-3">
@@ -269,6 +278,30 @@ export function NpcTrackerOverlay({
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 text-white text-xs shadow-xl">
           <Loader2 className="size-3.5 animate-spin" /> Uploading…
         </div>
+      )}
+
+      {/* Detail Notes — the cramped single "Details" textarea above is for a
+          short blurb; this is the full sticky-note corkboard (same
+          component pins/trackers use) for actual session-to-session notes,
+          in its own full-screen layer so there's real room for it. */}
+      {detailNotesNpc && createPortal(
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm" onClick={() => setDetailNotesId(null)}>
+          <div className="flex items-center justify-between px-5 py-3 shrink-0" onClick={e => e.stopPropagation()}>
+            <span className="text-sm font-semibold text-white">Detail Notes — {detailNotesNpc.name}</span>
+            <button type="button" onClick={() => setDetailNotesId(null)} className="text-white/60 hover:text-white text-lg leading-none px-1">✕</button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-5" onClick={e => e.stopPropagation()}>
+            <MapNotesPanel
+              notes={notesForNpc(detailNotesNpc.id)}
+              currentUserId={currentUserId}
+              placeholder={`Detail notes about ${detailNotesNpc.name}…`}
+              onAddNote={content => addNpcNote(detailNotesNpc.id, currentUserName, content)}
+              onEditNote={editNpcNote}
+              onDeleteNote={deleteNpcNote}
+            />
+          </div>
+        </div>,
+        document.body
       )}
     </div>,
     document.body

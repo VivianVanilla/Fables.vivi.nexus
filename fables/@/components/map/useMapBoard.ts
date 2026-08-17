@@ -30,12 +30,17 @@ export interface MapPin {
   created_at: string
 }
 
-// `pin_id`/`token_id` are mutually exclusive — a note hangs off either a pin
-// or a tracker, never both (enforced by a DB check constraint).
+// `pin_id`/`token_id`/`npc_id` are mutually exclusive — a note hangs off
+// exactly one of a pin, a tracker, or an NPC Tracker entry (enforced by a DB
+// check constraint). `npc_id` notes are read/written by
+// npcTracker/useNpcTrackers.ts, not this hook — reusing this same type and
+// table (and MapNotesPanel's UI) rather than standing up a parallel notes
+// system just because the target is a different kind of row.
 export interface MapPinNote {
   id: string
   pin_id: string | null
   token_id: string | null
+  npc_id: string | null
   party_code: string
   owner_id: string
   owner_name: string

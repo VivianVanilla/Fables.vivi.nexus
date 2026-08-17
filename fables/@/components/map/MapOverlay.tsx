@@ -775,6 +775,7 @@ export function MapOverlay({
         <NpcTrackerOverlay
           partyCode={partyCode}
           currentUserId={currentUserId}
+          currentUserName={currentUserName}
           focusNpcId={npcTrackerFocusId}
           onClose={() => { setNpcTrackerOpen(false); setNpcTrackerFocusId(null) }}
         />

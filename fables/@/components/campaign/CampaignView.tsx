@@ -180,6 +180,88 @@ function RosterFieldsMenu({ rosterFields, onChange }: { rosterFields: CampaignDa
   )
 }
 
+// DM-only activity leaderboard — how much each party member has
+// contributed to the shared map (pins dropped, NPC detail notes written).
+// Gated to a single DM email rather than a general "isDM" check since this
+// is a one-off ask for one campaign's DM, not a feature meant to surface for
+// every DM using the app.
+const ACTIVITY_STATS_EMAIL = "loganadsit@gmail.com"
+
+function tallyByOwner(rows: { owner_id: string }[] | null): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const row of rows ?? []) counts[row.owner_id] = (counts[row.owner_id] ?? 0) + 1
+  return counts
+}
+
+function usePartyActivityStats(partyCode: string) {
+  const [pingCounts, setPingCounts] = useState<Record<string, number>>({})
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({})
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!partyCode) { setPingCounts({}); setNoteCounts({}); setLoaded(true); return }
+    let cancelled = false
+    setLoaded(false)
+    Promise.all([
+      supabase.from("map_pins").select("owner_id").eq("party_code", partyCode),
+      supabase.from("map_pin_notes").select("owner_id").eq("party_code", partyCode).not("npc_id", "is", null),
+    ]).then(([pinsRes, notesRes]) => {
+      if (cancelled) return
+      if (pinsRes.error) console.error("activity stats: pins load error:", pinsRes.error)
+      if (notesRes.error) console.error("activity stats: notes load error:", notesRes.error)
+      setPingCounts(tallyByOwner(pinsRes.data as { owner_id: string }[] | null))
+      setNoteCounts(tallyByOwner(notesRes.data as { owner_id: string }[] | null))
+      setLoaded(true)
+    })
+    return () => { cancelled = true }
+  }, [partyCode])
+
+  return { pingCounts, noteCounts, loaded }
+}
+
+// "Pings" = map pins dropped; "NPC notes" = Detail Notes written on the NPC
+// Tracker shelf (map_pin_notes rows with npc_id set — including ones that
+// live under a linked tracker's token_id, see useNpcTrackers.notesForNpc).
+function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
+  partyCode: string
+  partyMembers: SidebarObject[]
+  currentUserId: string
+}) {
+  const { pingCounts, noteCounts, loaded } = usePartyActivityStats(partyCode)
+  const ownerIds = Array.from(new Set([...Object.keys(pingCounts), ...Object.keys(noteCounts)]))
+  const rows = ownerIds
+    .map(ownerId => ({
+      ownerId,
+      name: ownerId === currentUserId ? "Dungeon Master" : partyMembers.find(c => c.owner_id === ownerId)?.name ?? "Unknown",
+      pings: pingCounts[ownerId] ?? 0,
+      npcNotes: noteCounts[ownerId] ?? 0,
+    }))
+    .sort((a, b) => (b.pings + b.npcNotes) - (a.pings + a.npcNotes))
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">Party Activity</span>
+      <div className="rounded-xl bg-muted ring-1 ring-border overflow-hidden">
+        {!loaded ? (
+          <p className="text-xs text-foreground/30 italic text-center py-4">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-xs text-foreground/30 italic text-center py-4">No map pins or NPC notes yet.</p>
+        ) : (
+          <div className="divide-y divide-foreground/5">
+            {rows.map(row => (
+              <div key={row.ownerId} className="flex items-center gap-3 px-3 py-2">
+                <span className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{row.name}</span>
+                <span className="text-[10px] text-foreground/50 tabular-nums">{row.pings} ping{row.pings !== 1 ? "s" : ""}</span>
+                <span className="text-[10px] text-foreground/50 tabular-nums">{row.npcNotes} npc note{row.npcNotes !== 1 ? "s" : ""}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 type CampaignTab = "overview" | "initiative" | "chat"
 
 // Everything about a campaign's live roster — fetching, realtime sync, and
@@ -502,6 +584,10 @@ export function CampaignView({ campaign }: Props) {
             />
           ))}
         </div>
+
+        {user?.email === ACTIVITY_STATS_EMAIL && (
+          <PartyActivitySection partyCode={partyCode} partyMembers={partyMembers} currentUserId={user?.id ?? ""} />
+        )}
       </div>}
     </div>
   )
