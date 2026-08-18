@@ -66,6 +66,21 @@ export const CONDITION_EFFECTS: Record<string, string> = {
 // Conditions that force speed to 0 per RAW, until removed
 export const SPEED_ZERO_CONDITIONS = ["Grappled", "Restrained"]
 
+// 2014 PHB exhaustion table (levels are cumulative — level 3 also carries
+// levels 1-2's effects — but each entry below states only what's newly
+// gained at that level, matching how the book presents the table).
+// Exhaustion is the one condition whose effect depends on a level, so it's
+// kept out of the flat CONDITION_EFFECTS map above and looked up separately
+// wherever that map is read (ConditionsCard.tsx, CharacterSheet.tsx).
+export const EXHAUSTION_EFFECTS: Record<number, string> = {
+  1: "Disadvantage on ability checks.",
+  2: "Speed halved.",
+  3: "Disadvantage on attack rolls and saving throws.",
+  4: "Hit point maximum halved.",
+  5: "Speed reduced to 0.",
+  6: "Death.",
+}
+
 export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact", "Wondrous"] as const
 
 export const RARITY_COLORS: Record<string, string> = {
@@ -141,4 +156,43 @@ export const SKILLS = [
   { name: "Sleight of Hand",  ability: "dex" },
   { name: "Stealth",          ability: "dex" },
   { name: "Survival",         ability: "wis" },
+] as const
+
+// ── Proficiency autofill suggestions ─────────────────────────────────────────
+// Plain name lists offered as <datalist> suggestions on InfoTab.tsx's
+// ProficiencyList entries (Languages/Armor/Tools/Weapons) — proficiencies
+// there are freeform tags with no mechanical data behind them, so a static
+// list is enough; contrast with the weapon *items* seeded into the
+// `documentation` table (see documentation/seed-data.ts) that actually drive
+// EquipmentEntry's damage/weight autofill.
+
+export const LANGUAGE_SUGGESTIONS = [
+  "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc",
+  "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal", "Primordial", "Sylvan", "Undercommon",
+] as const
+
+export const ARMOR_PROFICIENCY_SUGGESTIONS = [
+  "Light Armor", "Medium Armor", "Heavy Armor", "Shields",
+  "Padded", "Leather", "Studded Leather",
+  "Hide", "Chain Shirt", "Scale Mail", "Breastplate", "Half Plate",
+  "Ring Mail", "Chain Mail", "Splint", "Plate",
+] as const
+
+export const TOOL_PROFICIENCY_SUGGESTIONS = [
+  "Alchemist's supplies", "Brewer's supplies", "Calligrapher's supplies", "Carpenter's tools",
+  "Cartographer's tools", "Cobbler's tools", "Cook's utensils", "Glassblower's tools",
+  "Jeweler's tools", "Leatherworker's tools", "Mason's tools", "Painter's supplies",
+  "Potter's tools", "Smith's tools", "Tinker's tools", "Weaver's tools", "Woodcarver's tools",
+  "Dice set", "Playing card set",
+  "Bagpipes", "Drum", "Dulcimer", "Flute", "Lute", "Lyre", "Horn", "Pan flute", "Shawm", "Viol",
+  "Navigator's tools", "Thieves' tools", "Vehicles",
+] as const
+
+export const WEAPON_PROFICIENCY_SUGGESTIONS = [
+  "Simple Weapons", "Martial Weapons",
+  "Club", "Dagger", "Greatclub", "Handaxe", "Javelin", "Light hammer", "Mace", "Quarterstaff", "Sickle", "Spear",
+  "Crossbow, light", "Dart", "Shortbow", "Sling",
+  "Battleaxe", "Flail", "Glaive", "Greataxe", "Greatsword", "Halberd", "Lance", "Longsword", "Maul",
+  "Morningstar", "Pike", "Rapier", "Scimitar", "Shortsword", "Trident", "War pick", "Warhammer", "Whip",
+  "Blowgun", "Crossbow, hand", "Crossbow, heavy", "Longbow", "Net",
 ] as const

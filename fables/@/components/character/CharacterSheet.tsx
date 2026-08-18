@@ -10,9 +10,9 @@ import { useUserContext } from "../../../src/contexts/UserContext"
 
 import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
-  SpellSlot, FavoriteRef, Feature, FamiliarRef,
+  SpellSlot, FavoriteRef, Feature, FamiliarRef, ActiveCondition,
 } from "@/components/shared/types"
-import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
+import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
 import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
@@ -69,6 +69,13 @@ interface Props {
 }
 
 type Tab = "main" | "details" | "familiars" | "chat"
+
+// Exhaustion's effect depends on its level, so it's looked up in
+// EXHAUSTION_EFFECTS instead of the flat CONDITION_EFFECTS map every other
+// condition uses.
+function conditionEffectText(c: ActiveCondition): string | undefined {
+  return c.name === "Exhaustion" ? EXHAUSTION_EFFECTS[c.level ?? 1] : CONDITION_EFFECTS[c.name]
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // CharacterSheet
@@ -1298,7 +1305,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           
           </div>
 
-          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => CONDITION_EFFECTS[c.name])) && (
+          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => conditionEffectText(c))) && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               {deathwardTriggers.map(t => (
                 <span key={t.id}
@@ -1318,12 +1325,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                     className="opacity-60 hover:opacity-100 shrink-0">✕</button>
                 </span>
               ))}
-              {conditions.map(c => CONDITION_EFFECTS[c.name] && (
-                <span key={c.id} title={CONDITION_EFFECTS[c.name]}
-                  className="text-xs px-2 py-1 rounded-full bg-red-500/15 border border-red-400/30 text-red-200">
-                  {c.name}: {CONDITION_EFFECTS[c.name]}
-                </span>
-              ))}
+              {conditions.map(c => {
+                const effect = conditionEffectText(c)
+                if (!effect) return null
+                const label = c.name === "Exhaustion" ? `Exhaustion ${c.level ?? 1}` : c.name
+                return (
+                  <span key={c.id} title={effect}
+                    className="text-xs px-2 py-1 rounded-full bg-red-500/15 border border-red-400/30 text-red-200">
+                    {label}: {effect}
+                  </span>
+                )
+              })}
             </div>
           )}
         </div>

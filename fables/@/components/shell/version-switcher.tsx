@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useUser } from "../../../src/contexts/UserContext"
-import { supabase } from "../../../src/supabase"
+import { supabase, markIntentionalSignOut } from "../../../src/supabase"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +32,7 @@ export function VersionSwitcher() {
   const avatarUrl = user?.user_metadata?.avatar_url
 
   async function handleSignOut() {
+    markIntentionalSignOut()
     await supabase.auth.signOut()
     navigate("/")
   }

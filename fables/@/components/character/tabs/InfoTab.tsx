@@ -9,6 +9,9 @@ import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteR
 import type { Theme } from "@/components/shared/themes"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
 import { nanoid, profBonus, safeParseJson, uniqueName, weightExemptItemIds } from "@/components/shared/utils"
+import {
+  LANGUAGE_SUGGESTIONS, ARMOR_PROFICIENCY_SUGGESTIONS, TOOL_PROFICIENCY_SUGGESTIONS, WEAPON_PROFICIENCY_SUGGESTIONS,
+} from "@/components/shared/constants"
 import { useUserContext } from "../../../../src/contexts/UserContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
@@ -16,6 +19,7 @@ import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { matchClassKey } from "@/components/shared/classColors"
+import { FavoriteStar } from "../ui/FavoriteStar"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -178,9 +182,11 @@ interface ContainerItemsListProps {
   magicItemStyle?: "none" | "outline" | "galaxy"
   magicItemColor?: string
   magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  pendingItemId?: string | null   // set right after Add — opens that item straight into its edit form
+  onAutoEditConsumed?: () => void
 }
 
-function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle }: ContainerItemsListProps) {
+function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed }: ContainerItemsListProps) {
   // Which containers (isContainer feature ids) have their contents shown —
   // per-container, not a whole-panel toggle; hidden by default; ephemeral
   // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
@@ -262,6 +268,8 @@ function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onL
           onChange={patch => onChange(f.id, patch)}
           onRemove={() => onRemove(f.id)}
           onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
+          autoEdit={f.id === pendingItemId}
+          onAutoEditConsumed={onAutoEditConsumed}
         />
         <PopTransition show={!!f.isContainer}>
           <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"
@@ -328,6 +336,47 @@ function toProfEntries(value: ProficiencyEntry[] | string | undefined): Proficie
   return []
 }
 
+// Static name suggestions offered via <datalist> — proficiencies are
+// freeform tags with no mechanical data behind them (contrast with the
+// weapon *items* seeded into the `documentation` table, which drive
+// EquipmentEntry's damage/weight autofill instead).
+const PROFICIENCY_SUGGESTIONS: Record<string, readonly string[]> = {
+  Weapons: WEAPON_PROFICIENCY_SUGGESTIONS,
+  Armor: ARMOR_PROFICIENCY_SUGGESTIONS,
+  Tools: TOOL_PROFICIENCY_SUGGESTIONS,
+  Languages: LANGUAGE_SUGGESTIONS,
+}
+
+// Delete used to be a bare "✕" sitting right next to the text field — easy
+// to hit by accident while scanning a long list. Same fix as LinkMenu above:
+// behind a small ⋮ menu so it's a deliberate two-click action.
+function ProficiencyEditMenu({ onDelete }: { onDelete: () => void }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pos = usePopoverPosition(open, triggerRef, contentRef)
+  useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
+
+  return (
+    <div className="relative shrink-0">
+      <button type="button" ref={triggerRef} onClick={() => setOpen(v => !v)} title="Edit"
+        className="text-white/30 hover:text-white text-xs size-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors">
+        ⋮
+      </button>
+      {open && pos && createPortal(
+        <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
+          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-32 animate-in fade-in zoom-in-95 duration-150">
+          <button type="button" onClick={() => { setOpen(false); onDelete() }}
+            className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors whitespace-nowrap">
+            Delete
+          </button>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 function ProficiencyList({ label, value, onChange, readOnly, card }: {
   label: string
   value: ProficiencyEntry[] | string | undefined
@@ -336,10 +385,18 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
   card: string
 }) {
   const entries = toProfEntries(value)
+  const suggestions = PROFICIENCY_SUGGESTIONS[label]
+  const datalistId = `profs-suggest-${label.toLowerCase()}`
+
+  // Favorited entries pin to the top (stable otherwise) — a quick way to
+  // surface the handful that actually matter (main weapon, spoken
+  // languages) out of a list that can otherwise grow long.
+  const displayEntries = [...entries].sort((a, b) => (a.favorite ? 0 : 1) - (b.favorite ? 0 : 1))
 
   function addEntry()                        { onChange([...entries, { id: nanoid(), name: "" }]) }
   function changeEntry(id: string, name: string) { onChange(entries.map(e => e.id === id ? { ...e, name } : e)) }
   function removeEntry(id: string)           { onChange(entries.filter(e => e.id !== id)) }
+  function toggleFavorite(id: string)        { onChange(entries.map(e => e.id === id ? { ...e, favorite: !e.favorite } : e)) }
 
   return (
     <div className={`${card} p-3 flex flex-col gap-2`}>
@@ -352,21 +409,28 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
           </button>
         )}
       </div>
+      {suggestions && !readOnly && (
+        <datalist id={datalistId}>
+          {suggestions.map(s => <option key={s} value={s} />)}
+        </datalist>
+      )}
       <div className="flex flex-col gap-1.5">
         {entries.length === 0 && (
           <p className="text-[10px] text-white/25 italic text-center py-3">
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        {entries.map(entry => (
-          <div key={entry.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5">
-            <input value={entry.name} disabled={readOnly} placeholder="e.g. Longswords"
+        {displayEntries.map(entry => (
+          <div key={entry.id} className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1">
+            {!readOnly ? (
+              <FavoriteStar isFavorite={!!entry.favorite} onToggle={() => toggleFavorite(entry.id)} />
+            ) : entry.favorite ? (
+              <span className="text-yellow-400 text-xs shrink-0 w-7 text-center">★</span>
+            ) : null}
+            <input value={entry.name} disabled={readOnly} placeholder="e.g. Longswords" list={suggestions ? datalistId : undefined}
               onChange={e => changeEntry(entry.id, e.target.value)}
               className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 disabled:opacity-60" />
-            {!readOnly && (
-              <button type="button" onClick={() => removeEntry(entry.id)}
-                className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
-            )}
+            {!readOnly && <ProficiencyEditMenu onDelete={() => removeEntry(entry.id)} />}
           </div>
         ))}
       </div>
@@ -625,6 +689,11 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
 
   const pb = profBonus(data.level ?? 1)
 
+  // Opens a newly-added Carried Item straight into its edit form instead of
+  // dropping an unnamed collapsed row into the list — same pattern as the
+  // spell list's pendingSpellId (see CharacterSheet.tsx).
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
+
   // Feature Stylings (Settings) applied sheet-wide — same source of truth
   // FavoritesPanel.tsx reads, just resolved per fixed list here since each of
   // these lists is a single, known category. "item" (the Items tab) is
@@ -659,6 +728,12 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
 
   function addFeature(key: FeatureKey, patch?: Partial<Feature>) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "", ...patch }] })
+  }
+
+  function addCarriedItem(parentId?: string) {
+    const id = nanoid()
+    addFeature("items", { id, category: "item", parentId })
+    setPendingItemId(id)
   }
 
   // ── Linked Notes helpers — create a real sidebar Note object and link it ──
@@ -855,7 +930,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
               checkbox at all, so it can never leave this list on its own). */}
           <ContainerItemsList
             items={(data.items ?? []).filter(i => !(i.category === "armor" && i.equipped))} allFeatures={allFeatures}
-            onAdd={parentId => addFeature("items", { category: "item", parentId })}
+            onAdd={addCarriedItem}
             onChange={onChangeFeature}
             onRemove={onRemoveFeature}
             onLinkToggle={onLinkToggle}
@@ -863,6 +938,7 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
             userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
+            pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
           />
         </div>
       )}

@@ -163,6 +163,7 @@ export function EquipmentEntry({
                             damage: s.meta?.damage || item.damage,
                             damageType: s.meta?.damage_type || item.damageType,
                             properties: s.meta?.properties || item.properties,
+                            weight: s.meta?.weight ?? item.weight,
                           })
                           setShowSuggest(false)
                         }}

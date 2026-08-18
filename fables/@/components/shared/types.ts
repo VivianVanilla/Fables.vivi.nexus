@@ -176,6 +176,7 @@ export interface ActiveCondition {
 export interface ProficiencyEntry {
   id: string
   name: string
+  favorite?: boolean
 }
 
 export interface LinkedNoteRef {

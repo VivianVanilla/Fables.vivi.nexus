@@ -31,7 +31,7 @@ export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation"
 export interface Suggestion {
   name: string
   description: string
-  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; prerequisite?: string }
+  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; prerequisite?: string }
 }
 
 // Shared with EquipmentEntry.tsx (the Martial tab) so a weapon's Attack Stat
@@ -122,6 +122,7 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
             damage:       row.data?.damage,
             damage_type:  row.data?.damage_type,
             properties:   row.data?.properties,
+            weight:       row.data?.weight,
           },
         })
         continue
@@ -187,6 +188,8 @@ interface FeatureEntryProps {
   accentColor?:      string             // Settings — this feature's category color (Feature Stylings); resolved by the caller from its category (race/class/feat/invocation), applies everywhere it's rendered, not just Favorites
   accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" for the category card background above
   sliderStyle?:      CardStyle          // Settings — separate look for this category's own "Track uses" bars, independent of accentStyle (the card background)
+  autoEdit?:         boolean            // open the edit form immediately (newly-added feature/item) — same pattern as SpellEntry.tsx
+  onAutoEditConsumed?: () => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -288,16 +291,21 @@ export function FeatureEntry({
   isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras, showWeightColumn,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
-  accentColor, accentStyle, sliderStyle,
+  accentColor, accentStyle, sliderStyle, autoEdit = false, onAutoEditConsumed,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
-  const [editing,     setEditing]     = useState(false)
+  const [editing,     setEditing]     = useState(autoEdit)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [showSuggest, setShowSuggest] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   const namePlaceholder = showItemExtras ? "Item name" : "Feature name"
   const unnamedLabel    = showItemExtras ? "Unnamed Item" : "Unnamed"
+
+  useEffect(() => {
+    if (autoEdit) onAutoEditConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Preload cache when entering edit mode
   useEffect(() => {

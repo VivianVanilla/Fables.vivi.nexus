@@ -1,4 +1,4 @@
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 import { supabase } from "../../../src/supabase";
@@ -37,6 +37,18 @@ async function signInWithDiscord() {
 export function LoginForm({ className, ...props }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // UserContext bounces here with a hard redirect when a session times out
+  // (refresh token expired/revoked) rather than a deliberate Log Out — see
+  // src/supabase.ts's consumeIntentionalSignOut.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("fables:sessionExpired")) {
+        sessionStorage.removeItem("fables:sessionExpired");
+        setError("Your session timed out — please log in again.");
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   async function handleDiscordSignIn() {
     try {

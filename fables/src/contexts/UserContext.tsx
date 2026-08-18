@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "../supabase"
+import { supabase, consumeIntentionalSignOut } from "../supabase"
 import type { userInfo } from "@/types/userInfo"
 
 export async function getObjectsForUser(userId: string) {
@@ -58,6 +58,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
 
     loadUser()
+  }, [])
+
+  // Supabase's own token-refresh loop fires "SIGNED_OUT" the moment a
+  // refresh fails (expired/revoked refresh token) — the same event a
+  // deliberate Log Out produces. A hard redirect (not react-router's
+  // navigate) is used because UserProvider sits outside <BrowserRouter> in
+  // main.tsx and has no router context to navigate with; the flag survives
+  // that reload so the login page can show why it bounced you back.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
+      if (event !== "SIGNED_OUT") return
+      setUser(null)
+      setObjects([])
+      if (!consumeIntentionalSignOut()) {
+        try { sessionStorage.setItem("fables:sessionExpired", "1") } catch { /* ignore */ }
+        window.location.href = "/"
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   async function refreshObjects() {
