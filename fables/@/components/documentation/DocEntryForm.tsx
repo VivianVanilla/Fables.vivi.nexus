@@ -70,7 +70,8 @@ function defaultData(type: DocType): Record<string, any> {
     }
     case "races": return { traits: [] }
     case "feats": return { prerequisite: "", description: "" }
-    case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "", damage: "", damage_type: "", properties: "" }
+    case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "", damage: "", damage_type: "", properties: "", cost: "" }
+    case "backgrounds": return { skill_proficiencies: "", tool_proficiencies: "", languages: "", equipment: [], feature_name: "", feature_description: "" }
   }
 }
 
@@ -595,6 +596,9 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
             </select>
           </Field>
         </div>
+        <Field label="Cost" hint="autofills onto a character's equipment entry when picked">
+          <input value={d.cost ?? ""} onChange={e => set("cost", e.target.value)} placeholder="15 gp" className={inp} />
+        </Field>
         <Field label="Attunement">
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={!!d.requires_attunement} onChange={e => set("requires_attunement", e.target.checked)} className="rounded accent-purple-500 size-4" />
@@ -626,6 +630,44 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
           placeholder="Describe the item's magical properties…"
           rows={5}
           className={`${inp} resize-none`}
+        />
+      </Section>
+    </>
+  )
+}
+
+// ── BackgroundFields ─────────────────────────────────────────────────────────
+
+function BackgroundFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any) => void }) {
+  return (
+    <>
+      <Section title="Proficiencies">
+        <Field label="Skill Proficiencies" hint="comma-separated">
+          <input value={d.skill_proficiencies ?? ""} onChange={e => set("skill_proficiencies", e.target.value)} placeholder="Insight, Religion" className={inp} />
+        </Field>
+        <Field label="Tool Proficiencies" hint="leave blank if none">
+          <input value={d.tool_proficiencies ?? ""} onChange={e => set("tool_proficiencies", e.target.value)} placeholder="Disguise kit, forgery kit" className={inp} />
+        </Field>
+        <Field label="Languages" hint="leave blank if none">
+          <input value={d.languages ?? ""} onChange={e => set("languages", e.target.value)} placeholder="One of your choice" className={inp} />
+        </Field>
+      </Section>
+
+      <Section title="Starting Equipment">
+        <p className="text-xs text-muted-foreground -mt-1 mb-2">Each line becomes a bullet point.</p>
+        <EquipmentField d={d} set={set} />
+      </Section>
+
+      <Section title="Feature">
+        <Field label="Feature Name" hint='e.g. "Shelter of the Faithful"'>
+          <input value={d.feature_name ?? ""} onChange={e => set("feature_name", e.target.value)} placeholder="Shelter of the Faithful" className={inp} />
+        </Field>
+        <MarkdownTextarea
+          value={d.feature_description ?? ""}
+          onChange={v => set("feature_description", v)}
+          placeholder="Describe what this feature grants…"
+          rows={4}
+          className={`${inp} resize-y`}
         />
       </Section>
     </>
@@ -730,10 +772,11 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
       </Section>
 
       {/* Type-specific fields */}
-      {type === "classes" && <ClassFields d={data} set={setField} isHomebrew={isHomebrew} userId={userId} />}
-      {type === "races"   && <RaceFields  d={data} set={setField} />}
-      {type === "feats"   && <FeatFields  d={data} set={setField} isHomebrew={isHomebrew} />}
-      {type === "items"   && <ItemFields  d={data} set={setField} />}
+      {type === "classes"     && <ClassFields      d={data} set={setField} isHomebrew={isHomebrew} userId={userId} />}
+      {type === "races"       && <RaceFields       d={data} set={setField} />}
+      {type === "feats"       && <FeatFields       d={data} set={setField} isHomebrew={isHomebrew} />}
+      {type === "items"       && <ItemFields       d={data} set={setField} />}
+      {type === "backgrounds" && <BackgroundFields d={data} set={setField} />}
 
       {error && <p className="text-sm text-red-400 bg-red-400/10 rounded-lg px-3 py-2">{error}</p>}
 

@@ -13,21 +13,22 @@ import { SpellBrowser } from "./spells/SpellBrowser";
 import { DocBrowser } from "@/components/documentation/DocBrowser";
 import type { DocType } from "@/components/documentation/doc-types";
 import { ADMIN_EMAILS } from "@/components/documentation/doc-types";
-import { BookOpen, Sparkles, LayoutGrid, Swords, Gem, Users, Eye, ShieldCheck } from "lucide-react";
+import { BookOpen, Sparkles, LayoutGrid, Swords, Gem, Users, Eye, ShieldCheck, ScrollText } from "lucide-react";
 import "./index.css";
 
-type Section = "welcome" | "spells" | "classes" | "feats" | "items" | "races";
+type Section = "welcome" | "spells" | "classes" | "feats" | "items" | "races" | "backgrounds";
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
-  { id: "welcome",  label: "Welcome",  icon: <BookOpen    className="size-4" /> },
-  { id: "spells",   label: "Spells",   icon: <Sparkles   className="size-4" /> },
-  { id: "classes",  label: "Classes",  icon: <LayoutGrid className="size-4" /> },
-  { id: "feats",    label: "Feats",    icon: <Swords     className="size-4" /> },
-  { id: "items",    label: "Items",    icon: <Gem        className="size-4" /> },
-  { id: "races",    label: "Races",    icon: <Users      className="size-4" /> },
+  { id: "welcome",     label: "Welcome",     icon: <BookOpen    className="size-4" /> },
+  { id: "spells",      label: "Spells",      icon: <Sparkles   className="size-4" /> },
+  { id: "classes",     label: "Classes",     icon: <LayoutGrid className="size-4" /> },
+  { id: "feats",       label: "Feats",       icon: <Swords     className="size-4" /> },
+  { id: "items",       label: "Items",       icon: <Gem        className="size-4" /> },
+  { id: "races",       label: "Races",       icon: <Users      className="size-4" /> },
+  { id: "backgrounds", label: "Backgrounds", icon: <ScrollText className="size-4" /> },
 ];
 
-const DOC_SECTIONS = new Set<Section>(["classes", "feats", "items", "races"]);
+const DOC_SECTIONS = new Set<Section>(["classes", "feats", "items", "races", "backgrounds"]);
 
 export default function Documentation() {
   const navigate   = useNavigate();
@@ -140,20 +141,22 @@ export default function Documentation() {
                       className="group flex flex-col items-start gap-3 p-5 rounded-xl bg-card border border-border hover:border-border hover:bg-muted/80 transition-all text-left"
                     >
                       <span className="p-2.5 rounded-lg bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20 transition-colors">
-                        {item.id === "spells"  && <Sparkles   className="size-6" />}
-                        {item.id === "classes" && <LayoutGrid className="size-6" />}
-                        {item.id === "feats"   && <Swords     className="size-6" />}
-                        {item.id === "items"   && <Gem        className="size-6" />}
-                        {item.id === "races"   && <Users      className="size-6" />}
+                        {item.id === "spells"      && <Sparkles   className="size-6" />}
+                        {item.id === "classes"     && <LayoutGrid className="size-6" />}
+                        {item.id === "feats"       && <Swords     className="size-6" />}
+                        {item.id === "items"       && <Gem        className="size-6" />}
+                        {item.id === "races"       && <Users      className="size-6" />}
+                        {item.id === "backgrounds" && <ScrollText className="size-6" />}
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-foreground">{item.label}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                          {item.id === "spells"  && "Browse & manage spells"}
-                          {item.id === "classes" && "Core & homebrew classes"}
-                          {item.id === "feats"   && "Core & homebrew feats"}
-                          {item.id === "items"   && "Core & homebrew items"}
-                          {item.id === "races"   && "Core & homebrew races"}
+                          {item.id === "spells"      && "Browse & manage spells"}
+                          {item.id === "classes"     && "Core & homebrew classes"}
+                          {item.id === "feats"       && "Core & homebrew feats"}
+                          {item.id === "items"       && "Core & homebrew items"}
+                          {item.id === "races"       && "Core & homebrew races"}
+                          {item.id === "backgrounds" && "Core & homebrew backgrounds"}
                         </p>
                       </div>
                     </button>

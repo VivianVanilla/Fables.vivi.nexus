@@ -31,7 +31,7 @@ export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation"
 export interface Suggestion {
   name: string
   description: string
-  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; prerequisite?: string }
+  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; cost?: string; prerequisite?: string }
 }
 
 // Shared with EquipmentEntry.tsx (the Martial tab) so a weapon's Attack Stat
@@ -123,6 +123,7 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
             damage_type:  row.data?.damage_type,
             properties:   row.data?.properties,
             weight:       row.data?.weight,
+            cost:         row.data?.cost,
           },
         })
         continue
@@ -980,8 +981,20 @@ export function FeatureEntry({
             </label>
           )}
 
-          {showItemExtras && feature.category !== "armor" && (feature.amount ?? 1) > 1 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">×{feature.amount}</span>
+          {/* Quick +/- so consuming one (a potion, a ration) is a single
+              click instead of opening the edit form to change a number. */}
+          {showItemExtras && feature.category !== "armor" && (
+            <span className="flex items-center gap-1 shrink-0 bg-white/10 rounded-full px-1.5 py-0.5" onClick={e => e.stopPropagation()}>
+              {!readOnly && (
+                <button type="button" onClick={() => onChange({ amount: Math.max(1, (feature.amount ?? 1) - 1) })}
+                  className="text-white/50 hover:text-white text-[10px] leading-none px-0.5">−</button>
+              )}
+              <span className="text-[10px] text-white/60 font-semibold tabular-nums min-w-[1ch] text-center">×{feature.amount ?? 1}</span>
+              {!readOnly && (
+                <button type="button" onClick={() => onChange({ amount: (feature.amount ?? 1) + 1 })}
+                  className="text-white/50 hover:text-white text-[10px] leading-none px-0.5">+</button>
+              )}
+            </span>
           )}
 
           {/* At the trailing edge, alongside Weight, rather than crowding the

@@ -23,6 +23,7 @@ export interface EquipmentItem {
   damages?: DamageEntry[] // additional damage instances beyond the primary damage/damageType, only used when multiDamage is on
   type?: string        // "melee" | "ranged" | "armor" | "misc"
   notes?: string
+  cost?: string        // e.g. "15 gp" — autofilled from Documentation's item data, same as damage/weight
   magicBonus?: string  // e.g. "+1", "+2"
   properties?: string  // e.g. "Versatile, Finesse"
   proficient?: boolean

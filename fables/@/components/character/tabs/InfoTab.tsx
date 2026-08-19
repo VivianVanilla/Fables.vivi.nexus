@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import type { userInfo } from "@/types/userInfo"
-import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef } from "@/components/shared/types"
+import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef, FamiliarRef } from "@/components/shared/types"
 import type { Theme } from "@/components/shared/themes"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
 import { nanoid, profBonus, safeParseJson, uniqueName, weightExemptItemIds } from "@/components/shared/utils"
@@ -17,13 +17,13 @@ import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
+import { FamiliarsTab } from "./FamiliarsTab"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { matchClassKey } from "@/components/shared/classColors"
-import { FavoriteStar } from "../ui/FavoriteStar"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type InfoSubTab = "overview" | "raceFeats" | "features" | "items" | "profs"
+export type InfoSubTab = "overview" | "raceFeats" | "features" | "familiars" | "profs"
 
 interface InfoTabProps {
   data: CharacterData
@@ -40,12 +40,20 @@ interface InfoTabProps {
   updateObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
-  onAddItemToEquipment: (feature: Feature) => void
-  equipmentLinkedIds: Set<string>
   subTab: InfoSubTab
   onSubTabChange: (tab: InfoSubTab) => void
   isWarlock: boolean
   isArtificer: boolean
+  // Familiars subtab — mirrors the props FamiliarsTab took when it was its
+  // own top-level Tab in CharacterSheet.tsx (see the tab-swap note above).
+  familiars: FamiliarRef[]
+  monsters: userInfo.Objects[]
+  poppedOutIds: Set<string>
+  onAddFamiliar: (monsterId: string) => void
+  onUpdateFamiliar: (id: string, patch: Partial<FamiliarRef>) => void
+  onRemoveFamiliar: (id: string) => void
+  onToggleFamiliarFavorite: (id: string, label: string) => void
+  onPopOutFamiliar: (id: string) => void
 }
 
 // ── Sub-component: FeatureList ────────────────────────────────────────────────
@@ -164,7 +172,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
 
 // ── Sub-component: ContainerItemsList — generic items, with folder-like containers ────
 
-interface ContainerItemsListProps {
+export interface ContainerItemsListProps {
   items: Feature[]  // full generic-items array (for parent/child resolution)
   allFeatures: Feature[]
   onAdd: (parentId?: string) => void
@@ -186,7 +194,7 @@ interface ContainerItemsListProps {
   onAutoEditConsumed?: () => void
 }
 
-function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed }: ContainerItemsListProps) {
   // Which containers (isContainer feature ids) have their contents shown —
   // per-container, not a whole-panel toggle; hidden by default; ephemeral
   // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
@@ -347,36 +355,6 @@ const PROFICIENCY_SUGGESTIONS: Record<string, readonly string[]> = {
   Languages: LANGUAGE_SUGGESTIONS,
 }
 
-// Delete used to be a bare "✕" sitting right next to the text field — easy
-// to hit by accident while scanning a long list. Same fix as LinkMenu above:
-// behind a small ⋮ menu so it's a deliberate two-click action.
-function ProficiencyEditMenu({ onDelete }: { onDelete: () => void }) {
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const pos = usePopoverPosition(open, triggerRef, contentRef)
-  useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
-
-  return (
-    <div className="relative shrink-0">
-      <button type="button" ref={triggerRef} onClick={() => setOpen(v => !v)} title="Edit"
-        className="text-white/30 hover:text-white text-xs size-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors">
-        ⋮
-      </button>
-      {open && pos && createPortal(
-        <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
-          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-32 animate-in fade-in zoom-in-95 duration-150">
-          <button type="button" onClick={() => { setOpen(false); onDelete() }}
-            className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors whitespace-nowrap">
-            Delete
-          </button>
-        </div>,
-        document.body
-      )}
-    </div>
-  )
-}
-
 function ProficiencyList({ label, value, onChange, readOnly, card }: {
   label: string
   value: ProficiencyEntry[] | string | undefined
@@ -421,16 +399,23 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
           </p>
         )}
         {displayEntries.map(entry => (
-          <div key={entry.id} className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1">
+          <div key={entry.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5">
             {!readOnly ? (
-              <FavoriteStar isFavorite={!!entry.favorite} onToggle={() => toggleFavorite(entry.id)} />
+              <button type="button" onClick={() => toggleFavorite(entry.id)}
+                title={entry.favorite ? "Remove from favorites" : "Add to favorites"}
+                className={`text-xs shrink-0 transition-colors ${entry.favorite ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}>
+                {entry.favorite ? "★" : "☆"}
+              </button>
             ) : entry.favorite ? (
-              <span className="text-yellow-400 text-xs shrink-0 w-7 text-center">★</span>
+              <span className="text-yellow-400 text-xs shrink-0">★</span>
             ) : null}
             <input value={entry.name} disabled={readOnly} placeholder="e.g. Longswords" list={suggestions ? datalistId : undefined}
               onChange={e => changeEntry(entry.id, e.target.value)}
               className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 disabled:opacity-60" />
-            {!readOnly && <ProficiencyEditMenu onDelete={() => removeEntry(entry.id)} />}
+            {!readOnly && (
+              <button type="button" onClick={() => removeEntry(entry.id)}
+                className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+            )}
           </div>
         ))}
       </div>
@@ -677,22 +662,24 @@ function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, readO
 
 // ── Main InfoTab component ────────────────────────────────────────────────────
 
+// "Armor & Items" moved out to its own top-level Tab in CharacterSheet.tsx
+// (it's what players open most, so it earned a one-click tab); Familiars
+// moved in here to make room — see CharacterSheet.tsx's Tab bar.
 const SUB_TABS: [InfoSubTab, string][] = [
   ["overview",   "Notes"],
   ["raceFeats",  "Race & Feats"],
   ["features",   "Features"],
-  ["items",      "Armor & Items"],
+  ["familiars",  "Familiars"],
   ["profs",      "Proficiencies"]
 ]
 
-export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject, favorites, onToggleFavorite, onAddItemToEquipment, equipmentLinkedIds, subTab, onSubTabChange, isWarlock, isArtificer }: InfoTabProps) {
+export function InfoTab({
+  data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject,
+  favorites, onToggleFavorite, subTab, onSubTabChange, isWarlock, isArtificer,
+  familiars, monsters, poppedOutIds, onAddFamiliar, onUpdateFamiliar, onRemoveFamiliar, onToggleFamiliarFavorite, onPopOutFamiliar,
+}: InfoTabProps) {
 
   const pb = profBonus(data.level ?? 1)
-
-  // Opens a newly-added Carried Item straight into its edit form instead of
-  // dropping an unnamed collapsed row into the list — same pattern as the
-  // spell list's pendingSpellId (see CharacterSheet.tsx).
-  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
 
   // Feature Stylings (Settings) applied sheet-wide — same source of truth
   // FavoritesPanel.tsx reads, just resolved per fixed list here since each of
@@ -724,16 +711,10 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
 
   // ── Feature list helpers ─────────────────────────────────────────────────
 
-  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "items" | "invocations" | "infusions"
+  type FeatureKey = "racialTraits" | "feats" | "classFeatures" | "invocations" | "infusions"
 
   function addFeature(key: FeatureKey, patch?: Partial<Feature>) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "", ...patch }] })
-  }
-
-  function addCarriedItem(parentId?: string) {
-    const id = nanoid()
-    addFeature("items", { id, category: "item", parentId })
-    setPendingItemId(id)
   }
 
   // ── Linked Notes helpers — create a real sidebar Note object and link it ──
@@ -767,22 +748,33 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
       {subTab === "overview" && (
         <div className="flex flex-col gap-3 overflow-auto flex-1">
 
+          {/* Its own card with real room — this used to share a cramped
+              single-line input with Alignment, not enough space for an
+              actual background writeup (personality, ideals, bonds, flaws…). */}
           <div className={`${card} p-3 flex flex-col gap-2`}>
             <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Background</span>
-            <input value={data.background ?? ""} onChange={e => update({ background: e.target.value })}
-              placeholder="Acolyte, Sage…" disabled={readOnly}
-              className="bg-transparent outline-none text-xs text-white placeholder:text-white/20 border-b border-white/10 pb-1 disabled:opacity-60" />
-            <input value={data.alignment ?? ""} onChange={e => update({ alignment: e.target.value })}
-              placeholder="Alignment…" disabled={readOnly}
-              className="bg-transparent outline-none text-xs text-white placeholder:text-white/20 disabled:opacity-60" />
+            {readOnly ? (
+              data.background ? (
+                <Markdown text={data.background} tone="auto" size="sm" />
+              ) : (
+                <p className="text-xs text-white/25 italic">No background yet.</p>
+              )
+            ) : (
+              <MarkdownTextarea
+                value={data.background ?? ""} onChange={v => update({ background: v })}
+                placeholder="Acolyte, Sage… personality traits, ideals, bonds, flaws…"
+                rows={6}
+                className="bg-white/5 rounded-lg px-2.5 py-1.5 outline-none text-xs text-white placeholder:text-white/20 resize-none"
+              />
+            )}
           </div>
 
           <div className={`${card} p-3 flex flex-col gap-2`}>
             <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Description</span>
             <div className="grid grid-cols-2 gap-x-3 gap-y-2">
               {([
-                ["age", "Age"], ["height", "Height"], ["weight", "Weight"],
-                ["eyes", "Eyes"], ["skin", "Skin"], ["hair", "Hair"],
+                ["alignment", "Alignment"], ["age", "Age"], ["height", "Height"],
+                ["weight", "Weight"], ["eyes", "Eyes"], ["skin", "Skin"], ["hair", "Hair"],
               ] as const).map(([key, label]) => (
                 <label key={key} className="flex flex-col gap-1">
                   <span className="text-[9px] uppercase tracking-wider text-white/30">{label}</span>
@@ -806,18 +798,6 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
               <p className="text-[9px] text-white/40">Joined: <span className="text-white/70 font-mono">{data.partyCode}</span></p>
             )}
           </div>
-
-          {data.multiclass && data.classes && data.classes.length > 1 && (
-            <div className={`${card} p-3 flex flex-col gap-2`}>
-              <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Classes</span>
-              {data.classes.map((c, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="text-white/70 flex-1">{c.cls}</span>
-                  <span className="text-white/40">Lv {c.level}</span>
-                </div>
-              ))}
-            </div>
-          )}
 
           <LinkedNotesSection
             objects={objects}
@@ -906,41 +886,26 @@ export function InfoTab({ data, update, onChangeFeature, onRemoveFeature, onLink
         />
       )}
 
-      {/* ── Armor & Items ─────────────────────────────────────────────────── */}
+      {/* ── Familiars ─────────────────────────────────────────────────────── */}
+      {/* "Armor & Items" moved out to its own top-level Tab — see the note on
+          SUB_TABS above — and Familiars moved in here in its place. */}
 
-      {subTab === "items" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
-          <FeatureList
-            items={(data.items ?? []).filter(i => i.category === "armor" && i.equipped)} allFeatures={allFeatures} label="Equipped"
-            onAdd={() => addFeature("items", { category: "armor", equipped: true })}
-            onChange={onChangeFeature}
-            onRemove={onRemoveFeature}
-            onLinkToggle={onLinkToggle}
-            theme={theme} card={card} readOnly={readOnly} pb={pb}
-            suggestionSource="item" userId={userId}
-            favorites={favorites} onToggleFavorite={onToggleFavorite}
-            onAddToEquipment={onAddItemToEquipment}
-            equipmentLinkedIds={equipmentLinkedIds}
-            showAttunement
-            showItemExtras
-            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
-          />
-          {/* Everything not equipped lands here — armor/weapons you own but
-              aren't wearing, and every generic item (which has no Equip
-              checkbox at all, so it can never leave this list on its own). */}
-          <ContainerItemsList
-            items={(data.items ?? []).filter(i => !(i.category === "armor" && i.equipped))} allFeatures={allFeatures}
-            onAdd={addCarriedItem}
-            onChange={onChangeFeature}
-            onRemove={onRemoveFeature}
-            onLinkToggle={onLinkToggle}
-            theme={theme} card={card} readOnly={readOnly} pb={pb}
-            userId={userId}
-            favorites={favorites} onToggleFavorite={onToggleFavorite}
-            showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
-            pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
-          />
-        </div>
+      {subTab === "familiars" && (
+        <FamiliarsTab
+          familiars={familiars}
+          monsters={monsters}
+          favorites={favorites}
+          card={card}
+          readOnly={readOnly}
+          poppedOutIds={poppedOutIds}
+          onAdd={onAddFamiliar}
+          onUpdate={onUpdateFamiliar}
+          onRemove={onRemoveFamiliar}
+          onToggleFavorite={onToggleFamiliarFavorite}
+          onPopOut={onPopOutFamiliar}
+          accentColor={favAccentColor("familiar")}
+          accentStyle={favAccentStyle("familiar")}
+        />
       )}
 
       {/* ── Proficiencies ──────────────────────────────────────────────────── */}

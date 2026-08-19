@@ -53,7 +53,7 @@ import { SpeedDisplay }          from "@/components/shared/ui/SpeedDisplay"
 
 // Tabs / other
 import { InfoTab, type InfoSubTab } from "./tabs/InfoTab"
-import { FamiliarsTab }          from "./tabs/FamiliarsTab"
+import { ItemsTab }              from "./tabs/ItemsTab"
 import { FamiliarMonsterView }   from "@/components/shared/monster/monster"
 import { PartyServer }           from "@/components/party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "@/components/party/unread"
@@ -68,7 +68,7 @@ interface Props {
   readOnly?: boolean
 }
 
-type Tab = "main" | "details" | "familiars" | "chat"
+type Tab = "main" | "details" | "items" | "chat"
 
 // Exhaustion's effect depends on its level, so it's looked up in
 // EXHAUSTION_EFFECTS instead of the flat CONDITION_EFFECTS map every other
@@ -925,7 +925,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   const INFO_SUBTAB_BY_CATEGORY: Record<string, InfoSubTab> = {
-    Trait: "raceFeats", Feat: "raceFeats", Feature: "features", Gear: "items",
+    Trait: "raceFeats", Feat: "raceFeats", Feature: "features",
   }
 
   function navigateToResult(r: (typeof searchResults)[number]) {
@@ -934,8 +934,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     } else if (r.refType === "equipment") {
       setSpellsSubTab("martial"); setActiveTab("main")
     } else if (r.refType === "familiar") {
-      setActiveTab("familiars")
+      setInfoSubTab("familiars"); setActiveTab("details")
       if (!openPopouts[r.id]) togglePopout(r.id)
+    } else if (r.category === "Gear") {
+      setActiveTab("items")
     } else {
       setInfoSubTab(INFO_SUBTAB_BY_CATEGORY[r.category] ?? "overview")
       setActiveTab("details")
@@ -1359,10 +1361,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
-        {(["main", "details", "familiars", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
+        {(["main", "details", "items", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "familiars" ? "Familiars" : "Chat"}
+            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "items" ? "Armor & Items" : "Chat"}
             {tab === "chat" && partyChatUnread && (
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
             )}
@@ -1381,24 +1383,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             userId={user?.id ?? null} objects={objects} createObject={createObject} updateObject={updateObject}
             subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
-            favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment}
-            equipmentLinkedIds={equipmentLinkedIds} isWarlock={isWarlock} isArtificer={isArtificer} />
+            favorites={favorites} onToggleFavorite={toggleFeatureFavorite}
+            isWarlock={isWarlock} isArtificer={isArtificer}
+            familiars={familiars} monsters={monsters} poppedOutIds={new Set(Object.keys(openPopouts))}
+            onAddFamiliar={addFamiliar} onUpdateFamiliar={updateFamiliar} onRemoveFamiliar={removeFamiliar}
+            onToggleFamiliarFavorite={toggleFamiliarFavorite} onPopOutFamiliar={togglePopout} />
         )}
-        {activeTab === "familiars" && (
-          <FamiliarsTab
-            familiars={familiars}
-            monsters={monsters}
-            favorites={favorites}
-            card={card}
-            readOnly={readOnly}
-            poppedOutIds={new Set(Object.keys(openPopouts))}
-            onAdd={addFamiliar}
-            onUpdate={updateFamiliar}
-            onRemove={removeFamiliar}
-            onToggleFavorite={toggleFamiliarFavorite}
-            onPopOut={togglePopout}
-            accentColor={data.favoriteCategoryColors?.familiar}
-            accentStyle={data.favoriteCategoryStyle?.familiar}
+        {activeTab === "items" && (
+          <ItemsTab
+            data={data} update={update} theme={theme} card={card} readOnly={readOnly} pb={profBonus(data.level ?? 1)}
+            userId={user?.id ?? null}
+            onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
+            favorites={favorites} onToggleFavorite={toggleFeatureFavorite} onAddItemToEquipment={addItemToEquipment}
+            equipmentLinkedIds={equipmentLinkedIds}
           />
         )}
         {activeTab === "chat" && data.partyCode && !readOnly && (

@@ -470,6 +470,7 @@ function DetailView({
             <RefSection title="Properties">
               {d.rarity    && <Prop label="Rarity"    value={<span className="capitalize text-amber-400 font-semibold">{d.rarity}</span>} />}
               {d.item_type && <Prop label="Type"      value={<span className="capitalize">{d.item_type}</span>} />}
+              {d.cost      && <Prop label="Cost"      value={d.cost} />}
               {d.requires_attunement && <Prop label="Attunement" value="Requires attunement" />}
               {d.item_type === "weapon" && d.damage && (
                 <Prop label="Damage" value={`${d.damage}${d.damage_type ? ` ${d.damage_type}` : ""}`} />
@@ -479,6 +480,34 @@ function DetailView({
             {d.description && (
               <RefSection title="Description">
                 <Markdown text={d.description} tone="slate" />
+              </RefSection>
+            )}
+          </>
+        )}
+
+        {/* ── BACKGROUNDS ─────────────────────────────────────────────── */}
+        {type === "backgrounds" && (
+          <>
+            {(d.skill_proficiencies || d.tool_proficiencies || d.languages) && (
+              <RefSection title="Proficiencies">
+                {d.skill_proficiencies && <Prop label="Skills"    value={d.skill_proficiencies} />}
+                {d.tool_proficiencies  && <Prop label="Tools"     value={d.tool_proficiencies} />}
+                {d.languages           && <Prop label="Languages" value={d.languages} />}
+              </RefSection>
+            )}
+            {d.equipment?.length > 0 && (
+              <RefSection title="Equipment">
+                <ul className="flex flex-col gap-1.5">
+                  {(d.equipment as string[]).map((line, i) => (
+                    <li key={i} className="text-sm text-foreground pl-3 border-l-2 border-border">{line}</li>
+                  ))}
+                </ul>
+              </RefSection>
+            )}
+            {d.feature_name && (
+              <RefSection title="Feature">
+                <p className="text-sm font-bold text-foreground mb-0.5">{d.feature_name}</p>
+                {d.feature_description && <Markdown text={d.feature_description} tone="slate" />}
               </RefSection>
             )}
           </>

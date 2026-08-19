@@ -164,6 +164,7 @@ export function EquipmentEntry({
                             damageType: s.meta?.damage_type || item.damageType,
                             properties: s.meta?.properties || item.properties,
                             weight: s.meta?.weight ?? item.weight,
+                            cost: s.meta?.cost || item.cost,
                           })
                           setShowSuggest(false)
                         }}
@@ -173,6 +174,7 @@ export function EquipmentEntry({
                         {s.meta?.damage && (
                           <span className="text-white/35 ml-2">{s.meta.damage}{s.meta.damage_type ? ` ${s.meta.damage_type}` : ""}</span>
                         )}
+                        {s.meta?.cost && <span className="text-white/25 ml-2">{s.meta.cost}</span>}
                       </button>
                     ))}
                   </div>
@@ -290,6 +292,12 @@ export function EquipmentEntry({
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-white/40 uppercase tracking-wider">Weight (lb)</span>
                   <NumInput min={0} step="0.1" value={item.weight ?? ""} onChange={e => onChange({ weight: e.target.value ? parseFloat(e.target.value) || 0 : undefined })} placeholder="0"
+                    className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-white/40 uppercase tracking-wider">Cost</span>
+                  <input value={item.cost ?? ""} onChange={e => onChange({ cost: e.target.value })} placeholder="15 gp"
                     className="bg-white/10 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-white/30 placeholder:text-white/20" />
                 </label>
 

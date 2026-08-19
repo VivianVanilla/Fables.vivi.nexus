@@ -76,10 +76,59 @@ function useRaceEntries(userId?: string | null) {
   return raceEntries
 }
 
-const CLASSES = [
-  "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
-  "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard", "Artificer",
-]
+// ── Class data (fetched from documentation, same pattern as useRaceEntries
+// above) — this used to be a hardcoded list, so classes added/renamed in
+// Documentation never reached "New Character." Subclass rows share the same
+// `type: "class"` table, so they're filtered out here just like DocBrowser
+// does for its own class list.
+interface ClassOption { name: string }
+
+function useClassEntries(userId?: string | null) {
+  const [classEntries, setClassEntries] = useState<ClassOption[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: coreRows } = await supabase
+        .from("documentation").select("name, data")
+        .eq("type", "class").eq("is_homebrew", false)
+
+      let extraRows: any[] = []
+      if (userId) {
+        const { data: ownRows } = await supabase
+          .from("documentation").select("name, data")
+          .eq("type", "class").eq("is_homebrew", true).eq("owner_id", userId)
+
+        const { data: libObjs } = await supabase
+          .from("objects").select("data")
+          .eq("type", "doc_class").eq("owner_id", userId)
+        const libIds = (libObjs ?? []).map((o: any) => o.data?.doc_id).filter(Boolean)
+        let libRows: any[] = []
+        if (libIds.length) {
+          const { data: lr } = await supabase
+            .from("documentation").select("name, data").in("id", libIds)
+          libRows = lr ?? []
+        }
+        extraRows = [...(ownRows ?? []), ...libRows]
+      }
+
+      const seen = new Set<string>()
+      const entries: ClassOption[] = []
+      for (const c of [...(coreRows ?? []), ...extraRows]) {
+        if (c.data?.is_subclass) continue
+        if (seen.has(c.name)) continue
+        seen.add(c.name)
+        entries.push({ name: c.name })
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name))
+      if (!cancelled) setClassEntries(entries)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  return classEntries
+}
 
 // ── Tiny helpers ──────────────────────────────────────────────────────────────
 function clampLevel(n: number) {
@@ -142,10 +191,11 @@ function FolderForm({ onCreated }: { onCreated: () => void }) {
 function CharacterForm({ onCreated }: { onCreated: () => void }) {
   const { createObject, user } = useUserContext()
   const raceEntries = useRaceEntries(user?.id)
+  const classEntries = useClassEntries(user?.id)
   const [name, setName] = useState("New Character")
   const [race, setRace] = useState("")
   const [multiclass, setMulticlass] = useState(false)
-  const [classes, setClasses] = useState<ClassEntry[]>([{ cls: CLASSES[0], level: 1 }])
+  const [classes, setClasses] = useState<ClassEntry[]>([{ cls: "", level: 1 }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -154,6 +204,10 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
   useEffect(() => {
     if (!race && raceEntries.length > 0) setRace(raceEntries[0].name)
   }, [raceEntries, race])
+
+  useEffect(() => {
+    if (!classes[0]?.cls && classEntries.length > 0) setClasses(prev => prev.map((c, i) => i === 0 ? { ...c, cls: classEntries[0].name } : c))
+  }, [classEntries, classes])
 
   function setClassEntry(index: number, field: keyof ClassEntry, value: string | number) {
     setClasses((prev) =>
@@ -165,7 +219,7 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
 
   function addClass() {
     if (totalLevel >= 20) return
-    setClasses((prev) => [...prev, { cls: CLASSES[0], level: 1 }])
+    setClasses((prev) => [...prev, { cls: classEntries[0]?.name ?? "", level: 1 }])
   }
 
   function removeClass(index: number) {
@@ -252,9 +306,11 @@ function CharacterForm({ onCreated }: { onCreated: () => void }) {
               <select
                 value={entry.cls}
                 onChange={(e) => setClassEntry(i, "cls", e.target.value)}
-                className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={classEntries.length === 0}
+                className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
               >
-                {CLASSES.map((c) => <option key={c} className="bg-zinc-800 text-white">{c}</option>)}
+                {classEntries.length === 0 && <option>Loading…</option>}
+                {classEntries.map((c) => <option key={c.name} className="bg-zinc-800 text-white">{c.name}</option>)}
               </select>
               <div className="flex items-center gap-1">
                 <Button

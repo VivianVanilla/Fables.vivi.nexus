@@ -1,14 +1,14 @@
 // Shared types and constants for the documentation system
 
-export type DocType = "classes" | "feats" | "items" | "races"
-export type DocSingular = "class" | "feat" | "item" | "race"
+export type DocType = "classes" | "feats" | "items" | "races" | "backgrounds"
+export type DocSingular = "class" | "feat" | "item" | "race" | "background"
 
 export const SINGULAR: Record<DocType, DocSingular> = {
-  classes: "class", feats: "feat", items: "item", races: "race",
+  classes: "class", feats: "feat", items: "item", races: "race", backgrounds: "background",
 }
 
 export const TYPE_LABEL: Record<DocType, string> = {
-  classes: "Class", feats: "Feat", items: "Item", races: "Race",
+  classes: "Class", feats: "Feat", items: "Item", races: "Race", backgrounds: "Background",
 }
 
 export const ADMIN_EMAILS = [
