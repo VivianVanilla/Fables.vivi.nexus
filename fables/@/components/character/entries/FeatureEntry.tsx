@@ -31,7 +31,7 @@ export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation"
 export interface Suggestion {
   name: string
   description: string
-  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; cost?: string; prerequisite?: string }
+  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; cost?: string; prerequisite?: string; class?: string }
 }
 
 // Shared with EquipmentEntry.tsx (the Martial tab) so a weapon's Attack Stat
@@ -133,7 +133,7 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
       const traits:   any[] = row.data?.traits   ?? []
 
       features.forEach(f => {
-        if (f?.name) results.push({ name: f.name, description: f.description ?? "" })
+        if (f?.name) results.push({ name: f.name, description: f.description ?? "", meta: { class: row.name } })
       })
       traits.forEach(t => {
         if (typeof t === "string") results.push({ name: t, description: "" })

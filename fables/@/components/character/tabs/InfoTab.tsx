@@ -98,11 +98,12 @@ interface FeatureListProps {
 // know the exact spelling first. Manually typing a custom name still gets
 // that inline autofill same as always; this modal doesn't replace it, it's
 // just another way to reach the same pool before you've started typing.
-function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existingNames, onPick, onClose }: {
+function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existingNames, classFilter, onPick, onClose }: {
   label: string
   suggestionSource: SuggestionSource
   userId?: string | null
   existingNames: string[]
+  classFilter?: string[]  // Class Features only — restricts the grid to features tagged with one of these class names (see getSuggestions' meta.class), so a Fighter doesn't see Wizard spell features
   onPick: (s: Suggestion) => void
   onClose: () => void
 }) {
@@ -110,6 +111,11 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
   const [loaded, setLoaded] = useState(false)
   const [query, setQuery] = useState("")
   const [customName, setCustomName] = useState("")
+  // Clicking a grid tile opens it for a look (full description) rather than
+  // adding it immediately — Add is a separate, deliberate confirm step from
+  // there. Clearing this returns to the grid (still open, so picking a few
+  // in a row doesn't mean reopening the modal each time).
+  const [selected, setSelected] = useState<Suggestion | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -117,9 +123,15 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
     return () => { cancelled = true }
   }, [suggestionSource, userId])
 
+  // Falls back to showing everything if the character has no class set yet
+  // (an empty filter would otherwise mean "match nothing").
+  const classNames = classFilter && classFilter.length > 0 ? new Set(classFilter.map(c => c.toLowerCase())) : null
   const existing = new Set(existingNames.map(n => n.trim().toLowerCase()))
   const q = query.trim().toLowerCase()
-  const available = all.filter(s => !existing.has(s.name.toLowerCase()) && (!q || s.name.toLowerCase().includes(q)))
+  const available = all.filter(s =>
+    (!classNames || (s.meta?.class && classNames.has(s.meta.class.toLowerCase()))) &&
+    !existing.has(s.name.toLowerCase()) && (!q || s.name.toLowerCase().includes(q))
+  )
 
   function addCustom() {
     const name = customName.trim()
@@ -132,46 +144,68 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
     <Modal onClose={onClose}>
       <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(640px,calc(100vw-2rem))] max-h-[80vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-          <span className="text-sm font-bold text-white">Add {label}</span>
+          <span className="text-sm font-bold text-white">{selected ? selected.name : `Add ${label}`}</span>
           <button type="button" onClick={onClose}
             className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
         </div>
-        <div className="p-4 flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
-          <input
-            autoFocus value={query} onChange={e => setQuery(e.target.value)}
-            placeholder={`Search ${label.toLowerCase()}…`}
-            className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 shrink-0"
-          />
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto flex-1 min-h-0 content-start">
-            {!loaded ? (
-              <p className="col-span-full text-xs text-white/30 italic text-center py-6">Loading…</p>
-            ) : available.length === 0 ? (
-              <p className="col-span-full text-xs text-white/30 italic text-center py-6">
-                {q ? "No matches — add it as custom below." : "All suggestions already added."}
-              </p>
-            ) : available.map(s => (
-              <button key={s.name} type="button" onClick={() => onPick(s)}
-                className="text-left text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 transition-colors flex flex-col gap-0.5">
-                <span className="font-medium truncate">{s.name}</span>
-                {s.description && (
-                  <span className="text-white/35 truncate">{s.description.slice(0, 50)}{s.description.length > 50 ? "…" : ""}</span>
-                )}
+        {selected ? (
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="p-5 overflow-y-auto flex-1 min-h-0">
+              {selected.description ? (
+                <Markdown text={selected.description} tone="dark" />
+              ) : (
+                <p className="text-xs text-white/30 italic">No description available.</p>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-white/10 shrink-0">
+              <button type="button" onClick={() => setSelected(null)}
+                className="text-xs px-3 py-2 rounded-lg text-white/50 hover:text-white transition-colors">
+                ← Back
               </button>
-            ))}
+              <button type="button" onClick={() => { onPick(selected); setSelected(null) }}
+                className="text-xs px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-semibold transition-colors">
+                + Add {selected.name}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 pt-3 border-t border-white/10 shrink-0">
+        ) : (
+          <div className="p-4 flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
             <input
-              value={customName} onChange={e => setCustomName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addCustom()}
-              placeholder="Custom — type here…"
-              className="flex-1 min-w-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+              autoFocus value={query} onChange={e => setQuery(e.target.value)}
+              placeholder={`Search ${label.toLowerCase()}…`}
+              className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 shrink-0"
             />
-            <button type="button" onClick={addCustom} disabled={!customName.trim()}
-              className="text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-40 shrink-0">
-              Add
-            </button>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto flex-1 min-h-0 content-start">
+              {!loaded ? (
+                <p className="col-span-full text-xs text-white/30 italic text-center py-6">Loading…</p>
+              ) : available.length === 0 ? (
+                <p className="col-span-full text-xs text-white/30 italic text-center py-6">
+                  {q ? "No matches — add it as custom below." : "All suggestions already added."}
+                </p>
+              ) : available.map(s => (
+                <button key={s.name} type="button" onClick={() => setSelected(s)}
+                  className="text-left text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 transition-colors flex flex-col gap-0.5">
+                  <span className="font-medium truncate">{s.name}</span>
+                  {s.description && (
+                    <span className="text-white/35 truncate">{s.description.slice(0, 50)}{s.description.length > 50 ? "…" : ""}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 pt-3 border-t border-white/10 shrink-0">
+              <input
+                value={customName} onChange={e => setCustomName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addCustom()}
+                placeholder="Custom — type here…"
+                className="flex-1 min-w-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+              />
+              <button type="button" onClick={addCustom} disabled={!customName.trim()}
+                className="text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-40 shrink-0">
+                Add
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Modal>
   )
@@ -913,6 +947,13 @@ export function InfoTab({
       }
     : undefined
 
+  // This character's own class(es) — restricts the Class Feature picker
+  // modal to features tagged with one of these names (see getSuggestions'
+  // meta.class) instead of every class in the whole documentation library.
+  const characterClassNames = data.multiclass && data.classes?.length
+    ? data.classes.map(c => c.cls).filter(Boolean)
+    : data.class ? [data.class] : []
+
   // All features across all lists (for linking UI)
   const allFeatures: Feature[] = [
     ...(data.racialTraits  ?? []),
@@ -1132,6 +1173,7 @@ export function InfoTab({
             <FeatureSuggestionPickerModal
               label="Class Feature" suggestionSource="class" userId={userId}
               existingNames={(data.classFeatures ?? []).map(f => f.name)}
+              classFilter={characterClassNames}
               onPick={s => addFeatureFromSuggestion("classFeatures", s)}
               onClose={() => setShowClassFeaturePicker(false)}
             />
