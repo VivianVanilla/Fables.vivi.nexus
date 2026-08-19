@@ -311,7 +311,7 @@ export function EquipmentEntry({
                   <input type="checkbox" checked={item.isMagicItem ?? false} onChange={e => onChange({ isMagicItem: e.target.checked })}
                     className="accent-purple-500 size-4 rounded" />
                   <span className="text-sm text-purple-300">Magic Item</span>
-                  <span className="text-xs text-white/25 italic">(style is set sheet-wide in Settings)</span>
+                 
                 </label>
               </div>
 

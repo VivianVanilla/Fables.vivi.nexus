@@ -16,10 +16,12 @@ import { useUserContext } from "../../../../src/contexts/UserContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
-import { FeatureEntry, type SuggestionSource } from "../entries/FeatureEntry"
+import { FeatureEntry, getSuggestions, type Suggestion, type SuggestionSource } from "../entries/FeatureEntry"
 import { FamiliarsTab } from "./FamiliarsTab"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { matchClassKey } from "@/components/shared/classColors"
+import { FavoriteStar } from "../ui/FavoriteStar"
+import { Modal } from "@/components/shared/ui/Modal"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -87,6 +89,92 @@ interface FeatureListProps {
   sliderStyle?: CardStyle
   perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — only used for Class Features when "Separate color per class" is on; falls back to accentColor when it returns undefined
   sortable?: boolean
+}
+
+// Searchable grid over the same core+homebrew suggestion pool the inline
+// autocomplete (FeatureEntry.tsx, while typing a name in edit mode) already
+// draws from — picking one here fills name/description exactly like typing
+// it out and clicking the inline suggestion would, just without needing to
+// know the exact spelling first. Manually typing a custom name still gets
+// that inline autofill same as always; this modal doesn't replace it, it's
+// just another way to reach the same pool before you've started typing.
+function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existingNames, onPick, onClose }: {
+  label: string
+  suggestionSource: SuggestionSource
+  userId?: string | null
+  existingNames: string[]
+  onPick: (s: Suggestion) => void
+  onClose: () => void
+}) {
+  const [all, setAll] = useState<Suggestion[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [query, setQuery] = useState("")
+  const [customName, setCustomName] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    getSuggestions(suggestionSource, userId).then(s => { if (!cancelled) { setAll(s); setLoaded(true) } })
+    return () => { cancelled = true }
+  }, [suggestionSource, userId])
+
+  const existing = new Set(existingNames.map(n => n.trim().toLowerCase()))
+  const q = query.trim().toLowerCase()
+  const available = all.filter(s => !existing.has(s.name.toLowerCase()) && (!q || s.name.toLowerCase().includes(q)))
+
+  function addCustom() {
+    const name = customName.trim()
+    if (!name) return
+    onPick({ name, description: "" })
+    setCustomName("")
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(640px,calc(100vw-2rem))] max-h-[80vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+          <span className="text-sm font-bold text-white">Add {label}</span>
+          <button type="button" onClick={onClose}
+            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
+        </div>
+        <div className="p-4 flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
+          <input
+            autoFocus value={query} onChange={e => setQuery(e.target.value)}
+            placeholder={`Search ${label.toLowerCase()}…`}
+            className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 shrink-0"
+          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto flex-1 min-h-0 content-start">
+            {!loaded ? (
+              <p className="col-span-full text-xs text-white/30 italic text-center py-6">Loading…</p>
+            ) : available.length === 0 ? (
+              <p className="col-span-full text-xs text-white/30 italic text-center py-6">
+                {q ? "No matches — add it as custom below." : "All suggestions already added."}
+              </p>
+            ) : available.map(s => (
+              <button key={s.name} type="button" onClick={() => onPick(s)}
+                className="text-left text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 transition-colors flex flex-col gap-0.5">
+                <span className="font-medium truncate">{s.name}</span>
+                {s.description && (
+                  <span className="text-white/35 truncate">{s.description.slice(0, 50)}{s.description.length > 50 ? "…" : ""}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-3 border-t border-white/10 shrink-0">
+            <input
+              value={customName} onChange={e => setCustomName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addCustom()}
+              placeholder="Custom — type here…"
+              className="flex-1 min-w-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+            />
+            <button type="button" onClick={addCustom} disabled={!customName.trim()}
+              className="text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-40 shrink-0">
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
 }
 
 const MAX_ATTUNEMENTS = 3
@@ -344,15 +432,88 @@ function toProfEntries(value: ProficiencyEntry[] | string | undefined): Proficie
   return []
 }
 
-// Static name suggestions offered via <datalist> — proficiencies are
-// freeform tags with no mechanical data behind them (contrast with the
-// weapon *items* seeded into the `documentation` table, which drive
-// EquipmentEntry's damage/weight autofill instead).
+// Static name suggestions surfaced through ProficiencyPickerModal's
+// searchable grid — proficiencies are freeform tags with no mechanical data
+// behind them (contrast with the weapon *items* seeded into the
+// `documentation` table, which drive EquipmentEntry's damage/weight
+// autofill instead). No inline <datalist> autofill on the manual rename
+// input below — the modal is the one place to pick from this list now.
 const PROFICIENCY_SUGGESTIONS: Record<string, readonly string[]> = {
   Weapons: WEAPON_PROFICIENCY_SUGGESTIONS,
   Armor: ARMOR_PROFICIENCY_SUGGESTIONS,
   Tools: TOOL_PROFICIENCY_SUGGESTIONS,
   Languages: LANGUAGE_SUGGESTIONS,
+}
+
+// Browsing ~30 weapon names (or armor/tools) through a single-line
+// datalist dropdown is cramped — this surfaces the same suggestion list as
+// a searchable grid instead, staying open across multiple picks (each pick
+// drops out of the grid immediately since it's now in `existingNames`) so
+// adding several at once — e.g. three languages — doesn't mean reopening
+// the picker each time.
+function ProficiencyPickerModal({ label, suggestions, existingNames, onPick, onClose }: {
+  label: string
+  suggestions: readonly string[]
+  existingNames: string[]
+  onPick: (name: string) => void
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState("")
+  const [customName, setCustomName] = useState("")
+  const existing = new Set(existingNames.map(n => n.trim().toLowerCase()))
+  const q = query.trim().toLowerCase()
+  const available = suggestions.filter(s => !existing.has(s.toLowerCase()) && (!q || s.toLowerCase().includes(q)))
+
+  function addCustom() {
+    const name = customName.trim()
+    if (!name) return
+    onPick(name)
+    setCustomName("")
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(640px,calc(100vw-2rem))] max-h-[80vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+          <span className="text-sm font-bold text-white">Add {label}</span>
+          <button type="button" onClick={onClose}
+            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
+        </div>
+        <div className="p-4 flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
+          <input
+            autoFocus value={query} onChange={e => setQuery(e.target.value)}
+            placeholder={`Search ${label.toLowerCase()}…`}
+            className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 shrink-0"
+          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto flex-1 min-h-0 content-start">
+            {available.map(s => (
+              <button key={s} type="button" onClick={() => onPick(s)}
+                className="text-left text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 transition-colors truncate">
+                {s}
+              </button>
+            ))}
+            {available.length === 0 && (
+              <p className="col-span-full text-xs text-white/30 italic text-center py-6">
+                {q ? "No matches — add it as custom below." : "All suggestions already added."}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 pt-3 border-t border-white/10 shrink-0">
+            <input
+              value={customName} onChange={e => setCustomName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addCustom()}
+              placeholder="[Custom] Type here…"
+              className="flex-1 min-w-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+            />
+            <button type="button" onClick={addCustom} disabled={!customName.trim()}
+              className="text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-40 shrink-0">
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
 }
 
 function ProficiencyList({ label, value, onChange, readOnly, card }: {
@@ -364,16 +525,34 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
 }) {
   const entries = toProfEntries(value)
   const suggestions = PROFICIENCY_SUGGESTIONS[label]
-  const datalistId = `profs-suggest-${label.toLowerCase()}`
+
+  // Entries are real, named things now — not a raw always-editable text
+  // field with a hair-trigger ✕ next to it. Renaming/deleting requires
+  // deliberately entering edit mode via the pencil first.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [showPicker, setShowPicker] = useState(false)
 
   // Favorited entries pin to the top (stable otherwise) — a quick way to
   // surface the handful that actually matter (main weapon, spoken
   // languages) out of a list that can otherwise grow long.
   const displayEntries = [...entries].sort((a, b) => (a.favorite ? 0 : 1) - (b.favorite ? 0 : 1))
 
-  function addEntry()                        { onChange([...entries, { id: nanoid(), name: "" }]) }
+  // Categories with a suggestion list open the searchable grid picker
+  // instead of a blank entry — anything without one (shouldn't happen
+  // today, but keeps this safe if a label with no suggestions is ever
+  // passed in) falls back to the old add-then-rename flow.
+  function addEntry() {
+    if (suggestions) { setShowPicker(true); return }
+    const id = nanoid()
+    onChange([...entries, { id, name: "" }])
+    setEditingId(id)
+  }
+  function addNamedEntry(name: string) { onChange([...entries, { id: nanoid(), name }]) }
   function changeEntry(id: string, name: string) { onChange(entries.map(e => e.id === id ? { ...e, name } : e)) }
-  function removeEntry(id: string)           { onChange(entries.filter(e => e.id !== id)) }
+  function removeEntry(id: string) {
+    onChange(entries.filter(e => e.id !== id))
+    if (editingId === id) setEditingId(null)
+  }
   function toggleFavorite(id: string)        { onChange(entries.map(e => e.id === id ? { ...e, favorite: !e.favorite } : e)) }
 
   return (
@@ -387,10 +566,14 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
           </button>
         )}
       </div>
-      {suggestions && !readOnly && (
-        <datalist id={datalistId}>
-          {suggestions.map(s => <option key={s} value={s} />)}
-        </datalist>
+      {showPicker && suggestions && (
+        <ProficiencyPickerModal
+          label={label}
+          suggestions={suggestions}
+          existingNames={entries.map(e => e.name)}
+          onPick={addNamedEntry}
+          onClose={() => setShowPicker(false)}
+        />
       )}
       <div className="flex flex-col gap-1.5">
         {entries.length === 0 && (
@@ -398,26 +581,52 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        {displayEntries.map(entry => (
-          <div key={entry.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5">
-            {!readOnly ? (
-              <button type="button" onClick={() => toggleFavorite(entry.id)}
-                title={entry.favorite ? "Remove from favorites" : "Add to favorites"}
-                className={`text-xs shrink-0 transition-colors ${entry.favorite ? "text-yellow-400" : "text-white/20 hover:text-yellow-400"}`}>
-                {entry.favorite ? "★" : "☆"}
-              </button>
-            ) : entry.favorite ? (
-              <span className="text-yellow-400 text-xs shrink-0">★</span>
-            ) : null}
-            <input value={entry.name} disabled={readOnly} placeholder="e.g. Longswords" list={suggestions ? datalistId : undefined}
-              onChange={e => changeEntry(entry.id, e.target.value)}
-              className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 disabled:opacity-60" />
-            {!readOnly && (
-              <button type="button" onClick={() => removeEntry(entry.id)}
-                className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
-            )}
-          </div>
-        ))}
+        {displayEntries.map(entry => {
+          const isEditing = editingId === entry.id
+          // Styled after FeatureEntry's own card/edit-form split (see
+          // entries/FeatureEntry.tsx) — a rounded card for the read view,
+          // dropping into a small edit form (with the same animated
+          // FavoriteStar, labeled, that feats/items use) rather than an
+          // always-open text field with a hair-trigger delete next to it.
+          return (
+            <div key={entry.id} className="rounded-lg border border-white/10 bg-white/5 overflow-hidden">
+              {isEditing ? (
+                <div className="p-2.5 flex flex-col gap-2">
+                  <input
+                    autoFocus value={entry.name} placeholder="e.g. Longswords"
+                    onChange={e => changeEntry(entry.id, e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && setEditingId(null)}
+                    className="bg-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none placeholder:text-white/20"
+                  />
+                  <div className="flex items-center justify-between">
+                    <button type="button" onClick={() => removeEntry(entry.id)}
+                      className="text-xs text-red-300/80 hover:text-red-400 transition-colors">Delete</button>
+                    <div className="flex items-center gap-2">
+                      <FavoriteStar isFavorite={!!entry.favorite} onToggle={() => toggleFavorite(entry.id)} label="Favorite" />
+                      <button type="button" onClick={() => setEditingId(null)}
+                        className="text-[11px] px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-2.5 py-1.5">
+                  <span className="flex-1 min-w-0 text-xs text-white/80 truncate">
+                    {entry.name || <span className="text-white/30 italic">Unnamed</span>}
+                  </span>
+                  {entry.favorite && <span className="text-yellow-400 text-xs shrink-0">★</span>}
+                  {!readOnly && (
+                    <button type="button" onClick={() => setEditingId(entry.id)} title="Edit"
+                      className="text-white/30 hover:text-white text-xs shrink-0 transition-colors">
+                      ✎
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -681,6 +890,11 @@ export function InfoTab({
 
   const pb = profBonus(data.level ?? 1)
 
+  // Background defaults to a rendered (read-only) view, same as every other
+  // markdown field in the app — an explicit Edit toggle instead of always
+  // showing a raw editable textarea.
+  const [editingBackground, setEditingBackground] = useState(false)
+
   // Feature Stylings (Settings) applied sheet-wide — same source of truth
   // FavoritesPanel.tsx reads, just resolved per fixed list here since each of
   // these lists is a single, known category. "item" (the Items tab) is
@@ -715,6 +929,21 @@ export function InfoTab({
 
   function addFeature(key: FeatureKey, patch?: Partial<Feature>) {
     update({ [key]: [...(data[key] ?? []), { id: nanoid(), name: "", ...patch }] })
+  }
+
+  // Same picker-grid pattern as ProficiencyList, but the pick also autofills
+  // description (and, for feats, a prerequisite line) — the exact same
+  // fields FeatureEntry.tsx's inline while-typing autocomplete fills in,
+  // just without needing to type the name out first. Typing a custom name
+  // by hand still gets that inline autofill untouched.
+  const [showFeatPicker, setShowFeatPicker] = useState(false)
+  const [showClassFeaturePicker, setShowClassFeaturePicker] = useState(false)
+
+  function addFeatureFromSuggestion(key: FeatureKey, s: Suggestion) {
+    const description = s.meta?.prerequisite
+      ? `*Prerequisite: ${s.meta.prerequisite}*\n\n${s.description}`
+      : s.description
+    addFeature(key, { name: s.name, description })
   }
 
   // ── Linked Notes helpers — create a real sidebar Note object and link it ──
@@ -752,20 +981,26 @@ export function InfoTab({
               single-line input with Alignment, not enough space for an
               actual background writeup (personality, ideals, bonds, flaws…). */}
           <div className={`${card} p-3 flex flex-col gap-2`}>
-            <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Background</span>
-            {readOnly ? (
-              data.background ? (
-                <Markdown text={data.background} tone="auto" size="sm" />
-              ) : (
-                <p className="text-xs text-white/25 italic">No background yet.</p>
-              )
-            ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Background</span>
+              {!readOnly && (
+                <button type="button" onClick={() => setEditingBackground(v => !v)}
+                  className="text-[10px] px-2 py-0.5 rounded-full transition-colors shrink-0 bg-white/10 hover:bg-white/20 text-white/60 hover:text-white">
+                  {editingBackground ? "Confirm" : "✎"}
+                </button>
+              )}
+            </div>
+            {!readOnly && editingBackground ? (
               <MarkdownTextarea
                 value={data.background ?? ""} onChange={v => update({ background: v })}
                 placeholder="Acolyte, Sage… personality traits, ideals, bonds, flaws…"
                 rows={6}
                 className="bg-white/5 rounded-lg px-2.5 py-1.5 outline-none text-xs text-white placeholder:text-white/20 resize-none"
               />
+            ) : data.background ? (
+              <Markdown text={data.background} tone="auto" size="sm" />
+            ) : (
+              <p className="text-xs text-white/25 italic">{readOnly ? "No background yet." : "No background yet — click Edit to add one."}</p>
             )}
           </div>
 
@@ -829,7 +1064,7 @@ export function InfoTab({
           />
           <FeatureList
             items={data.feats ?? []} allFeatures={allFeatures} label="Feats"
-            onAdd={() => addFeature("feats")}
+            onAdd={() => setShowFeatPicker(true)}
             onChange={onChangeFeature}
             onRemove={onRemoveFeature}
             onLinkToggle={onLinkToggle}
@@ -838,6 +1073,14 @@ export function InfoTab({
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")} sliderStyle={favSliderStyle("feat")}
           />
+          {showFeatPicker && (
+            <FeatureSuggestionPickerModal
+              label="Feat" suggestionSource="feat" userId={userId}
+              existingNames={(data.feats ?? []).map(f => f.name)}
+              onPick={s => addFeatureFromSuggestion("feats", s)}
+              onClose={() => setShowFeatPicker(false)}
+            />
+          )}
           {isWarlock && (
             <FeatureList
               items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
@@ -871,19 +1114,29 @@ export function InfoTab({
       {/* ── Class Features ─────────────────────────────────────────────────── */}
 
       {subTab === "features" && (
-        <FeatureList
-          items={data.classFeatures ?? []} allFeatures={allFeatures} label="Class Features"
-          onAdd={() => addFeature("classFeatures")}
-          onChange={onChangeFeature}
-          onRemove={onRemoveFeature}
-          onLinkToggle={onLinkToggle}
-          theme={theme} card={card} readOnly={readOnly} pb={pb}
-          suggestionSource="class" userId={userId}
-          favorites={favorites} onToggleFavorite={onToggleFavorite}
-          accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
-          perItemAccentColor={classFeatureAccentColor}
-          sortable
-        />
+        <>
+          <FeatureList
+            items={data.classFeatures ?? []} allFeatures={allFeatures} label="Class Features"
+            onAdd={() => setShowClassFeaturePicker(true)}
+            onChange={onChangeFeature}
+            onRemove={onRemoveFeature}
+            onLinkToggle={onLinkToggle}
+            theme={theme} card={card} readOnly={readOnly} pb={pb}
+            suggestionSource="class" userId={userId}
+            favorites={favorites} onToggleFavorite={onToggleFavorite}
+            accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
+            perItemAccentColor={classFeatureAccentColor}
+            sortable
+          />
+          {showClassFeaturePicker && (
+            <FeatureSuggestionPickerModal
+              label="Class Feature" suggestionSource="class" userId={userId}
+              existingNames={(data.classFeatures ?? []).map(f => f.name)}
+              onPick={s => addFeatureFromSuggestion("classFeatures", s)}
+              onClose={() => setShowClassFeaturePicker(false)}
+            />
+          )}
+        </>
       )}
 
       {/* ── Familiars ─────────────────────────────────────────────────────── */}

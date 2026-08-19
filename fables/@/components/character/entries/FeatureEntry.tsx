@@ -672,12 +672,21 @@ export function FeatureEntry({
             <div className="flex flex-wrap items-center gap-3">
               <PopTransition show={feature.category !== "armor"}>
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
-                    Amount
-                    <NumInput min={1} value={feature.amount ?? 1}
-                      onChange={e => onChange({ amount: Math.max(1, parseInt(e.target.value) || 1) })}
-                      className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                  <label className="flex items-center gap-2 text-white/50 cursor-pointer select-none whitespace-nowrap">
+                    <input type="checkbox" checked={feature.trackAmount ?? false}
+                      onChange={e => onChange({ trackAmount: e.target.checked })}
+                      className="accent-white"
+                    />
+                    Track Multiple (adds a −/+ counter)
                   </label>
+                  <PopTransition show={!!feature.trackAmount}>
+                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                      Amount
+                      <NumInput min={1} value={feature.amount ?? 1}
+                        onChange={e => onChange({ amount: Math.max(1, parseInt(e.target.value) || 1) })}
+                        className="w-14 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                    </label>
+                  </PopTransition>
                   <label className="flex items-center gap-2 text-amber-300 cursor-pointer select-none whitespace-nowrap">
                     <input type="checkbox" checked={feature.isContainer ?? false}
                       onChange={e => onChange({ isContainer: e.target.checked })}
@@ -981,20 +990,10 @@ export function FeatureEntry({
             </label>
           )}
 
-          {/* Quick +/- so consuming one (a potion, a ration) is a single
-              click instead of opening the edit form to change a number. */}
-          {showItemExtras && feature.category !== "armor" && (
-            <span className="flex items-center gap-1 shrink-0 bg-white/10 rounded-full px-1.5 py-0.5" onClick={e => e.stopPropagation()}>
-              {!readOnly && (
-                <button type="button" onClick={() => onChange({ amount: Math.max(1, (feature.amount ?? 1) - 1) })}
-                  className="text-white/50 hover:text-white text-[10px] leading-none px-0.5">−</button>
-              )}
-              <span className="text-[10px] text-white/60 font-semibold tabular-nums min-w-[1ch] text-center">×{feature.amount ?? 1}</span>
-              {!readOnly && (
-                <button type="button" onClick={() => onChange({ amount: (feature.amount ?? 1) + 1 })}
-                  className="text-white/50 hover:text-white text-[10px] leading-none px-0.5">+</button>
-              )}
-            </span>
+          {/* Passive readout only — expand the card to actually change it
+              (see the −/+ stepper in the expanded view below). */}
+          {showItemExtras && feature.category !== "armor" && feature.trackAmount && (feature.amount ?? 1) > 1 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">×{feature.amount}</span>
           )}
 
           {/* At the trailing edge, alongside Weight, rather than crowding the
@@ -1101,6 +1100,22 @@ export function FeatureEntry({
                     {feature.itemMeta?.throwRange && `⇒ ${feature.itemMeta.throwRange}`}
                   </span>
                 )
+            )}
+            {/* Opt-in (see the "Track Multiple" checkbox in edit mode) — only
+                lives here in the expanded view, not the collapsed header, so
+                one-off items don't carry a counter nobody uses. */}
+            {showItemExtras && feature.category !== "armor" && feature.trackAmount && (
+              <span className="flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60" onClick={e => e.stopPropagation()}>
+                {!readOnly && (
+                  <button type="button" onClick={() => onChange({ amount: Math.max(1, (feature.amount ?? 1) - 1) })}
+                    className="text-white/60 hover:text-white leading-none px-0.5">−</button>
+                )}
+                <span className="font-semibold tabular-nums">×{feature.amount ?? 1}</span>
+                {!readOnly && (
+                  <button type="button" onClick={() => onChange({ amount: (feature.amount ?? 1) + 1 })}
+                    className="text-white/60 hover:text-white leading-none px-0.5">+</button>
+                )}
+              </span>
             )}
             {showItemExtras && !!feature.weight && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">{feature.weight} lb</span>

@@ -122,6 +122,7 @@ export interface Feature {
   weight?: number            // lb — rolled into the character's total carried weight
   value?: number             // gp — per-unit value, rolled into the character's total carried value
   amount?: number            // Items tab, generic items only — quantity (armor/equipment is always qty 1)
+  trackAmount?: boolean      // Items tab, generic items only — opt-in: shows a −/+ stepper (in the expanded description view) for consumables you add/remove one at a time; off by default so one-off items don't carry a counter nobody uses
   category?: "armor" | "item" // Items tab only — which stat fields this item's edit form shows (armor/weapon fields vs. generic amount/container fields); no longer determines which list (Equipped vs Carried) it shows in
   equipKind?: "armor" | "weapon" | "misc" // Armor & Equipment section only — which stat fields apply
   isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
