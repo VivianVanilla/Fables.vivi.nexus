@@ -14,7 +14,8 @@ import { uploadUserImage, loadUserImages, type GalleryImage } from "../shared/im
 import { PortraitModal } from "../shared/PortraitModal"
 import { MAP_PARTY_CODE } from "../shared/constants"
 import { MapNotesPanel } from "../map/MapNotesPanel"
-import { useNpcTrackers, type NpcTracker, type NpcTrackerDraft } from "./useNpcTrackers"
+import { useNpcTrackers, linkifyNpcMentions, type NpcTracker, type NpcTrackerDraft } from "./useNpcTrackers"
+import { NpcQuickViewModal } from "./NpcQuickViewModal"
 
 const BLANK_DRAFT: NpcTrackerDraft = { name: "New NPC", subtitle: "", details: "", image_url: "", goal: "", location_pin_id: null }
 
@@ -32,6 +33,7 @@ export function NpcTrackerOverlay({
 }) {
   const { npcs, pins, notesForNpc, createNpc, updateNpc, deleteNpc, addNpcNote, editNpcNote, deleteNpcNote } = useNpcTrackers(partyCode, currentUserId)
   const [detailNotesId, setDetailNotesId] = useState<string | null>(null)
+  const [quickViewId, setQuickViewId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(focusNpcId ?? null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<NpcTrackerDraft>(BLANK_DRAFT)
@@ -57,6 +59,17 @@ export function NpcTrackerOverlay({
   const expanded = sorted.find(n => n.id === expandedId) ?? null
   const showLocation = partyCode === MAP_PARTY_CODE
   const detailNotesNpc = sorted.find(n => n.id === detailNotesId) ?? null
+  const quickViewNpc = sorted.find(n => n.id === quickViewId) ?? null
+
+  // A `[[Name]]` mention (see linkifyNpcMentions) resolves to another NPC on
+  // this same shelf — clicking it pops a small self-contained quick-view
+  // modal on top rather than disturbing whatever's already open underneath
+  // (the shelf, an expanded card, Detail Notes, …).
+  function openQuickView(target: string) {
+    if (!target.startsWith("npc:")) return
+    const id = target.slice("npc:".length)
+    if (sorted.some(n => n.id === id)) setQuickViewId(id)
+  }
 
   function startEdit(npc: NpcTracker) {
     setEditingId(npc.id)
@@ -163,10 +176,10 @@ export function NpcTrackerOverlay({
                     )}
                     {isEditing ? (
                       <textarea value={draft.details ?? ""} onChange={e => setDraft(d => ({ ...d, details: e.target.value }))}
-                        placeholder="Details — appearance, personality, history…" rows={5}
+                        placeholder="Details — appearance, personality, history… Type [[Name]] to link another NPC." rows={5}
                         className="w-full resize-none text-sm bg-foreground/8 rounded-lg px-2.5 py-1.5 outline-none text-foreground leading-relaxed" />
                     ) : npc.details ? (
-                      <Markdown text={npc.details} tone="auto" size="sm" />
+                      <Markdown text={linkifyNpcMentions(npc.details, sorted)} tone="auto" size="sm" onInternalLink={openQuickView} />
                     ) : (
                       <p className="text-sm text-muted-foreground/40 italic">No details yet.</p>
                     )}
@@ -298,10 +311,25 @@ export function NpcTrackerOverlay({
               onAddNote={content => addNpcNote(detailNotesNpc.id, currentUserName, content)}
               onEditNote={editNpcNote}
               onDeleteNote={deleteNpcNote}
+              linkify={text => linkifyNpcMentions(text, sorted)}
+              onInternalLink={openQuickView}
             />
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Quick-view popup for a clicked `[[Name]]` mention — rendered last so
+          it paints on top of everything above, including Detail Notes when
+          both happen to be open at once. */}
+      {quickViewNpc && (
+        <NpcQuickViewModal
+          npc={quickViewNpc}
+          npcs={sorted}
+          locationName={showLocation ? pins.find(p => p.id === quickViewNpc.location_pin_id)?.name ?? null : null}
+          onClose={() => setQuickViewId(null)}
+          onSelectNpc={setQuickViewId}
+        />
       )}
     </div>,
     document.body

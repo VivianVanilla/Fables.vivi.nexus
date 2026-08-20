@@ -49,7 +49,7 @@ function insertImageMd(draft: string, url: string) {
 }
 
 export function MapNotesPanel({
-  notes, currentUserId, placeholder, onAddNote, onEditNote, onDeleteNote,
+  notes, currentUserId, placeholder, onAddNote, onEditNote, onDeleteNote, linkify, onInternalLink,
 }: {
   notes: MapPinNote[]
   currentUserId: string
@@ -57,6 +57,11 @@ export function MapNotesPanel({
   onAddNote: (content: string) => void
   onEditNote: (id: string, content: string) => void
   onDeleteNote: (id: string) => void
+  // Optional — lets a caller (e.g. NPC Tracker's Detail Notes) rewrite
+  // `[[Name]]`-style mentions into clickable links before Markdown renders
+  // them. Unused call sites (map pin/tracker notes) render notes as-is.
+  linkify?: (text: string) => string
+  onInternalLink?: (target: string) => void
 }) {
   const [noteDraft, setNoteDraft] = useState("")
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
@@ -113,7 +118,7 @@ export function MapNotesPanel({
     return (
       <div onClick={e => handleContentClick(e, note)}
         className={`cursor-pointer [&_img]:cursor-zoom-in ${long ? "relative max-h-52 overflow-y-auto" : ""}`}>
-        <Markdown text={note.content} tone="paper" size="xs" />
+        <Markdown text={linkify ? linkify(note.content) : note.content} tone="paper" size="xs" onInternalLink={onInternalLink} />
         {/* Scrollbar chrome is hidden globally (see index.css) — content is
             still scrollable, just without a visible track/thumb. This hint
             fades with the rest of the content as soon as you start
@@ -330,7 +335,7 @@ export function MapNotesPanel({
               </button>
             </div>
             <div onClick={e => handleContentClick(e, expandedNote)} className="[&_img]:cursor-zoom-in">
-              <Markdown text={expandedNote.content} tone="paper" size="sm" />
+              <Markdown text={linkify ? linkify(expandedNote.content) : expandedNote.content} tone="paper" size="sm" onInternalLink={onInternalLink} />
             </div>
           </div>
         </Modal>

@@ -43,18 +43,21 @@ interface Tone {
   border: string
   headBg: string
   code: string
+  link: string
 }
 
 const TONES: Record<"dark" | "slate" | "auto" | "paper", Tone> = {
-  dark:  { text: "text-white/70",   heading: "text-white",        muted: "text-white/55",   border: "border-white/10",   headBg: "bg-white/5",     code: "bg-white/10 text-white/80" },
-  slate: { text: "text-slate-400",  heading: "text-slate-100",    muted: "text-slate-400",  border: "border-slate-700",  headBg: "bg-slate-800/70", code: "bg-slate-800 text-purple-300" },
+  dark:  { text: "text-white/70",   heading: "text-white",        muted: "text-white/55",   border: "border-white/10",   headBg: "bg-white/5",     code: "bg-white/10 text-white/80",  link: "text-violet-300" },
+  slate: { text: "text-slate-400",  heading: "text-slate-100",    muted: "text-slate-400",  border: "border-slate-700",  headBg: "bg-slate-800/70", code: "bg-slate-800 text-purple-300", link: "text-violet-300" },
   // For contexts that follow the app's light/dark theme (semantic shadcn
   // tokens) instead of the character sheet's always-dark styling — e.g.
   // party chat, which renders under both.
-  auto:  { text: "text-foreground/85", heading: "text-foreground", muted: "text-foreground/55", border: "border-border", headBg: "bg-foreground/5", code: "bg-foreground/10 text-foreground/80" },
+  auto:  { text: "text-foreground/85", heading: "text-foreground", muted: "text-foreground/55", border: "border-border", headBg: "bg-foreground/5", code: "bg-foreground/10 text-foreground/80", link: "text-violet-400" },
   // Always-light card on always-dark surroundings — e.g. sticky-note-style
-  // map annotations — the mirror image of `dark`, not theme-dependent.
-  paper: { text: "text-zinc-700",   heading: "text-zinc-900",     muted: "text-zinc-500",   border: "border-zinc-900/10", headBg: "bg-zinc-900/5",  code: "bg-zinc-900/10 text-zinc-800" },
+  // map annotations — the mirror image of `dark`, not theme-dependent. Needs
+  // its own darker link color: violet-300 (fine on the dark tones above)
+  // nearly disappears against these light card backgrounds.
+  paper: { text: "text-zinc-700",   heading: "text-zinc-900",     muted: "text-zinc-500",   border: "border-zinc-900/10", headBg: "bg-zinc-900/5",  code: "bg-zinc-900/10 text-zinc-800", link: "text-violet-700" },
 }
 
 interface MarkdownProps {
@@ -62,9 +65,15 @@ interface MarkdownProps {
   tone?: "dark" | "slate" | "auto" | "paper"
   size?: "sm" | "xs"
   className?: string
+  // Called instead of navigating for links whose href starts with
+  // "internal:" (e.g. NPC Tracker's `[[Name]]` mentions, rewritten to
+  // "internal:npc:<id>" before the text reaches this component) — lets a
+  // caller intercept in-app "jump to X" links without this generic renderer
+  // needing to know what an NPC is.
+  onInternalLink?: (target: string) => void
 }
 
-export function Markdown({ text, tone = "dark", size = "sm", className = "" }: MarkdownProps) {
+export function Markdown({ text, tone = "dark", size = "sm", className = "", onInternalLink }: MarkdownProps) {
   const c = TONES[tone]
 
   return (
@@ -87,7 +96,23 @@ export function Markdown({ text, tone = "dark", size = "sm", className = "" }: M
           hr: () => <hr className={c.border} />,
           code: ({ children }) => <code className={`px-1 py-0.5 rounded text-xs font-mono ${c.code}`}>{children}</code>,
           img: ({ src, alt }) => <img src={src} alt={alt ?? ""} className={`max-w-full rounded-lg border ${c.border}`} />,
-          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:opacity-80">{children}</a>,
+          a: ({ children, href }) => {
+            if (href?.startsWith("#internal:")) {
+              const target = href.slice("#internal:".length)
+              // No handler wired at this render site — fall back to plain
+              // (non-clickable) text instead of a real anchor: an <a> here
+              // would have nothing valid to point at (this pseudo-scheme
+              // isn't a real URL) and would misbehave same as the bug above.
+              if (!onInternalLink) return <span className={c.link}>{children}</span>
+              return (
+                <button type="button" onClick={() => onInternalLink(target)}
+                  className={`underline decoration-dotted hover:opacity-80 font-medium ${c.link}`}>
+                  {children}
+                </button>
+              )
+            }
+            return <a href={href} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:opacity-80">{children}</a>
+          },
           table: ({ children }) => (
             <div className={`overflow-x-auto rounded-md border ${c.border}`}>
               <table className="w-full text-xs border-collapse">{children}</table>
