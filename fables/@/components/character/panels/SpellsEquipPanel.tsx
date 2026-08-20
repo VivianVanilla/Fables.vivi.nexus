@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { CharacterData, SpellItem, EquipmentItem, SpellSlot, CharacterForm } from "@/components/shared/types"
+import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "@/components/shared/types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
@@ -7,6 +7,49 @@ import { slotLevelColor, slotLevelGradient } from "@/components/shared/themes"
 import type { Theme, SlotTheme } from "@/components/shared/themes"
 import { profBonus } from "@/components/shared/utils"
 import { SAVE_TO_ABILITY, type FavoriteCategory } from "@/components/shared/constants"
+import { Modal } from "@/components/shared/ui/Modal"
+
+// Master-toggle "Cast" button (Automation → Cast tab → "Show Cast button")
+// sitting next to the Cantrips stat rather than one button per spell row —
+// see SpellEntry.tsx's note on why that wasn't mobile-friendly. Opens a full
+// modal (not a small anchored popover) listing just the spells enabled for
+// Cast in Automation, styled with the character's own theme.
+function CastButton({ theme, spells, onCast }: { theme: Theme; spells: SpellItem[]; onCast: (spell: SpellItem) => void }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="flex flex-col items-center leading-none gap-0.5 shrink-0">
+      <button type="button" onClick={() => setOpen(true)} disabled={spells.length === 0}
+        title={spells.length === 0 ? "Enable a spell for Cast in Automation first" : "Cast a spell"}
+        className={`size-6 pl-6 pr-6 py-4 text-sm flex items-center justify-center rounded-sm ring-1 transition-colors disabled:opacity-30 disabled:cursor-default ${theme.ring} ${theme.color} hover:bg-white/10`}>
+        Cast
+      </button>
+
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,92vw)] max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+              <p className={`text-sm font-bold ${theme.color}`}>Cast a Spell</p>
+              <button type="button" onClick={() => setOpen(false)}
+                className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-1.5">
+              {spells.length === 0 && (
+                <p className="text-sm text-white/30 italic text-center py-6">No spells enabled for Cast — set that up in Automation.</p>
+              )}
+              {spells.map(s => (
+                <button key={s.id} type="button" onClick={() => { onCast(s); setOpen(false) }}
+                  className={`text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
+                  {s.name || "Unnamed Spell"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
 
 interface Props {
   card: string
@@ -32,8 +75,7 @@ interface Props {
   onAddEquip: () => void
   onChangeEquip: (id: string, patch: Partial<EquipmentItem>) => void
   onRemoveEquip: (id: string) => void
-  forms?: CharacterForm[]         // Automation — options for a spell's "Activate Form" cast setting
-  onCastSpell?: (spell: SpellItem) => void
+  onCastSpell?: (spell: SpellItem) => void  // Automation — wired only when data.castButtonEnabled shows the Cast button
 }
 
 export function SpellsEquipPanel({
@@ -44,7 +86,7 @@ export function SpellsEquipPanel({
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
   pendingSpellId, onAutoEditConsumed,
-  forms, onCastSpell,
+  onCastSpell,
 }: Props) {
   const showSpells = activeSubTab === "spells"
   // Feature Stylings (Settings) applied sheet-wide, mirrors InfoTab.tsx's favAccentColor/favAccentStyle.
@@ -154,6 +196,9 @@ export function SpellsEquipPanel({
               </span>
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
             </div>
+            {data.castButtonEnabled && onCastSpell && (
+              <CastButton theme={theme} spells={spellItems.filter(s => s.castEnabled)} onCast={onCastSpell} />
+            )}
             {!!data.invocationsKnown && (
               <div className="flex flex-col items-center leading-none gap-0.5">
                 <span className="text-lg font-bold text-white tabular-nums">{data.invocationsKnown}</span>
@@ -290,8 +335,7 @@ export function SpellsEquipPanel({
                             compact={spellsDisplay === "bubbles"}
                             autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
                             accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
-                            onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)}
-                            forms={forms} onCast={onCastSpell ? () => onCastSpell(spell) : undefined} />
+                            onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
                         )
                       }
                     }

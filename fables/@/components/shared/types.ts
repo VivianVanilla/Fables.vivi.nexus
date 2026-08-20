@@ -67,12 +67,15 @@ export interface SpellItem {
   sourceClass?: string           // which class this spell is known/prepared from (multiclass)
   usesPerDay?: number            // monster innate spellcasting (spellUsageMode "perDay") — e.g. 3 for "3/day"; undefined/0 = at will
   usesPerDayUsed?: number        // uses spent today — only meaningful when usesPerDay is set
-  // Cast button — opt-in per spell (Automation). castExpendSlot/castFormId/castGrantConditions
-  // are independent and can combine (e.g. cast Haste: expend a slot AND activate the Hasted
-  // form), applied together via CharacterSheet.tsx's castSpell.
+  // Cast — configured entirely from Automation (not on the spell row itself,
+  // which isn't mobile-friendly for one more small button). castExpendSlot/
+  // castFormId/castConditionalId/castGrantConditions are independent and can
+  // combine (e.g. cast Haste: expend a slot AND activate the Hasted form),
+  // applied together via utils.ts's castSpellPatch.
   castEnabled?: boolean
   castExpendSlot?: boolean       // consumes one spell slot of this spell's level when cast
   castFormId?: string            // activates this Form (see CharacterForm) when cast
+  castConditionalId?: string     // triggers this Conditional (see CharacterConditional) when cast
   castGrantConditions?: string[] // condition names (from ALL_CONDITIONS) applied when cast
 }
 
@@ -210,6 +213,20 @@ export interface CharacterForm {
   notification?: string        // banner text shown near Lv while active; blank = no banner
   grantedConditions?: string[] // names from ALL_CONDITIONS, auto-applied on activate / auto-removed on revert
   revertOnZeroHp?: boolean     // auto-revert to Base Form the instant HP hits 0 while this form is active
+  portraitUrl?: string         // replaces the header portrait while this form is active; blank = keep the character's own portrait
+}
+
+// The lightweight sibling of a Form — a one-shot "apply this now" (temp HP,
+// healing, a condition or two) for things that don't warrant a whole Form
+// with stat overrides/notification/revert rules. No active/revert state:
+// triggering it just applies its effects once. See utils.ts's
+// conditionalTriggerPatch.
+export interface CharacterConditional {
+  id: string
+  name: string
+  tempHp?: number           // grants this much temp HP (5e: take the higher of current and this, not additive)
+  healHp?: number           // heals this much HP, clamped to max
+  grantConditions?: string[] // condition names applied once when triggered
 }
 
 export interface ProficiencyEntry {
@@ -310,6 +327,8 @@ export interface CharacterData {
   conditions?: ActiveCondition[]
   forms?: CharacterForm[]           // Automation — reusable alternate-form/buff presets, see CharacterForm
   activeFormId?: string | null      // id of the currently-active form; null/unset = Base Form
+  conditionals?: CharacterConditional[] // Automation — one-shot "apply this now" effects, see CharacterConditional
+  castButtonEnabled?: boolean // Automation (Cast tab) — master switch that shows the themed Cast button next to Cantrips in the Spells panel
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">
   skillBonuses?: Record<string, number>

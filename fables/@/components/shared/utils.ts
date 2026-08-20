@@ -1,6 +1,6 @@
 // Small helper functions used throughout the character sheet
 
-import type { CharacterData, Feature } from "./types"
+import type { CharacterData, Feature, SpellItem, CharacterConditional } from "./types"
 
 /** Returns the ability modifier as a signed string, e.g. "+2" or "-1" */
 export function abilityMod(score: number): string {
@@ -140,4 +140,79 @@ export function weightExemptItemIds(items: Feature[]): Set<string> {
   }
   items.filter(i => i.containerIgnoresWeight).forEach(i => markDescendants(i.id))
   return exempt
+}
+
+// ── Automation — Forms / Conditionals / Cast ────────────────────────────────
+// Pure functions (data in, patch out) shared by CharacterSheet.tsx (the
+// header form-switcher, the 0-HP auto-revert effect) and AutomationModal.tsx
+// (manual "Trigger"/"Cast" buttons) — both call the same logic against
+// `onUpdate`/`update` rather than each keeping their own copy, so activating
+// a Form or casting a spell behaves identically no matter where it's done from.
+
+/**
+ * Switches (or clears, id === null) the active Form, granting/revoking the
+ * conditions each Form tags itself with (see ActiveCondition.source). Returns
+ * a patch rather than applying it, so a caller that also needs to expend a
+ * slot or add more conditions in the same click (see castSpellPatch below)
+ * can merge everything into one update() instead of two racing writes off
+ * the same stale `data`.
+ */
+export function formActivationPatch(data: CharacterData, id: string | null): Partial<CharacterData> {
+  const forms = data.forms ?? []
+  const conditions = data.conditions ?? []
+  const activeForm = data.activeFormId ? forms.find(f => f.id === data.activeFormId) ?? null : null
+  let nextConditions = conditions.filter(c => !(activeForm && c.source === `form:${activeForm.id}`))
+  const next = id ? forms.find(f => f.id === id) ?? null : null
+  for (const name of next?.grantedConditions ?? []) {
+    if (!nextConditions.some(c => c.name === name)) {
+      nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${next!.id}` }]
+    }
+  }
+  return { activeFormId: id, conditions: nextConditions }
+}
+
+/**
+ * A spell's Cast configuration (castExpendSlot/castFormId/castConditionalId/
+ * castGrantConditions) — all independent, all composed into one patch here
+ * so a single Cast click applies them together atomically.
+ */
+export function castSpellPatch(data: CharacterData, spell: SpellItem): Partial<CharacterData> {
+  const spellSlots = data.spellSlots ?? []
+  const conditions = data.conditions ?? []
+  const patch: Partial<CharacterData> = spell.castFormId ? formActivationPatch(data, spell.castFormId) : {}
+  if (spell.castExpendSlot && spell.level) {
+    const slot = spellSlots.find(s => s.level === spell.level && s.used < s.total)
+    if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
+  }
+  if (spell.castConditionalId) {
+    const conditional = (data.conditionals ?? []).find(c => c.id === spell.castConditionalId)
+    if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional))
+  }
+  if (spell.castGrantConditions?.length) {
+    const base = patch.conditions ?? conditions
+    const toAdd = spell.castGrantConditions.filter(n => !base.some(c => c.name === n))
+    if (toAdd.length) patch.conditions = [...base, ...toAdd.map(name => ({ id: nanoid(), name }))]
+  }
+  return patch
+}
+
+/**
+ * A Conditional is the lightweight sibling of a Form — a one-shot "apply
+ * these effects now" (temp HP, healing, granted conditions) with no ongoing
+ * active/revert state to track, for things that don't need a whole Form
+ * (see CharacterConditional).
+ */
+export function conditionalTriggerPatch(data: CharacterData, c: CharacterConditional): Partial<CharacterData> {
+  const patch: Partial<CharacterData> = {}
+  if (c.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, c.tempHp)
+  if (c.healHp) {
+    const maxHp = Math.max(0, (data.maxHp ?? 0) + (data.maxHpMod ?? 0))
+    patch.hp = Math.min(maxHp, (data.hp ?? 0) + c.healHp)
+  }
+  if (c.grantConditions?.length) {
+    const conditions = data.conditions ?? []
+    const toAdd = c.grantConditions.filter(n => !conditions.some(x => x.name === n))
+    if (toAdd.length) patch.conditions = [...conditions, ...toAdd.map(name => ({ id: nanoid(), name }))]
+  }
+  return patch
 }

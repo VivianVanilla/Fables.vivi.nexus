@@ -18,8 +18,29 @@ import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
 // fingerprinting them through the module graph.
 const hjollandUrl = "/hjolland.svg"
 
-const MAP_W = 2400
-const MAP_H = 1804
+// IMAGE_W/IMAGE_H — the Hjolland art's own natural size. This is also the
+// canonical coordinate space every pin.x/token.x/stroke point has always
+// been stored in (0 = the image's left edge) — that never changes here.
+//
+// MAP_W/MAP_H — the actual paintable/placeable canvas, wider than the image
+// by CANVAS_MARGIN on each side (east + west) so there's real room to draw
+// and drop pins beyond the art itself, not just a decorative backdrop.
+// Because the canvas is wider than the coordinate space pins/strokes are
+// stored in, the image (and everything drawn from storage — the baked paint
+// layer, existing strokes) sits inset by CANVAS_MARGIN inside the canvas,
+// while the canvas element's own internal pixel grid spans the full width.
+// Two places convert between the two spaces:
+//   - storage → canvas: add CANVAS_MARGIN (rendering pins/tokens; drawing
+//     the baked image/strokes from `strokes` state, via ctx.translate)
+//   - canvas → storage: subtract CANVAS_MARGIN (persisting a new pin/token
+//     position, or a freshly-painted stroke's points)
+// Live paint drawing (beginStroke/extendStroke) needs no conversion — it
+// draws straight onto the canvas's own pixel grid, which IS canvas-space.
+const IMAGE_W = 2400
+const IMAGE_H = 1804
+const CANVAS_MARGIN = 300
+const MAP_W = IMAGE_W + CANVAS_MARGIN * 2
+const MAP_H = IMAGE_H
 const PIN_SIZE = 40
 const PIN_ICON_SIZE = 45
 const TOKEN_SIZE = 40
@@ -166,8 +187,15 @@ export function MapOverlay({
     if (!canvas || !ctx) return
     ctx.clearRect(0, 0, MAP_W, MAP_H)
     ctx.globalCompositeOperation = "source-over"
-    if (bakedImageRef.current) ctx.drawImage(bakedImageRef.current, 0, 0, MAP_W, MAP_H)
+    // Everything here (the baked image, every stroke) is stored in
+    // image-relative space — translate once so it lands inset by
+    // CANVAS_MARGIN inside the wider canvas, instead of offsetting each
+    // draw call individually.
+    ctx.save()
+    ctx.translate(CANVAS_MARGIN, 0)
+    if (bakedImageRef.current) ctx.drawImage(bakedImageRef.current, 0, 0, IMAGE_W, IMAGE_H)
     for (const s of strokes) drawStroke(ctx, s.color, s.size, s.erase, s.points)
+    ctx.restore()
     ctx.globalCompositeOperation = "source-over"
   }, [strokes, bakedImageTick])
 
@@ -221,17 +249,25 @@ export function MapOverlay({
   function endStroke() {
     const pts = currentStroke.current
     currentStroke.current = null
-    if (pts && pts.length) addStroke(brushColor, brushSize, erasing, pts)
+    // Live drawing happens straight in canvas-space (see beginStroke/
+    // extendStroke) — shift back to image-relative space before persisting,
+    // to match every stroke already stored and the redraw effect's own
+    // translate above.
+    if (pts && pts.length) addStroke(brushColor, brushSize, erasing, pts.map(p => ({ x: p.x - CANVAS_MARGIN, y: p.y })))
   }
 
-  // Fit the map roughly into view the moment it opens instead of dropping
-  // the player into a zoomed-to-1 corner of a 2400×1804 canvas.
+  // Fit the map art roughly into view the moment it opens instead of
+  // dropping the player into a zoomed-to-1 corner of a 2400×1804 image (the
+  // extra canvas margin on either side is there to pan/draw into, not to be
+  // the thing centered on open) — fits IMAGE_W/IMAGE_H, then shifts pan left
+  // by the scaled margin so the image (inset by CANVAS_MARGIN in the wider
+  // canvas) still lands centered rather than the canvas as a whole.
   useLayoutEffect(() => {
     const rect = pz.surfaceRef.current?.getBoundingClientRect()
     if (!rect) return
-    const fit = Math.min(rect.width / MAP_W, rect.height / MAP_H) * 0.92
+    const fit = Math.min(rect.width / IMAGE_W, rect.height / IMAGE_H) * 0.92
     pz.setZoom(+fit.toFixed(2))
-    pz.setPan({ x: (rect.width - MAP_W * fit) / 2, y: (rect.height - MAP_H * fit) / 2 })
+    pz.setPan({ x: (rect.width - IMAGE_W * fit) / 2 - CANVAS_MARGIN * fit, y: (rect.height - IMAGE_H * fit) / 2 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -305,7 +341,12 @@ export function MapOverlay({
     const start = dragStart.current
     dragStart.current = null
     if (!start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return
-    const { x, y } = pz.toWorld(e.clientX, e.clientY)
+    // toWorld() gives canvas-space (relative to the wider, margin-inclusive
+    // canvas) — shift back to image-relative space before storing, same
+    // conversion as endStroke's.
+    const world = pz.toWorld(e.clientX, e.clientY)
+    const x = world.x - CANVAS_MARGIN
+    const y = world.y
     if (mode === "drop") {
       setPendingPin({ x: x - PIN_SIZE / 2, y: y - PIN_SIZE / 2 })
       setPinNameDraft("")
@@ -381,16 +422,21 @@ export function MapOverlay({
     const moved = pz.onSurfaceMouseUp()
     setDraggingId(null)
     if (!moved) return
-    if (tokens.some(t => t.id === moved.id)) moveToken(moved.id, moved.x, moved.y)
-    else movePin(moved.id, moved.x, moved.y)
+    // Drag started from canvas-space (see startNodeDrag calls above), so the
+    // result needs the same shift back to image-relative space as any other
+    // persisted position.
+    const x = moved.x - CANVAS_MARGIN
+    if (tokens.some(t => t.id === moved.id)) moveToken(moved.id, x, moved.y)
+    else movePin(moved.id, x, moved.y)
   }
   function onSurfaceTouchEnd() {
     if (currentStroke.current) { endStroke(); return }
     const moved = pz.onSurfaceTouchEnd()
     setDraggingId(null)
     if (!moved) return
-    if (tokens.some(t => t.id === moved.id)) moveToken(moved.id, moved.x, moved.y)
-    else movePin(moved.id, moved.x, moved.y)
+    const x = moved.x - CANVAS_MARGIN
+    if (tokens.some(t => t.id === moved.id)) moveToken(moved.id, x, moved.y)
+    else movePin(moved.id, x, moved.y)
   }
 
   function onPinClick(e: React.MouseEvent, pinId: string) {
@@ -536,7 +582,7 @@ export function MapOverlay({
               style={{ position: "absolute", left: 0, top: 0, width: MAP_W, height: MAP_H, pointerEvents: "none" }} />
 
             <img src={hjollandUrl} alt="Hjolland" draggable={false}
-              style={{ width: MAP_W, height: MAP_H, position: "absolute", left: 0, top: 0, userSelect: "none", pointerEvents: "none" }} />
+              style={{ width: IMAGE_W, height: IMAGE_H, position: "absolute", left: CANVAS_MARGIN, top: 0, userSelect: "none", pointerEvents: "none" }} />
 
             {/* Pins */}
             {pins.map(pin => {
@@ -546,12 +592,12 @@ export function MapOverlay({
                 <div
                   key={pin.id}
                   ref={el => pz.setNodeEl(pin.id, el)}
-                  onMouseDown={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(pin.id); pz.startNodeDrag(e, pin) }}
-                  onTouchStart={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(pin.id); pz.startNodeDragTouch(e, pin) }}
+                  onMouseDown={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(pin.id); pz.startNodeDrag(e, { id: pin.id, x: pin.x + CANVAS_MARGIN, y: pin.y }) }}
+                  onTouchStart={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(pin.id); pz.startNodeDragTouch(e, { id: pin.id, x: pin.x + CANVAS_MARGIN, y: pin.y }) }}
                   onClick={e => onPinClick(e, pin.id)}
                   style={{
                     left: 0, top: 0, width: PIN_SIZE, height: PIN_SIZE,
-                    transform: `translate3d(${pin.x}px, ${pin.y}px, 0)`,
+                    transform: `translate3d(${pin.x + CANVAS_MARGIN}px, ${pin.y}px, 0)`,
                     willChange: dragging ? "transform" : undefined,
                     zIndex: dragging ? 10 : undefined,
                   }}
@@ -570,12 +616,12 @@ export function MapOverlay({
             {hereToken && (
               <div
                 ref={el => pz.setNodeEl(hereToken.id, el)}
-                onMouseDown={e => { dragStart.current = null; setDraggingId(hereToken.id); pz.startNodeDrag(e, { id: hereToken.id, x: hereToken.x, y: hereToken.y }) }}
-                onTouchStart={e => { dragStart.current = null; setDraggingId(hereToken.id); pz.startNodeDragTouch(e, { id: hereToken.id, x: hereToken.x, y: hereToken.y }) }}
+                onMouseDown={e => { dragStart.current = null; setDraggingId(hereToken.id); pz.startNodeDrag(e, { id: hereToken.id, x: hereToken.x + CANVAS_MARGIN, y: hereToken.y }) }}
+                onTouchStart={e => { dragStart.current = null; setDraggingId(hereToken.id); pz.startNodeDragTouch(e, { id: hereToken.id, x: hereToken.x + CANVAS_MARGIN, y: hereToken.y }) }}
                 onClick={e => e.stopPropagation()}
                 style={{
                   left: 0, top: 0, width: TOKEN_SIZE, height: TOKEN_SIZE,
-                  transform: `translate3d(${hereToken.x}px, ${hereToken.y}px, 0)`,
+                  transform: `translate3d(${hereToken.x + CANVAS_MARGIN}px, ${hereToken.y}px, 0)`,
                   willChange: draggingId === hereToken.id ? "transform" : undefined,
                   zIndex: draggingId === hereToken.id ? 11 : 9,
                 }}
@@ -591,8 +637,8 @@ export function MapOverlay({
 
             {!hereToken && (
               <button type="button"
-                onClick={e => { e.stopPropagation(); placeHereToken(MAP_W / 2 - TOKEN_SIZE / 2, MAP_H / 2 - TOKEN_SIZE / 2) }}
-                style={{ left: MAP_W / 2 - 60, top: MAP_H / 2 - 14 }}
+                onClick={e => { e.stopPropagation(); placeHereToken(IMAGE_W / 2 - TOKEN_SIZE / 2, IMAGE_H / 2 - TOKEN_SIZE / 2) }}
+                style={{ left: CANVAS_MARGIN + IMAGE_W / 2 - 60, top: IMAGE_H / 2 - 14 }}
                 className="absolute px-2.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[11px] font-semibold shadow-lg transition-colors">
                 Place "currently here"
               </button>
@@ -611,12 +657,12 @@ export function MapOverlay({
                 <div
                   key={t.id}
                   ref={el => pz.setNodeEl(t.id, el)}
-                  onMouseDown={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(t.id); pz.startNodeDrag(e, t) }}
-                  onTouchStart={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(t.id); pz.startNodeDragTouch(e, t) }}
+                  onMouseDown={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(t.id); pz.startNodeDrag(e, { id: t.id, x: t.x + CANVAS_MARGIN, y: t.y }) }}
+                  onTouchStart={e => { if (mode !== "move") return; dragStart.current = null; setDraggingId(t.id); pz.startNodeDragTouch(e, { id: t.id, x: t.x + CANVAS_MARGIN, y: t.y }) }}
                   onClick={e => onTrackerClick(e, t.id)}
                   style={{
                     left: 0, top: 0, width: TOKEN_SIZE, height: TOKEN_SIZE,
-                    transform: `translate3d(${t.x}px, ${t.y}px, 0)`,
+                    transform: `translate3d(${t.x + CANVAS_MARGIN}px, ${t.y}px, 0)`,
                     willChange: dragging ? "transform" : undefined,
                     zIndex: dragging ? 12 : 8,
                   }}

@@ -7,9 +7,10 @@ interface Props {
   data: CharacterData
   readOnly?: boolean
   onShowModal: () => void
+  overriddenKeys?: Set<string>  // Automation — ability keys an active Form is currently overriding; shown blue instead of the usual white/green/red
 }
 
-export function AbilitiesCard({ card, data, readOnly, onShowModal }: Props) {
+export function AbilitiesCard({ card, data, readOnly, onShowModal, overriddenKeys }: Props) {
   return (
     <div className={`${card} p-3 flex flex-col gap-2`}>
       <div className="flex items-center justify-between">
@@ -23,11 +24,12 @@ export function AbilitiesCard({ card, data, readOnly, onShowModal }: Props) {
         {ABILITY_KEYS.map(key => {
           const score = (data[key as keyof CharacterData] as number | undefined) ?? 10
           const mod   = abilityMod(score)
+          const overridden = overriddenKeys?.has(key)
           return (
             <div key={key} className="flex items-center gap-2">
               <span className="text-xs text-white/50 uppercase tracking-wider w-8">{ABILITY_ABBR[key]}</span>
-              <span className="text-base font-bold text-white w-7 tabular-nums">{score}</span>
-              <span className={`text-xs font-mono ${mod.startsWith("-") ? "text-red-400" : "text-green-400"}`}>{mod}</span>
+              <span className={`text-base font-bold w-7 tabular-nums ${overridden ? "text-blue-400" : "text-white"}`}>{score}</span>
+              <span className={`text-xs font-mono ${overridden ? "text-blue-400" : mod.startsWith("-") ? "text-red-400" : "text-green-400"}`}>{mod}</span>
             </div>
           )
         })}

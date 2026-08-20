@@ -14,7 +14,7 @@ import type {
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
@@ -201,10 +201,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const activeForm = data.activeFormId ? forms.find(f => f.id === data.activeFormId) ?? null : null
   const ov         = activeForm?.overrides
 
+  // Which ability keys a Form is currently overriding — drives the blue
+  // "this number is temporary" highlight in AbilitiesCard. AbilityModal (the
+  // ✎ editor) still opens against raw `data`, never effectiveData below —
+  // editing must always change the true base score, not the temporary one.
+  const overriddenAbilityKeys = new Set(
+    ov ? (["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"] as const)
+      .filter(k => ov[k] != null) : []
+  )
+
   // Surgical merged view for the specific read/calc sites below (AC ring,
-  // save/skill mods, statMods) — never passed to anything that *edits*
-  // ability scores (AbilitiesCard, AbilityModal, etc. keep using raw `data`),
-  // and never passed to update()/scheduleSave.
+  // save/skill mods, statMods, and AbilitiesCard's display) — never passed
+  // to update()/scheduleSave, and never used as the value an edit form binds to.
   const effectiveData: CharacterData = ov ? {
     ...data,
     strength: ov.strength ?? data.strength, dexterity: ov.dexterity ?? data.dexterity,
@@ -686,39 +694,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   // ── FORMS HELPERS (Automation) ────────────────────────────────────────────
-  // Shared by the header switcher and the spell Cast button — returns a
-  // patch rather than calling update() itself, so callers that also need to
-  // expend a slot / grant extra conditions in the same click (castSpell,
-  // below) can merge everything into exactly one update() call instead of
-  // two racing off the same stale `data` closure.
-  function formActivationPatch(id: string | null): Partial<CharacterData> {
-    let nextConditions = conditions.filter(c => !(activeForm && c.source === `form:${activeForm.id}`))
-    const next = id ? forms.find(f => f.id === id) ?? null : null
-    for (const name of next?.grantedConditions ?? []) {
-      if (!nextConditions.some(c => c.name === name)) {
-        nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${next!.id}` }]
-      }
-    }
-    return { activeFormId: id, conditions: nextConditions }
-  }
-  function activateForm(id: string | null) { update(formActivationPatch(id)) }
-
-  // A spell's Cast button — expending a slot, activating a Form, and
-  // granting conditions are independent toggles that can all fire from one
-  // click, so they're composed into a single patch/update() here too.
-  function castSpell(spell: SpellItem) {
-    const patch: Partial<CharacterData> = spell.castFormId ? formActivationPatch(spell.castFormId) : {}
-    if (spell.castExpendSlot && spell.level) {
-      const slot = spellSlots.find(s => s.level === spell.level && s.used < s.total)
-      if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
-    }
-    if (spell.castGrantConditions?.length) {
-      const base = patch.conditions ?? conditions
-      const toAdd = spell.castGrantConditions.filter(n => !base.some(c => c.name === n))
-      if (toAdd.length) patch.conditions = [...base, ...toAdd.map(name => ({ id: nanoid(), name }))]
-    }
-    if (Object.keys(patch).length) update(patch)
-  }
+  // formActivationPatch itself lives in shared/utils.ts now — AutomationModal.tsx's
+  // own "Trigger"/"Cast" buttons call it the same way, off the same `data`/`onUpdate`
+  // shape, so a Form behaves identically whichever surface activates it.
+  function activateForm(id: string | null) { update(formActivationPatch(data, id)) }
 
   // ── HIT DICE HELPERS ──────────────────────────────────────────────────────
 
@@ -887,7 +866,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               className="absolute inset-0 flex items-center justify-center hover:brightness-125 transition-all"
               title="Edit Armor Class">
               <Shield className="size-11 text-white/60" />
-              <span className="absolute text-base font-bold text-white leading-none">{acResult.total}</span>
+              <span className={`absolute text-base font-bold leading-none ${(ov?.acBonus || ov?.acOverride != null) ? "text-blue-400" : "text-white"}`}>{acResult.total}</span>
             </button>
             {acResult.equipBonus > 0 && !data.hideEquipAcBadge && (
               <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold shrink-0 whitespace-nowrap"
@@ -901,7 +880,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-bold text-white leading-none">{hp}</span>
             {tempHp > 0 && <span className="text-base font-bold text-blue-400 leading-none">+{tempHp}</span>}
-            <span className="text-sm text-white/40">/ {effectiveMax}{maxHpMod !== 0 && <span className={`ml-1 text-xs ${maxHpMod > 0 ? "text-emerald-400" : "text-red-400"}`}>({maxHpMod > 0 ? "+" : ""}{maxHpMod})</span>}</span>
+            <span className={`text-sm ${ov?.maxHpBonus ? "text-blue-400" : "text-white/40"}`}>/ {effectiveMax}{maxHpMod !== 0 && <span className={`ml-1 text-xs ${maxHpMod > 0 ? "text-emerald-400" : "text-red-400"}`}>({maxHpMod > 0 ? "+" : ""}{maxHpMod})</span>}</span>
           </div>
 
           {/* Normal HP controls — only when hp > 0 */}
@@ -963,6 +942,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <SpeedDisplay
               speeds={{ walk: effectiveSpeed, fly: data.speeds?.fly, swim: data.speeds?.swim, climb: data.speeds?.climb }}
               zeroed={!!speedOverrideReason}
+              overridden={!speedOverrideReason && ov?.speedOverride != null}
             />
             <span className="text-xs uppercase tracking-widest text-white/50">Speed{speedOverrideReason ? ` (${speedOverrideReason})` : ""}</span>
           </button>
@@ -1086,7 +1066,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
           {/* Col 2: Abilities → Saves → Skills */}
           <div className="lg:w-56 shrink-0 flex flex-col gap-3">
-            <AbilitiesCard card={card} data={data} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} />
+            <AbilitiesCard card={card} data={effectiveData} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} overriddenKeys={overriddenAbilityKeys} />
             <SavesCard card={card} data={data} readOnly={readOnly} getSaveMod={getSaveMod} onShowModal={() => setShowSavesModal(true)} />
             <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} />
             {!data.hideJumpCalculator && (
@@ -1121,7 +1101,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
           pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
-          forms={forms} onCastSpell={castSpell}
+          onCastSpell={spell => update(castSpellPatch(data, spell))}
         />
       </div>
     )
@@ -1229,7 +1209,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
 
       {showAutomationModal && (
-        <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} />
+        <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} userId={user?.id ?? null} />
       )}
       {showRestModal && (
         <Modal onClose={() => setShowRestModal(false)}>
@@ -1318,9 +1298,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
         <button type="button"
           onClick={readOnly ? undefined : openPortraitPicker}
-          className={`relative size-11 rounded-full overflow-hidden ring-2 ${theme.ring} ${readOnly ? "" : "hover:ring-primary cursor-pointer"} shrink-0 ${theme.box} flex items-center justify-center transition-all`}>
+          title={activeForm?.portraitUrl ? `${activeForm.name} — click to change your base portrait (set from Automation)` : undefined}
+          className={`relative size-14 rounded-xl overflow-hidden ring-2 ${theme.ring} ${readOnly ? "" : "hover:ring-primary cursor-pointer"} shrink-0 ${theme.box} flex items-center justify-center transition-all`}>
           {uploading ? <span className="text-xs text-white/70">…</span>
-            : data.portrait ? <img src={data.portrait} alt="portrait" className="w-full h-full object-cover" />
+            : (activeForm?.portraitUrl || data.portrait) ? <img src={activeForm?.portraitUrl || data.portrait} alt="portrait" className="w-full h-full object-cover" />
             : <span className="text-2xl leading-none select-none">IMAGE</span>}
         </button>
 

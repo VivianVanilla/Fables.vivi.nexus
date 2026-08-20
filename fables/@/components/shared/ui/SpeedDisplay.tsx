@@ -28,10 +28,11 @@ const SPEED_TYPES = [
 interface Props {
   speeds: SpeedValues
   size?: "sm" | "lg"
-  zeroed?: boolean  // condition (e.g. Grappled) forces movement to 0
+  zeroed?: boolean      // condition (e.g. Grappled) forces movement to 0
+  overridden?: boolean  // Automation — an active Form is overriding walk speed; renders it blue instead of white
 }
 
-export function SpeedDisplay({ speeds, size = "sm", zeroed }: Props) {
+export function SpeedDisplay({ speeds, size = "sm", zeroed, overridden }: Props) {
   const numCls = size === "lg" ? "text-xl" : "text-md"
 
   if (zeroed) {
@@ -43,17 +44,17 @@ export function SpeedDisplay({ speeds, size = "sm", zeroed }: Props) {
     .filter((e): e is typeof e & { value: number } => !!e.value && e.value > 0)
 
   if (entries.length <= 1) {
-    return <span className={`${numCls} font-bold text-white transition-all duration-200`}>{entries[0]?.value ?? 0}</span>
+    return <span className={`${numCls} font-bold transition-all duration-200 ${overridden ? "text-blue-400" : "text-white"}`}>{entries[0]?.value ?? 0}</span>
   }
 
   // Monster-size ("lg") lays the movement types out side by side — a vertical
-  // stack of 3-4 entries took up too much room in the compact stats summary. 
+  // stack of 3-4 entries took up too much room in the compact stats summary.
   return (
     <div className={`flex items-center transition-all duration-200 ${size === "lg" ? "flex-row flex-wrap justify-center gap-x-2 gap-y-0.5" : "flex-col gap-0"}`}>
       {entries.map(e => (
         <div key={e.key} className="flex items-baseline gap-1 animate-in fade-in duration-200">
           <span className={`${size === "lg" ? "text-[11px]" : "text-[9px]"} font-bold ${e.color}`}>{e.abbr}</span>
-          <span className={`${size === "lg" ? "text-base" : "text-xs"} font-bold text-white tabular-nums`}>{e.value}</span>
+          <span className={`${size === "lg" ? "text-base" : "text-xs"} font-bold tabular-nums ${overridden && e.key === "walk" ? "text-blue-400" : "text-white"}`}>{e.value}</span>
         </div>
       ))}
     </div>
