@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
-import type { SpellItem } from "@/components/shared/types"
+import type { SpellItem, CharacterForm } from "@/components/shared/types"
 import type { Theme } from "@/components/shared/themes"
 import { Modal } from "@/components/shared/ui/Modal"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
@@ -15,7 +15,7 @@ import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 import { spellItemFieldsFromSpell } from "@/components/shared/spellUtils"
 import { categoryAccentStyle } from "./FeatureEntry"
-import type { CardStyle } from "@/components/shared/constants"
+import { ALL_CONDITIONS, type CardStyle } from "@/components/shared/constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,8 @@ interface SpellEntryProps {
   onToggleFavorite?: () => void  // omit to hide the star
   accentColor?: string     // Settings — this spell's category color (category is "spell"), see FeatureEntry.tsx's categoryAccentStyle
   accentStyle?: CardStyle  // Settings — "none" (default), "outline", or "galaxy" for the category accent above
+  forms?: CharacterForm[]  // Automation — options for this spell's "Activate Form" cast setting
+  onCast?: () => void      // omit to hide the Cast button regardless of spell.castEnabled
 }
 
 // ── Spell name input with autofill ────────────────────────────────────────────
@@ -198,7 +200,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, accentColor, accentStyle }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, accentColor, accentStyle, forms = [], onCast }: SpellEntryProps) {
   const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -376,6 +378,55 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                 </label>
               )}
 
+              {/* Cast Button (Automation) — opt-in per spell; expending a
+                  slot, activating a Form, and granting conditions are
+                  independent and can all fire together from one click (see
+                  CharacterSheet.tsx's castSpell). */}
+              <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
+                <label className="flex items-center gap-2 cursor-pointer text-white/60 text-sm">
+                  <input type="checkbox" checked={spell.castEnabled ?? false}
+                    onChange={e => onChange({ castEnabled: e.target.checked })}
+                    className="accent-purple-500" />
+                  Show Cast Button
+                </label>
+                <PopTransition show={!!spell.castEnabled} className="flex flex-col gap-2 pl-6">
+                  {spell.level !== 0 && (
+                    <label className="flex items-center gap-2 cursor-pointer text-white/50 text-xs">
+                      <input type="checkbox" checked={spell.castExpendSlot ?? false}
+                        onChange={e => onChange({ castExpendSlot: e.target.checked })}
+                        className="accent-purple-500" />
+                      Expend a Level {spell.level} spell slot
+                    </label>
+                  )}
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider">Activate Form</span>
+                    <select value={spell.castFormId ?? ""} onChange={e => onChange({ castFormId: e.target.value || undefined })}
+                      className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+                      <option value="" className="bg-zinc-800 text-white">— None —</option>
+                      {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+                    </select>
+                  </label>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider">Grant Conditions</span>
+                    <div className="flex flex-wrap gap-1">
+                      {ALL_CONDITIONS.map(name => {
+                        const on = (spell.castGrantConditions ?? []).includes(name)
+                        return (
+                          <button key={name} type="button"
+                            onClick={() => {
+                              const current = spell.castGrantConditions ?? []
+                              onChange({ castGrantConditions: on ? current.filter(n => n !== name) : [...current, name] })
+                            }}
+                            className={`text-[10px] px-2 py-1 rounded-full transition-colors ${on ? "bg-purple-500/30 text-purple-200" : "bg-white/10 text-white/40 hover:text-white/70"}`}>
+                            {name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </PopTransition>
+              </div>
+
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-white/40 uppercase tracking-wider">Description / Notes</span>
                 <MarkdownTextarea
@@ -419,6 +470,20 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             }`}
           >
             P
+          </button>
+        )}
+
+        {/* Cast button — opt-in (Automation, see the edit form's "Cast Button"
+            section below). Expends a slot / activates a Form / grants
+            conditions per that spell's own configuration, all in one click. */}
+        {spell.castEnabled && onCast && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onCast() }}
+            title="Cast"
+            className="size-4 rounded shrink-0 transition-all text-[9px] font-bold flex items-center justify-center border border-purple-400/40 bg-purple-500/20 text-purple-300 hover:bg-purple-500/30"
+          >
+            ⚡
           </button>
         )}
 

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "@/components/shared/types"
+import type { CharacterData, SpellItem, EquipmentItem, SpellSlot, CharacterForm } from "@/components/shared/types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
@@ -32,6 +32,8 @@ interface Props {
   onAddEquip: () => void
   onChangeEquip: (id: string, patch: Partial<EquipmentItem>) => void
   onRemoveEquip: (id: string) => void
+  forms?: CharacterForm[]         // Automation — options for a spell's "Activate Form" cast setting
+  onCastSpell?: (spell: SpellItem) => void
 }
 
 export function SpellsEquipPanel({
@@ -42,6 +44,7 @@ export function SpellsEquipPanel({
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
   pendingSpellId, onAutoEditConsumed,
+  forms, onCastSpell,
 }: Props) {
   const showSpells = activeSubTab === "spells"
   // Feature Stylings (Settings) applied sheet-wide, mirrors InfoTab.tsx's favAccentColor/favAccentStyle.
@@ -287,7 +290,8 @@ export function SpellsEquipPanel({
                             compact={spellsDisplay === "bubbles"}
                             autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
                             accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
-                            onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+                            onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)}
+                            forms={forms} onCast={onCastSpell ? () => onCastSpell(spell) : undefined} />
                         )
                       }
                     }

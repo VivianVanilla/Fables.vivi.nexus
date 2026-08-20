@@ -67,6 +67,13 @@ export interface SpellItem {
   sourceClass?: string           // which class this spell is known/prepared from (multiclass)
   usesPerDay?: number            // monster innate spellcasting (spellUsageMode "perDay") — e.g. 3 for "3/day"; undefined/0 = at will
   usesPerDayUsed?: number        // uses spent today — only meaningful when usesPerDay is set
+  // Cast button — opt-in per spell (Automation). castExpendSlot/castFormId/castGrantConditions
+  // are independent and can combine (e.g. cast Haste: expend a slot AND activate the Hasted
+  // form), applied together via CharacterSheet.tsx's castSpell.
+  castEnabled?: boolean
+  castExpendSlot?: boolean       // consumes one spell slot of this spell's level when cast
+  castFormId?: string            // activates this Form (see CharacterForm) when cast
+  castGrantConditions?: string[] // condition names (from ALL_CONDITIONS) applied when cast
 }
 
 export interface HitDicePool {
@@ -173,6 +180,36 @@ export interface ActiveCondition {
   id: string
   name: string
   level?: number   // for Exhaustion (1–6)
+  source?: string  // e.g. `form:${formId}` — set when a Form auto-granted this condition, so
+                    // reverting that Form only strips what it granted, never a condition of the
+                    // same name the player added manually. Unset = manually added, as before.
+}
+
+// A reusable preset — Wild Shape, Haste, Rage, etc. — that temporarily overrides
+// stats/AC/speed/HP, shows a notification pill near the character's level, and can
+// auto-grant/revoke conditions while active. See CharacterData.forms/activeFormId
+// and CharacterSheet.tsx's formActivationPatch/activateForm/castSpell.
+export interface FormStatOverrides {
+  strength?: number
+  dexterity?: number
+  constitution?: number
+  intelligence?: number
+  wisdom?: number
+  charisma?: number
+  acBonus?: number       // stacks on top of computed AC, same semantics as acMiscBonus
+  acOverride?: number    // replaces the total AC outright when set
+  speedOverride?: number // replaces walking speed when set (conditions forcing speed to 0 still win)
+  maxHpBonus?: number    // stacks on top of maxHp + maxHpMod while this form is active
+}
+
+export interface CharacterForm {
+  id: string
+  name: string
+  notes?: string
+  overrides?: FormStatOverrides
+  notification?: string        // banner text shown near Lv while active; blank = no banner
+  grantedConditions?: string[] // names from ALL_CONDITIONS, auto-applied on activate / auto-removed on revert
+  revertOnZeroHp?: boolean     // auto-revert to Base Form the instant HP hits 0 while this form is active
 }
 
 export interface ProficiencyEntry {
@@ -271,6 +308,8 @@ export interface CharacterData {
   uiScale?: 100 | 75 | 50  // Settings — "Modules and Font Size": sheet-wide zoom level, default 100
   carryCapacityBonus?: number  // flat lb bonus added on top of the computed STR × 15 carrying capacity — set via clicking the ⚖ carry-weight badge
   conditions?: ActiveCondition[]
+  forms?: CharacterForm[]           // Automation — reusable alternate-form/buff presets, see CharacterForm
+  activeFormId?: string | null      // id of the currently-active form; null/unset = Base Form
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">
   skillBonuses?: Record<string, number>

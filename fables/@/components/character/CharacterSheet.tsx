@@ -48,6 +48,7 @@ import { SpeedModal }            from "./modals/stats/SpeedModal"
 import { CarryCapacityModal }    from "./modals/stats/CarryCapacityModal"
 import { ConditionPickerModal }  from "./modals/pickers/ConditionPickerModal"
 import { SettingsModal }         from "./modals/SettingsModal"
+import { AutomationModal}        from "./modals/AutomationModal"
 import { PortraitModal }         from "@/components/shared/PortraitModal"
 import { SpeedDisplay }          from "@/components/shared/ui/SpeedDisplay"
 
@@ -55,6 +56,7 @@ import { SpeedDisplay }          from "@/components/shared/ui/SpeedDisplay"
 import { InfoTab, type InfoSubTab } from "./tabs/InfoTab"
 import { ItemsTab }              from "./tabs/ItemsTab"
 import { FamiliarMonsterView }   from "@/components/shared/monster/monster"
+import { FormSwitcher }          from "./FormSwitcher"
 import { PartyServer }           from "@/components/party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "@/components/party/unread"
 import { ClassPickerModal }      from "./modals/pickers/ClassPickerModal"
@@ -106,6 +108,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [showCarryModal,        setShowCarryModal]        = useState(false)
   const [showClassPicker,       setShowClassPicker]       = useState(false)
   const [showRacePicker,        setShowRacePicker]        = useState(false)
+  const [showAutomationModal,     setShowAutomationModal] = useState(false)
 
   // Concentration check prompts (dismissible) — triggered by HP loss while "Concentrating" is active
   const [concentrationPrompts, setConcentrationPrompts] = useState<{ id: string; damage: number; dc: number }[]>([])
@@ -190,12 +193,33 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     e.target.value = ""
   }
 
+  // ── FORMS (Automation) ────────────────────────────────────────────────────
+  // Wild Shape / Haste / Rage-style presets — see CharacterForm. `ov` is the
+  // active form's stat overrides (undefined when on Base Form).
+
+  const forms      = data.forms ?? []
+  const activeForm = data.activeFormId ? forms.find(f => f.id === data.activeFormId) ?? null : null
+  const ov         = activeForm?.overrides
+
+  // Surgical merged view for the specific read/calc sites below (AC ring,
+  // save/skill mods, statMods) — never passed to anything that *edits*
+  // ability scores (AbilitiesCard, AbilityModal, etc. keep using raw `data`),
+  // and never passed to update()/scheduleSave.
+  const effectiveData: CharacterData = ov ? {
+    ...data,
+    strength: ov.strength ?? data.strength, dexterity: ov.dexterity ?? data.dexterity,
+    constitution: ov.constitution ?? data.constitution, intelligence: ov.intelligence ?? data.intelligence,
+    wisdom: ov.wisdom ?? data.wisdom, charisma: ov.charisma ?? data.charisma,
+    acMiscBonus: (data.acMiscBonus ?? 0) + (ov.acBonus ?? 0),
+    ac: ov.acOverride ?? data.ac,
+  } : data
+
   // ── HP COMPUTED ───────────────────────────────────────────────────────────
 
   const hp           = data.hp       ?? 0
   const maxHp        = data.maxHp    ?? 0
   const maxHpMod     = data.maxHpMod ?? 0
-  const effectiveMax = Math.max(0, maxHp + maxHpMod)
+  const effectiveMax = Math.max(0, maxHp + maxHpMod + (ov?.maxHpBonus ?? 0))
   const tempHp       = data.tempHp   ?? 0
   const hpPercent    = effectiveMax > 0 ? Math.min(100, (hp / effectiveMax) * 100) : 0
   const tempHpPct    = effectiveMax > 0 ? Math.min(100, (tempHp / effectiveMax) * 100) : 0
@@ -217,7 +241,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const activeConditionNames = new Set(conditions.map(c => c.name))
   const speedOverrideReason  = SPEED_ZERO_CONDITIONS.find(name => activeConditionNames.has(name))
-  const effectiveSpeed       = speedOverrideReason ? 0 : (data.speed ?? 0)
+  const effectiveSpeed       = speedOverrideReason ? 0 : (ov?.speedOverride ?? data.speed ?? 0)
 
   // Derived from equipment rather than the manually-toggled `conditions` list,
   // so it can't drift out of sync with the armor that causes it — shown as a
@@ -235,10 +259,20 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     const prevHp = prevHpRef.current
     if (prevHp !== undefined && hp <= 0 && prevHp > 0) {
       const deathward = conditions.find(c => c.name === "Deathward")
+      let patch: Partial<CharacterData> = {}
       if (deathward) {
-        update({ hp: 1, conditions: conditions.filter(c => c.id !== deathward.id) })
+        patch = { hp: 1, conditions: conditions.filter(c => c.id !== deathward.id) }
         setDeathwardTriggers(prev => [...prev, { id: nanoid() }])
       }
+      // Auto-revert (opt-in per form) — merged into the same patch as
+      // Deathward above rather than a second update() call, since update()
+      // spreads off the current `data` closure and a second call in the
+      // same tick would silently drop this one.
+      if (activeForm?.revertOnZeroHp) {
+        const baseConditions = (patch.conditions ?? conditions).filter(c => c.source !== `form:${activeForm.id}`)
+        patch = { ...patch, activeFormId: null, conditions: baseConditions }
+      }
+      if (Object.keys(patch).length) update(patch)
     }
     if (prevHp !== undefined && hp < prevHp && activeConditionNames.has("Concentrating")) {
       const damage = prevHp - hp
@@ -272,7 +306,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // AC = 10 + chosen ability mod(s) (dual-stat aware), overridden by an equipped "base
   // armor" piece's own base+Dex formula, plus flat bonuses from equipped shields/rings/etc.
-  const acResult = computeAc(data)
+  // Reads effectiveData so an active Form's Dex/AC overrides are reflected here too.
+  const acResult = computeAc(effectiveData)
 
   // Items sent over to the Martial list keep a `sourceFeatureId` link — used both to render
   // "+ Martial Tab" as a toggle (on/off, not a repeatable spawn) and to avoid double-counting
@@ -650,6 +685,41 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     update({ conditions: conditions.map(c => c.id === id ? { ...c, level } : c) })
   }
 
+  // ── FORMS HELPERS (Automation) ────────────────────────────────────────────
+  // Shared by the header switcher and the spell Cast button — returns a
+  // patch rather than calling update() itself, so callers that also need to
+  // expend a slot / grant extra conditions in the same click (castSpell,
+  // below) can merge everything into exactly one update() call instead of
+  // two racing off the same stale `data` closure.
+  function formActivationPatch(id: string | null): Partial<CharacterData> {
+    let nextConditions = conditions.filter(c => !(activeForm && c.source === `form:${activeForm.id}`))
+    const next = id ? forms.find(f => f.id === id) ?? null : null
+    for (const name of next?.grantedConditions ?? []) {
+      if (!nextConditions.some(c => c.name === name)) {
+        nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${next!.id}` }]
+      }
+    }
+    return { activeFormId: id, conditions: nextConditions }
+  }
+  function activateForm(id: string | null) { update(formActivationPatch(id)) }
+
+  // A spell's Cast button — expending a slot, activating a Form, and
+  // granting conditions are independent toggles that can all fire from one
+  // click, so they're composed into a single patch/update() here too.
+  function castSpell(spell: SpellItem) {
+    const patch: Partial<CharacterData> = spell.castFormId ? formActivationPatch(spell.castFormId) : {}
+    if (spell.castExpendSlot && spell.level) {
+      const slot = spellSlots.find(s => s.level === spell.level && s.used < s.total)
+      if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
+    }
+    if (spell.castGrantConditions?.length) {
+      const base = patch.conditions ?? conditions
+      const toAdd = spell.castGrantConditions.filter(n => !base.some(c => c.name === n))
+      if (toAdd.length) patch.conditions = [...base, ...toAdd.map(name => ({ id: nanoid(), name }))]
+    }
+    if (Object.keys(patch).length) update(patch)
+  }
+
   // ── HIT DICE HELPERS ──────────────────────────────────────────────────────
 
   const hitDicePools = data.hitDicePools ?? []
@@ -706,7 +776,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ── SAVING THROW MODIFIER ─────────────────────────────────────────────────
 
   function getSaveMod(save: typeof SAVE_KEYS[number]): number {
-    const score      = (data[SAVE_TO_ABILITY[save] as keyof CharacterData] as number | undefined) ?? 10
+    const score      = (effectiveData[SAVE_TO_ABILITY[save] as keyof CharacterData] as number | undefined) ?? 10
     const base       = Math.floor((score - 10) / 2)
     const proficient = data.savingThrowProfs?.[save] ?? false
     const bonus      = data.saveBonuses?.[save] ?? 0
@@ -714,7 +784,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   function getSkillMod(skillName: string, abilityKey: string): number {
-    const score = (data[SAVE_TO_ABILITY[abilityKey] as keyof CharacterData] as number | undefined) ?? 10
+    const score = (effectiveData[SAVE_TO_ABILITY[abilityKey] as keyof CharacterData] as number | undefined) ?? 10
     const base  = Math.floor((score - 10) / 2)
     const prof  = data.skillProfs?.[skillName]
     const bonus = data.skillBonuses?.[skillName] ?? 0
@@ -725,12 +795,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // ── FAVORITES PROPS ───────────────────────────────────────────────────────
 
   const statMods = {
-    str: Math.floor(((data.strength     ?? 10) - 10) / 2),
-    dex: Math.floor(((data.dexterity    ?? 10) - 10) / 2),
-    con: Math.floor(((data.constitution ?? 10) - 10) / 2),
-    int: Math.floor(((data.intelligence ?? 10) - 10) / 2),
-    wis: Math.floor(((data.wisdom       ?? 10) - 10) / 2),
-    cha: Math.floor(((data.charisma     ?? 10) - 10) / 2),
+    str: Math.floor(((effectiveData.strength     ?? 10) - 10) / 2),
+    dex: Math.floor(((effectiveData.dexterity    ?? 10) - 10) / 2),
+    con: Math.floor(((effectiveData.constitution ?? 10) - 10) / 2),
+    int: Math.floor(((effectiveData.intelligence ?? 10) - 10) / 2),
+    wis: Math.floor(((effectiveData.wisdom       ?? 10) - 10) / 2),
+    cha: Math.floor(((effectiveData.charisma     ?? 10) - 10) / 2),
   }
 
   const availableClasses = data.multiclass && data.classes?.length
@@ -1051,6 +1121,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
           pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
+          forms={forms} onCastSpell={castSpell}
         />
       </div>
     )
@@ -1154,8 +1225,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {showSettingsModal && (
         <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)}
           isWarlock={isWarlock} isArtificer={isArtificer} />
-      )}
+      )} 
 
+
+      {showAutomationModal && (
+        <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} />
+      )}
       {showRestModal && (
         <Modal onClose={() => setShowRestModal(false)}>
           <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(320px,calc(100vw-2rem))] overflow-hidden">
@@ -1304,11 +1379,20 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 ? data.classes.reduce((s, c) => s + c.level, 0)
                 : (data.level ?? "—")}
             </span>
-          
+            <FormSwitcher forms={forms} activeFormId={data.activeFormId ?? null} onActivate={activateForm} readOnly={readOnly} />
           </div>
 
-          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => conditionEffectText(c))) && (
+          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => conditionEffectText(c)) || !!activeForm?.notification) && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {activeForm?.notification && (
+                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-200">
+                  {activeForm.name}: {activeForm.notification}
+                  {!readOnly && (
+                    <button type="button" onClick={() => activateForm(null)}
+                      className="opacity-60 hover:opacity-100 shrink-0 underline decoration-dotted">Revert</button>
+                  )}
+                </span>
+              )}
               {deathwardTriggers.map(t => (
                 <span key={t.id}
                   className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200">
@@ -1346,6 +1430,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
         {!readOnly && (
           <div className="flex items-center gap-1 shrink-0">
+           
             <button onClick={() => setShowRestModal(true)}
               className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
               Rest
@@ -1354,6 +1439,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               onClick={() => setShowSettingsModal(true)}
               className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
               Settings
+            </button>
+
+             <button onClick={() => setShowAutomationModal(true)}
+              className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+              Automation
             </button>
           </div>
         )}
