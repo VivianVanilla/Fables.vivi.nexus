@@ -68,12 +68,15 @@ export interface SpellItem {
   usesPerDay?: number            // monster innate spellcasting (spellUsageMode "perDay") — e.g. 3 for "3/day"; undefined/0 = at will
   usesPerDayUsed?: number        // uses spent today — only meaningful when usesPerDay is set
   // Cast — configured entirely from Automation (not on the spell row itself,
-  // which isn't mobile-friendly for one more small button). castExpendSlot/
+  // which isn't mobile-friendly for one more small button). castSlotId/
   // castFormId/castConditionalId/castGrantConditions are independent and can
   // combine (e.g. cast Haste: expend a slot AND activate the Hasted form),
   // applied together via utils.ts's castSpellPatch.
   castEnabled?: boolean
-  castExpendSlot?: boolean       // consumes one spell slot of this spell's level when cast
+  castSlotId?: string            // id of the specific SpellSlot row to expend one use of when cast — a specific
+                                  // row rather than "any slot at this spell's level" so Pact Magic (and any
+                                  // multiclass caster with more than one pool at the same level) burns the
+                                  // right pool instead of a same-level regular slot
   castFormId?: string            // activates this Form (see CharacterForm) when cast
   castConditionalId?: string     // triggers this Conditional (see CharacterConditional) when cast
   castGrantConditions?: string[] // condition names (from ALL_CONDITIONS) applied when cast

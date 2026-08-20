@@ -172,7 +172,7 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
 }
 
 /**
- * A spell's Cast configuration (castExpendSlot/castFormId/castConditionalId/
+ * A spell's Cast configuration (castSlotId/castFormId/castConditionalId/
  * castGrantConditions) — all independent, all composed into one patch here
  * so a single Cast click applies them together atomically.
  */
@@ -180,8 +180,8 @@ export function castSpellPatch(data: CharacterData, spell: SpellItem): Partial<C
   const spellSlots = data.spellSlots ?? []
   const conditions = data.conditions ?? []
   const patch: Partial<CharacterData> = spell.castFormId ? formActivationPatch(data, spell.castFormId) : {}
-  if (spell.castExpendSlot && spell.level) {
-    const slot = spellSlots.find(s => s.level === spell.level && s.used < s.total)
+  if (spell.castSlotId) {
+    const slot = spellSlots.find(s => s.id === spell.castSlotId && s.used < s.total)
     if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
   }
   if (spell.castConditionalId) {

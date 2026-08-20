@@ -17,7 +17,7 @@ import { createPortal } from "react-dom"
 import { Modal } from "@/components/shared/ui/Modal"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
-import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem } from "@/components/shared/types"
+import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot } from "@/components/shared/types"
 import { ALL_CONDITIONS } from "@/components/shared/constants"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { nanoid, castSpellPatch, conditionalTriggerPatch } from "@/components/shared/utils"
@@ -273,6 +273,14 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
     onUpdate({ forms: forms.filter(f => f.id !== id), activeFormId: data.activeFormId === id ? null : data.activeFormId })
     setEditingId(null)
   }
+  function move(id: string, dir: -1 | 1) {
+    const i = forms.findIndex(f => f.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= forms.length) return
+    const next = [...forms]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onUpdate({ forms: next })
+  }
 
   if (newDraft || editing) {
     return (
@@ -292,8 +300,14 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
         {forms.length === 0 && (
           <p className="text-sm text-white/30 italic text-center py-8">No forms yet — create one to get started.</p>
         )}
-        {forms.map(f => (
+        {forms.map((f, i) => (
           <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5">
+            <div className="flex flex-col shrink-0">
+              <button type="button" onClick={() => move(f.id, -1)} disabled={i === 0} title="Move up"
+                className="size-4 flex items-center justify-center text-white/30 hover:text-white disabled:opacity-20 disabled:hover:text-white/30 transition-colors leading-none text-[10px]">▲</button>
+              <button type="button" onClick={() => move(f.id, 1)} disabled={i === forms.length - 1} title="Move down"
+                className="size-4 flex items-center justify-center text-white/30 hover:text-white disabled:opacity-20 disabled:hover:text-white/30 transition-colors leading-none text-[10px]">▼</button>
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-white/80 truncate">{f.name}</p>
               {f.notes && <p className="text-[10px] text-white/30 truncate">{f.notes}</p>}
@@ -401,8 +415,8 @@ function ConditionalsTab({ data, onUpdate, onTrigger }: {
 
 // ── Cast tab ─────────────────────────────────────────────────────────────────
 
-function SpellCastEditor({ spell, forms, conditionals, onSave, onCancel }: {
-  spell: SpellItem; forms: CharacterForm[]; conditionals: CharacterConditional[]
+function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCancel }: {
+  spell: SpellItem; forms: CharacterForm[]; conditionals: CharacterConditional[]; spellSlots: SpellSlot[]
   onSave: (s: SpellItem) => void; onCancel: () => void
 }) {
   const [draft, setDraft] = useState<SpellItem>(spell)
@@ -426,11 +440,22 @@ function SpellCastEditor({ spell, forms, conditionals, onSave, onCancel }: {
 
       <PopTransition show={!!draft.castEnabled} className="flex flex-col gap-3 pl-2">
         {!!draft.level && (
-          <label className="flex items-center gap-2 cursor-pointer text-white/50 text-xs">
-            <input type="checkbox" checked={draft.castExpendSlot ?? false}
-              onChange={e => set({ castExpendSlot: e.target.checked })}
-              className="accent-purple-500" />
-            Expend a Level {draft.level} spell slot
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-white/40 uppercase tracking-wider">Expend Slot</span>
+            <select value={draft.castSlotId ?? ""} onChange={e => set({ castSlotId: e.target.value || undefined })}
+              className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+              <option value="" className="bg-zinc-800 text-white">— None —</option>
+              {spellSlots.map(s => (
+                <option key={s.id} value={s.id} className="bg-zinc-800 text-white">
+                  {s.pact ? "Pact — " : ""}Level {s.level} ({Math.max(0, s.total - s.used)}/{s.total} left)
+                </option>
+              ))}
+            </select>
+            {/* Picking a specific slot row (not just "a level N slot") is what
+                makes this Warlock-safe — Pact Magic is its own separate pool
+                that needs to be the one that burns, not a same-level regular
+                slot from a multiclass. */}
+            <p className="text-[10px] text-white/30">Warlocks: pick your Pact slot here, not a same-level regular slot.</p>
           </label>
         )}
         <label className="flex flex-col gap-1">
@@ -489,7 +514,7 @@ function CastTab({ data, onUpdate, onCast }: {
 
   if (editingSpell) {
     return (
-      <SpellCastEditor spell={editingSpell} forms={forms} conditionals={conditionals}
+      <SpellCastEditor spell={editingSpell} forms={forms} conditionals={conditionals} spellSlots={data.spellSlots ?? []}
         onSave={saveSpell} onCancel={() => setEditingId(null)} />
     )
   }

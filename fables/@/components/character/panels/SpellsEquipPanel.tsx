@@ -196,14 +196,14 @@ export function SpellsEquipPanel({
               </span>
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
             </div>
-            {data.castButtonEnabled && onCastSpell && (
-              <CastButton theme={theme} spells={spellItems.filter(s => s.castEnabled)} onCast={onCastSpell} />
-            )}
             {!!data.invocationsKnown && (
               <div className="flex flex-col items-center leading-none gap-0.5">
                 <span className="text-lg font-bold text-white tabular-nums">{data.invocationsKnown}</span>
                 <span className="text-[10px] text-white/40 uppercase tracking-wider">Invocations</span>
               </div>
+            )}
+            {data.castButtonEnabled && onCastSpell && (
+              <CastButton theme={theme} spells={spellItems.filter(s => s.castEnabled)} onCast={onCastSpell} />
             )}
           </div>
         )}

@@ -1294,8 +1294,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       <div className="shrink-0">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+      {/* Two rows on narrow screens (portrait+info, then the Rest/Settings/
+          Automation cluster below it) instead of cramming everything into
+          one unbreakable row — collapses back to a single row at sm:. */}
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
 
+        <div className="flex items-center gap-3 min-w-0">
         <button type="button"
           onClick={readOnly ? undefined : openPortraitPicker}
           title={activeForm?.portraitUrl ? `${activeForm.name} — click to change your base portrait (set from Automation)` : undefined}
@@ -1406,28 +1410,29 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             </div>
           )}
         </div>
+        </div>
 
-        {saving && <span className="text-xs text-white/40 shrink-0">saving…</span>}
+        <div className="flex items-center gap-2 flex-wrap justify-end sm:ml-auto sm:justify-start">
+          {saving && <span className="text-xs text-white/40 shrink-0">saving…</span>}
 
-        {!readOnly && (
-          <div className="flex items-center gap-1 shrink-0">
-           
-            <button onClick={() => setShowRestModal(true)}
-              className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
-              Rest
-            </button>
-            <button type="button"
-              onClick={() => setShowSettingsModal(true)}
-              className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
-              Settings
-            </button>
-
-             <button onClick={() => setShowAutomationModal(true)}
-              className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
-              Automation
-            </button>
-          </div>
-        )}
+          {!readOnly && (
+            <div className="flex items-center gap-1 flex-wrap shrink-0">
+              <button onClick={() => setShowRestModal(true)}
+                className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+                Rest
+              </button>
+              <button type="button"
+                onClick={() => setShowSettingsModal(true)}
+                className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+                Settings
+              </button>
+              <button onClick={() => setShowAutomationModal(true)}
+                className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+                Automation
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
