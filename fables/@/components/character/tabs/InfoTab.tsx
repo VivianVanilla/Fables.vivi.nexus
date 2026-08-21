@@ -89,6 +89,7 @@ interface FeatureListProps {
   sliderStyle?: CardStyle
   perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — only used for Class Features when "Separate color per class" is on; falls back to accentColor when it returns undefined
   sortable?: boolean
+  showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
 }
 
 // Searchable grid over the same core+homebrew suggestion pool the inline
@@ -213,7 +214,7 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, perItemAccentColor, sortable }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, perItemAccentColor, sortable, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -246,7 +247,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             </button>
           </div>
         )}
-        {!readOnly && (
+        {!readOnly && showAddButton && (
           <button type="button" onClick={onAdd}
             className={`text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ${sortable ? "shrink-0" : "ml-auto"}`}>
             + Add
@@ -314,9 +315,10 @@ export interface ContainerItemsListProps {
   magicItemSliderStyle?: "none" | "outline" | "galaxy"
   pendingItemId?: string | null   // set right after Add — opens that item straight into its edit form
   onAutoEditConsumed?: () => void
+  showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true }: ContainerItemsListProps) {
   // Which containers (isContainer feature ids) have their contents shown —
   // per-container, not a whole-panel toggle; hidden by default; ephemeral
   // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
@@ -437,7 +439,7 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
             {totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(1)} lb total
           </span>
         )}
-        {!readOnly && (
+        {!readOnly && showAddButton && (
           <button type="button" onClick={() => onAdd()}
             className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ml-auto shrink-0">
             + Add

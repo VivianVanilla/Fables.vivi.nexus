@@ -329,6 +329,7 @@ function StatsSummary({ data, onUpdate, readOnly, onEdit }: { data: MonsterData;
     const max = data.maxHp
     const next = (data.hp ?? 0) + delta
     onUpdate({ hp: Math.max(0, max != null ? Math.min(max, next) : next) })
+    setHpStep(1)
   }
 
   return (

@@ -41,8 +41,8 @@ export const SUPABASE_BUCKET = "fableimages"
 
 export const ALL_CONDITIONS = [
   "Blinded", "Charmed", "Concentrating", "Deafened", "Deathward", "Exhaustion",
-  "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed",
-  "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious",
+  "Frightened", "Grappled", "Haste", "Incapacitated", "Invisible", "Paralyzed",
+  "Petrified", "Poisoned", "Prone", "Rage", "Restrained", "Stunned", "Unconscious",
 ]
 
 export const CONDITION_EFFECTS: Record<string, string> = {
@@ -52,12 +52,14 @@ export const CONDITION_EFFECTS: Record<string, string> = {
   Deafened:      "Automatically fails ability checks that require hearing.",
   Frightened:    "Disadvantage on attack rolls and ability checks while the source is in sight.",
   Grappled:      "Speed is 0 and can't benefit from any bonus to speed.",
+  Haste:         "Speed doubled, +2 AC, advantage on DEX saves, and an extra action limited to Attack/Dash/Disengage/Hide/Use an Object; when it ends you can't move or take actions until after your next turn.",
   Incapacitated: "Can't take actions or reactions.",
   Invisible:     "Attacks against you have disadvantage; your attacks have advantage.",
   Paralyzed:     "Auto-fails STR/DEX saves; attacks against you have advantage and auto-crit within 5 ft.",
   Petrified:     "Incapacitated, can't move or speak, and unaware of your surroundings.",
   Poisoned:      "Disadvantage on attack rolls and ability checks.",
   Prone:         "Disadvantage on attack rolls; melee attacks against you have advantage.",
+  Rage:          "Advantage on STR checks/saves, resistance to bludgeoning/piercing/slashing damage, and bonus melee damage; can't cast or concentrate on spells, and it ends early if you go a turn without attacking a hostile creature or taking damage.",
   Restrained:    "Speed is 0; disadvantage on attack rolls and DEX saves; attacks against you have advantage.",
   Stunned:       "Auto-fails STR/DEX saves; attacks against you have advantage.",
   Unconscious:   "Incapacitated, can't move or speak, unaware of your surroundings; attacks against you have advantage and auto-crit within 5 ft.",

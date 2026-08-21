@@ -31,7 +31,18 @@ export type SuggestionSource = "race" | "class" | "feat" | "item" | "invocation"
 export interface Suggestion {
   name: string
   description: string
-  meta?: { item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; cost?: string; prerequisite?: string; class?: string }
+  meta?: {
+    item_type?: string; damage?: string; damage_type?: string; properties?: string; weight?: number; cost?: string
+    prerequisite?: string; class?: string
+    rarity?: string; requires_attunement?: boolean
+    // Weapon/armor mechanical stats — set on a Documentation "item" entry (see
+    // DocEntryForm.tsx's ItemFields) so a magic weapon/armor picked from the
+    // suggestion grid autofills fully instead of just name/description/damage.
+    weapon_kind?: "melee" | "ranged"; attack_stat?: "str" | "dex" | "con" | "int" | "wis" | "cha"; magic_bonus?: string
+    melee_range?: string; throw_range?: string; range?: string
+    armor_mode?: "base" | "bonus"; ac_bonus?: number; armor_base_ac?: number; armor_dex_mode?: "full" | "half" | "none"
+    stealth_disadvantage?: boolean
+  }
 }
 
 // Shared with EquipmentEntry.tsx (the Martial tab) so a weapon's Attack Stat
@@ -124,6 +135,19 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
             properties:   row.data?.properties,
             weight:       row.data?.weight,
             cost:         row.data?.cost,
+            rarity:       row.data?.rarity,
+            requires_attunement: row.data?.requires_attunement,
+            weapon_kind:  row.data?.weapon_kind,
+            attack_stat:  row.data?.attack_stat,
+            magic_bonus:  row.data?.magic_bonus,
+            melee_range:  row.data?.melee_range,
+            throw_range:  row.data?.throw_range,
+            range:        row.data?.range,
+            armor_mode:   row.data?.armor_mode,
+            ac_bonus:     row.data?.ac_bonus,
+            armor_base_ac: row.data?.armor_base_ac,
+            armor_dex_mode: row.data?.armor_dex_mode,
+            stealth_disadvantage: row.data?.stealth_disadvantage,
           },
         })
         continue
@@ -156,6 +180,59 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
 
   promiseMap.set(key, p)
   return p
+}
+
+// Parses a freeform doc "Cost" string ("15 gp", "1,500 gp") into a plain gp
+// number for Feature.value — best-effort, undefined if nothing parses.
+function parseGpFromCost(cost?: string): number | undefined {
+  if (!cost) return undefined
+  const n = parseFloat(cost.replace(/,/g, "").match(/[\d.]+/)?.[0] ?? "")
+  return Number.isFinite(n) ? n : undefined
+}
+
+function capitalizeRarity(raw?: string): Feature["rarity"] {
+  if (!raw) return undefined
+  const cap = raw.replace(/\b\w/g, c => c.toUpperCase())
+  return (ITEM_RARITIES as readonly string[]).includes(cap) ? (cap as Feature["rarity"]) : undefined
+}
+
+// Item suggestions (docType "item") carry full weapon/armor mechanical stats
+// (see DocEntryForm.tsx's ItemFields) — picking one should autofill this
+// item all the way to "ready to use" instead of just name/description/damage,
+// including flipping it from a bare "Generic Item" into a properly-typed
+// weapon/armor entry (category/equipKind) the way picking a real weapon off
+// a shelf would. Only fires for suggestionSource "item" — other sources
+// (race/class/feat/invocation/infusion) never carry this shape of meta.
+function itemPatchFromSuggestion(suggestionSource: SuggestionSource | undefined, s: Suggestion, feature: Feature): Partial<Feature> {
+  if (suggestionSource !== "item" || !s.meta) return {}
+  const m = s.meta
+  const isWeapon = m.item_type === "weapon"
+  const isArmor  = m.item_type === "armor"
+  const patch: Partial<Feature> = {}
+  if (isWeapon || isArmor) {
+    patch.category  = "armor" // "Armor & Equipment" section — covers weapons too, via equipKind below
+    patch.equipKind = isWeapon ? "weapon" : "armor"
+  }
+  const rarity = capitalizeRarity(m.rarity)
+  if (rarity) patch.rarity = rarity
+  if (m.requires_attunement != null) patch.requiresAttunement = m.requires_attunement
+  if (m.rarity && m.rarity !== "common") patch.isMagicItem = true
+  if (m.weight != null) patch.weight = m.weight
+  const value = parseGpFromCost(m.cost)
+  if (value != null) patch.value = value
+  patch.itemMeta = {
+    ...feature.itemMeta,
+    itemType: m.item_type, damage: m.damage, damageType: m.damage_type, properties: m.properties,
+    ...(isWeapon ? {
+      weaponKind: m.weapon_kind, attackStat: m.attack_stat, magicBonus: m.magic_bonus,
+      meleeRange: m.melee_range, throwRange: m.throw_range, range: m.range,
+    } : {}),
+    ...(isArmor ? {
+      armorMode: m.armor_mode, acBonus: m.ac_bonus, armorBaseAc: m.armor_base_ac,
+      armorDexMode: m.armor_dex_mode, stealthDisadvantage: m.stealth_disadvantage,
+    } : {}),
+  }
+  return patch
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -385,11 +462,7 @@ export function FeatureEntry({
                     const desc = s.meta?.prerequisite
                       ? `*Prerequisite: ${s.meta.prerequisite}*\n\n${s.description}`
                       : (s.description || feature.description)
-                    onChange({
-                      name: s.name,
-                      description: desc,
-                      ...(s.meta && !s.meta.prerequisite ? { itemMeta: { itemType: s.meta.item_type, damage: s.meta.damage, damageType: s.meta.damage_type, properties: s.meta.properties } } : {}),
-                    })
+                    onChange({ name: s.name, description: desc, ...itemPatchFromSuggestion(suggestionSource, s, feature) })
                     setShowSuggest(false)
                   }}
                   className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"

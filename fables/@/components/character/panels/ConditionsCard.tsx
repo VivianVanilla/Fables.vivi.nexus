@@ -17,6 +17,8 @@ const CONDITION_COLOR: Record<string, string> = {
   Poisoned:      "bg-green-700/25 text-green-200 border-green-700/40",
   Charmed:       "bg-pink-500/25 text-pink-200 border-pink-500/40",
   Frightened:    "bg-pink-700/25 text-pink-200 border-pink-700/40",
+  Haste:         "bg-yellow-500/25 text-yellow-200 border-yellow-500/40",
+  Rage:          "bg-rose-600/25 text-rose-200 border-rose-600/40",
   Stunned:       "bg-red-500/25 text-red-200 border-red-500/40",
   Paralyzed:     "bg-red-700/25 text-red-200 border-red-700/40",
   Unconscious:   "bg-zinc-700/40 text-zinc-300 border-zinc-600/60",

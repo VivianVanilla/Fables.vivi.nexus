@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// AutomationModal.tsx — Automation hub, three tabs:
+// AutomationModal.tsx — Automation hub, four tabs:
 //   Forms        — reusable presets (Wild Shape, Haste, Rage) that override
 //                  stats/AC/speed/HP and show a notification pill near Lv.
 //   Conditionals — lightweight one-shot effects (temp HP, healing, a
@@ -8,8 +8,13 @@
 //                  Spell" picker to run it. Deliberately not a button on the
 //                  spell row itself — cramped and not mobile-friendly with
 //                  everything else already on that row.
+//   Features     — link a trackable feature's use (Rage, Second Wind, a
+//                  limited-use item) to a Form/Conditional. Same "keep it out
+//                  of the row itself" reasoning as Cast — lives here, not on
+//                  the feature's own card in InfoTab/ItemsTab.
 // See CharacterForm/CharacterConditional in shared/types.ts and
-// formActivationPatch/castSpellPatch/conditionalTriggerPatch in shared/utils.ts.
+// formActivationPatch/castSpellPatch/conditionalTriggerPatch/featureUsePatch
+// in shared/utils.ts.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
@@ -17,7 +22,7 @@ import { createPortal } from "react-dom"
 import { Modal } from "@/components/shared/ui/Modal"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
-import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot } from "@/components/shared/types"
+import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot, Feature } from "@/components/shared/types"
 import { ALL_CONDITIONS } from "@/components/shared/constants"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { nanoid, castSpellPatch, conditionalTriggerPatch } from "@/components/shared/utils"
@@ -28,12 +33,15 @@ interface Props {
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
   userId: string | null
+  allFeatures: Feature[]                                      // every trackable-eligible feature (Racial Traits/Feats/Class Features/Items/Invocations/Infusions), for the Features tab
+  onChangeFeature: (id: string, patch: Partial<Feature>) => void
 }
 
 const HELP_TEXT: Record<Tab, string> = {
   forms: "Forms are reusable presets: Wild Shape, Haste, Rage, that temporarily override stats, AC, speed, and HP, and show a notification pill near your level. Swap manually from the button next to your level, or link one to a spell in the Cast tab.",
   conditionals: "Conditionals are quick one-shot effects temp HP, healing, a condition — for things that don't need a whole Form. Tap Apply to run one immediately, or link it to a spell in the Cast tab.",
   cast: "Enable Cast on a spell here, configure what it does (expend a slot, activate a Form or Conditional, grant conditions), then flip on \"Show Cast button\" to get a Cast button next to Cantrips on the character sheet.",
+  features: "Link a trackable feature (Rage, Second Wind, a limited-use item — turn on \"Track uses\" on it first) to a Form or Conditional. Spending a use of that feature activates it automatically, same as Cast does for a spell.",
 }
 
 // Small "what is this?" popover, portaled to <body> so it isn't clipped by
@@ -528,6 +536,17 @@ function CastTab({ data, onUpdate, onCast }: {
     onCast(`Cast: ${spell.name || "spell"}`)
     setPicking(false)
   }
+  // Reorders the underlying spellItems array itself (not just this list's
+  // display) — so moving a spell up here also moves it earlier in the "Cast
+  // a Spell" picker grid above, same list/same order, no separate field.
+  function moveSpell(id: string, dir: -1 | 1) {
+    const i = spells.findIndex(s => s.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= spells.length) return
+    const next = [...spells]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onUpdate({ spellItems: next })
+  }
 
   if (editingSpell) {
     return (
@@ -575,8 +594,14 @@ function CastTab({ data, onUpdate, onCast }: {
         {spells.length === 0 && (
           <p className="text-sm text-white/30 italic text-center py-8">No spells yet — add some from the Main tab first.</p>
         )}
-        {spells.map(s => (
+        {spells.map((s, i) => (
           <div key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5">
+            <div className="flex flex-col shrink-0">
+              <button type="button" onClick={() => moveSpell(s.id, -1)} disabled={i === 0} title="Move up"
+                className="size-4 flex items-center justify-center text-white/30 hover:text-white disabled:opacity-20 disabled:hover:text-white/30 transition-colors leading-none text-[10px]">▲</button>
+              <button type="button" onClick={() => moveSpell(s.id, 1)} disabled={i === spells.length - 1} title="Move down"
+                className="size-4 flex items-center justify-center text-white/30 hover:text-white disabled:opacity-20 disabled:hover:text-white/30 transition-colors leading-none text-[10px]">▼</button>
+            </div>
             <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${s.castEnabled ? "bg-purple-500/30 text-purple-200" : "bg-white/10 text-white/30"}`}>
               {s.castEnabled ? "ON" : "OFF"}
             </span>
@@ -590,12 +615,88 @@ function CastTab({ data, onUpdate, onCast }: {
   )
 }
 
+// ── Features tab ─────────────────────────────────────────────────────────────
+// Trackable features (Race & Feats/Class Features/Items/Invocations/Infusions
+// — anything with "Track uses" on) link to a Form/Conditional here, same
+// "keep the row itself uncluttered" reasoning as the Cast tab.
+
+function FeatureTriggerEditor({ feature, forms, conditionals, onChange, onBack }: {
+  feature: Feature; forms: CharacterForm[]; conditionals: CharacterConditional[]
+  onChange: (patch: Partial<Feature>) => void; onBack: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <button type="button" onClick={onBack} className="text-xs text-white/40 hover:text-white self-start transition-colors">← Back to Features</button>
+      <p className="text-sm font-bold text-white truncate">{feature.name || "Unnamed Feature"}</p>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider">Activate Form</span>
+        <select value={feature.triggerFormId ?? ""} onChange={e => onChange({ triggerFormId: e.target.value || undefined })}
+          className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+          <option value="" className="bg-zinc-800 text-white">— None —</option>
+          {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider">Trigger Conditional</span>
+        <select value={feature.triggerConditionalId ?? ""} onChange={e => onChange({ triggerConditionalId: e.target.value || undefined })}
+          className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+          <option value="" className="bg-zinc-800 text-white">— None —</option>
+          {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
+        </select>
+      </label>
+      <p className="text-[10px] text-white/30">Spending a use of this feature (the −/+ bar on its card) fires these automatically.</p>
+    </div>
+  )
+}
+
+function FeaturesTab({ data, allFeatures, onChangeFeature }: {
+  data: CharacterData; allFeatures: Feature[]; onChangeFeature: (id: string, patch: Partial<Feature>) => void
+}) {
+  const forms = data.forms ?? []
+  const conditionals = data.conditionals ?? []
+  const trackable = allFeatures.filter(f => f.trackable)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = editingId ? trackable.find(f => f.id === editingId) ?? null : null
+
+  if (editing) {
+    return (
+      <FeatureTriggerEditor feature={editing} forms={forms} conditionals={conditionals}
+        onChange={patch => onChangeFeature(editing.id, patch)} onBack={() => setEditingId(null)} />
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Trackable Features</span>
+        {trackable.length === 0 && (
+          <p className="text-sm text-white/30 italic text-center py-8">No trackable features yet — turn on "Track uses" on a feature (Race & Feats, Class Features, Items, etc.) first.</p>
+        )}
+        {trackable.map(f => {
+          const linked = !!(f.triggerFormId || f.triggerConditionalId)
+          return (
+            <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5">
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${linked ? "bg-purple-500/30 text-purple-200" : "bg-white/10 text-white/30"}`}>
+                {linked ? "ON" : "OFF"}
+              </span>
+              <p className="flex-1 min-w-0 text-sm text-white/80 truncate">{f.name || "Unnamed Feature"}</p>
+              <button type="button" onClick={() => setEditingId(f.id)} title="Configure"
+                className="text-white/30 hover:text-white text-xs shrink-0 transition-colors">✎</button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main modal ─────────────────────────────────────────────────────────────
 
-type Tab = "forms" | "conditionals" | "cast"
-const TABS: [Tab, string][] = [["forms", "Forms"], ["conditionals", "Conditionals"], ["cast", "Cast"]]
+type Tab = "forms" | "conditionals" | "cast" | "features"
+const TABS: [Tab, string][] = [["forms", "Forms"], ["conditionals", "Conditionals"], ["cast", "Cast"], ["features", "Features"]]
 
-export function AutomationModal({ data, onUpdate, onClose, userId }: Props) {
+export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, onChangeFeature }: Props) {
   const [tab, setTab] = useState<Tab>("forms")
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -635,6 +736,7 @@ export function AutomationModal({ data, onUpdate, onClose, userId }: Props) {
           {tab === "forms" && <FormsTab data={data} onUpdate={onUpdate} userId={userId} />}
           {tab === "conditionals" && <ConditionalsTab data={data} onUpdate={onUpdate} onTrigger={showToast} />}
           {tab === "cast" && <CastTab data={data} onUpdate={onUpdate} onCast={showToast} />}
+          {tab === "features" && <FeaturesTab data={data} allFeatures={allFeatures} onChangeFeature={onChangeFeature} />}
         </div>
 
       </div>

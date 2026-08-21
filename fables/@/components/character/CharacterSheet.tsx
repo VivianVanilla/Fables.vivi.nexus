@@ -14,7 +14,7 @@ import type {
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
@@ -24,6 +24,7 @@ import { NumInput }              from "@/components/shared/ui/NumInput"
 
 // Panels
 import { DiceRoller }            from "./panels/DiceRoller"
+import { ResistanceTracker }     from "./panels/ResistanceTracker"
 import { CurrencyTracker }       from "./panels/CurrencyTracker"
 import { HitDice }               from "./panels/HitDice"
 import { DeathSavingThrows }     from "./panels/DeathSavingThrows"
@@ -661,6 +662,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       patchedFeature = { ...target, ...patch }
       combinedPatch[key] = list!.map(f => f.id === id ? patchedFeature! : f)
       linkedIds = target.linkedTo ?? []
+
+      // Spending a use (usesUsed going up, not a rest-reset or a manual
+      // refund) fires this feature's linked Form/Conditional, if any.
+      if (patch.usesUsed != null && patch.usesUsed > (target.usesUsed ?? 0)) {
+        Object.assign(combinedPatch, featureUsePatch({ ...data, ...combinedPatch }, patchedFeature))
+      }
       break
     }
 
@@ -957,6 +964,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                     } else {
                       update({ tempHp: Math.max(0, tempHp - hpStep) })
                     }
+                    setHpStep(1)
                   }}
                   className="size-9 rounded-full bg-white/10 hover:bg-red-900 text-white hover:text-red-200 flex items-center justify-center text-xl font-bold transition-colors">−</button>
                 <NumInput value={hpStep}
@@ -964,11 +972,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                   onChange={e => setHpStep(Math.max(1, parseInt(e.target.value) || 1))} min={1}
                   className={`w-12 text-center text-sm font-bold ${theme.box} border border-white/15 rounded-lg py-1.5 text-white outline-none`} />
                 <button type="button"
-                  onClick={() => usingFormPool
-                    ? update({ formHp: Math.min(effectiveMax, hp + hpStep) })
-                    : hpTarget === "hp"
-                      ? update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep })
-                      : update({ tempHp: tempHp + hpStep })}
+                  onClick={() => {
+                    if (usingFormPool) {
+                      update({ formHp: Math.min(effectiveMax, hp + hpStep) })
+                    } else if (hpTarget === "hp") {
+                      update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep })
+                    } else {
+                      update({ tempHp: tempHp + hpStep })
+                    }
+                    setHpStep(1)
+                  }}
                   className="size-9 rounded-full bg-white/10 hover:bg-green-900 text-white hover:text-green-200 flex items-center justify-center text-xl font-bold transition-colors">+</button>
               </div>
             </div>
@@ -1117,6 +1130,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               onUpdateLevel={updateConditionLevel}
             />
             {!data.hideDiceRoller && <DiceRoller card={card} />}
+            {data.showResistanceTracker && (
+              <ResistanceTracker card={card} readOnly={readOnly}
+                resistances={data.resistances ?? []} vulnerabilities={data.vulnerabilities ?? []}
+                onUpdate={update} />
+            )}
             <CurrencyTracker card={card} data={data} readOnly={readOnly} update={update} />
           </div>
 
@@ -1265,7 +1283,8 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
 
       {showAutomationModal && (
-        <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} userId={user?.id ?? null} />
+        <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} userId={user?.id ?? null}
+          allFeatures={allFeatures} onChangeFeature={patchFeature} />
       )}
       {showRestModal && (
         <Modal onClose={() => setShowRestModal(false)}>

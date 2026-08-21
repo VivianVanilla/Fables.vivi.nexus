@@ -118,6 +118,7 @@ export function InitiativeTracker({ campaign, partyMembers, onUpdateCharacterHp 
   // Monsters: adjust the combatant's own independent HP snapshot.
   // Characters: adjust the real character object's HP — the DM edits the PC's actual sheet.
   function adjustHp(c: Combatant, delta: number) {
+    setHpStep(1)
     if (c.refType === "character") {
       const charObj = partyMembers.find(p => p.id === c.refId)
       if (!charObj) return

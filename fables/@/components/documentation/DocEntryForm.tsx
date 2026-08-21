@@ -9,6 +9,7 @@ import type { DocType, DocEntry } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { MarkdownTextarea } from "../ui/MarkdownTextarea"
 import { invalidateSuggestionCache } from "../character/entries/FeatureEntry"
+import { WEAPON_PROFICIENCY_SUGGESTIONS, ARMOR_PROFICIENCY_SUGGESTIONS } from "@/components/shared/constants"
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -56,6 +57,24 @@ function uid() {
   return Math.random().toString(36).slice(2, 9)
 }
 
+// Auto-classifies a new item's Item Type from its name, so a magic weapon/
+// armor entered by name (e.g. "Flame Tongue Longsword") flips out of the
+// "Wondrous" default and reveals its Weapon/Armor Stats section without the
+// creator having to remember to pick the dropdown by hand. Only ever called
+// while Item Type is still that untouched default — see the Name field below
+// — so a deliberate choice (including deliberately picking Wondrous back) is
+// never overridden.
+const WEAPON_NAMES = WEAPON_PROFICIENCY_SUGGESTIONS.filter(w => !/ weapons$/i.test(w))
+const ARMOR_NAMES   = ARMOR_PROFICIENCY_SUGGESTIONS.filter(a => !/^(light|medium|heavy) armor$|^shields$/i.test(a))
+function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") }
+function detectItemType(name: string): "weapon" | "armor" | undefined {
+  const n = name.trim()
+  if (!n) return undefined
+  if (ARMOR_NAMES.some(a => new RegExp(`\\b${escapeRegExp(a)}\\b`, "i").test(n))) return "armor"
+  if (WEAPON_NAMES.some(w => new RegExp(`\\b${escapeRegExp(w)}\\b`, "i").test(n))) return "weapon"
+  return undefined
+}
+
 function defaultData(type: DocType): Record<string, any> {
   switch (type) {
     case "classes": return {
@@ -70,7 +89,12 @@ function defaultData(type: DocType): Record<string, any> {
     }
     case "races": return { traits: [] }
     case "feats": return { prerequisite: "", description: "" }
-    case "items": return { rarity: "common", item_type: "wondrous", requires_attunement: false, description: "", damage: "", damage_type: "", properties: "", cost: "" }
+    case "items": return {
+      rarity: "common", item_type: "wondrous", requires_attunement: false, description: "",
+      damage: "", damage_type: "", properties: "", cost: "", weight: undefined,
+      weapon_kind: "melee", attack_stat: "", magic_bonus: "", melee_range: "", throw_range: "", range: "",
+      armor_mode: "bonus", ac_bonus: undefined, armor_base_ac: undefined, armor_dex_mode: "full", stealth_disadvantage: false,
+    }
     case "backgrounds": return { skill_proficiencies: "", tool_proficiencies: "", languages: "", equipment: [], feature_name: "", feature_description: "" }
   }
 }
@@ -596,9 +620,14 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
             </select>
           </Field>
         </div>
-        <Field label="Cost" hint="autofills onto a character's equipment entry when picked">
-          <input value={d.cost ?? ""} onChange={e => set("cost", e.target.value)} placeholder="15 gp" className={inp} />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Cost" hint="autofills onto a character's equipment entry when picked">
+            <input value={d.cost ?? ""} onChange={e => set("cost", e.target.value)} placeholder="15 gp" className={inp} />
+          </Field>
+          <Field label="Weight" hint="lb">
+            <input type="number" min={0} step="0.1" value={d.weight ?? ""} onChange={e => set("weight", e.target.value ? parseFloat(e.target.value) || 0 : undefined)} placeholder="0" className={inp} />
+          </Field>
+        </div>
         <Field label="Attunement">
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={!!d.requires_attunement} onChange={e => set("requires_attunement", e.target.checked)} className="rounded accent-purple-500 size-4" />
@@ -609,6 +638,7 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
 
       {d.item_type === "weapon" && (
         <Section title="Weapon Stats">
+          <p className="text-xs text-muted-foreground -mt-1">Picking this item on a character autofills these straight onto its Martial/Item entry.</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Damage" hint="e.g. 1d8">
               <input value={d.damage ?? ""} onChange={e => set("damage", e.target.value)} placeholder="1d8" className={inp} />
@@ -619,6 +649,71 @@ function ItemFields({ d, set }: { d: Record<string,any>; set: (k: string, v: any
           </div>
           <Field label="Properties" hint="comma-separated">
             <input value={d.properties ?? ""} onChange={e => set("properties", e.target.value)} placeholder="Versatile, Finesse…" className={inp} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Kind">
+              <select value={d.weapon_kind ?? "melee"} onChange={e => set("weapon_kind", e.target.value)} className={sel}>
+                <option value="melee" className="bg-card text-foreground">Melee</option>
+                <option value="ranged" className="bg-card text-foreground">Ranged</option>
+              </select>
+            </Field>
+            <Field label="Attack Stat">
+              <select value={d.attack_stat ?? ""} onChange={e => set("attack_stat", e.target.value)} className={sel}>
+                <option value="" className="bg-card text-foreground">None</option>
+                {["str","dex","con","int","wis","cha"].map(a => <option key={a} value={a} className="bg-card text-foreground">{a.toUpperCase()}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Magic Bonus" hint='e.g. "+1"'>
+            <input value={d.magic_bonus ?? ""} onChange={e => set("magic_bonus", e.target.value)} placeholder="+1" className={inp} />
+          </Field>
+          {d.weapon_kind === "ranged" ? (
+            <Field label="Range" hint="e.g. 80/320 ft.">
+              <input value={d.range ?? ""} onChange={e => set("range", e.target.value)} placeholder="80/320 ft." className={inp} />
+            </Field>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Melee Range" hint="e.g. 5 ft.">
+                <input value={d.melee_range ?? ""} onChange={e => set("melee_range", e.target.value)} placeholder="5 ft." className={inp} />
+              </Field>
+              <Field label="Throw Range" hint="thrown only">
+                <input value={d.throw_range ?? ""} onChange={e => set("throw_range", e.target.value)} placeholder="20/60 ft." className={inp} />
+              </Field>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {d.item_type === "armor" && (
+        <Section title="Armor Stats">
+          <p className="text-xs text-muted-foreground -mt-1">Picking this item on a character autofills these straight onto its Martial/Item entry.</p>
+          <div className="flex gap-2">
+            <ToggleChip label="Flat AC Bonus" active={(d.armor_mode ?? "bonus") === "bonus"} onClick={() => set("armor_mode", "bonus")} />
+            <ToggleChip label="Base Armor" active={d.armor_mode === "base"} onClick={() => set("armor_mode", "base")} />
+          </div>
+          {(d.armor_mode ?? "bonus") === "bonus" ? (
+            <Field label="AC Bonus">
+              <input type="number" value={d.ac_bonus ?? ""} onChange={e => set("ac_bonus", e.target.value ? parseInt(e.target.value) || 0 : undefined)} placeholder="0" className={inp} />
+            </Field>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Base AC">
+                <input type="number" value={d.armor_base_ac ?? ""} onChange={e => set("armor_base_ac", e.target.value ? parseInt(e.target.value) || 0 : undefined)} placeholder="10" className={inp} />
+              </Field>
+              <Field label="Dex Mod">
+                <select value={d.armor_dex_mode ?? "full"} onChange={e => set("armor_dex_mode", e.target.value)} className={sel}>
+                  <option value="full" className="bg-card text-foreground">Full Dex</option>
+                  <option value="half" className="bg-card text-foreground">Half Dex (max +2)</option>
+                  <option value="none" className="bg-card text-foreground">No Dex</option>
+                </select>
+              </Field>
+            </div>
+          )}
+          <Field label="Stealth">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={!!d.stealth_disadvantage} onChange={e => set("stealth_disadvantage", e.target.checked)} className="rounded accent-purple-500 size-4" />
+              <span className="text-sm text-foreground">Disadvantage on Stealth</span>
+            </label>
           </Field>
         </Section>
       )}
@@ -764,7 +859,14 @@ export function DocEntryForm({ type, initial, isHomebrew, userId, onSave, onCanc
       {/* Common fields */}
       <Section title="Identity">
         <Field label="Name *">
-          <input value={name} onChange={e => setName(e.target.value)} placeholder={`${entryLabel} name…`} className={inp} />
+          <input value={name} onChange={e => {
+            const v = e.target.value
+            setName(v)
+            if (type === "items" && (data.item_type ?? "wondrous") === "wondrous") {
+              const detected = detectItemType(v)
+              if (detected) setField("item_type", detected)
+            }
+          }} placeholder={`${entryLabel} name…`} className={inp} />
         </Field>
         <Field label="Source" hint="shown on card — e.g. Player's Handbook p.51">
           <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Player's Handbook p.51, Xanathar's Guide…" className={inp} />

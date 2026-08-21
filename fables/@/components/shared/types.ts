@@ -126,6 +126,8 @@ export interface Feature {
   usesUsed?: number
   resetsOn?: "short" | "long" | "dawn" | "manual"
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
+  triggerFormId?: string          // Automation — activates this Form (see CharacterForm) whenever a use of this feature is spent (see utils.ts's featureUsePatch)
+  triggerConditionalId?: string   // Automation — triggers this Conditional (see CharacterConditional) whenever a use of this feature is spent
   multiTracking?: boolean    // toggle — on splits use-tracking across `trackers` instead of just the single trackable/maxUses/usesUsed triplet
   trackers?: UseTracker[]    // additional tracked bars beyond the primary trackable/maxUses/usesUsed, only used when multiTracking is on
   requiresAttunement?: boolean // does this item require attunement at all?
@@ -305,6 +307,9 @@ export interface CharacterData {
   spellsDisplay?: "list" | "bubbles"            // list = one spell per row; bubbles = spells size to their content and wrap to pack multiple per line
   hideDiceRoller?: boolean       // true = hide the dice roller panel on the Combat tab
   hideJumpCalculator?: boolean   // true = hide the jump distance calculator on the Combat tab
+  showResistanceTracker?: boolean // opt-in (default off) — shows the Resistances/Vulnerabilities panel on the Combat tab, same column as the dice roller
+  resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
+  vulnerabilities?: string[]     // damage type names this character has vulnerability to
   showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
   magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy" is labeled "Animated" in the UI
   magicItemColor?: string  // accent color for both magicItemStyle and magicItemSliderStyle — default DEFAULT_ACCENT_COLOR

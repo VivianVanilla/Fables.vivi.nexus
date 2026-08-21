@@ -288,3 +288,19 @@ export function conditionalTriggerPatch(data: CharacterData, c: CharacterConditi
   }
   return patch
 }
+
+/**
+ * A Feature's use-tracking automation (triggerFormId/triggerConditionalId) —
+ * fires whenever a use of that feature is spent (see CharacterSheet.tsx's
+ * patchFeature, which calls this only when usesUsed just went up, never on
+ * a rest-reset or a manual refund). Same independent-and-composable shape as
+ * castSpellPatch, just with no spell slot to expend.
+ */
+export function featureUsePatch(data: CharacterData, feature: Feature): Partial<CharacterData> {
+  const patch: Partial<CharacterData> = feature.triggerFormId ? formActivationPatch(data, feature.triggerFormId) : {}
+  if (feature.triggerConditionalId) {
+    const conditional = (data.conditionals ?? []).find(c => c.id === feature.triggerConditionalId)
+    if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional))
+  }
+  return patch
+}
