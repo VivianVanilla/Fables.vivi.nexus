@@ -216,6 +216,9 @@ export interface CharacterForm {
   notification?: string        // banner text shown near Lv while active; blank = no banner
   grantedConditions?: string[] // names from ALL_CONDITIONS, auto-applied on activate / auto-removed on revert
   revertOnZeroHp?: boolean     // auto-revert to Base Form the instant HP hits 0 while this form is active
+  formMaxHp?: number           // Wild Shape-style separate HP pool for this form, tracked in CharacterData.formHp —
+                                // entirely independent of the character's own hp/maxHp while active. Unset (the
+                                // default) means the form shares the character's normal HP pool as before.
   portraitUrl?: string         // replaces the header portrait while this form is active; blank = keep the character's own portrait
 }
 
@@ -276,6 +279,8 @@ export interface CharacterData {
   maxHpMod?: number    // flat bonus or penalty to max HP (positive = bonus, negative = reduction)
   hideEquipAcBadge?: boolean // hides the "+X equip" AC-bonus badge under the HP/AC ring
   tempHp?: number
+  formHp?: number  // current HP within the active form's own pool — only meaningful while
+                    // activeFormId points at a form with formMaxHp set (see CharacterForm)
   speed?: number   // walk speed, ft/round
   speeds?: { fly?: number; swim?: number; climb?: number }  // extra movement types, ft/round
   initiative?: number

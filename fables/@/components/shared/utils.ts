@@ -168,7 +168,11 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
       nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${next!.id}` }]
     }
   }
-  return { activeFormId: id, conditions: nextConditions }
+  const patch: Partial<CharacterData> = { activeFormId: id, conditions: nextConditions }
+  // Activating a form with its own HP pool starts it fresh at full — the
+  // character's own hp/maxHp are left completely untouched underneath.
+  if (next?.formMaxHp != null) patch.formHp = next.formMaxHp
+  return patch
 }
 
 /**

@@ -22,7 +22,10 @@ export function FormSwitcher({ forms, activeFormId, onActivate, readOnly }: {
   const pos = usePopoverPosition(open, triggerRef, contentRef)
   useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
 
-  if (readOnly && forms.length === 0) return null
+  // No forms defined at all — nothing to switch between, and an empty
+  // "No Forms" pill just confuses new players who haven't touched
+  // Automation yet. It reappears the moment they add their first form.
+  if (forms.length === 0) return null
 
   const activeForm = activeFormId ? forms.find(f => f.id === activeFormId) : null
 

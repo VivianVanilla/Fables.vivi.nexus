@@ -223,12 +223,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   } : data
 
   // ── HP COMPUTED ───────────────────────────────────────────────────────────
+  // A form with its own formMaxHp (Wild Shape-style) tracks HP completely
+  // separately from the character's own hp/maxHp — usingFormPool switches
+  // every read/write below (ring, buttons, the 0-HP effect) onto that pool
+  // instead, and back the instant the form isn't active anymore.
 
-  const hp           = data.hp       ?? 0
+  const usingFormPool = activeForm?.formMaxHp != null
+  const hp           = usingFormPool ? (data.formHp ?? activeForm!.formMaxHp!) : (data.hp ?? 0)
   const maxHp        = data.maxHp    ?? 0
   const maxHpMod     = data.maxHpMod ?? 0
-  const effectiveMax = Math.max(0, maxHp + maxHpMod + (ov?.maxHpBonus ?? 0))
-  const tempHp       = data.tempHp   ?? 0
+  const effectiveMax = usingFormPool ? activeForm!.formMaxHp! : Math.max(0, maxHp + maxHpMod + (ov?.maxHpBonus ?? 0))
+  const tempHp       = usingFormPool ? 0 : (data.tempHp ?? 0)
   const hpPercent    = effectiveMax > 0 ? Math.min(100, (hp / effectiveMax) * 100) : 0
   const tempHpPct    = effectiveMax > 0 ? Math.min(100, (tempHp / effectiveMax) * 100) : 0
   const hpColor      = hpPercent > 50 ? "#22c55e" : hpPercent > 25 ? "#eab308" : "#ef4444"
@@ -260,27 +265,35 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Concentration check: any HP loss while "Concentrating" is active prompts a save.
   // Deathward: catches the transition to 0 HP (or below) and corrects it back to 1,
-  // burning the condition — a useLayoutEffect (not useEffect) so the correction lands
-  // before the browser ever paints the 0-HP frame (which would otherwise flash the
-  // Death Saving Throws panel for one frame before flipping back).
+  // burning the condition. Wild Shape-style forms (usingFormPool): the form's own
+  // pool hitting 0 always reverts to Base Form and lands it at 1 HP, independent of
+  // Deathward — two separate safety nets for two separate pools. Both run in a
+  // useLayoutEffect (not useEffect) so the correction lands before the browser ever
+  // paints the 0-HP frame (which would otherwise flash Death Saving Throws for one
+  // frame before flipping back).
   useLayoutEffect(() => {
     const prevHp = prevHpRef.current
     if (prevHp !== undefined && hp <= 0 && prevHp > 0) {
-      const deathward = conditions.find(c => c.name === "Deathward")
-      let patch: Partial<CharacterData> = {}
-      if (deathward) {
-        patch = { hp: 1, conditions: conditions.filter(c => c.id !== deathward.id) }
-        setDeathwardTriggers(prev => [...prev, { id: nanoid() }])
+      if (usingFormPool && activeForm?.revertOnZeroHp) {
+        const baseConditions = conditions.filter(c => c.source !== `form:${activeForm.id}`)
+        update({ activeFormId: null, conditions: baseConditions, hp: 1 })
+      } else {
+        const deathward = conditions.find(c => c.name === "Deathward")
+        let patch: Partial<CharacterData> = {}
+        if (deathward) {
+          patch = { hp: 1, conditions: conditions.filter(c => c.id !== deathward.id) }
+          setDeathwardTriggers(prev => [...prev, { id: nanoid() }])
+        }
+        // Auto-revert (opt-in per form) — merged into the same patch as
+        // Deathward above rather than a second update() call, since update()
+        // spreads off the current `data` closure and a second call in the
+        // same tick would silently drop this one.
+        if (activeForm?.revertOnZeroHp) {
+          const baseConditions = (patch.conditions ?? conditions).filter(c => c.source !== `form:${activeForm.id}`)
+          patch = { ...patch, activeFormId: null, conditions: baseConditions }
+        }
+        if (Object.keys(patch).length) update(patch)
       }
-      // Auto-revert (opt-in per form) — merged into the same patch as
-      // Deathward above rather than a second update() call, since update()
-      // spreads off the current `data` closure and a second call in the
-      // same tick would silently drop this one.
-      if (activeForm?.revertOnZeroHp) {
-        const baseConditions = (patch.conditions ?? conditions).filter(c => c.source !== `form:${activeForm.id}`)
-        patch = { ...patch, activeFormId: null, conditions: baseConditions }
-      }
-      if (Object.keys(patch).length) update(patch)
     }
     if (prevHp !== undefined && hp < prevHp && activeConditionNames.has("Concentrating")) {
       const damage = prevHp - hp
@@ -886,17 +899,22 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           {/* Normal HP controls — only when hp > 0 */}
           {!isAtZero && !readOnly && (
             <div className="flex flex-col items-center gap-2 w-full">
-              <div className={`flex rounded-full text-xs font-semibold uppercase tracking-wide overflow-hidden ring-1 ${theme.ring}`}>
-                <button type="button" onClick={() => setHpTarget("hp")}
-                  className={`px-3 py-1.5 transition-colors ${hpTarget === "hp" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>HP</button>
-                <button type="button" onClick={() => setHpTarget("temp")}
-                  className={`px-3 py-1.5 transition-colors ${hpTarget === "temp" ? "bg-blue-500/40 text-blue-200" : "text-white/40 hover:text-white/70"}`}>Temp</button>
-              </div>
+              {/* The form's own pool has no Temp HP tracking of its own — just a plain HP bar */}
+              {!usingFormPool && (
+                <div className={`flex rounded-full text-xs font-semibold uppercase tracking-wide overflow-hidden ring-1 ${theme.ring}`}>
+                  <button type="button" onClick={() => setHpTarget("hp")}
+                    className={`px-3 py-1.5 transition-colors ${hpTarget === "hp" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>HP</button>
+                  <button type="button" onClick={() => setHpTarget("temp")}
+                    className={`px-3 py-1.5 transition-colors ${hpTarget === "temp" ? "bg-blue-500/40 text-blue-200" : "text-white/40 hover:text-white/70"}`}>Temp</button>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 {/* Minus: damage always drains temp first when in HP mode */}
                 <button type="button"
                   onClick={() => {
-                    if (hpTarget === "hp") {
+                    if (usingFormPool) {
+                      update({ formHp: Math.max(0, hp - hpStep) })
+                    } else if (hpTarget === "hp") {
                       const tempDrained = Math.min(tempHp, hpStep)
                       const remainder   = hpStep - tempDrained
                       update({ tempHp: tempHp - tempDrained, hp: Math.max(0, hp - remainder) })
@@ -910,9 +928,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                   onChange={e => setHpStep(Math.max(1, parseInt(e.target.value) || 1))} min={1}
                   className={`w-12 text-center text-sm font-bold ${theme.box} border border-white/15 rounded-lg py-1.5 text-white outline-none`} />
                 <button type="button"
-                  onClick={() => hpTarget === "hp"
-                    ? update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep })
-                    : update({ tempHp: tempHp + hpStep })}
+                  onClick={() => usingFormPool
+                    ? update({ formHp: Math.min(effectiveMax, hp + hpStep) })
+                    : hpTarget === "hp"
+                      ? update({ hp: effectiveMax > 0 ? Math.min(effectiveMax, hp + hpStep) : hp + hpStep })
+                      : update({ tempHp: tempHp + hpStep })}
                   className="size-9 rounded-full bg-white/10 hover:bg-green-900 text-white hover:text-green-200 flex items-center justify-center text-xl font-bold transition-colors">+</button>
               </div>
             </div>
@@ -1372,10 +1392,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               {activeForm?.notification && (
                 <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-200">
                   {activeForm.name}: {activeForm.notification}
-                  {!readOnly && (
-                    <button type="button" onClick={() => activateForm(null)}
-                      className="opacity-60 hover:opacity-100 shrink-0 underline decoration-dotted">Revert</button>
-                  )}
                 </span>
               )}
               {deathwardTriggers.map(t => (

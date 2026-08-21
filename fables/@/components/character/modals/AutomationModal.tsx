@@ -247,6 +247,15 @@ function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
         Revert to Base Form when HP reaches 0
       </label>
 
+      <div className="flex flex-col gap-1.5">
+        <NumField label="Form's Own HP Pool" value={draft.formMaxHp} onChange={v => setDraft(d => ({ ...d, formMaxHp: v }))} placeholder="shares character HP" />
+        <p className="text-[10px] text-white/30">
+          Wild Shape-style: this form gets its own separate HP bar (starting full each time it activates)
+          instead of using the character's own HP. Combined with "Revert to Base Form" above, dropping this
+          pool to 0 reverts you and leaves your original form at 1 HP. Blank = share the character's own HP as normal.
+        </p>
+      </div>
+
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Conditions</span>
         <p className="text-[10px] text-white/30 -mt-0.5">Applied when this form activates, removed when it reverts.</p>
