@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function SkillModal({ skillName, data, readOnly, getSkillMod, onUpdate, onClose }: Props) {
-  const skill     = SKILLS.find(s => s.name === skillName)
+  const skill     = SKILLS.find(s => s.name === skillName) ?? data.customSkills?.find(s => s.name === skillName)
   if (!skill) return null
   const profLevel = data.skillProfs?.[skillName] ?? "none"
   const bonus     = data.skillBonuses?.[skillName] ?? 0

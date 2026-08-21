@@ -1003,11 +1003,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <span className="text-xs uppercase tracking-widest text-white/50">Speed{speedOverrideReason ? ` (${speedOverrideReason})` : ""}</span>
           </button>
           <button type="button" onClick={() => setShowInitiativeModal(true)}
-            className={`${card} p-3 flex flex-col items-center gap-0.5 hover:brightness-110 transition-all`}
-            style={{ boxShadow: `0 0 0 1px ${theme.accent}40` }}>
+            className={`${card} p-3 flex flex-col items-center gap-0.5 border-2 hover:brightness-110 transition-all`}
+            style={{ borderColor: theme.accent + "90" }}>
             <span className="text-xl font-bold text-white">{initStr}</span>
-            <span className="text-xs uppercase tracking-widest" style={{ color: theme.accent + "cc" }}>Initiative</span>
-            <span className="text-[9px] uppercase tracking-wider" style={{ color: theme.accent + "77" }}>
+            <span className="text-xs uppercase tracking-widest text-white/60 font-semibold">Initiative</span>
+            <span className="text-[9px] uppercase tracking-wider font-bold" style={{ color: theme.accent }}>
               {initStat.toUpperCase()}{data.initiativeBonus ? ` +${data.initiativeBonus}` : ""}
             </span>
           </button>
@@ -1124,7 +1124,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <div className="lg:w-56 shrink-0 flex flex-col gap-3">
             <AbilitiesCard card={card} data={effectiveData} readOnly={readOnly} onShowModal={() => setShowAbilityModal(true)} overriddenKeys={overriddenAbilityKeys} />
             <SavesCard card={card} data={data} readOnly={readOnly} getSaveMod={getSaveMod} onShowModal={() => setShowSavesModal(true)} />
-            <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} />
+            <SkillsCard card={card} data={data} characterId={character.id} readOnly={readOnly} getSkillMod={getSkillMod} onShowSkillModal={setShowSkillModal} onUpdate={update} />
             {!data.hideJumpCalculator && (
               <div className={`${card} p-3 flex items-center justify-around gap-2`} title="Running jump distances — PHB: Long Jump = STR score (ft), High Jump = 3 + STR mod (ft)">
                 <div className="flex flex-col items-center gap-0.5">

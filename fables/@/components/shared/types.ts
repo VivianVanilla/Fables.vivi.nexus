@@ -351,6 +351,7 @@ export interface CharacterData {
   familiars?: FamiliarRef[]
   skillProfs?: Record<string, "half" | "prof" | "exp">
   skillBonuses?: Record<string, number>
+  customSkills?: { id: string; name: string; ability: string }[]  // right-click "Add Custom Skill" on the Skills panel — stored separately from the fixed SKILLS list but keyed into skillProfs/skillBonuses by name just like a built-in skill
   saveBonuses?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>
   spellsPrepared?: number
   initiativeStat?: string  // ability key e.g. "dex"; default "dex"
