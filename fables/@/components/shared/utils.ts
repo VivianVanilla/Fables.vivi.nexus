@@ -1,6 +1,6 @@
 // Small helper functions used throughout the character sheet
 
-import type { CharacterData, Feature, SpellItem, CharacterConditional } from "./types"
+import type { CharacterData, Feature, SpellItem, CharacterConditional, CharacterForm, FormStatOverrides } from "./types"
 
 /** Returns the ability modifier as a signed string, e.g. "+2" or "-1" */
 export function abilityMod(score: number): string {
@@ -172,6 +172,74 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
   // Activating a form with its own HP pool starts it fresh at full — the
   // character's own hp/maxHp are left completely untouched underneath.
   if (next?.formMaxHp != null) patch.formHp = next.formMaxHp
+  // Same "take the higher, not additive" semantics as CharacterConditional's tempHp.
+  if (next?.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, next.tempHp)
+  return patch
+}
+
+/**
+ * Combines every simultaneously-active form's overrides into one — used by
+ * multi-form mode (see CharacterData.activeFormIds) where more than one form
+ * can be active at once. Ability scores / AC override / speed override are
+ * last-defined-wins (later forms in the list take priority, so a
+ * later-activated form can knock out an earlier one's number); AC bonus and
+ * Max HP bonus are additive, since those are the kind of thing that's meant
+ * to stack (a Mutagen's +2 AC on top of a Wild Shape's, say). Also correct
+ * for the ordinary single-form case: called with a 0-or-1-element array, it
+ * degenerates to exactly today's `activeForm?.overrides` behavior.
+ */
+export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
+  const merged: FormStatOverrides = {}
+  let acBonusSum = 0, maxHpBonusSum = 0
+  for (const f of forms) {
+    const ov = f.overrides
+    if (!ov) continue
+    if (ov.strength != null) merged.strength = ov.strength
+    if (ov.dexterity != null) merged.dexterity = ov.dexterity
+    if (ov.constitution != null) merged.constitution = ov.constitution
+    if (ov.intelligence != null) merged.intelligence = ov.intelligence
+    if (ov.wisdom != null) merged.wisdom = ov.wisdom
+    if (ov.charisma != null) merged.charisma = ov.charisma
+    if (ov.acOverride != null) merged.acOverride = ov.acOverride
+    if (ov.speedOverride != null) merged.speedOverride = ov.speedOverride
+    acBonusSum += ov.acBonus ?? 0
+    maxHpBonusSum += ov.maxHpBonus ?? 0
+  }
+  if (acBonusSum) merged.acBonus = acBonusSum
+  if (maxHpBonusSum) merged.maxHpBonus = maxHpBonusSum
+  return merged
+}
+
+/**
+ * Multi-form mode's equivalent of formActivationPatch — toggles one form's
+ * membership in activeFormIds independently of whichever other forms are
+ * already active, instead of formActivationPatch's exclusive single-slot
+ * swap. Deactivating only strips that one form's granted conditions/HP pool
+ * ownership; anything else stacked on top stays active.
+ */
+export function toggleFormPatch(data: CharacterData, formId: string): Partial<CharacterData> {
+  const forms = data.forms ?? []
+  const conditions = data.conditions ?? []
+  const activeIds = data.activeFormIds ?? []
+  const form = forms.find(f => f.id === formId)
+  if (!form) return {}
+
+  if (activeIds.includes(formId)) {
+    return {
+      activeFormIds: activeIds.filter(id => id !== formId),
+      conditions: conditions.filter(c => c.source !== `form:${formId}`),
+    }
+  }
+
+  let nextConditions = conditions
+  for (const name of form.grantedConditions ?? []) {
+    if (!nextConditions.some(c => c.name === name)) {
+      nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${form.id}` }]
+    }
+  }
+  const patch: Partial<CharacterData> = { activeFormIds: [...activeIds, formId], conditions: nextConditions }
+  if (form.formMaxHp != null) patch.formHp = form.formMaxHp
+  if (form.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, form.tempHp)
   return patch
 }
 

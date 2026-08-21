@@ -256,6 +256,14 @@ function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
         </p>
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <NumField label="Grants Temp HP" value={draft.tempHp} onChange={v => setDraft(d => ({ ...d, tempHp: v }))} placeholder="none" />
+        <p className="text-[10px] text-white/30">
+          Same as a Conditional's temp HP — activating this form sets your temp HP to this amount if it's
+          higher than what you already have (not additive). Blank = grants none.
+        </p>
+      </div>
+
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Conditions</span>
         <p className="text-[10px] text-white/30 -mt-0.5">Applied when this form activates, removed when it reverts.</p>

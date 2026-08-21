@@ -219,6 +219,8 @@ export interface CharacterForm {
   formMaxHp?: number           // Wild Shape-style separate HP pool for this form, tracked in CharacterData.formHp —
                                 // entirely independent of the character's own hp/maxHp while active. Unset (the
                                 // default) means the form shares the character's normal HP pool as before.
+  tempHp?: number              // grants this much temp HP on activation — same semantics as CharacterConditional's
+                                // tempHp (take the higher of current and this, not additive)
   portraitUrl?: string         // replaces the header portrait while this form is active; blank = keep the character's own portrait
 }
 
@@ -335,6 +337,15 @@ export interface CharacterData {
   conditions?: ActiveCondition[]
   forms?: CharacterForm[]           // Automation — reusable alternate-form/buff presets, see CharacterForm
   activeFormId?: string | null      // id of the currently-active form; null/unset = Base Form
+  // Multi-form mode — currently gated to a specific user+character in
+  // CharacterSheet.tsx (see multiFormEnabled) rather than exposed generally,
+  // since most characters only ever have one form active at a time. When
+  // enabled, this fully replaces activeFormId: any number of forms can be
+  // simultaneously active (e.g. a shapeshifted form stacked with a
+  // buff/mutagen form), each contributing its own overrides/conditions/
+  // notification. Whichever active form has formMaxHp set (if any) still
+  // owns the one HP pool/portrait — you can't have two bodies at once.
+  activeFormIds?: string[]
   conditionals?: CharacterConditional[] // Automation — one-shot "apply this now" effects, see CharacterConditional
   castButtonEnabled?: boolean // Automation (Cast tab) — master switch that shows the themed Cast button next to Cantrips in the Spells panel
   familiars?: FamiliarRef[]

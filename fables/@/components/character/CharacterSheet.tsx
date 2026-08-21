@@ -10,11 +10,11 @@ import { useUserContext } from "../../../src/contexts/UserContext"
 
 import type {
   CharacterData, HitDicePool, SpellItem, EquipmentItem,
-  SpellSlot, FavoriteRef, Feature, FamiliarRef, ActiveCondition,
+  SpellSlot, FavoriteRef, Feature, FamiliarRef, ActiveCondition, CharacterForm,
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
@@ -195,11 +195,30 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // ── FORMS (Automation) ────────────────────────────────────────────────────
   // Wild Shape / Haste / Rage-style presets — see CharacterForm. `ov` is the
-  // active form's stat overrides (undefined when on Base Form).
+  // merged stat overrides across every currently-active form (undefined when
+  // on Base Form).
 
-  const forms      = data.forms ?? []
+  // Multi-form (simultaneously-active forms, e.g. a shapeshifted form
+  // stacked with a mutagen buff) is a personal feature for one specific
+  // character rather than something exposed to every player — gated here
+  // rather than in the DB/UI layer so it's a single obvious toggle. Everyone
+  // else keeps the exclusive single-active-form behavior unchanged.
+  const multiFormEnabled = user?.email === "vivian.bonilla@outlook.com" && character.name === "Luna Sangris"
+
+  const forms = data.forms ?? []
   const activeForm = data.activeFormId ? forms.find(f => f.id === data.activeFormId) ?? null : null
-  const ov         = activeForm?.overrides
+  // activeForms is what everything below actually reads — for ordinary
+  // characters it's just [activeForm] (or [] on Base Form), which makes
+  // mergeFormOverrides et al. degenerate to exactly today's single-form math.
+  const activeForms: CharacterForm[] = multiFormEnabled
+    ? (data.activeFormIds ?? []).map(id => forms.find(f => f.id === id)).filter((f): f is CharacterForm => !!f)
+    : (activeForm ? [activeForm] : [])
+  const ov = activeForms.length > 0 ? mergeFormOverrides(activeForms) : undefined
+  // Whichever active form has its own HP pool "owns" the one body/portrait —
+  // you can't be in two bodies simultaneously even if several forms' other
+  // effects (stat bonuses, conditions, notifications) are stacked at once.
+  const poolForm = activeForms.find(f => f.formMaxHp != null) ?? null
+  const portraitForm = activeForms.find(f => f.portraitUrl) ?? null
 
   // Which ability keys a Form is currently overriding — drives the blue
   // "this number is temporary" highlight in AbilitiesCard. AbilityModal (the
@@ -228,11 +247,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // every read/write below (ring, buttons, the 0-HP effect) onto that pool
   // instead, and back the instant the form isn't active anymore.
 
-  const usingFormPool = activeForm?.formMaxHp != null
-  const hp           = usingFormPool ? (data.formHp ?? activeForm!.formMaxHp!) : (data.hp ?? 0)
+  const usingFormPool = poolForm != null
+  const hp           = usingFormPool ? (data.formHp ?? poolForm!.formMaxHp!) : (data.hp ?? 0)
   const maxHp        = data.maxHp    ?? 0
   const maxHpMod     = data.maxHpMod ?? 0
-  const effectiveMax = usingFormPool ? activeForm!.formMaxHp! : Math.max(0, maxHp + maxHpMod + (ov?.maxHpBonus ?? 0))
+  const effectiveMax = usingFormPool ? poolForm!.formMaxHp! : Math.max(0, maxHp + maxHpMod + (ov?.maxHpBonus ?? 0))
   const tempHp       = usingFormPool ? 0 : (data.tempHp ?? 0)
   const hpPercent    = effectiveMax > 0 ? Math.min(100, (hp / effectiveMax) * 100) : 0
   const tempHpPct    = effectiveMax > 0 ? Math.min(100, (tempHp / effectiveMax) * 100) : 0
@@ -274,9 +293,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   useLayoutEffect(() => {
     const prevHp = prevHpRef.current
     if (prevHp !== undefined && hp <= 0 && prevHp > 0) {
-      if (usingFormPool && activeForm?.revertOnZeroHp) {
-        const baseConditions = conditions.filter(c => c.source !== `form:${activeForm.id}`)
-        update({ activeFormId: null, conditions: baseConditions, hp: 1 })
+      if (poolForm?.revertOnZeroHp) {
+        // The pool-owning form (Wild Shape-style) hit 0 on its own separate
+        // pool — reverts just that one form (any other stacked forms in
+        // multi-form mode stay active) and lands the character's real hp at
+        // 1, independent of Deathward below (a different safety net, for
+        // the shared pool specifically).
+        const baseConditions = conditions.filter(c => c.source !== `form:${poolForm.id}`)
+        update(multiFormEnabled
+          ? { activeFormIds: (data.activeFormIds ?? []).filter(id => id !== poolForm.id), conditions: baseConditions, hp: 1 }
+          : { activeFormId: null, conditions: baseConditions, hp: 1 })
       } else {
         const deathward = conditions.find(c => c.name === "Deathward")
         let patch: Partial<CharacterData> = {}
@@ -287,10 +313,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         // Auto-revert (opt-in per form) — merged into the same patch as
         // Deathward above rather than a second update() call, since update()
         // spreads off the current `data` closure and a second call in the
-        // same tick would silently drop this one.
-        if (activeForm?.revertOnZeroHp) {
-          const baseConditions = (patch.conditions ?? conditions).filter(c => c.source !== `form:${activeForm.id}`)
-          patch = { ...patch, activeFormId: null, conditions: baseConditions }
+        // same tick would silently drop this one. Every currently-active
+        // form that wants to auto-revert on 0 HP (and doesn't own its own
+        // pool — handled above) reverts together.
+        const revertForms = activeForms.filter(f => f.revertOnZeroHp)
+        if (revertForms.length) {
+          const revertIds = new Set(revertForms.map(f => f.id))
+          const revertSources = new Set(revertForms.map(f => `form:${f.id}`))
+          const baseConditions = (patch.conditions ?? conditions).filter(c => !c.source || !revertSources.has(c.source))
+          patch = multiFormEnabled
+            ? { ...patch, activeFormIds: (data.activeFormIds ?? []).filter(id => !revertIds.has(id)), conditions: baseConditions }
+            : { ...patch, activeFormId: null, conditions: baseConditions }
         }
         if (Object.keys(patch).length) update(patch)
       }
@@ -711,6 +744,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // own "Trigger"/"Cast" buttons call it the same way, off the same `data`/`onUpdate`
   // shape, so a Form behaves identically whichever surface activates it.
   function activateForm(id: string | null) { update(formActivationPatch(data, id)) }
+  // Multi-form mode only (see multiFormEnabled) — toggles one form on/off
+  // independently of whatever else is currently stacked.
+  function toggleForm(id: string) { update(toggleFormPatch(data, id)) }
 
   // ── HIT DICE HELPERS ──────────────────────────────────────────────────────
 
@@ -1322,10 +1358,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         <div className="flex items-center gap-3 min-w-0">
         <button type="button"
           onClick={readOnly ? undefined : openPortraitPicker}
-          title={activeForm?.portraitUrl ? `${activeForm.name} — click to change your base portrait (set from Automation)` : undefined}
+          title={portraitForm?.portraitUrl ? `${portraitForm.name} — click to change your base portrait (set from Automation)` : undefined}
           className={`relative size-14 rounded-xl overflow-hidden ring-2 ${theme.ring} ${readOnly ? "" : "hover:ring-primary cursor-pointer"} shrink-0 ${theme.box} flex items-center justify-center transition-all`}>
           {uploading ? <span className="text-xs text-white/70">…</span>
-            : (activeForm?.portraitUrl || data.portrait) ? <img src={activeForm?.portraitUrl || data.portrait} alt="portrait" className="w-full h-full object-cover" />
+            : (portraitForm?.portraitUrl || data.portrait) ? <img src={portraitForm?.portraitUrl || data.portrait} alt="portrait" className="w-full h-full object-cover" />
             : <span className="text-2xl leading-none select-none">IMAGE</span>}
         </button>
 
@@ -1384,16 +1420,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 ? data.classes.reduce((s, c) => s + c.level, 0)
                 : (data.level ?? "—")}
             </span>
-            <FormSwitcher forms={forms} activeFormId={data.activeFormId ?? null} onActivate={activateForm} readOnly={readOnly} />
+            <FormSwitcher forms={forms} activeFormId={data.activeFormId ?? null} onActivate={activateForm} readOnly={readOnly}
+              multiForm={multiFormEnabled} activeFormIds={data.activeFormIds} onToggle={toggleForm} />
           </div>
 
-          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => conditionEffectText(c)) || !!activeForm?.notification) && (
+          {(concentrationPrompts.length > 0 || deathwardTriggers.length > 0 || conditions.some(c => conditionEffectText(c)) || activeForms.some(f => f.notification)) && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              {activeForm?.notification && (
-                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-200">
-                  {activeForm.name}: {activeForm.notification}
+              {activeForms.filter(f => f.notification).map(f => (
+                <span key={f.id} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-200">
+                  {f.name}: {f.notification}
                 </span>
-              )}
+              ))}
               {deathwardTriggers.map(t => (
                 <span key={t.id}
                   className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200">
