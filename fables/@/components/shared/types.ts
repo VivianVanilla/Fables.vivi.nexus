@@ -208,6 +208,9 @@ export interface FormStatOverrides {
   acOverride?: number    // replaces the total AC outright when set
   speedOverride?: number // replaces walking speed when set (conditions forcing speed to 0 still win)
   maxHpBonus?: number    // stacks on top of maxHp + maxHpMod while this form is active
+  carryCapacityBonus?: number // stacks on top of computed carry capacity, same semantics as
+                               // CharacterData.carryCapacityBonus (and note a Strength override
+                               // above already scales capacity too — the two stack)
 }
 
 export interface CharacterForm {

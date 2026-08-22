@@ -237,7 +237,12 @@ function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
           <NumField label="AC Override" value={ov.acOverride} onChange={v => setOv({ acOverride: v })} placeholder="computed" />
           <NumField label="Speed Override (ft)" value={ov.speedOverride} onChange={v => setOv({ speedOverride: v })} placeholder="base" />
           <NumField label="Max HP Bonus" value={ov.maxHpBonus} onChange={v => setOv({ maxHpBonus: v })} placeholder="+0" />
+          <NumField label="Carry Capacity Bonus (lb)" value={ov.carryCapacityBonus} onChange={v => setOv({ carryCapacityBonus: v })} placeholder="+0" />
         </div>
+        <p className="text-[10px] text-white/30 -mt-0.5">
+          A Strength override above already scales carry capacity (15 lb per point) — this is an
+          additional flat bonus on top, for forms that grant extra carrying capacity without a Strength change.
+        </p>
       </div>
 
       <label className="flex flex-col gap-1">

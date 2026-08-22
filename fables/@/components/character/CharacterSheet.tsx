@@ -380,7 +380,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   // Carrying capacity (PHB) — STR score × 15 lb, plus any flat bonus set via
   // the ⚖ badge (Bags of Holding, Belts of Giant Strength, feats, homebrew…)
-  const carryCapacity = (data.strength ?? 10) * 15 + (data.carryCapacityBonus ?? 0)
+  // and any active form's own carryCapacityBonus (the two stack). Reads
+  // effectiveData.strength rather than the raw base score so a form that
+  // boosts Strength (Bear/Bull forms, a strength mutagen, …) scales this
+  // the same way it already scales AC/skills/saves, instead of silently
+  // ignoring the override the way this used to.
+  const carryCapacity = (effectiveData.strength ?? 10) * 15 + (data.carryCapacityBonus ?? 0) + (ov?.carryCapacityBonus ?? 0)
   const encumbered     = totalWeight > carryCapacity
 
   function addSpell() {
@@ -520,6 +525,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function toggleFeatureFavorite(id: string, label: string) {
     if (favorites.find(f => f.refId === id)) removeFavorite(id)
     else addFavorite({ refId: id, refType: "feature", label })
+  }
+
+  function toggleEquipmentFavorite(id: string, label: string) {
+    if (favorites.find(f => f.refId === id)) removeFavorite(id)
+    else addFavorite({ refId: id, refType: "equipment", label })
   }
 
   function reorderFavorites(fromIdx: number, toIdx: number) {
@@ -1166,7 +1176,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
         {/* Full-width spells / martial panel */}
         <SpellsEquipPanel
-          card={card} theme={theme} data={data} readOnly={readOnly} userId={user?.id ?? null}
+          card={card} theme={theme} data={effectiveData} readOnly={readOnly} userId={user?.id ?? null}
           spellItems={spellItems} equipItems={equipItems} spellSlots={spellSlots}
           slotTheme={slotTheme} slotAnimated={slotAnimated} characterId={character.id}
           activeSubTab={spellsSubTab} onChangeSubTab={setSpellsSubTab}
@@ -1176,6 +1186,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
           onCastSpell={spell => update(castSpellPatch(data, spell))}
+          favorites={favorites} onToggleEquipFavorite={toggleEquipmentFavorite}
         />
       </div>
     )

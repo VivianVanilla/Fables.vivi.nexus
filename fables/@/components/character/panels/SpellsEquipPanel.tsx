@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { CharacterData, SpellItem, EquipmentItem, SpellSlot } from "@/components/shared/types"
+import type { CharacterData, SpellItem, EquipmentItem, SpellSlot, FavoriteRef } from "@/components/shared/types"
 import { SpellEntry } from "../entries/SpellEntry"
 import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
@@ -76,6 +76,8 @@ interface Props {
   onChangeEquip: (id: string, patch: Partial<EquipmentItem>) => void
   onRemoveEquip: (id: string) => void
   onCastSpell?: (spell: SpellItem) => void  // Automation — wired only when data.castButtonEnabled shows the Cast button
+  favorites?: FavoriteRef[]
+  onToggleEquipFavorite?: (id: string, label: string) => void
 }
 
 export function SpellsEquipPanel({
@@ -86,7 +88,7 @@ export function SpellsEquipPanel({
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
   pendingSpellId, onAutoEditConsumed,
-  onCastSpell,
+  onCastSpell, favorites, onToggleEquipFavorite,
 }: Props) {
   const showSpells = activeSubTab === "spells"
   // Feature Stylings (Settings) applied sheet-wide, mirrors InfoTab.tsx's favAccentColor/favAccentStyle.
@@ -362,6 +364,8 @@ export function SpellsEquipPanel({
                 showMagicStar={data.showMagicItemStar}
                 magicItemStyle={data.magicItemStyle}
                 magicItemColor={data.magicItemColor}
+                isFavorite={favorites?.some(f => f.refId === item.id)}
+                onToggleFavorite={onToggleEquipFavorite ? () => onToggleEquipFavorite(item.id, item.name || "Item") : undefined}
                 accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")}
               />
             ))}
