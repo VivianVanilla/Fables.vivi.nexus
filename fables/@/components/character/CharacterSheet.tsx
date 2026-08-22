@@ -1507,14 +1507,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
                 className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
                 Rest
               </button>
+              <button onClick={() => setShowAutomationModal(true)}
+                className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
+                Automation
+              </button>
               <button type="button"
                 onClick={() => setShowSettingsModal(true)}
                 className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
                 Settings
-              </button>
-              <button onClick={() => setShowAutomationModal(true)}
-                className="text-xs px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
-                Automation
               </button>
             </div>
           )}
