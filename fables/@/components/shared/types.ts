@@ -243,6 +243,10 @@ export interface CharacterConditional {
   tempHp?: number           // grants this much temp HP (5e: take the higher of current and this, not additive)
   healHp?: number           // heals this much HP, clamped to max
   grantConditions?: string[] // condition names applied once when triggered
+  triggerFormId?: string    // activates this Form (see CharacterForm) when triggered — same idea as
+                             // SpellItem.castFormId/Feature.triggerFormId, applied before tempHp/healHp/
+                             // grantConditions above so those read the post-activation state (a form's own
+                             // max HP bonus, say) rather than the character's plain base stats
 }
 
 export interface ProficiencyEntry {

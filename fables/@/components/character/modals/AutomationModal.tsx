@@ -36,6 +36,8 @@ interface Props {
   userId: string | null
   allFeatures: Feature[]                                      // every trackable-eligible feature (Racial Traits/Feats/Class Features/Items/Invocations/Infusions), for the Features tab
   onChangeFeature: (id: string, patch: Partial<Feature>) => void
+  multiFormEnabled?: boolean // see CharacterSheet.tsx — passed through to castSpellPatch/conditionalTriggerPatch
+                              // so a Cast/Trigger from in here activates a form the same way it would from the sheet
 }
 
 const HELP_TEXT: Record<Tab, string> = {
@@ -374,8 +376,8 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
 
 // ── Conditionals tab ─────────────────────────────────────────────────────────
 
-function ConditionalEditor({ conditional, onSave, onCancel, onDelete }: {
-  conditional: CharacterConditional; onSave: (c: CharacterConditional) => void; onCancel: () => void; onDelete?: () => void
+function ConditionalEditor({ conditional, forms, onSave, onCancel, onDelete }: {
+  conditional: CharacterConditional; forms: CharacterForm[]; onSave: (c: CharacterConditional) => void; onCancel: () => void; onDelete?: () => void
 }) {
   const [draft, setDraft] = useState<CharacterConditional>(conditional)
   function toggleCondition(name: string) {
@@ -395,6 +397,15 @@ function ConditionalEditor({ conditional, onSave, onCancel, onDelete }: {
         <NumField label="Grant Temp HP" value={draft.tempHp} onChange={v => setDraft(d => ({ ...d, tempHp: v }))} placeholder="+0" />
         <NumField label="Heal HP" value={draft.healHp} onChange={v => setDraft(d => ({ ...d, healHp: v }))} placeholder="+0" />
       </div>
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider">Activates Form</span>
+        <select value={draft.triggerFormId ?? ""} onChange={e => setDraft(d => ({ ...d, triggerFormId: e.target.value || undefined }))}
+          className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+          <option value="" className="bg-zinc-800 text-white">— None —</option>
+          {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+        </select>
+        <p className="text-[10px] text-white/30">Switches you into this Form (its overrides, granted conditions, HP pool, etc.) when this conditional is triggered.</p>
+      </label>
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Grant Conditions</span>
         <ConditionChips options={ALL_CONDITIONS} selected={draft.grantConditions ?? []} onToggle={toggleCondition} />
@@ -405,8 +416,8 @@ function ConditionalEditor({ conditional, onSave, onCancel, onDelete }: {
   )
 }
 
-function ConditionalsTab({ data, onUpdate, onTrigger }: {
-  data: CharacterData; onUpdate: (patch: Partial<CharacterData>) => void; onTrigger: (msg: string) => void
+function ConditionalsTab({ data, onUpdate, onTrigger, multiFormEnabled }: {
+  data: CharacterData; onUpdate: (patch: Partial<CharacterData>) => void; onTrigger: (msg: string) => void; multiFormEnabled?: boolean
 }) {
   const conditionals = data.conditionals ?? []
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -418,11 +429,11 @@ function ConditionalsTab({ data, onUpdate, onTrigger }: {
     else { onUpdate({ conditionals: conditionals.map(x => x.id === c.id ? c : x) }); setEditingId(null) }
   }
   function del(id: string) { onUpdate({ conditionals: conditionals.filter(c => c.id !== id) }); setEditingId(null) }
-  function trigger(c: CharacterConditional) { onUpdate(conditionalTriggerPatch(data, c)); onTrigger(`Applied: ${c.name}`) }
+  function trigger(c: CharacterConditional) { onUpdate(conditionalTriggerPatch(data, c, multiFormEnabled)); onTrigger(`Applied: ${c.name}`) }
 
   if (newDraft || editing) {
     return (
-      <ConditionalEditor conditional={newDraft ?? editing!} onSave={save}
+      <ConditionalEditor conditional={newDraft ?? editing!} forms={data.forms ?? []} onSave={save}
         onCancel={() => { setNewDraft(null); setEditingId(null) }}
         onDelete={newDraft ? undefined : () => del(editing!.id)} />
     )
@@ -541,8 +552,8 @@ function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCan
   )
 }
 
-function CastTab({ data, onUpdate, onCast }: {
-  data: CharacterData; onUpdate: (patch: Partial<CharacterData>) => void; onCast: (msg: string) => void
+function CastTab({ data, onUpdate, onCast, multiFormEnabled }: {
+  data: CharacterData; onUpdate: (patch: Partial<CharacterData>) => void; onCast: (msg: string) => void; multiFormEnabled?: boolean
 }) {
   const spells = data.spellItems ?? []
   const forms = data.forms ?? []
@@ -558,7 +569,7 @@ function CastTab({ data, onUpdate, onCast }: {
     setEditingId(null)
   }
   function cast(spell: SpellItem) {
-    onUpdate(castSpellPatch(data, spell))
+    onUpdate(castSpellPatch(data, spell, multiFormEnabled))
     onCast(`Cast: ${spell.name || "spell"}`)
     setPicking(false)
   }
@@ -722,7 +733,7 @@ function FeaturesTab({ data, allFeatures, onChangeFeature }: {
 type Tab = "forms" | "conditionals" | "cast" | "features"
 const TABS: [Tab, string][] = [["forms", "Forms"], ["conditionals", "Conditionals"], ["cast", "Cast"], ["features", "Features"]]
 
-export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, onChangeFeature }: Props) {
+export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, onChangeFeature, multiFormEnabled }: Props) {
   const [tab, setTab] = useState<Tab>("forms")
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -760,8 +771,8 @@ export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, 
 
         <div className="overflow-y-auto flex-1 px-5 py-4">
           {tab === "forms" && <FormsTab data={data} onUpdate={onUpdate} userId={userId} />}
-          {tab === "conditionals" && <ConditionalsTab data={data} onUpdate={onUpdate} onTrigger={showToast} />}
-          {tab === "cast" && <CastTab data={data} onUpdate={onUpdate} onCast={showToast} />}
+          {tab === "conditionals" && <ConditionalsTab data={data} onUpdate={onUpdate} onTrigger={showToast} multiFormEnabled={multiFormEnabled} />}
+          {tab === "cast" && <CastTab data={data} onUpdate={onUpdate} onCast={showToast} multiFormEnabled={multiFormEnabled} />}
           {tab === "features" && <FeaturesTab data={data} allFeatures={allFeatures} onChangeFeature={onChangeFeature} />}
         </div>
 

@@ -297,21 +297,41 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
 }
 
 /**
+ * Activates a form as a side effect of something else — casting a spell,
+ * spending a feature's use, triggering a conditional — always "make sure
+ * this form is active," never a toggle (repeating the trigger shouldn't
+ * turn it back off, unlike FormSwitcher's multi-form checklist). In
+ * ordinary single-form mode this is exactly formActivationPatch's exclusive
+ * swap; in multi-form mode (see CharacterData.activeFormIds — currently
+ * gated to one specific character, see CharacterSheet.tsx's
+ * multiFormEnabled) it adds the form to the active set instead, alongside
+ * whatever's already running, since stacking is multi-form's whole point.
+ * Every trigger path (castSpellPatch/featureUsePatch/conditionalTriggerPatch)
+ * needs to know which mode it's in, since they can't tell on their own —
+ * that's plain CharacterData, not something derivable from `data` alone.
+ */
+export function activateFormPatch(data: CharacterData, formId: string, multiForm?: boolean): Partial<CharacterData> {
+  if (!multiForm) return formActivationPatch(data, formId)
+  if ((data.activeFormIds ?? []).includes(formId)) return {} // already active — a no-op, not a toggle-off
+  return toggleFormPatch(data, formId)
+}
+
+/**
  * A spell's Cast configuration (castSlotId/castFormId/castConditionalId/
  * castGrantConditions) — all independent, all composed into one patch here
  * so a single Cast click applies them together atomically.
  */
-export function castSpellPatch(data: CharacterData, spell: SpellItem): Partial<CharacterData> {
+export function castSpellPatch(data: CharacterData, spell: SpellItem, multiForm?: boolean): Partial<CharacterData> {
   const spellSlots = data.spellSlots ?? []
   const conditions = data.conditions ?? []
-  const patch: Partial<CharacterData> = spell.castFormId ? formActivationPatch(data, spell.castFormId) : {}
+  const patch: Partial<CharacterData> = spell.castFormId ? activateFormPatch(data, spell.castFormId, multiForm) : {}
   if (spell.castSlotId) {
     const slot = spellSlots.find(s => s.id === spell.castSlotId && s.used < s.total)
     if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
   }
   if (spell.castConditionalId) {
     const conditional = (data.conditionals ?? []).find(c => c.id === spell.castConditionalId)
-    if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional))
+    if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional, multiForm))
   }
   if (spell.castGrantConditions?.length) {
     const base = patch.conditions ?? conditions
@@ -327,15 +347,21 @@ export function castSpellPatch(data: CharacterData, spell: SpellItem): Partial<C
  * active/revert state to track, for things that don't need a whole Form
  * (see CharacterConditional).
  */
-export function conditionalTriggerPatch(data: CharacterData, c: CharacterConditional): Partial<CharacterData> {
-  const patch: Partial<CharacterData> = {}
-  if (c.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, c.tempHp)
+export function conditionalTriggerPatch(data: CharacterData, c: CharacterConditional, multiForm?: boolean): Partial<CharacterData> {
+  // Activates the linked Form (if any) first, same as castSpellPatch does
+  // for a spell's castFormId — everything below then reads off `merged`
+  // instead of `data` so a heal/temp HP/condition grant reflects the form
+  // it just switched into (its own max HP bonus, granted conditions, etc.)
+  // rather than the character's plain pre-activation state.
+  let patch: Partial<CharacterData> = c.triggerFormId ? activateFormPatch(data, c.triggerFormId, multiForm) : {}
+  const merged = { ...data, ...patch }
+  if (c.tempHp) patch.tempHp = Math.max(merged.tempHp ?? 0, c.tempHp)
   if (c.healHp) {
-    const maxHp = Math.max(0, (data.maxHp ?? 0) + (data.maxHpMod ?? 0))
-    patch.hp = Math.min(maxHp, (data.hp ?? 0) + c.healHp)
+    const maxHp = Math.max(0, (merged.maxHp ?? 0) + (merged.maxHpMod ?? 0))
+    patch.hp = Math.min(maxHp, (merged.hp ?? 0) + c.healHp)
   }
   if (c.grantConditions?.length) {
-    const conditions = data.conditions ?? []
+    const conditions = patch.conditions ?? merged.conditions ?? []
     const toAdd = c.grantConditions.filter(n => !conditions.some(x => x.name === n))
     if (toAdd.length) patch.conditions = [...conditions, ...toAdd.map(name => ({ id: nanoid(), name }))]
   }
@@ -349,11 +375,11 @@ export function conditionalTriggerPatch(data: CharacterData, c: CharacterConditi
  * a rest-reset or a manual refund). Same independent-and-composable shape as
  * castSpellPatch, just with no spell slot to expend.
  */
-export function featureUsePatch(data: CharacterData, feature: Feature): Partial<CharacterData> {
-  const patch: Partial<CharacterData> = feature.triggerFormId ? formActivationPatch(data, feature.triggerFormId) : {}
+export function featureUsePatch(data: CharacterData, feature: Feature, multiForm?: boolean): Partial<CharacterData> {
+  const patch: Partial<CharacterData> = feature.triggerFormId ? activateFormPatch(data, feature.triggerFormId, multiForm) : {}
   if (feature.triggerConditionalId) {
     const conditional = (data.conditionals ?? []).find(c => c.id === feature.triggerConditionalId)
-    if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional))
+    if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional, multiForm))
   }
   return patch
 }

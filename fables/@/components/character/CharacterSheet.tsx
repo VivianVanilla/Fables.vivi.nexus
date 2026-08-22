@@ -680,7 +680,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       // Spending a use (usesUsed going up, not a rest-reset or a manual
       // refund) fires this feature's linked Form/Conditional, if any.
       if (patch.usesUsed != null && patch.usesUsed > (target.usesUsed ?? 0)) {
-        Object.assign(combinedPatch, featureUsePatch({ ...data, ...combinedPatch }, patchedFeature))
+        Object.assign(combinedPatch, featureUsePatch({ ...data, ...combinedPatch }, patchedFeature, multiFormEnabled))
       }
       break
     }
@@ -1189,7 +1189,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onAddSpell={addSpell} onChangeSpell={changeSpell} onRemoveSpell={removeSpell}
           pendingSpellId={pendingSpellId} onAutoEditConsumed={() => setPendingSpellId(null)}
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
-          onCastSpell={spell => update(castSpellPatch(data, spell))}
+          onCastSpell={spell => update(castSpellPatch(data, spell, multiFormEnabled))}
           favorites={favorites} onToggleEquipFavorite={toggleEquipmentFavorite}
         />
       </div>
@@ -1299,7 +1299,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
       {showAutomationModal && (
         <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} userId={user?.id ?? null}
-          allFeatures={allFeatures} onChangeFeature={patchFeature} />
+          allFeatures={allFeatures} onChangeFeature={patchFeature} multiFormEnabled={multiFormEnabled} />
       )}
       {showRestModal && (
         <Modal onClose={() => setShowRestModal(false)}>
