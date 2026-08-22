@@ -33,7 +33,7 @@ const DEFAULT_COLOR: ClassColor = { text: "text-white/50", bg: "bg-white/10" }
 export const CLASS_NAMES = Object.keys(CLASS_COLORS)
 
 export function classLabel(key: string): string {
-  return key.charAt(0).toUpperCase() + key.slice(1)
+  return key.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 }
 
 /**
@@ -59,19 +59,41 @@ export function classColorClasses(source?: string): string {
 }
 
 // Which classes to show a color swatch for in Settings' "Separate color per
-// class" grid — prefers the character's actual class(es) (single-class or
-// multiclass), falls back to whatever class names appear in their Class
-// Features list, and finally lists every known class so the control is never
-// empty on a freshly-created sheet.
+// class" grid — the character's own typed class(es) (single-class or
+// multiclass), whatever they actually are, not just the 13 built-in presets
+// (a homebrew class like "Blood Hunter" gets its own swatch same as
+// "Fighter" would). Only falls back to scanning the Class Features list
+// (matched against the known preset list — free-text feature sources are
+// noisier to pattern-match than the character's own Class field) and then to
+// every known class name, in that order, when the character has no class
+// typed at all yet, so the control is never empty on a freshly-created sheet.
 export function deriveCharacterClassNames(data: Pick<CharacterData, "class" | "classes" | "classFeatures">): string[] {
   const picked = data.classes && data.classes.length > 0
     ? data.classes.map(c => c.cls)
     : data.class ? data.class.split("/").map(s => s.trim()) : []
-  const matched = picked.map(matchClassKey).filter((k): k is string => !!k)
-  if (matched.length > 0) return [...new Set(matched)]
+  const own = picked.map(c => c.trim().toLowerCase()).filter(Boolean)
+  if (own.length > 0) return [...new Set(own)]
 
   const fromFeatures = (data.classFeatures ?? []).map(f => matchClassKey(f.source)).filter((k): k is string => !!k)
   if (fromFeatures.length > 0) return [...new Set(fromFeatures)]
 
   return CLASS_NAMES
+}
+
+/**
+ * Finds which of the character's OWN typed class names (see
+ * deriveCharacterClassNames — same list Settings' "Separate color per
+ * class" swatches are keyed by) appears inside a (often free-text) source
+ * string — e.g. a homebrew "Blood Hunter" class matches a feature sourced
+ * "Blood Hunter (Order of the Lycan)" even though "Blood Hunter" isn't one
+ * of the 13 built-in presets matchClassKey knows about. Case-insensitive;
+ * returns the lowercase key (matching classFeatureColors' keying) or
+ * undefined if none of the character's classes appear in the source.
+ */
+export function matchOwnClassKey(source: string | undefined, ownClasses: string[]): string | undefined {
+  const s = source?.toLowerCase() ?? ""
+  if (!s) return undefined
+  return ownClasses
+    .map(c => c.trim().toLowerCase())
+    .find(cls => cls && new RegExp(`\\b${cls}\\b`).test(s))
 }

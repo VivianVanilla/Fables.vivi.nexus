@@ -19,7 +19,7 @@ import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FeatureEntry, getSuggestions, type Suggestion, type SuggestionSource } from "../entries/FeatureEntry"
 import { FamiliarsTab } from "./FamiliarsTab"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
-import { matchClassKey } from "@/components/shared/classColors"
+import { matchOwnClassKey, deriveCharacterClassNames } from "@/components/shared/classColors"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { Modal } from "@/components/shared/ui/Modal"
 
@@ -941,10 +941,14 @@ export function InfoTab({
 
   // Settings' "Separate color per class" — resolves each Class Feature's own
   // accent from its `source` (e.g. "Fighter (Champion)") instead of the one
-  // shared favoriteCategoryColors.class swatch.
+  // shared favoriteCategoryColors.class swatch. Matched against the
+  // character's own typed class(es) (see deriveCharacterClassNames), not
+  // just the 13 built-in presets, so a homebrew class's features get colored
+  // too as long as its name appears in the feature's source.
+  const ownClassNames = deriveCharacterClassNames(data)
   const classFeatureAccentColor = data.classFeatureColorsByClass
     ? (f: Feature) => {
-        const key = matchClassKey(f.source)
+        const key = matchOwnClassKey(f.source, ownClassNames)
         return key ? data.classFeatureColors?.[key] : undefined
       }
     : undefined

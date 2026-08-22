@@ -24,6 +24,7 @@ import { PortraitModal } from "@/components/shared/PortraitModal"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot, Feature } from "@/components/shared/types"
 import { ALL_CONDITIONS } from "@/components/shared/constants"
+import { DAMAGE_TYPES } from "@/components/shared/damageTypes"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { nanoid, castSpellPatch, conditionalTriggerPatch } from "@/components/shared/utils"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
@@ -84,10 +85,10 @@ function NumField({ label, value, onChange, placeholder }: {
   )
 }
 
-function ConditionChips({ selected, onToggle }: { selected: string[]; onToggle: (name: string) => void }) {
+function ConditionChips({ options, selected, onToggle }: { options: readonly string[]; selected: string[]; onToggle: (name: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {ALL_CONDITIONS.map(name => {
+      {options.map(name => {
         const on = selected.includes(name)
         return (
           <button key={name} type="button" onClick={() => onToggle(name)}
@@ -156,6 +157,14 @@ function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
   function toggleCondition(name: string) {
     const current = draft.grantedConditions ?? []
     setDraft(d => ({ ...d, grantedConditions: current.includes(name) ? current.filter(n => n !== name) : [...current, name] }))
+  }
+  function toggleGrantedResistance(type: string) {
+    const current = draft.grantedResistances ?? []
+    setDraft(d => ({ ...d, grantedResistances: current.includes(type) ? current.filter(t => t !== type) : [...current, type] }))
+  }
+  function toggleGrantedVulnerability(type: string) {
+    const current = draft.grantedVulnerabilities ?? []
+    setDraft(d => ({ ...d, grantedVulnerabilities: current.includes(type) ? current.filter(t => t !== type) : [...current, type] }))
   }
 
   async function openPortraitPicker() {
@@ -280,7 +289,19 @@ function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Conditions</span>
         <p className="text-[10px] text-white/30 -mt-0.5">Applied when this form activates, removed when it reverts.</p>
-        <ConditionChips selected={draft.grantedConditions ?? []} onToggle={toggleCondition} />
+        <ConditionChips options={ALL_CONDITIONS} selected={draft.grantedConditions ?? []} onToggle={toggleCondition} />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Resistances</span>
+        <p className="text-[10px] text-white/30 -mt-0.5">Applied when this form activates, removed when it reverts (mirrors the ⚖ Resistances panel).</p>
+        <ConditionChips options={DAMAGE_TYPES} selected={draft.grantedResistances ?? []} onToggle={toggleGrantedResistance} />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Vulnerabilities</span>
+        <p className="text-[10px] text-white/30 -mt-0.5">Applied when this form activates, removed when it reverts.</p>
+        <ConditionChips options={DAMAGE_TYPES} selected={draft.grantedVulnerabilities ?? []} onToggle={toggleGrantedVulnerability} />
       </div>
 
       <DeleteFooter confirmName={form.name} onCancel={onCancel} onDelete={onDelete}
@@ -376,7 +397,7 @@ function ConditionalEditor({ conditional, onSave, onCancel, onDelete }: {
       </div>
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Grant Conditions</span>
-        <ConditionChips selected={draft.grantConditions ?? []} onToggle={toggleCondition} />
+        <ConditionChips options={ALL_CONDITIONS} selected={draft.grantConditions ?? []} onToggle={toggleCondition} />
       </div>
       <DeleteFooter confirmName={conditional.name} onCancel={onCancel} onDelete={onDelete}
         saveDisabled={!draft.name.trim()} onSave={() => onSave(draft)} />
@@ -506,7 +527,7 @@ function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCan
         </label>
         <div className="flex flex-col gap-1">
           <span className="text-[10px] text-white/40 uppercase tracking-wider">Grant Conditions</span>
-          <ConditionChips selected={draft.castGrantConditions ?? []} onToggle={toggleCondition} />
+          <ConditionChips options={ALL_CONDITIONS} selected={draft.castGrantConditions ?? []} onToggle={toggleCondition} />
         </div>
       </PopTransition>
 

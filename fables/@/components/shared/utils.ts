@@ -157,6 +157,44 @@ export function weightExemptItemIds(items: Feature[]): Set<string> {
  * can merge everything into one update() instead of two racing writes off
  * the same stale `data`.
  */
+/**
+ * Grants a form's resistances/vulnerabilities on top of the given arrays —
+ * granting one cancels the opposite on the same type first, same 5e rule the
+ * ⚖ Resistances panel's click-to-cycle already follows.
+ */
+export function grantFormResistances(resistances: string[], vulnerabilities: string[], form: CharacterForm | null) {
+  let res = resistances, vul = vulnerabilities
+  for (const type of form?.grantedResistances ?? []) {
+    vul = vul.filter(t => t !== type)
+    if (!res.includes(type)) res = [...res, type]
+  }
+  for (const type of form?.grantedVulnerabilities ?? []) {
+    res = res.filter(t => t !== type)
+    if (!vul.includes(type)) vul = [...vul, type]
+  }
+  return { resistances: res, vulnerabilities: vul }
+}
+
+/**
+ * Un-grants whatever revertingForms granted — unless a form in
+ * remainingForms (still active, multi-form mode) grants that same type, in
+ * which case it stays. There's no per-instance provenance to check (unlike
+ * ActiveCondition.source): a damage type can only appear once in either
+ * array, so comparing against the forms' own static granted lists is exact.
+ */
+export function revokeFormResistances(
+  resistances: string[], vulnerabilities: string[], revertingForms: CharacterForm[], remainingForms: CharacterForm[],
+) {
+  const revertingRes = new Set(revertingForms.flatMap(f => f.grantedResistances ?? []))
+  const revertingVul = new Set(revertingForms.flatMap(f => f.grantedVulnerabilities ?? []))
+  const stillRes = new Set(remainingForms.flatMap(f => f.grantedResistances ?? []))
+  const stillVul = new Set(remainingForms.flatMap(f => f.grantedVulnerabilities ?? []))
+  return {
+    resistances: resistances.filter(t => !(revertingRes.has(t) && !stillRes.has(t))),
+    vulnerabilities: vulnerabilities.filter(t => !(revertingVul.has(t) && !stillVul.has(t))),
+  }
+}
+
 export function formActivationPatch(data: CharacterData, id: string | null): Partial<CharacterData> {
   const forms = data.forms ?? []
   const conditions = data.conditions ?? []
@@ -168,7 +206,12 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
       nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${next!.id}` }]
     }
   }
-  const patch: Partial<CharacterData> = { activeFormId: id, conditions: nextConditions }
+  const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], activeForm ? [activeForm] : [], next ? [next] : [])
+  const granted = grantFormResistances(revoked.resistances, revoked.vulnerabilities, next)
+  const patch: Partial<CharacterData> = {
+    activeFormId: id, conditions: nextConditions,
+    resistances: granted.resistances, vulnerabilities: granted.vulnerabilities,
+  }
   // Activating a form with its own HP pool starts it fresh at full — the
   // character's own hp/maxHp are left completely untouched underneath.
   if (next?.formMaxHp != null) patch.formHp = next.formMaxHp
@@ -227,9 +270,13 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
   if (!form) return {}
 
   if (activeIds.includes(formId)) {
+    const remainingIds = activeIds.filter(id => id !== formId)
+    const remainingForms = remainingIds.map(fid => forms.find(f => f.id === fid)).filter((f): f is CharacterForm => !!f)
+    const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], [form], remainingForms)
     return {
-      activeFormIds: activeIds.filter(id => id !== formId),
+      activeFormIds: remainingIds,
       conditions: conditions.filter(c => c.source !== `form:${formId}`),
+      resistances: revoked.resistances, vulnerabilities: revoked.vulnerabilities,
     }
   }
 
@@ -239,7 +286,11 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
       nextConditions = [...nextConditions, { id: nanoid(), name, source: `form:${form.id}` }]
     }
   }
-  const patch: Partial<CharacterData> = { activeFormIds: [...activeIds, formId], conditions: nextConditions }
+  const granted = grantFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], form)
+  const patch: Partial<CharacterData> = {
+    activeFormIds: [...activeIds, formId], conditions: nextConditions,
+    resistances: granted.resistances, vulnerabilities: granted.vulnerabilities,
+  }
   if (form.formMaxHp != null) patch.formHp = form.formMaxHp
   if (form.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, form.tempHp)
   return patch

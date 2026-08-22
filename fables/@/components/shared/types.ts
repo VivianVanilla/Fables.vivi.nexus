@@ -220,6 +220,9 @@ export interface CharacterForm {
   overrides?: FormStatOverrides
   notification?: string        // banner text shown near Lv while active; blank = no banner
   grantedConditions?: string[] // names from ALL_CONDITIONS, auto-applied on activate / auto-removed on revert
+  grantedResistances?: string[]     // damage type names from DAMAGE_TYPES, auto-applied on activate / auto-removed
+                                     // on revert — mirrors grantedConditions, but for the ⚖ Resistances panel
+  grantedVulnerabilities?: string[] // same as grantedResistances, for vulnerability instead
   revertOnZeroHp?: boolean     // auto-revert to Base Form the instant HP hits 0 while this form is active
   formMaxHp?: number           // Wild Shape-style separate HP pool for this form, tracked in CharacterData.formHp —
                                 // entirely independent of the character's own hp/maxHp while active. Unset (the

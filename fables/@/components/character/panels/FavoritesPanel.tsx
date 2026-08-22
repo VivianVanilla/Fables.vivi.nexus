@@ -17,7 +17,7 @@ import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { FeatureEntry, categoryAccentStyle } from "../entries/FeatureEntry"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "@/components/shared/utils"
-import { matchClassKey } from "@/components/shared/classColors"
+import { matchOwnClassKey } from "@/components/shared/classColors"
 import type { Theme } from "@/components/shared/themes"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
 
@@ -133,7 +133,7 @@ export function FavoritesPanel({
   function accentColorFor(fav: FavoriteRef): string | undefined {
     const category = resolveCategory(fav)
     if (category === "class" && classFeatureColorsByClass) {
-      const key = matchClassKey(resolveFeature(fav.refId)?.source)
+      const key = matchOwnClassKey(resolveFeature(fav.refId)?.source, classes)
       const perClass = key ? classFeatureColors?.[key] : undefined
       if (perClass) return perClass
     }

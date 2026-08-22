@@ -14,7 +14,7 @@ import type {
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
@@ -301,9 +301,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         // 1, independent of Deathward below (a different safety net, for
         // the shared pool specifically).
         const baseConditions = conditions.filter(c => c.source !== `form:${poolForm.id}`)
+        const remaining = multiFormEnabled ? activeForms.filter(f => f.id !== poolForm.id) : []
+        const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], [poolForm], remaining)
         update(multiFormEnabled
-          ? { activeFormIds: (data.activeFormIds ?? []).filter(id => id !== poolForm.id), conditions: baseConditions, hp: 1 }
-          : { activeFormId: null, conditions: baseConditions, hp: 1 })
+          ? { activeFormIds: (data.activeFormIds ?? []).filter(id => id !== poolForm.id), conditions: baseConditions, hp: 1, ...revoked }
+          : { activeFormId: null, conditions: baseConditions, hp: 1, ...revoked })
       } else {
         const deathward = conditions.find(c => c.name === "Deathward")
         let patch: Partial<CharacterData> = {}
@@ -322,9 +324,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           const revertIds = new Set(revertForms.map(f => f.id))
           const revertSources = new Set(revertForms.map(f => `form:${f.id}`))
           const baseConditions = (patch.conditions ?? conditions).filter(c => !c.source || !revertSources.has(c.source))
+          const remaining = multiFormEnabled ? activeForms.filter(f => !revertIds.has(f.id)) : []
+          const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], revertForms, remaining)
           patch = multiFormEnabled
-            ? { ...patch, activeFormIds: (data.activeFormIds ?? []).filter(id => !revertIds.has(id)), conditions: baseConditions }
-            : { ...patch, activeFormId: null, conditions: baseConditions }
+            ? { ...patch, activeFormIds: (data.activeFormIds ?? []).filter(id => !revertIds.has(id)), conditions: baseConditions, ...revoked }
+            : { ...patch, activeFormId: null, conditions: baseConditions, ...revoked }
         }
         if (Object.keys(patch).length) update(patch)
       }
