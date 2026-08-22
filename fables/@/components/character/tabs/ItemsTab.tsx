@@ -96,6 +96,8 @@ export function ItemsTab({
           theme={theme} card={card} readOnly={readOnly} pb={pb}
           userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
+          onAddToEquipment={onAddItemToEquipment}
+          equipmentLinkedIds={equipmentLinkedIds}
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
           pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
         />

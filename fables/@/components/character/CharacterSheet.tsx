@@ -399,7 +399,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
-  function addEquip()                                          { update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] }) }
+  // A brand-new Martial entry gets an Items-tab Feature of its own right away
+  // (linked via sourceFeatureId, landing in Carried Items) instead of staying
+  // a standalone weapon nobody's inventory knows about — same backlink every
+  // "+ Martial Tab" toggle already creates, just initiated from this side.
+  function addEquip() {
+    const equipId = nanoid()
+    const featureId = nanoid()
+    update({
+      equipmentItems: [...equipItems, { id: equipId, name: "", type: "melee", sourceFeatureId: featureId }],
+      items: [...(data.items ?? []), { id: featureId, name: "", category: "item", equipKind: "weapon" }],
+    })
+  }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
 
   // ── Armor & Equipment ↔ Martial backlink ─────────────────────────────────
@@ -436,6 +447,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       extraDamage: meta?.extraDamage,
       proficient: meta?.proficient,
       isMagicItem: feature.isMagicItem,
+      trackable: feature.trackable,
+      trackerLabel: feature.trackerLabel,
+      maxUses: feature.maxUses,
+      maxUsesFormula: feature.maxUsesFormula,
+      usesUsed: feature.usesUsed,
+      resetsOn: feature.resetsOn,
+      multiTracking: feature.multiTracking,
+      trackers: feature.trackers,
     }
   }
 
@@ -449,6 +468,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       weight: equip.weight,
       equipKind: kind,
       isMagicItem: equip.isMagicItem,
+      trackable: equip.trackable,
+      trackerLabel: equip.trackerLabel,
+      maxUses: equip.maxUses,
+      maxUsesFormula: equip.maxUsesFormula,
+      usesUsed: equip.usesUsed,
+      resetsOn: equip.resetsOn,
+      multiTracking: equip.multiTracking,
+      trackers: equip.trackers,
       itemMeta: {
         ...existingFeature.itemMeta,
         damage: equip.damage,

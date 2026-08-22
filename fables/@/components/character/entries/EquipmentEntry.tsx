@@ -3,16 +3,19 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import type { EquipmentItem } from "@/components/shared/types"
+import type { EquipmentItem, UseTracker } from "@/components/shared/types"
 import type { Theme } from "@/components/shared/themes"
+import { accentShimmerGradient } from "@/components/shared/themes"
 import { Modal } from "@/components/shared/ui/Modal"
 import { Markdown } from "../../ui/Markdown"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "@/components/shared/ui/NumInput"
+import { TracingSlider } from "../../ui/tracing-slider"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
 import { computeDamageSegments, type DamageSegment } from "@/components/shared/damageTypes"
 import { getSuggestions, type Suggestion, STAT_OPTIONS, coloredNebulaBg, categoryAccentStyle } from "./FeatureEntry"
+import { nanoid } from "@/components/shared/utils"
 import { DEFAULT_ACCENT_COLOR, type CardStyle } from "@/components/shared/constants"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -88,6 +91,30 @@ export function EquipmentEntry({
   const magicStar  = item.isMagicItem && showMagicStar
   const magicStyle = item.isMagicItem && magicItemStyle !== "none" ? magicItemStyle : null
   const cardStyle  = magicStyle === "galaxy" ? coloredNebulaBg(magicItemColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex) : undefined
+
+  // Tracked uses — same fields/semantics as FeatureEntry.tsx, mirrored onto
+  // this item's linked Feature (if any) by equipmentFieldsFromFeature/
+  // featureFieldsFromEquipment in CharacterSheet.tsx.
+  const effectiveMax  = item.maxUsesFormula === "pb" ? pb : (item.maxUses ?? 0)
+  const usesUsed      = item.usesUsed ?? 0
+  const usesRemaining = Math.max(0, effectiveMax - usesUsed)
+  const hasUses       = !!(item.trackable && effectiveMax > 0)
+
+  const sliderSource = item.isMagicItem
+    ? { style: magicItemStyle, color: magicItemColor ?? DEFAULT_ACCENT_COLOR }
+    : { style: accentStyle, color: accentColor }
+  const barAnimated = sliderSource.style === "galaxy" && !!sliderSource.color
+  const barColor     = sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1"
+
+  function addTracker() {
+    onChange({ trackers: [...(item.trackers ?? []), { id: nanoid(), label: "", maxUses: 1, usesUsed: 0, resetsOn: "long" }] })
+  }
+  function changeTracker(id: string, patch: Partial<UseTracker>) {
+    onChange({ trackers: (item.trackers ?? []).map(t => t.id === id ? { ...t, ...patch } : t) })
+  }
+  function removeTracker(id: string) {
+    onChange({ trackers: (item.trackers ?? []).filter(t => t.id !== id) })
+  }
 
   // ── Drag source ─────────────────────────────────────────────────────────
 
@@ -315,6 +342,114 @@ export function EquipmentEntry({
                 </label>
               </div>
 
+              {/* Use tracking */}
+              <div className="border-t border-white/10 pt-2 flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none">
+                  <input type="checkbox" checked={item.trackable ?? false}
+                    onChange={e => onChange({ trackable: e.target.checked })}
+                  />
+                  Track uses
+                </label>
+
+                {item.trackable && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-white/50">
+                      Bar label
+                      <input value={item.trackerLabel ?? ""} placeholder={item.multiTracking ? "e.g. Charges" : "optional"}
+                        onChange={e => onChange({ trackerLabel: e.target.value })}
+                        className="flex-1 min-w-0 bg-white/10 rounded px-2 py-1 text-white outline-none placeholder:text-white/20" />
+                    </label>
+                    <div className="flex items-center gap-3 text-xs flex-wrap">
+                      <label className="flex items-center gap-1.5 text-white/50">
+                        Max
+                        {item.maxUsesFormula === "pb" ? (
+                          <span className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold">PB ({pb})</span>
+                        ) : (
+                          <NumInput value={item.maxUses ?? ""} min={1}
+                            onChange={e => onChange({ maxUses: parseInt(e.target.value) || 0 })}
+                            className="w-12 bg-white/10 rounded px-2 py-1 text-center text-white outline-none"
+                          />
+                        )}
+                      </label>
+                      <label className="flex items-center gap-1.5 text-white/50 cursor-pointer select-none">
+                        <input type="checkbox" checked={item.maxUsesFormula === "pb"}
+                          onChange={e => onChange({ maxUsesFormula: e.target.checked ? "pb" : undefined, maxUses: e.target.checked ? undefined : (item.maxUses ?? 1) })}
+                        />
+                        = Prof. Bonus
+                      </label>
+                      <label className="flex items-center gap-1.5 text-white/50">
+                        Resets on
+                        <select value={item.resetsOn ?? "long"}
+                          onChange={e => onChange({ resetsOn: e.target.value as EquipmentItem["resetsOn"] })}
+                          className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                          <option value="short" className="bg-zinc-800 text-white">Short Rest</option>
+                          <option value="long" className="bg-zinc-800 text-white">Long Rest</option>
+                          <option value="dawn" className="bg-zinc-800 text-white">Dawn</option>
+                          <option value="manual" className="bg-zinc-800 text-white">Manual</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-white/60 cursor-pointer select-none">
+                      <input type="checkbox" checked={item.multiTracking ?? false}
+                        onChange={e => onChange({ multiTracking: e.target.checked })}
+                      />
+                      Track multiple things on this item
+                    </label>
+
+                    {item.multiTracking && (
+                      <div className="flex flex-col gap-2">
+                        {(item.trackers ?? []).map(t => (
+                          <div key={t.id} className="flex flex-col gap-1.5 bg-white/5 rounded-lg p-2">
+                            <div className="flex items-center gap-2">
+                              <input value={t.label ?? ""} placeholder="Label (e.g. 1/Day Recall)"
+                                onChange={e => changeTracker(t.id, { label: e.target.value })}
+                                className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 border-b border-white/10 pb-1" />
+                              <button type="button" onClick={() => removeTracker(t.id)}
+                                className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs flex-wrap">
+                              <label className="flex items-center gap-1.5 text-white/50">
+                                Max
+                                {t.maxUsesFormula === "pb" ? (
+                                  <span className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-semibold">PB ({pb})</span>
+                                ) : (
+                                  <NumInput value={t.maxUses ?? ""} min={1}
+                                    onChange={e => changeTracker(t.id, { maxUses: parseInt(e.target.value) || 0 })}
+                                    className="w-12 bg-white/10 rounded px-2 py-1 text-center text-white outline-none"
+                                  />
+                                )}
+                              </label>
+                              <label className="flex items-center gap-1.5 text-white/50 cursor-pointer select-none">
+                                <input type="checkbox" checked={t.maxUsesFormula === "pb"}
+                                  onChange={e => changeTracker(t.id, { maxUsesFormula: e.target.checked ? "pb" : undefined, maxUses: e.target.checked ? undefined : (t.maxUses ?? 1) })}
+                                />
+                                = Prof. Bonus
+                              </label>
+                              <label className="flex items-center gap-1.5 text-white/50">
+                                Resets on
+                                <select value={t.resetsOn ?? "long"}
+                                  onChange={e => changeTracker(t.id, { resetsOn: e.target.value as UseTracker["resetsOn"] })}
+                                  className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                                  <option value="short" className="bg-zinc-800 text-white">Short Rest</option>
+                                  <option value="long" className="bg-zinc-800 text-white">Long Rest</option>
+                                  <option value="dawn" className="bg-zinc-800 text-white">Dawn</option>
+                                  <option value="manual" className="bg-zinc-800 text-white">Manual</option>
+                                </select>
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" onClick={addTracker}
+                          className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors self-start">
+                          + Add Tracker
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* Computed preview */}
               {item.attackStat && isWeapon && (
                 <div className="flex gap-3 flex-wrap">
@@ -399,6 +534,45 @@ export function EquipmentEntry({
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">{item.weight} lb</span>
               )}
             </div>
+
+            {hasUses && (
+              <div className="flex items-center gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
+                {item.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{item.trackerLabel}</span>}
+                <TracingSlider
+                  value={usesRemaining} max={effectiveMax}
+                  disabled={readOnly}
+                  color={barAnimated ? accentShimmerGradient(barColor) : barColor}
+                  animated={barAnimated}
+                  showButtons buttonSize="sm" className="flex-1 min-w-0"
+                  onChange={val => onChange({ usesUsed: effectiveMax - val })}
+                />
+                <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
+                  {usesRemaining}/{effectiveMax}
+                </span>
+              </div>
+            )}
+
+            {item.multiTracking && (item.trackers ?? []).map(t => {
+              const trMax = t.maxUsesFormula === "pb" ? pb : (t.maxUses ?? 0)
+              if (trMax <= 0) return null
+              const trRemaining = Math.max(0, trMax - (t.usesUsed ?? 0))
+              return (
+                <div key={t.id} className="flex items-center gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
+                  {t.label && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{t.label}</span>}
+                  <TracingSlider
+                    value={trRemaining} max={trMax}
+                    disabled={readOnly}
+                    color={barAnimated ? accentShimmerGradient(barColor) : barColor}
+                    animated={barAnimated}
+                    showButtons buttonSize="sm" className="flex-1 min-w-0"
+                    onChange={val => onChange({ trackers: (item.trackers ?? []).map(x => x.id === t.id ? { ...x, usesUsed: trMax - val } : x) })}
+                  />
+                  <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
+                    {trRemaining}/{trMax}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
 

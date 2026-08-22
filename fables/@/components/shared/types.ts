@@ -39,6 +39,20 @@ export interface EquipmentItem {
   isMagicItem?: boolean  // mirrors Feature.isMagicItem — mirrored both ways by equipmentFieldsFromFeature/
                           // featureFieldsFromEquipment (character.tsx) so the Martial tab shows the same
                           // ✨ badge / card treatment as the Items tab for the same physical item
+  // Tracked uses — same fields/semantics as the matching ones on Feature (see
+  // UseTracker below), mirrored both ways by equipmentFieldsFromFeature/
+  // featureFieldsFromEquipment whenever this item is linked via sourceFeatureId,
+  // so a weapon's charges/uses stay in sync between the Martial and Items tabs
+  // (and show up wherever this item renders — Martial list, Favorites — since
+  // both read straight off EquipmentEntry).
+  trackable?: boolean
+  trackerLabel?: string
+  maxUses?: number
+  maxUsesFormula?: "pb"
+  usesUsed?: number
+  resetsOn?: "short" | "long" | "dawn" | "manual"
+  multiTracking?: boolean
+  trackers?: UseTracker[]
 }
 
 export interface SpellItem {

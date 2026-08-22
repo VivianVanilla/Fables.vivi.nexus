@@ -316,9 +316,11 @@ export interface ContainerItemsListProps {
   pendingItemId?: string | null   // set right after Add — opens that item straight into its edit form
   onAutoEditConsumed?: () => void
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
+  onAddToEquipment?: (feature: Feature) => void  // toggles this item's "+ Martial Tab" link — omit to hide the button
+  equipmentLinkedIds?: Set<string>               // sourceFeatureIds already linked into the Martial tab
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddToEquipment, equipmentLinkedIds }: ContainerItemsListProps) {
   // Which containers (isContainer feature ids) have their contents shown —
   // per-container, not a whole-panel toggle; hidden by default; ephemeral
   // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
@@ -402,6 +404,8 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
           onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
           autoEdit={f.id === pendingItemId}
           onAutoEditConsumed={onAutoEditConsumed}
+          onAddToEquipment={onAddToEquipment}
+          inEquipment={equipmentLinkedIds?.has(f.id)}
         />
         <PopTransition show={!!f.isContainer}>
           <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"
