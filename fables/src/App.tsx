@@ -2,7 +2,7 @@ import { EncryptedText } from "@/components/ui/encrypted-text"
 import { LoginForm } from "@/components/shell/login-form"
 import "./App.css"
 import Dashboard from "./Dashboard"
-import { Routes, Route, useNavigate } from "react-router-dom"
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
 import { useEffect } from "react"
 import Documentation from "./Documentation"
@@ -18,8 +18,16 @@ function App() {
 
 
 const navigate = useNavigate();
+const location = useLocation();
 
+// Only the "/" landing page should bounce a logged-in visitor straight to
+// their Dashboard — this effect used to fire on every route (App wraps
+// <Routes>, so it never unmounts between pages), which meant opening a
+// /share link while logged into your own account got hijacked straight to
+// /dashboard before ShareView ever rendered.
 useEffect(() => {
+  if (location.pathname !== "/") return;
+
   async function checkSession() {
     const {
       data: { session },
@@ -31,7 +39,7 @@ useEffect(() => {
   }
 
   checkSession();
-}, []);
+}, [location.pathname]);
 
 
   return (

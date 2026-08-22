@@ -70,7 +70,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
           <div className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Share Link</p>
             <p className="text-[10px] text-white/30 -mt-1">
-              Anyone with this link can view (never edit) this character — no account or party invite needed.
+              Anyone with this link can view this character/
             </p>
             {data.shareToken ? (
               <>
