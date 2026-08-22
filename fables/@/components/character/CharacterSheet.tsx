@@ -200,11 +200,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // on Base Form).
 
   // Multi-form (simultaneously-active forms, e.g. a shapeshifted form
-  // stacked with a mutagen buff) is a personal feature for one specific
-  // character rather than something exposed to every player — gated here
-  // rather than in the DB/UI layer so it's a single obvious toggle. Everyone
-  // else keeps the exclusive single-active-form behavior unchanged.
-  const multiFormEnabled = user?.email === "vivian.bonilla@outlook.com" && character.name === "Luna Sangris"
+  // stacked with a mutagen buff) is opt-in per character — see
+  // data.multiFormMode's doc comment. Off by default, so everyone keeps the
+  // exclusive single-active-form behavior unless they turn it on themselves.
+  const multiFormEnabled = data.multiFormMode ?? false
 
   const forms = data.forms ?? []
   const activeForm = data.activeFormId ? forms.find(f => f.id === data.activeFormId) ?? null : null
@@ -1293,7 +1292,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       )}
       {showSettingsModal && (
         <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)}
-          isWarlock={isWarlock} isArtificer={isArtificer} />
+          isWarlock={isWarlock} isArtificer={isArtificer} characterId={character.id} />
       )} 
 
 

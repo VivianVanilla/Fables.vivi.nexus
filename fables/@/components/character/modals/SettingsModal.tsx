@@ -1,8 +1,10 @@
+import { useState } from "react"
 import { Modal } from "@/components/shared/ui/Modal"
 import type { CharacterData } from "@/components/shared/types"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME } from "@/components/shared/themes"
 import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, UI_SCALES, type CardStyle } from "@/components/shared/constants"
 import { deriveCharacterClassNames, classLabel } from "@/components/shared/classColors"
+import { nanoid } from "@/components/shared/utils"
 
 interface Props {
   data: CharacterData
@@ -10,6 +12,7 @@ interface Props {
   onClose: () => void
   isWarlock: boolean    // gates the Invocations Feature Styling row below
   isArtificer: boolean  // gates the Infusions Feature Styling row below
+  characterId: string   // for building the /share/<id>/<token> link below
 }
 
 // One None/Outline(or Flat)/Animated toggle group, shared by every Feature
@@ -32,7 +35,7 @@ function StyleToggle({ label, value, onChange, slider }: { label: string; value:
   )
 }
 
-export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer }: Props) {
+export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer, characterId }: Props) {
   const activeThemeKey = data.theme     ?? DEFAULT_THEME
   const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
   const activeBgKey    = data.themeBg   ?? DEFAULT_BG_THEME
@@ -41,6 +44,15 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer 
   const slotCustomColor = data.slotCustomColor ?? DEFAULT_ACCENT_COLOR
   const classNames      = deriveCharacterClassNames(data)
   const uiScale         = data.uiScale ?? 100
+  const [copied, setCopied] = useState(false)
+  const shareUrl = data.shareToken ? `${window.location.origin}/share/${characterId}/${data.shareToken}` : ""
+
+  function copyLink() {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }).catch(() => {})
+  }
 
   return (
     <Modal onClose={onClose}>
@@ -53,6 +65,41 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer 
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-5">
+
+          {/* Share Link */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Share Link</p>
+            <p className="text-[10px] text-white/30 -mt-1">
+              Anyone with this link can view (never edit) this character — no account or party invite needed.
+            </p>
+            {data.shareToken ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <input readOnly value={shareUrl} onFocus={e => e.target.select()}
+                    className="flex-1 min-w-0 bg-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/70 outline-none truncate" />
+                  <button type="button" onClick={copyLink}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors shrink-0">
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => onUpdate({ shareToken: nanoid() })}
+                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors">
+                    Regenerate (invalidates the old link)
+                  </button>
+                  <button type="button" onClick={() => onUpdate({ shareToken: undefined })}
+                    className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">
+                    Revoke
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button type="button" onClick={() => onUpdate({ shareToken: nanoid() })}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors self-start">
+                Generate Share Link
+              </button>
+            )}
+          </div>
 
           {/* Card style */}
           <div className="flex flex-col gap-2">

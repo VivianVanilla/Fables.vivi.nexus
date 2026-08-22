@@ -6,6 +6,7 @@ import { Routes, Route, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 import { useEffect } from "react"
 import Documentation from "./Documentation"
+import ShareView from "./ShareView"
 
 
 
@@ -54,6 +55,7 @@ useEffect(() => {
       } />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/documentation" element={<Documentation />} />
+      <Route path="/share/:objectId/:token" element={<ShareView />} />
     </Routes>
     </>
   )

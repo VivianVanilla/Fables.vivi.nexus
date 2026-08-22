@@ -320,6 +320,13 @@ export interface CharacterData {
   showResistanceTracker?: boolean // opt-in (default off) — shows the Resistances/Vulnerabilities panel on the Combat tab, same column as the dice roller
   resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
   vulnerabilities?: string[]     // damage type names this character has vulnerability to
+  // Settings → "Share Link" — set/cleared as a whole (never edited directly)
+  // via SettingsModal's Generate/Revoke buttons. Presence = sharing is on;
+  // the actual URL is /share/<object id>/<this token>, resolved by
+  // src/ShareView.tsx with no login required. Regenerating swaps this for a
+  // fresh random value, which silently invalidates every link handed out
+  // under the old one.
+  shareToken?: string
   showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
   magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy" is labeled "Animated" in the UI
   magicItemColor?: string  // accent color for both magicItemStyle and magicItemSliderStyle — default DEFAULT_ACCENT_COLOR
@@ -352,14 +359,15 @@ export interface CharacterData {
   conditions?: ActiveCondition[]
   forms?: CharacterForm[]           // Automation — reusable alternate-form/buff presets, see CharacterForm
   activeFormId?: string | null      // id of the currently-active form; null/unset = Base Form
-  // Multi-form mode — currently gated to a specific user+character in
-  // CharacterSheet.tsx (see multiFormEnabled) rather than exposed generally,
-  // since most characters only ever have one form active at a time. When
-  // enabled, this fully replaces activeFormId: any number of forms can be
-  // simultaneously active (e.g. a shapeshifted form stacked with a
-  // buff/mutagen form), each contributing its own overrides/conditions/
-  // notification. Whichever active form has formMaxHp set (if any) still
-  // owns the one HP pool/portrait — you can't have two bodies at once.
+  // Multi-form mode — opt-in per character (Automation → Forms → "Allow
+  // multiple Forms active at once"), off by default since most characters
+  // only ever have one form active at a time. When on, this fully replaces
+  // activeFormId: any number of forms can be simultaneously active (e.g. a
+  // shapeshifted form stacked with a buff/mutagen form), each contributing
+  // its own overrides/conditions/notification. Whichever active form has
+  // formMaxHp set (if any) still owns the one HP pool/portrait — you can't
+  // have two bodies at once.
+  multiFormMode?: boolean
   activeFormIds?: string[]
   conditionals?: CharacterConditional[] // Automation — one-shot "apply this now" effects, see CharacterConditional
   castButtonEnabled?: boolean // Automation (Cast tab) — master switch that shows the themed Cast button next to Cantrips in the Spells panel

@@ -323,7 +323,11 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
     else { onUpdate({ forms: forms.map(x => x.id === f.id ? f : x) }); setEditingId(null) }
   }
   function del(id: string) {
-    onUpdate({ forms: forms.filter(f => f.id !== id), activeFormId: data.activeFormId === id ? null : data.activeFormId })
+    onUpdate({
+      forms: forms.filter(f => f.id !== id),
+      activeFormId: data.activeFormId === id ? null : data.activeFormId,
+      activeFormIds: (data.activeFormIds ?? []).filter(fid => fid !== id),
+    })
     setEditingId(null)
   }
   function move(id: string, dir: -1 | 1) {
@@ -345,6 +349,17 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
 
   return (
     <div className="flex flex-col gap-4">
+      <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none px-1">
+        <input type="checkbox" checked={data.multiFormMode ?? false}
+          onChange={e => onUpdate({ multiFormMode: e.target.checked })}
+          className="accent-purple-500 size-3.5 rounded" />
+        Allow multiple Forms active at once
+      </label>
+      <p className="text-[10px] text-white/30 -mt-2 px-1">
+        Off (default): activating a Form swaps out whatever's currently active, same as a single "current form"
+        slot. On: the header switcher becomes a checklist — any number of Forms can be stacked simultaneously
+        (e.g. a shapeshifted form plus a buff), and their overrides/conditions/notifications all combine.
+      </p>
       <button type="button" onClick={() => setNewDraft({ id: nanoid(), name: "New Form" })}
         className="text-sm px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors self-start">
         + New Form
