@@ -1228,7 +1228,7 @@ export function FeatureEntry({
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${RARITY_COLORS[feature.rarity] ?? "bg-white/10 text-white/40"}`}>{feature.rarity}</span>
             )}
             <div className="flex items-center gap-1 ml-auto">
-              {onAddToEquipment && !readOnly && (
+              {onAddToEquipment && !readOnly && feature.equipKind === "weapon" && (
                 <button type="button" onClick={e => { e.stopPropagation(); onAddToEquipment(feature) }}
                   title={inEquipment ? "Remove from the Martial list" : "Send to the Martial list"}
                   className={`text-[10px] px-2 py-1 rounded-full transition-colors shrink-0 ${
