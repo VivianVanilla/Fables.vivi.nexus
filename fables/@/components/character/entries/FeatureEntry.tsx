@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react"
 import type { Feature, UseTracker } from "@/components/shared/types"
+import type { PackItem } from "@/components/documentation/doc-types"
 import type { Theme } from "@/components/shared/themes"
 import { accentShimmerGradient } from "@/components/shared/themes"
 import { nanoid } from "@/components/shared/utils"
@@ -42,6 +43,12 @@ export interface Suggestion {
     melee_range?: string; throw_range?: string; range?: string
     armor_mode?: "base" | "bonus"; ac_bonus?: number; armor_base_ac?: number; armor_dex_mode?: "full" | "half" | "none"
     stealth_disadvantage?: boolean
+    // Set only when item_type is "pack" (e.g. "Explorer's Pack") — see
+    // DocEntryForm.tsx's PackItemsField. Picking one of these in the item-
+    // suggestion dropdown expands into every item it contains instead of
+    // patching the feature currently being edited — see FeatureEntry's
+    // suggestion onMouseDown handler and its onAddPack prop.
+    pack_items?: PackItem[]
   }
 }
 
@@ -148,6 +155,7 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
             armor_base_ac: row.data?.armor_base_ac,
             armor_dex_mode: row.data?.armor_dex_mode,
             stealth_disadvantage: row.data?.stealth_disadvantage,
+            pack_items: row.data?.pack_items,
           },
         })
         continue
@@ -182,12 +190,23 @@ export async function getSuggestions(docType: SuggestionSource, userId?: string 
   return p
 }
 
-// Parses a freeform doc "Cost" string ("15 gp", "1,500 gp") into a plain gp
-// number for Feature.value — best-effort, undefined if nothing parses.
-function parseGpFromCost(cost?: string): number | undefined {
+// Parses a freeform doc "Cost" string ("15 gp", "1,500 gp", "5 sp", "8 cp")
+// into a plain gp number for Feature.value — best-effort, undefined if
+// nothing parses. Converts sp/cp/pp to their gp equivalent (1 gp = 10 sp =
+// 100 cp = 1/10 pp) rather than just stripping the unit, since a lot of
+// mundane adventuring gear (candles, rations, tinderboxes…) is priced in sp
+// or cp on the source tables — treating "5 sp" as 5 gp would inflate a
+// character's carried value 10-100x for exactly the items sold that cheaply.
+// Exported for DocEntryForm.tsx's PackItemsField, which autofills a pack
+// item's value the same way picking a suggestion does anywhere else.
+export function parseGpFromCost(cost?: string): number | undefined {
   if (!cost) return undefined
-  const n = parseFloat(cost.replace(/,/g, "").match(/[\d.]+/)?.[0] ?? "")
-  return Number.isFinite(n) ? n : undefined
+  const m = cost.replace(/,/g, "").match(/([\d.]+)\s*(pp|gp|sp|cp)?/i)
+  if (!m) return undefined
+  const n = parseFloat(m[1])
+  if (!Number.isFinite(n)) return undefined
+  const rate: Record<string, number> = { pp: 10, gp: 1, sp: 0.1, cp: 0.01 }
+  return n * (rate[(m[2] ?? "gp").toLowerCase()] ?? 1)
 }
 
 function capitalizeRarity(raw?: string): Feature["rarity"] {
@@ -252,6 +271,7 @@ interface FeatureEntryProps {
   onToggleFavorite?: () => void        // omit to hide the star
   onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab — toggles into/out of Martial
   inEquipment?:      boolean            // whether this feature already has a linked copy in the Martial list
+  onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
   showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
@@ -366,7 +386,7 @@ export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: s
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, showAttunement, showItemExtras, showWeightColumn,
+  isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, onAddPack, showAttunement, showItemExtras, showWeightColumn,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
   accentColor, accentStyle, sliderStyle, autoEdit = false, onAutoEditConsumed,
@@ -459,6 +479,14 @@ export function FeatureEntry({
                   type="button"
                   onMouseDown={e => {
                     e.preventDefault()
+                    // A pack suggestion ("Explorer's Pack") doesn't fill in this
+                    // feature's own fields — it replaces it with every item the
+                    // pack contains, each its own singular-named Feature.
+                    if (s.meta?.item_type === "pack" && s.meta.pack_items && onAddPack) {
+                      onAddPack(s.meta.pack_items)
+                      setShowSuggest(false)
+                      return
+                    }
                     const desc = s.meta?.prerequisite
                       ? `*Prerequisite: ${s.meta.prerequisite}*\n\n${s.description}`
                       : (s.description || feature.description)

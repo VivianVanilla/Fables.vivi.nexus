@@ -7,6 +7,7 @@ import { createPortal } from "react-dom"
 import type { userInfo } from "@/types/userInfo"
 import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef, FamiliarRef } from "@/components/shared/types"
 import type { Theme } from "@/components/shared/themes"
+import type { PackItem } from "@/components/documentation/doc-types"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
 import { nanoid, profBonus, safeParseJson, uniqueName, weightExemptItemIds } from "@/components/shared/utils"
 import {
@@ -78,6 +79,7 @@ interface FeatureListProps {
   onToggleFavorite: (id: string, label: string) => void
   onAddToEquipment?: (feature: Feature) => void
   equipmentLinkedIds?: Set<string>
+  onAddPack?: (id: string, packItems: PackItem[]) => void  // only wired for the Items tab — a picked pack suggestion replaces feature `id` with every item it contains
   showAttunement?: boolean
   showItemExtras?: boolean
   showMagicStar?: boolean
@@ -214,7 +216,7 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, perItemAccentColor, sortable, showAddButton = true }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, perItemAccentColor, sortable, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -274,6 +276,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
             onAddToEquipment={onAddToEquipment}
             inEquipment={equipmentLinkedIds?.has(f.id)}
+            onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
             showAttunement={showAttunement}
             showItemExtras={showItemExtras}
             showMagicStar={showMagicStar}
@@ -318,9 +321,10 @@ export interface ContainerItemsListProps {
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
   onAddToEquipment?: (feature: Feature) => void  // toggles this item's "+ Martial Tab" link — omit to hide the button
   equipmentLinkedIds?: Set<string>               // sourceFeatureIds already linked into the Martial tab
+  onAddPack?: (id: string, packItems: PackItem[]) => void  // a picked pack suggestion replaces feature `id` with every item it contains
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddToEquipment, equipmentLinkedIds }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddToEquipment, equipmentLinkedIds, onAddPack }: ContainerItemsListProps) {
   // Which containers (isContainer feature ids) have their contents shown —
   // per-container, not a whole-panel toggle; hidden by default; ephemeral
   // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
@@ -406,6 +410,7 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
           onAutoEditConsumed={onAutoEditConsumed}
           onAddToEquipment={onAddToEquipment}
           inEquipment={equipmentLinkedIds?.has(f.id)}
+          onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
         />
         <PopTransition show={!!f.isContainer}>
           <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"

@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { Pencil, Library, Loader2, ArrowLeft, X, ExternalLink, Sparkles } from "lucide-react"
-import type { DocType, DocEntry } from "./doc-types"
+import type { DocType, DocEntry, PackItem } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { DocEntryForm } from "./DocEntryForm"
 import { HomebrewBrowserModal } from "./HomebrewBrowserModal"
@@ -477,6 +477,17 @@ function DetailView({
               )}
               {d.item_type === "weapon" && d.properties && <Prop label="Weapon Properties" value={d.properties} />}
             </RefSection>
+            {d.item_type === "pack" && d.pack_items?.length > 0 && (
+              <RefSection title="Contents">
+                <ul className="flex flex-col gap-1.5">
+                  {(d.pack_items as PackItem[]).map((it, i) => (
+                    <li key={i} className="text-sm text-foreground pl-3 border-l-2 border-border">
+                      {it.amount > 1 ? `${it.amount} ${it.name}` : it.name}
+                    </li>
+                  ))}
+                </ul>
+              </RefSection>
+            )}
             {d.description && (
               <RefSection title="Description">
                 <Markdown text={d.description} tone="slate" />

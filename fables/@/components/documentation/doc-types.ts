@@ -29,3 +29,15 @@ export interface DocEntry {
   data: Record<string, any>
   created_at?: string
 }
+
+// An "item" documentation entry with data.item_type === "pack" (e.g.
+// "Explorer's Pack") carries this instead of weapon/armor stats — see
+// DocEntryForm.tsx's ItemFields and FeatureEntry.tsx's getSuggestions.
+// Each entry becomes its own singular-named Feature when the pack is picked
+// from the item-suggestion dropdown ("Torch" x10, not one "10 Torches" row).
+export interface PackItem {
+  name: string
+  amount: number
+  weight?: number   // lb, per unit
+  value?: number     // gp, per unit
+}

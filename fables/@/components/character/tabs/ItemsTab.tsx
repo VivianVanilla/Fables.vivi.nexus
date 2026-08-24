@@ -10,6 +10,7 @@
 import { useState } from "react"
 import type { CharacterData, Feature, FavoriteRef } from "@/components/shared/types"
 import type { Theme } from "@/components/shared/themes"
+import type { PackItem } from "@/components/documentation/doc-types"
 import { nanoid } from "@/components/shared/utils"
 import { FeatureList, ContainerItemsList } from "./InfoTab"
 
@@ -60,6 +61,26 @@ export function ItemsTab({
     setPendingItemId(id)
   }
 
+  // A "pack" is just a documentation item entry (item_type "pack") that
+  // carries a pack_items list instead of weapon/armor stats — see
+  // DocEntryForm.tsx. Picking one from the name-suggestion dropdown (same
+  // dropdown any other item uses) replaces the in-progress blank item with
+  // every item the pack contains, each its own singular-named Feature
+  // ("Torch" ×10, not one "10 Torches" row) landing unequipped in Carried
+  // Items — one update() call so there's no intermediate state to race.
+  function addPackToInventory(blankId: string, packItems: PackItem[]) {
+    const newFeatures: Feature[] = packItems.map(pi => ({
+      id: nanoid(),
+      name: pi.name,
+      category: "item",
+      amount: pi.amount,
+      trackAmount: pi.amount > 1,
+      weight: pi.weight || undefined,
+      value: pi.value || undefined,
+    }))
+    update({ items: [...(data.items ?? []).filter(f => f.id !== blankId), ...newFeatures] })
+  }
+
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       {!readOnly && (
@@ -80,6 +101,7 @@ export function ItemsTab({
           favorites={favorites} onToggleFavorite={onToggleFavorite}
           onAddToEquipment={onAddItemToEquipment}
           equipmentLinkedIds={equipmentLinkedIds}
+          onAddPack={addPackToInventory}
           showAttunement
           showItemExtras
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
@@ -98,6 +120,7 @@ export function ItemsTab({
           favorites={favorites} onToggleFavorite={onToggleFavorite}
           onAddToEquipment={onAddItemToEquipment}
           equipmentLinkedIds={equipmentLinkedIds}
+          onAddPack={addPackToInventory}
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
           pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
         />
