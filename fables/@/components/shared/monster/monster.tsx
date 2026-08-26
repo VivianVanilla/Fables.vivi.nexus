@@ -72,7 +72,7 @@ const ACTION_SECTIONS: { key: "actions" | "bonusActions" | "reactions" | "legend
 ]
 
 const SECTION_HEADER_COLOR: Record<ActionCategory, string> = {
-  trait: "text-emerald-300", action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300", lair: "text-orange-300",
+  trait: "text-emerald-300", action: "text-sky-300", bonusAction: "text-amber-300", reaction: "text-violet-300", legendary: "text-yellow-300", lair: "text-orange-300", misc: "text-fuchsia-300",
 }
 
 const CARD = "rounded-xl bg-zinc-900 ring-1 ring-zinc-700 transition-colors"
@@ -472,6 +472,7 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
   const reactEnabled   = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendEnabled  = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
   const lairEnabled    = data.hasLairActions ?? (data.lairActions ?? []).length > 0
+  const miscEnabled    = data.hasMiscActions ?? (data.miscActions ?? []).length > 0
   const legResEnabled  = data.hasLegendaryResistance ?? false
   const spellEnabled   = data.hasSpellcasting ?? ((data.spellItems ?? []).length > 0 || !!data.spellcastingAbility)
 
@@ -488,6 +489,7 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
     reactions: data.reactions ?? [],
     legendaryActions: data.legendaryActions ?? [],
     lairActions: data.lairActions ?? [],
+    miscActions: data.miscActions ?? [],
   }
   function addAction(key: keyof typeof actionsBySection) {
     onUpdate({ [key]: [...actionsBySection[key], { id: nanoid(), name: "" }] } as Partial<MonsterData>)
@@ -754,6 +756,30 @@ function EditStatsModal({ data, onUpdate, onClose }: { data: MonsterData; onUpda
             </PopTransition>
           </div>
 
+          {/* Catch-all section for anything that doesn't fit the standard 5e
+              sections above — Mythic Actions, lore-specific abilities,
+              homebrew categories, etc. The heading itself is editable
+              (defaults to "Misc") rather than fixed, since what belongs here
+              varies monster to monster. */}
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
+              Misc
+              <input type="checkbox" checked={miscEnabled} onChange={e => onUpdate({ hasMiscActions: e.target.checked })} />
+            </label>
+            <PopTransition show={miscEnabled}>
+              <label className="flex items-center justify-between text-xs text-white/40 pl-3 gap-2">
+                Section name
+                <input value={data.miscActionsLabel ?? ""} placeholder="Misc"
+                  onChange={e => onUpdate({ miscActionsLabel: e.target.value })}
+                  className="flex-1 min-w-0 bg-white/10 rounded px-2 py-1 text-white outline-none placeholder:text-white/25 text-xs transition-colors focus:bg-white/15" />
+              </label>
+              <EntryListEditor label={data.miscActionsLabel || "Misc"} category="misc" items={actionsBySection.miscActions}
+                onAdd={() => addAction("miscActions")}
+                onChange={(id, patch) => changeAction("miscActions", id, patch)}
+                onRemove={id => removeAction("miscActions", id)} />
+            </PopTransition>
+          </div>
+
           <label className="flex items-center justify-between text-sm text-white/70 cursor-pointer select-none">
             Spellcasting
             <input type="checkbox" checked={spellEnabled} onChange={e => onUpdate({ hasSpellcasting: e.target.checked })} />
@@ -793,6 +819,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     reactions: data.reactions ?? [],
     legendaryActions: data.legendaryActions ?? [],
     lairActions: data.lairActions ?? [],
+    miscActions: data.miscActions ?? [],
   }
 
   // Only `change` survives here — used for the recharge-roll button, a live
@@ -862,6 +889,7 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
   const reactEnabled       = data.hasReactions ?? (data.reactions ?? []).length > 0
   const legendaryEnabled   = data.hasLegendaryActions ?? (data.legendaryActions ?? []).length > 0
   const lairEnabled        = data.hasLairActions ?? (data.lairActions ?? []).length > 0
+  const miscEnabled        = data.hasMiscActions ?? (data.miscActions ?? []).length > 0
   const legendaryResistanceEnabled = data.hasLegendaryResistance ?? false
   const spellcastingEnabled = data.hasSpellcasting ?? (levels.length > 0 || !!data.spellcastingAbility)
   const spellUsageMode      = data.spellUsageMode ?? "slots"
@@ -874,9 +902,23 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
     lairActions: lairEnabled,
   }
 
+  // Rolling a spell here is meant to represent it actually being cast, not
+  // just previewed — so it spends the same resource a manual cast would:
+  // a slot at the spell's level (slots mode) or one of its daily uses
+  // (perDay mode). Cantrips and "at will" spells have neither, so nothing
+  // to find/decrement and this is a no-op for them.
   function feelingLucky() {
     if (spellItems.length === 0) return
-    setLuckySpell(spellItems[Math.floor(Math.random() * spellItems.length)])
+    const spell = spellItems[Math.floor(Math.random() * spellItems.length)]
+    setLuckySpell(spell)
+    if (spellUsageMode === "perDay") {
+      if ((spell.usesPerDay ?? 0) > 0) {
+        changeSpell(spell.id, { usesPerDayUsed: Math.min(spell.usesPerDay!, (spell.usesPerDayUsed ?? 0) + 1) })
+      }
+    } else {
+      const slot = spellSlots.find(s => s.level === (spell.level ?? 0))
+      if (slot) changeSlot(slot.id, { used: Math.min(slot.total, slot.used + 1) })
+    }
   }
 
   return (
@@ -922,6 +964,14 @@ export function MonsterStatBlock({ data, onUpdate, readOnly = false }: StatBlock
           ) : undefined}
         />
       ))}
+
+      {/* ── Misc — freeform catch-all section (Mythic Actions, homebrew, etc.) ── */}
+      {miscEnabled && (
+        <ActionSection label={data.miscActionsLabel || "Misc"} category="misc"
+          actions={actionsBySection.miscActions} readOnly={readOnly} collapsible={data.collapsibleAbilities}
+          onChange={(id, patch) => changeAction("miscActions", id, patch)}
+        />
+      )}
 
       {/* ── Spellcasting ─────────────────────────────────────────────────── */}
       {spellcastingEnabled && (

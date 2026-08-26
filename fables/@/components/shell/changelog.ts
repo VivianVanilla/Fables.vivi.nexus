@@ -11,6 +11,56 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "August 23, 2026",
+    title: "Tracked uses on monster Traits and Actions",
+    description: "Any Trait, Action, Bonus Action, Reaction, Legendary Action, Lair Action, or Misc entry on a monster's stat block can now track its own uses (label, max, resets on) — same bar you're used to on Inventory and Martial items.",
+  },
+  {
+    date: "August 23, 2026",
+    title: "Pin spells to the top of your list",
+    description: "Open a spell's detail view and hit the pin button next to Edit — pinned spells show in a Pinned section right above Cantrips, and still show in their normal spot in the list too.",
+  },
+  {
+    date: "August 23, 2026",
+    title: "Custom \"Misc\" section for monster stat blocks",
+    description: "Edit Stat Block now has a Misc section with its own editable heading — use it for Mythic Actions or any other custom category that doesn't fit the standard 5e sections.",
+  },
+  {
+    date: "August 23, 2026",
+    title: "\"I'm Feeling Lucky\" spell roll now spends a slot",
+    description: "Rolling a random spell on a monster's stat block now actually expends a spell slot or daily use for the spell it picks, same as casting it normally would — cantrips and at-will spells still cost nothing.",
+  },
+  {
+    date: "August 23, 2026",
+    title: "Adventure Packs",
+    description: "Standard equipment packs (Explorer's Pack, Dungeoneer's Pack, etc.) now show up right in the item-name search when adding an item — picking one adds every item inside it individually (10 Torches becomes a Torch stack of 10, not one \"10 Torches\" line). The ordinary adventuring gear list (rope, rations, tools, etc.) got filled in too, so item search actually finds them.",
+  },
+  {
+    date: "August 23, 2026",
+    title: "Martial tab items can track uses",
+    description: "Weapons on the Martial tab can now have tracked uses (charges, uses/day) just like Inventory items — the uses bar shows on the Martial tab and in Favorites too.",
+  },
+  {
+    date: "August 23, 2026",
+    title: "Martial tab and Inventory stay linked",
+    description: "Adding a new weapon from the Martial tab now also creates a matching Inventory item automatically, and the \"+ Martial Tab\" link button works from Carried Items now, not just equipped armor. Only weapons can link to the Martial tab.",
+  },
+  {
+    date: "August 22, 2026",
+    title: "Share a character read-only",
+    description: "Settings → Share Link generates a link that shows anyone a read-only view of your character — no account or party invite needed.",
+  },
+  {
+    date: "August 22, 2026",
+    title: "Multiple active Forms",
+    description: "Automation → Forms has an \"Allow multiple Forms active at once\" checkbox, so a character can stack more than one active Form instead of just one at a time.",
+  },
+  {
+    date: "August 22, 2026",
+    title: "Automation moved before Settings",
+    description: "The Automation and Settings buttons on the character sheet header swapped places.",
+  },
+  {
     date: "August 7, 2026",
     title: "Carrying capacity bonus",
     description: "Click your ⚖ carry-weight badge (next to your name) to add a flat bonus to your carrying capacity — Belts of Giant Strength, feats, homebrew, etc.",

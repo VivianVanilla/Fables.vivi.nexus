@@ -75,6 +75,7 @@ export interface SpellItem {
   notes?: string                // description
   prepared?: boolean
   alwaysPrepared?: boolean
+  pinned?: boolean               // shows this spell a second time in a "Pinned" section above Cantrips — it still renders in its normal level group too, this doesn't move it
   freeSpell?: boolean            // granted free (subclass/domain spell) — doesn't count toward Known/Prepared caps
   ritual?: boolean
   concentration?: boolean

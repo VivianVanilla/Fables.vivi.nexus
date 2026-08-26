@@ -268,6 +268,25 @@ export function SpellsEquipPanel({
         {showSpells ? (
           <>
             {(() => {
+              const pinnedSpells = visibleSpells.filter(s => s.pinned)
+              if (pinnedSpells.length === 0) return null
+              return (
+                <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"} mb-2 pb-2 border-b border-white/10`}>
+                  <div className="w-full flex items-center gap-2 px-1 py-1">
+                    <span className="text-sm font-bold uppercase tracking-widest text-white/75">🖈 Pinned</span>
+                    <span className="text-xs text-white/40">({pinnedSpells.length})</span>
+                  </div>
+                  {pinnedSpells.map(spell => (
+                    <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
+                      compact={spellsDisplay === "bubbles"}
+                      accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
+                      isPinned onTogglePin={() => onChangeSpell(spell.id, { pinned: false })}
+                      onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+                  ))}
+                </div>
+              )
+            })()}
+            {(() => {
               const grouped = new Map<number, typeof visibleSpells>()
               for (const s of visibleSpells) {
                 const lvl = s.level ?? 0
@@ -337,6 +356,7 @@ export function SpellsEquipPanel({
                             compact={spellsDisplay === "bubbles"}
                             autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
                             accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
+                            isPinned={spell.pinned} onTogglePin={() => onChangeSpell(spell.id, { pinned: !spell.pinned })}
                             onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
                         )
                       }

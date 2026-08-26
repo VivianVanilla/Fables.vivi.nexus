@@ -22,7 +22,8 @@ import type { MonsterAction, ActionCategory } from "@/components/shared/monster/
 import { Markdown } from "../../ui/Markdown"
 import { DamagePills } from "../ui/DamageFields"
 import { computeDamageSegments } from "@/components/shared/damageTypes"
-import { CATEGORY_STYLE } from "./actionCategoryStyle"
+import { CATEGORY_STYLE, CATEGORY_HEX } from "./actionCategoryStyle"
+import { TracingSlider } from "../../ui/tracing-slider"
 
 interface ActionEntryProps {
   action: MonsterAction
@@ -37,6 +38,11 @@ export function ActionEntry({ action, category, onChange, readOnly = false, coll
   const segments = computeDamageSegments(action)
   const [expanded, setExpanded] = useState(false)
   const showDescription = !!action.description && (!collapsible || expanded)
+
+  const effectiveMax  = action.maxUses ?? 0
+  const usesUsed      = action.usesUsed ?? 0
+  const usesRemaining = Math.max(0, effectiveMax - usesUsed)
+  const hasUses       = !!(action.trackable && effectiveMax > 0)
 
   function rollRecharge() {
     if (readOnly || !action.recharge) return
@@ -81,6 +87,22 @@ export function ActionEntry({ action, category, onChange, readOnly = false, coll
           </button>
         )}
       </div>
+
+      {hasUses && (
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {action.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{action.trackerLabel}</span>}
+          <TracingSlider
+            value={usesRemaining} max={effectiveMax}
+            disabled={readOnly}
+            color={CATEGORY_HEX[category]}
+            showButtons buttonSize="sm" className="flex-1 min-w-0"
+            onChange={val => onChange({ usesUsed: effectiveMax - val })}
+          />
+          <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
+            {usesRemaining}/{effectiveMax}
+          </span>
+        </div>
+      )}
 
       {showDescription && <Markdown text={action.description!} tone="dark" />}
     </div>

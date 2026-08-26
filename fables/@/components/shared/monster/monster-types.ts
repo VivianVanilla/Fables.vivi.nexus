@@ -2,7 +2,7 @@
 
 import type { DamageEntry, SpellItem, SpellSlot } from "../types"
 
-export type ActionCategory = "trait" | "action" | "bonusAction" | "reaction" | "legendary" | "lair"
+export type ActionCategory = "trait" | "action" | "bonusAction" | "reaction" | "legendary" | "lair" | "misc"
 
 export interface MonsterAction {
   id: string
@@ -18,6 +18,15 @@ export interface MonsterAction {
   recharge?: number       // e.g. 5 -> "Recharge 5-6"; undefined = no recharge
   rechargeUsed?: boolean  // true once spent, until recharge roll succeeds
   legendaryCost?: number  // legendary actions only — uses consumed per activation (default 1)
+  // Tracked uses — same fields/semantics as Feature's primary tracker (see
+  // shared/types.ts). Available on every category, not just Actions —
+  // a Trait/passive with a limited daily use (e.g. "Regeneration", innate
+  // "3/Day" abilities) is exactly as common as a limited-use Action.
+  trackable?: boolean
+  trackerLabel?: string
+  maxUses?: number
+  usesUsed?: number
+  resetsOn?: "short" | "long" | "dawn" | "manual"
 }
 
 export interface MonsterData {
@@ -75,12 +84,15 @@ export interface MonsterData {
   reactions?: MonsterAction[]
   legendaryActions?: MonsterAction[]
   lairActions?: MonsterAction[]   // no per-action cost/budget, unlike legendary — 5e triggers one of these per round on initiative count 20
+  miscActions?: MonsterAction[]   // freeform catch-all section — e.g. Mythic Actions, or anything else that doesn't fit the standard 5e sections
   hasBonusActions?: boolean      // toggle — off hides the whole section (Actions is always shown)
   hasReactions?: boolean         // toggle — off hides the whole section
   hasLegendaryActions?: boolean  // toggle — off hides the whole legendary actions section
   legendaryActionsMax?: number
   legendaryActionsUsed?: number
   hasLairActions?: boolean       // toggle — off hides the whole lair actions section
+  hasMiscActions?: boolean       // toggle — off hides the whole misc section
+  miscActionsLabel?: string      // custom section heading, e.g. "Mythic Actions" — defaults to "Misc" when blank
 
   hasSpellcasting?: boolean      // toggle — off hides the whole spellcasting section
   spellcastingLevel?: string    // "9th-level spellcaster"

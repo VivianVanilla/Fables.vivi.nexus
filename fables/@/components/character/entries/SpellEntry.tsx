@@ -11,6 +11,7 @@ import { Markdown } from "../../ui/Markdown"
 import { damageTypeClasses, DAMAGE_TYPES } from "@/components/shared/damageTypes"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
+import { PinButton } from "../ui/PinButton"
 import { getSpells } from "../../../../src/spells/spellCache"
 import type { Spell } from "../../../../src/spells/types"
 import { spellItemFieldsFromSpell } from "@/components/shared/spellUtils"
@@ -32,6 +33,8 @@ interface SpellEntryProps {
   onAutoEditConsumed?: () => void
   isFavorite?: boolean
   onToggleFavorite?: () => void  // omit to hide the star
+  isPinned?: boolean
+  onTogglePin?: () => void       // omit to hide the pin button
   accentColor?: string     // Settings — this spell's category color (category is "spell"), see FeatureEntry.tsx's categoryAccentStyle
   accentStyle?: CardStyle  // Settings — "none" (default), "outline", or "galaxy" for the category accent above
 }
@@ -122,9 +125,10 @@ function Pill({ label, value, color = "bg-white/10 text-white/60" }: { label: st
 
 // ── Spell detail modal (shows SpellItem's own stored data) ────────────────────
 
-function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onToggleFavorite }: {
+function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onToggleFavorite, isPinned, onTogglePin }: {
   spell: SpellItem; onClose: () => void; onEdit: () => void; readOnly: boolean
   isFavorite?: boolean; onToggleFavorite?: () => void
+  isPinned?: boolean; onTogglePin?: () => void
 }) {
   return (
     <Modal onClose={onClose}>
@@ -149,6 +153,9 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
               )}
               {onToggleFavorite && (
                 <FavoriteStar isFavorite={!!isFavorite} onToggle={onToggleFavorite} />
+              )}
+              {onTogglePin && !readOnly && (
+                <PinButton isPinned={!!isPinned} onToggle={onTogglePin} />
               )}
               {!readOnly && (
                 <button type="button" onClick={onEdit}
@@ -198,7 +205,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, accentColor, accentStyle }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, isPinned, onTogglePin, accentColor, accentStyle }: SpellEntryProps) {
   const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -239,7 +246,8 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
       {showDetail && (
         <SpellDetailModal spell={spell} readOnly={readOnly} onClose={() => setShowDetail(false)}
           onEdit={() => { setShowDetail(false); setEditing(true) }}
-          isFavorite={isFavorite} onToggleFavorite={onToggleFavorite} />
+          isFavorite={isFavorite} onToggleFavorite={onToggleFavorite}
+          isPinned={isPinned} onTogglePin={onTogglePin} />
       )}
 
       {/* ── Edit form modal ─────────────────────────────────────────────── */}
@@ -433,6 +441,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             <p className="text-xs font-semibold text-white truncate">
               {spell.name || <span className="text-white/30 italic">Unnamed</span>}
             </p>
+            {spell.pinned && <span className="text-[9px] shrink-0" title="Pinned">🖈</span>}
             {spell.sourceClass && (
               <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 leading-tight shrink-0">{spell.sourceClass}</span>
             )}

@@ -89,12 +89,48 @@ export function ActionEntryEditor({ action, category, onChange, onRemove }: Acti
         </div>
       )}
 
+      {/* Track uses — available on every category, including Traits, since a
+          passive with limited daily uses (e.g. "Regeneration", innate
+          "3/Day" abilities) is just as common as a limited-use Action. */}
+      <div className="flex flex-col gap-2 text-xs border-t border-white/10 pt-2">
+        <label className="flex items-center gap-1.5 text-white/50 cursor-pointer select-none">
+          <input type="checkbox" checked={action.trackable ?? false}
+            onChange={e => onChange({ trackable: e.target.checked })} />
+          Track uses
+        </label>
+        {action.trackable && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-white/50">
+              Label
+              <input value={action.trackerLabel ?? ""} placeholder="e.g. Charges" onChange={e => onChange({ trackerLabel: e.target.value })}
+                className="w-28 bg-white/10 rounded px-2 py-1 text-white outline-none placeholder:text-white/20" />
+            </label>
+            <label className="flex items-center gap-1.5 text-white/50">
+              Max
+              <NumInput min={1} value={action.maxUses ?? 1}
+                onChange={e => onChange({ maxUses: parseInt(e.target.value) || 0 })}
+                className="w-12 bg-white/10 rounded px-1.5 py-1 text-center text-white outline-none" />
+            </label>
+            <label className="flex items-center gap-1.5 text-white/50">
+              Resets on
+              <select value={action.resetsOn ?? "long"} onChange={e => onChange({ resetsOn: e.target.value as MonsterAction["resetsOn"] })}
+                className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                <option value="short" className="bg-zinc-800 text-white">Short Rest</option>
+                <option value="long" className="bg-zinc-800 text-white">Long Rest</option>
+                <option value="dawn" className="bg-zinc-800 text-white">Dawn</option>
+                <option value="manual" className="bg-zinc-800 text-white">Manual</option>
+              </select>
+            </label>
+          </div>
+        )}
+      </div>
+
       <MarkdownTextarea
         value={action.description ?? ""}
         onChange={v => onChange({ description: v })}
         placeholder="Description…"
         rows={3}
-        className={`bg-transparent outline-none text-xs text-white/70 placeholder:text-white/20 resize-none leading-relaxed w-full ${isTrait ? "" : "border-t border-white/10 pt-2"}`}
+        className="bg-transparent outline-none text-xs text-white/70 placeholder:text-white/20 resize-none leading-relaxed w-full border-t border-white/10 pt-2"
         variant="light"
       />
     </div>
