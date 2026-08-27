@@ -2,9 +2,9 @@
 // DocBrowser.tsx — PHB-style reference browser
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../../src/supabase"
-import { Pencil, Library, Loader2, ArrowLeft, X, ExternalLink, Sparkles } from "lucide-react"
+import { Pencil, Library, Loader2, ArrowLeft, X, ExternalLink, Sparkles, Search } from "lucide-react"
 import type { DocType, DocEntry, PackItem } from "./doc-types"
 import { SINGULAR, TYPE_LABEL } from "./doc-types"
 import { DocEntryForm } from "./DocEntryForm"
@@ -152,6 +152,88 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Search bar ───────────────────────────────────────────────────────────────
+// Same live-filter + startsWith-suggestions-dropdown pattern as the Spells
+// browser's SpellSearch (src/spells/SpellSearch.tsx) — an input that filters
+// the list as you type, with up to 8 startsWith matches offered below it so
+// a long name can be filled in with one click instead of typed out fully.
+
+function DocSearchBar({ value, onChange, pool, placeholder }: {
+  value: string
+  onChange: (v: string) => void
+  pool: { id: string; name: string }[]
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [suggestions, setSuggestions] = useState<{ id: string; name: string }[]>([])
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!value.trim()) { setSuggestions([]); setOpen(false); return }
+    const q = value.toLowerCase()
+    const matches = pool
+      .filter(e => e.name.toLowerCase().startsWith(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 8)
+    setSuggestions(matches)
+    setOpen(matches.length > 0)
+  }, [value, pool])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (!containerRef.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  return (
+    <div ref={containerRef} className="relative w-full max-w-md">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        placeholder={placeholder}
+        className="w-full bg-card border border-border rounded-xl pl-10 pr-9 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-border transition-colors"
+      />
+      {value && (
+        <button type="button" onClick={() => onChange("")}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 size-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+          <X className="size-3.5" />
+        </button>
+      )}
+      {open && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
+          {suggestions.map(s => (
+            <button key={s.id} type="button" onMouseDown={() => { onChange(s.name); setOpen(false) }}
+              className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors truncate">
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Pagination ──────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 25
+
+function Paginator({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  if (totalPages <= 1) return null
+  const btn = "text-xs px-2.5 py-1.5 rounded border border-border text-muted-foreground hover:text-amber-400 hover:border-amber-700/50 disabled:opacity-30 disabled:hover:text-muted-foreground disabled:hover:border-border disabled:cursor-default transition-colors"
+  return (
+    <div className="flex items-center justify-center gap-2 mt-3">
+      <button type="button" onClick={() => onChange(1)} disabled={page === 1} className={btn}>« First</button>
+      <button type="button" onClick={() => onChange(page - 1)} disabled={page === 1} className={btn}>‹ Prev</button>
+      <span className="text-xs text-muted-foreground px-2 tabular-nums">Page {page} of {totalPages}</span>
+      <button type="button" onClick={() => onChange(page + 1)} disabled={page === totalPages} className={btn}>Next ›</button>
+      <button type="button" onClick={() => onChange(totalPages)} disabled={page === totalPages} className={btn}>Last »</button>
     </div>
   )
 }
@@ -560,14 +642,37 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
   const [showHBBrowser,  setShowHBBrowser]  = useState(false)
   const [invocationRefresh, setInvocationRefresh] = useState(0)
 
+  // Search + pagination — one search box filters all three list sections at
+  // once (Core/My Homebrew/Homebrew library), each paginated independently
+  // at PAGE_SIZE per page so a category with hundreds of entries (e.g. Items,
+  // after a bulk import) doesn't dump them all into one giant grid.
+  const [search,        setSearch]        = useState("")
+  const [basePage,      setBasePage]      = useState(1)
+  const [homebrewPage,  setHomebrewPage]  = useState(1)
+  const [libraryPage,   setLibraryPage]   = useState(1)
+
   const singular = SINGULAR[type]
   const label    = TYPE_LABEL[type]
 
   useEffect(() => {
     setViewMode("list")
     setActiveEntry(null)
+    setSearch("")
+    setBasePage(1)
+    setHomebrewPage(1)
+    setLibraryPage(1)
     loadAll()
   }, [type, userId])
+
+  // Search box changes go through this instead of setSearch directly, so
+  // typing a new query always snaps every section back to its first page
+  // rather than leaving you stranded on, say, page 4 of a now-3-page result.
+  function handleSearchChange(v: string) {
+    setSearch(v)
+    setBasePage(1)
+    setHomebrewPage(1)
+    setLibraryPage(1)
+  }
 
   // `silent` skips the loading spinner for background refreshes (e.g. after adding/removing
   // homebrew) so the grid doesn't briefly collapse to a few lines of "Loading…" — that height
@@ -650,14 +755,37 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
   }
 
   // ── List view ──────────────────────────────────────────────────────────────
+
+  const q = search.trim().toLowerCase()
+  const filteredBase     = q ? baseEntries.filter(e => e.name.toLowerCase().includes(q)) : baseEntries
+  const filteredHomebrew = q ? myHomebrew.filter(e => e.name.toLowerCase().includes(q))  : myHomebrew
+  const filteredLibrary  = q ? myLibrary.filter(l => l.name.toLowerCase().includes(q))   : myLibrary
+
+  const basePageItems     = filteredBase.slice((basePage - 1) * PAGE_SIZE, basePage * PAGE_SIZE)
+  const homebrewPageItems = filteredHomebrew.slice((homebrewPage - 1) * PAGE_SIZE, homebrewPage * PAGE_SIZE)
+  const libraryPageItems  = filteredLibrary.slice((libraryPage - 1) * PAGE_SIZE, libraryPage * PAGE_SIZE)
+
+  // Suggestion pool for the search box's dropdown — every entry across all
+  // three sections, so typing a name suggests it regardless of which list it
+  // actually lives in.
+  const searchPool = [
+    ...baseEntries.map(e => ({ id: e.id, name: e.name })),
+    ...myHomebrew.map(e => ({ id: e.id, name: e.name })),
+    ...myLibrary.map(l => ({ id: l.id, name: l.name })),
+  ]
+
   return (
     <div className="flex flex-col gap-10">
+
+      {!loading && (baseEntries.length > 0 || myHomebrew.length > 0 || myLibrary.length > 0) && (
+        <DocSearchBar value={search} onChange={handleSearchChange} pool={searchPool} placeholder={`Search ${label.toLowerCase()}s…`} />
+      )}
 
       {/* Core entries */}
       <section>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-base font-bold text-amber-400">
-            Core Rulebook{!loading && baseEntries.length > 0 ? ` (${baseEntries.length})` : ""}
+            Core Rulebook{!loading && baseEntries.length > 0 ? ` (${q ? `${filteredBase.length} of ${baseEntries.length}` : baseEntries.length})` : ""}
           </h2>
           {isAdminMode && (
             <button onClick={() => openCreate(false)}
@@ -677,14 +805,21 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
             <p className="text-sm text-muted-foreground">No entries yet.</p>
             {isAdminMode && <p className="text-xs text-muted-foreground mt-1">Use "Add Core {label}" above.</p>}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-            {baseEntries.map(entry => (
-              <DocCard key={entry.id} name={entry.name} caption={entry.description} canEdit={isAdminMode}
-                onClick={() => { setActiveEntry(entry); setViewMode("view") }}
-                onEdit={() => openEdit(entry)} />
-            ))}
+        ) : filteredBase.length === 0 ? (
+          <div className="py-10 text-center border border-dashed border-border rounded-lg">
+            <p className="text-sm text-muted-foreground">No {label.toLowerCase()}s match "{search}".</p>
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              {basePageItems.map(entry => (
+                <DocCard key={entry.id} name={entry.name} caption={entry.description} canEdit={isAdminMode}
+                  onClick={() => { setActiveEntry(entry); setViewMode("view") }}
+                  onEdit={() => openEdit(entry)} />
+              ))}
+            </div>
+            <Paginator page={basePage} total={filteredBase.length} onChange={setBasePage} />
+          </>
         )}
       </section>
 
@@ -693,38 +828,56 @@ export function DocBrowser({ type, isAdminMode, userId, onGoToSpells }: Props) {
       {/* My Homebrew */}
       {userId && myHomebrew.length > 0 && (
         <section>
-          <h2 className="text-base font-bold text-amber-400 mb-2">My {label}s ({myHomebrew.length})</h2>
+          <h2 className="text-base font-bold text-amber-400 mb-2">
+            My {label}s ({q ? `${filteredHomebrew.length} of ${myHomebrew.length}` : myHomebrew.length})
+          </h2>
           <div className="border-t border-amber-900/30 mb-4" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-            {myHomebrew.map(entry => (
-              <DocCard key={entry.id} name={entry.name} canEdit
-                onClick={() => { setActiveEntry(entry); setViewMode("view") }}
-                onEdit={() => openEdit(entry)} />
-            ))}
-          </div>
+          {filteredHomebrew.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No matches in your homebrew.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                {homebrewPageItems.map(entry => (
+                  <DocCard key={entry.id} name={entry.name} canEdit
+                    onClick={() => { setActiveEntry(entry); setViewMode("view") }}
+                    onEdit={() => openEdit(entry)} />
+                ))}
+              </div>
+              <Paginator page={homebrewPage} total={filteredHomebrew.length} onChange={setHomebrewPage} />
+            </>
+          )}
         </section>
       )}
 
       {/* Homebrew — added-to-library entries that feed autofill on the character sheet */}
       {userId && myLibrary.length > 0 && (
         <section>
-          <h2 className="text-base font-bold text-amber-400 mb-2">Homebrew ({myLibrary.length})</h2>
+          <h2 className="text-base font-bold text-amber-400 mb-2">
+            Homebrew ({q ? `${filteredLibrary.length} of ${myLibrary.length}` : myLibrary.length})
+          </h2>
           <p className="text-xs text-muted-foreground -mt-1 mb-2">These show up in autofill on your character sheet. Remove one to take it out of autofill.</p>
           <div className="border-t border-amber-900/30 mb-4" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-            {myLibrary.map(item => (
-              <DocCard key={item.id} name={item.name} canEdit={item.data.doc_owner_id === userId}
-                onClick={() => openViewFromLibrary(item)}
-                onEdit={() => openEditFromLibrary(item)}
-                extraAction={
-                  <span role="button" onClick={e => { e.stopPropagation(); removeFromLibrary(item.id) }}
-                    className="size-6 flex items-center justify-center rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
-                    <X className="size-3" />
-                  </span>
-                }
-              />
-            ))}
-          </div>
+          {filteredLibrary.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No matches in your library.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                {libraryPageItems.map(item => (
+                  <DocCard key={item.id} name={item.name} canEdit={item.data.doc_owner_id === userId}
+                    onClick={() => openViewFromLibrary(item)}
+                    onEdit={() => openEditFromLibrary(item)}
+                    extraAction={
+                      <span role="button" onClick={e => { e.stopPropagation(); removeFromLibrary(item.id) }}
+                        className="size-6 flex items-center justify-center rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
+                        <X className="size-3" />
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+              <Paginator page={libraryPage} total={filteredLibrary.length} onChange={setLibraryPage} />
+            </>
+          )}
         </section>
       )}
 
