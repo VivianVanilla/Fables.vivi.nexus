@@ -60,7 +60,13 @@ function Prop({ label, value }: { label: string; value: React.ReactNode }) {
 
 // ── Subclass spells table helper ───────────────────────────────────────────────
 
-function SpellsTable({ rows }: { rows: { level: number; spells: string[] }[] }) {
+interface DomainSpellRow {
+  level: number
+  spells: string[]
+  variant?: string  // e.g. Circle of the Land's terrain choice — see DocEntryForm.tsx's DomainSpellsField
+}
+
+function SpellsTable({ rows }: { rows: DomainSpellRow[] }) {
   if (!rows?.length) return null
   return (
     <table className="w-full text-sm border-collapse mt-1">
@@ -71,14 +77,47 @@ function SpellsTable({ rows }: { rows: { level: number; spells: string[] }[] }) 
         </tr>
       </thead>
       <tbody>
-        {[...rows].sort((a,b) => a.level - b.level).map(row => (
-          <tr key={row.level} className="border-t border-border/60">
+        {[...rows].sort((a,b) => a.level - b.level).map((row, i) => (
+          <tr key={i} className="border-t border-border/60">
             <td className="py-2 text-muted-foreground">{ORDINAL[row.level] ?? row.level}</td>
             <td className="py-2 text-foreground">{(row.spells ?? []).join(", ")}</td>
           </tr>
         ))}
       </tbody>
     </table>
+  )
+}
+
+// Ungated rows (Cleric domains, Paladin oaths, Warlock patrons — one fixed
+// list per level) render as a single table, same as before. Variant-gated
+// rows (Circle of the Land's terrain choice — same level, different spells
+// per terrain) get their own labeled table per variant instead of being
+// merged into one table keyed only by level, which would either collide or
+// silently mix terrains together.
+function DomainSpellsDisplay({ rows }: { rows: DomainSpellRow[] }) {
+  if (!rows?.length) return null
+  const plain = rows.filter(r => !r.variant)
+  const variants = new Map<string, DomainSpellRow[]>()
+  for (const r of rows) {
+    if (!r.variant) continue
+    if (!variants.has(r.variant)) variants.set(r.variant, [])
+    variants.get(r.variant)!.push(r)
+  }
+  const variantNames = [...variants.keys()].sort((a, b) => a.localeCompare(b))
+  return (
+    <>
+      {plain.length > 0 && <SpellsTable rows={plain} />}
+      {variantNames.length > 0 && (
+        <div className="flex flex-col gap-4 mt-3 first:mt-0">
+          {variantNames.map(name => (
+            <div key={name}>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-400/80 mb-1">{name}</p>
+              <SpellsTable rows={variants.get(name)!} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 
@@ -92,7 +131,7 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
 }) {
   const d = sc.data ?? {}
   const features: any[] = d.features ?? []
-  const domainSpells: { level: number; spells: string[] }[] = d.domain_spells ?? []
+  const domainSpells: DomainSpellRow[] = d.domain_spells ?? []
 
   const byLevel = features.reduce<Record<number, any[]>>((acc, f) => {
     if (!acc[f.level]) acc[f.level] = []
@@ -125,7 +164,7 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {domainSpells.length > 0 && (
             <RefSection title="Subclass Spells">
-              <SpellsTable rows={domainSpells} />
+              <DomainSpellsDisplay rows={domainSpells} />
             </RefSection>
           )}
 

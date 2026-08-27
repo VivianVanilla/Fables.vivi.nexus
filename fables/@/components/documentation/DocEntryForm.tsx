@@ -111,15 +111,16 @@ interface ClassFeature {
 interface DomainSpellRow {
   level: number
   spells: string[]
+  variant?: string  // optional secondary gate — e.g. Circle of the Land's terrain choice (Arctic, Coast, …),
+                     // where the same level grants different spells depending on which terrain was picked at
+                     // 1st level. Blank/omitted = ungated, same behavior as a plain domain/patron/oath spell list.
 }
 
 function DomainSpellsField({ d, set }: { d: Record<string,any>; set: (k: string, v: any) => void }) {
   const rows: DomainSpellRow[] = d.domain_spells ?? []
 
   function addRow() {
-    const existingLevels = new Set(rows.map(r => r.level))
-    const next = [1,3,5,7,9,11,13,15,17,19].find(l => !existingLevels.has(l)) ?? rows.length + 1
-    set("domain_spells", [...rows, { level: next, spells: [] }])
+    set("domain_spells", [...rows, { level: 3, variant: "", spells: [] }])
   }
 
   function updateRow(idx: number, patch: Partial<DomainSpellRow>) {
@@ -130,42 +131,67 @@ function DomainSpellsField({ d, set }: { d: Record<string,any>; set: (k: string,
     set("domain_spells", rows.filter((_, i) => i !== idx))
   }
 
+  // Sort for display only (ungated rows first, then grouped by variant, then
+  // by level) — edits/removals still address the underlying array by its
+  // real index, not this display position, so reordering here never
+  // scrambles which row a click actually touches.
+  const displayOrder = rows
+    .map((row, originalIndex) => ({ row, originalIndex }))
+    .sort((a, b) => (a.row.variant ?? "").localeCompare(b.row.variant ?? "") || a.row.level - b.row.level)
+
   return (
     <div className="flex flex-col gap-2">
       {rows.length === 0 && (
         <p className="text-xs text-muted-foreground italic">No domain spells yet.</p>
       )}
-      {rows.map((row, i) => (
-        <div key={i} className="flex gap-2 items-center">
-          <div className="flex flex-col gap-0.5 w-20 shrink-0">
-            <span className="text-[9px] uppercase text-muted-foreground">Level</span>
-            <select
-              value={row.level}
-              onChange={e => updateRow(i, { level: parseInt(e.target.value) })}
-              className="bg-card border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border"
-            >
-              {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l} className="bg-card text-foreground">{l}</option>)}
-            </select>
+      {displayOrder.map(({ row, originalIndex }, i) => {
+        const variantKey = row.variant?.trim() || null
+        const prevVariantKey = i > 0 ? (displayOrder[i - 1].row.variant?.trim() || null) : null
+        const showHeader = variantKey !== prevVariantKey
+        return (
+          <div key={originalIndex} className="flex flex-col gap-1">
+            {showHeader && variantKey && (
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-2 first:mt-0">{variantKey}</p>
+            )}
+            <div className="flex gap-2 items-center">
+              <div className="flex flex-col gap-0.5 w-20 shrink-0">
+                <span className="text-[9px] uppercase text-muted-foreground">Level</span>
+                <select
+                  value={row.level}
+                  onChange={e => updateRow(originalIndex, { level: parseInt(e.target.value) })}
+                  className="bg-card border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border"
+                >
+                  {[1,3,5,7,9,11,13,15,17,19].map(l => <option key={l} value={l} className="bg-card text-foreground">{l}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-0.5 w-32 shrink-0">
+                <span className="text-[9px] uppercase text-muted-foreground">Variant</span>
+                <input
+                  value={row.variant ?? ""}
+                  onChange={e => updateRow(originalIndex, { variant: e.target.value })}
+                  placeholder="optional, e.g. Arctic"
+                  className="bg-card border border-border rounded-lg px-2 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground"
+                />
+              </div>
+              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                <span className="text-[9px] uppercase text-muted-foreground">Spells (comma-separated)</span>
+                <input
+                  value={(row.spells ?? []).join(", ")}
+                  onChange={e => updateRow(originalIndex, { spells: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                  placeholder="Burning Hands, Command…"
+                  className="bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full"
+                />
+              </div>
+              <button onClick={() => removeRow(originalIndex)} className="size-7 flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-lg shrink-0 mt-4">
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-            <span className="text-[9px] uppercase text-muted-foreground">Spells (comma-separated)</span>
-            <input
-              value={(row.spells ?? []).join(", ")}
-              onChange={e => updateRow(i, { spells: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-              placeholder="Burning Hands, Command…"
-              className="bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-foreground outline-none focus:border-border placeholder:text-muted-foreground w-full"
-            />
-          </div>
-          <button onClick={() => removeRow(i)} className="size-7 flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-lg shrink-0 mt-4">
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
-      ))}
-      {rows.length < 5 && (
-        <button type="button" onClick={addRow} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
-          <Plus className="size-4" /> Add level
-        </button>
-      )}
+        )
+      })}
+      <button type="button" onClick={addRow} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-muted-foreground transition-colors py-1">
+        <Plus className="size-4" /> Add spell
+      </button>
     </div>
   )
 }
