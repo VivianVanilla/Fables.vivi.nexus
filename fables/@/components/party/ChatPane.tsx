@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { ImageIcon, Paperclip, Trash2, Copy, Pencil } from "lucide-react"
 import { loadUserImages } from "@/components/shared/imageGallery"
+import { tapHaptic } from "@/components/shared/haptics"
 import { Markdown } from "../ui/Markdown"
 import { ShareCard } from "./ShareCard"
 import { ShareComposer } from "./ShareComposer"
@@ -14,7 +15,16 @@ import type { Message, SharePayload } from "./partyTypes"
 
 const LONG_PRESS_MS = 500
 
-interface MessageMenuState { x: number; y: number; msg: Message }
+interface MessageMenuState { x: number; y: number; msg: Message; selectedText?: string }
+
+// Grabs whatever text is currently selected on the page, if any — read at
+// the moment the menu opens (right-click / long-press), not later when
+// "Copy" is actually clicked, since clicking the menu button itself would
+// collapse the selection first. Ignores a collapsed/empty selection.
+function currentSelectionText(): string | undefined {
+  const sel = window.getSelection()?.toString().trim()
+  return sel ? sel : undefined
+}
 
 function initials(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "?"
@@ -33,9 +43,14 @@ function Row({ msg, showHeader, isEditing, onSaveEdit, onCancelEdit, onOpenMenu 
   isEditing: boolean
   onSaveEdit: (body: string) => void
   onCancelEdit: () => void
-  onOpenMenu: (x: number, y: number) => void
+  onOpenMenu: (x: number, y: number, selectedText?: string) => void
 }) {
   const [hover, setHover] = useState(false)
+  // True from the moment a touch/hold starts on this row until it either
+  // resolves into the menu opening or gets cancelled (finger lifted/moved
+  // away) — a purely visual "yes, this is registering" cue so a long-press
+  // doesn't feel like it's doing nothing for the first half-second.
+  const [holding, setHolding] = useState(false)
   const touchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Uncontrolled — the textarea only exists in the DOM while isEditing (see
   // the conditional render below), so it naturally remounts with a fresh
@@ -46,18 +61,21 @@ function Row({ msg, showHeader, isEditing, onSaveEdit, onCancelEdit, onOpenMenu 
   function handleTouchStart(e: React.TouchEvent) {
     const touch = e.touches[0]
     const x = touch.clientX, y = touch.clientY
+    setHolding(true)
     touchTimer.current = setTimeout(() => {
       touchTimer.current = null
-      navigator.vibrate?.(10)
-      onOpenMenu(x, y)
+      setHolding(false)
+      tapHaptic()
+      onOpenMenu(x, y, currentSelectionText())
     }, LONG_PRESS_MS)
   }
   function cancelTouch() {
+    setHolding(false)
     if (touchTimer.current) { clearTimeout(touchTimer.current); touchTimer.current = null }
   }
   function handleContextMenu(e: React.MouseEvent) {
     e.preventDefault()
-    onOpenMenu(e.clientX, e.clientY)
+    onOpenMenu(e.clientX, e.clientY, currentSelectionText())
   }
 
   function saveEdit() {
@@ -68,7 +86,9 @@ function Row({ msg, showHeader, isEditing, onSaveEdit, onCancelEdit, onOpenMenu 
 
   return (
     <div
-      className="group flex items-start gap-2.5 px-3 py-0.5 hover:bg-foreground/[0.03] rounded-lg relative select-none"
+      className={`group flex items-start gap-2.5 px-3 py-0.5 rounded-lg relative select-none transition-colors ${
+        holding ? "bg-foreground/10" : "hover:bg-foreground/[0.03]"
+      }`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onContextMenu={handleContextMenu}
@@ -122,12 +142,17 @@ function Row({ msg, showHeader, isEditing, onSaveEdit, onCancelEdit, onOpenMenu 
         ) : msg.type === "share" && msg.payload ? (
           <div className="mt-1"><ShareCard payload={msg.payload} /></div>
         ) : (
-          <>
+          // select-text overrides the row's own select-none for just the
+          // message content — lets you drag-select part of a message (to
+          // copy only that part, see the menu's "Copy" below) without also
+          // making the avatar/name/timestamp draggable-selectable, which
+          // would just get in the way of the long-press/right-click gesture.
+          <div className="select-text">
             {msg.image_url && (
               <img src={msg.image_url} alt="attachment" className="rounded-lg max-w-xs max-h-64 object-cover mt-1 mb-0.5" />
             )}
             {msg.body && <Markdown text={msg.body} tone="auto" className="wrap-break-word" />}
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -160,12 +185,12 @@ export function ChatPane({
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  function openMessageMenu(x: number, y: number, msg: Message) {
+  function openMessageMenu(x: number, y: number, msg: Message, selectedText?: string) {
     // Keeps the menu on-screen in a panel that's often under 400px wide
     // (the mobile compact view especially) — a menu opened near the right
     // edge would otherwise render partly off-screen.
     const MENU_WIDTH = 150
-    setMenu({ x: Math.min(x, window.innerWidth - MENU_WIDTH - 8), y, msg })
+    setMenu({ x: Math.min(x, window.innerWidth - MENU_WIDTH - 8), y, msg, selectedText })
   }
 
   useEffect(() => {
@@ -230,7 +255,7 @@ export function ChatPane({
               isEditing={editingId === msg.id}
               onSaveEdit={body => { onEdit(msg.id, body); setEditingId(null) }}
               onCancelEdit={() => setEditingId(null)}
-              onOpenMenu={(x, y) => openMessageMenu(x, y, msg)}
+              onOpenMenu={(x, y, selectedText) => openMessageMenu(x, y, msg, selectedText)}
             />
           )
         })}
@@ -301,11 +326,11 @@ export function ChatPane({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
           <div style={{ left: menu.x, top: menu.y }} className="fixed z-50 flex flex-col rounded-lg bg-popover border border-border shadow-xl overflow-hidden py-1 min-w-36">
-            {menu.msg.body && (
+            {(menu.msg.body || menu.selectedText) && (
               <button type="button"
-                onClick={() => { navigator.clipboard.writeText(menu.msg.body ?? ""); setMenu(null) }}
+                onClick={() => { navigator.clipboard.writeText(menu.selectedText || menu.msg.body || ""); setMenu(null) }}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-foreground/80 hover:bg-foreground/10 transition-colors text-left">
-                <Copy className="size-3.5" /> Copy text
+                <Copy className="size-3.5" /> {menu.selectedText ? "Copy selection" : "Copy text"}
               </button>
             )}
             {menu.msg.sender_id === currentUserId && menu.msg.type === "message" && menu.msg.body != null && (

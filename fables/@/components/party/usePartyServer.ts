@@ -4,9 +4,10 @@
 // the `messages` table, with realtime INSERT/DELETE sync).
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
+import { useOnResume } from "@/components/shared/useOnResume"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { DEFAULT_CHANNEL, useChannelSuffix, type Channel, type Message, type PartyMember, type SharePayload } from "./partyTypes"
 
@@ -74,10 +75,16 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loaded, setLoaded] = useState(false)
   const suffix = useChannelSuffix()
+  // Bumped on every partyCode/currentUserId change and on unmount so a slow
+  // response from a *previous* party/user (or one arriving after unmount)
+  // can tell it's stale and skip applying — same intent the old `cancelled`
+  // flag had, just usable from fetchMessages() too, which useOnResume also
+  // calls independently of that effect's own lifecycle.
+  const genRef = useRef(0)
 
-  useEffect(() => {
+  function fetchMessages() {
     if (!partyCode || !currentUserId) return
-    let cancelled = false
+    const gen = genRef.current
     supabase
       .from("messages")
       .select("*")
@@ -85,13 +92,42 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
       .order("created_at", { ascending: true })
       .limit(500)
       .then(({ data, error }) => {
-        if (cancelled) return
-        if (error) console.error("chat load error:", error)
-        if (data) setMessages(data as Message[])
+        if (gen !== genRef.current) return
+        if (error) { console.error("chat load error:", error); return }
+        // Re-fetches (see useOnResume below) merge rather than replace, so
+        // an optimistic row still in flight from sendMessage() — or a
+        // temp-id swap racing this same tick — doesn't get clobbered by a
+        // response snapshot that predates it.
+        if (data) {
+          const fresh = data as Message[]
+          setMessages(prev => {
+            const pending = prev.filter(m => m.id.startsWith("pending:"))
+            return [...fresh, ...pending.filter(p => !fresh.some(f => f.id === p.id))]
+          })
+        }
         setLoaded(true)
       })
-    return () => { cancelled = true }
+  }
+
+  useEffect(() => {
+    genRef.current++
+    if (!partyCode || !currentUserId) return
+    fetchMessages()
+    // Deliberately reads genRef.current at cleanup time, not a value
+    // captured when the effect ran — genRef isn't a DOM/node ref, just a
+    // monotonic counter, so there's no stale-node concern here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { genRef.current++ }
+    // fetchMessages is deliberately omitted — a plain function redefined
+    // every render, not stateful; re-running this effect for identity
+    // churn alone would refetch the whole chat log every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode, currentUserId])
+
+  // Catches up on anything missed while the realtime socket was actually
+  // disconnected (routine on mobile — Android suspends the WebView's
+  // connections whenever the app is backgrounded) — see useOnResume.ts.
+  useOnResume(fetchMessages)
 
   useEffect(() => {
     if (!partyCode || !currentUserId) return

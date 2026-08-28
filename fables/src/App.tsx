@@ -7,6 +7,11 @@ import { supabase } from "./supabase"
 import { useEffect } from "react"
 import Documentation from "./Documentation"
 import ShareView from "./ShareView"
+import { Capacitor } from "@capacitor/core"
+import { SplashScreen } from "@capacitor/splash-screen"
+import { useAndroidBackButton } from "./hooks/useAndroidBackButton"
+import { usePushNotifications } from "./hooks/usePushNotifications"
+import { useUser } from "./contexts/UserContext"
 
 
 
@@ -19,6 +24,18 @@ function App() {
 
 const navigate = useNavigate();
 const location = useLocation();
+const user = useUser();
+
+useAndroidBackButton();
+usePushNotifications(user?.id);
+
+// Native splash screen (see capacitor.config.ts — launchAutoHide: false)
+// stays up until this fires, so the first paint the user sees is the real
+// app rather than a blank white flash while React/providers/session-check
+// spin up. Web build: Capacitor.isNativePlatform() is false, no-op.
+useEffect(() => {
+  if (Capacitor.isNativePlatform()) SplashScreen.hide()
+}, []);
 
 // Only the "/" landing page should bounce a logged-in visitor straight to
 // their Dashboard — this effect used to fire on every route (App wraps
@@ -44,9 +61,7 @@ useEffect(() => {
 
   return (
     <>
-    <span className="fixed bottom-3 left-3 z-50 text-[10px] font-mono font-semibold tracking-widest text-white/25 select-none pointer-events-none">
-      BETA VERSION 1.9.6
-    </span>
+    
     <Routes>
       <Route path="/" element={
         <div className="min-h-screen bg-background overflow-hidden flex items-center justify-center">

@@ -50,3 +50,17 @@ coverage/
 # TypeScript build cache
 *.tsbuildinfo
 
+# Capacitor Android native project — the project itself (android/) IS
+# committed (MainActivity, AndroidManifest, res/, gradle config — none of
+# that regenerates from `npx cap add android` alone once customized), but
+# these are either machine-specific, rebuildable, or secret:
+/fables/android/local.properties
+/fables/android/.gradle/
+/fables/android/**/build/
+/fables/android/captures/
+/fables/android/app/google-services.json
+/fables/android/app/*.keystore
+/fables/android/app/*.jks
+*.keystore
+*.jks
+

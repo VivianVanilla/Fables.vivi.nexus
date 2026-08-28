@@ -6,9 +6,10 @@
 // party/useCanvas.ts data layer.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { useChannelSuffix } from "../party/partyTypes"
+import { useOnResume } from "@/components/shared/useOnResume"
 import { SUPABASE_BUCKET } from "@/components/shared/constants"
 
 // Shared with the avatar-color wheel elsewhere in Party Chat (see
@@ -126,10 +127,15 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
   const [paintLayer, setPaintLayer] = useState<MapPaintLayer | null>(null)
   const [loaded, setLoaded] = useState(false)
   const suffix = useChannelSuffix()
+  // Guards a slow/late response against landing after partyCode/
+  // currentUserId changed or the hook unmounted — matters more now that
+  // useOnResume can also trigger this fetch outside this effect's own
+  // lifecycle (see usePartyMessages' genRef for the same pattern).
+  const genRef = useRef(0)
 
-  useEffect(() => {
+  function fetchBoard() {
     if (!partyCode || !currentUserId) return
-    let cancelled = false
+    const gen = genRef.current
     setLoaded(false)
     Promise.all([
       supabase.from("map_pins").select("*").eq("party_code", partyCode),
@@ -138,7 +144,7 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
       fetchAllStrokes(partyCode),
       supabase.from("map_paint_layer").select("*").eq("party_code", partyCode).maybeSingle(),
     ]).then(([p, n, t, s, l]) => {
-      if (cancelled) return
+      if (gen !== genRef.current) return
       if (p.error) console.error("map pins load error:", p.error)
       if (n.error) console.error("map pin notes load error:", n.error)
       if (t.error) console.error("map tokens load error:", t.error)
@@ -151,8 +157,25 @@ export function useMapBoard(partyCode: string, currentUserId: string) {
       setPaintLayer(l.data as MapPaintLayer | null)
       setLoaded(true)
     })
-    return () => { cancelled = true }
+  }
+
+  useEffect(() => {
+    genRef.current++
+    fetchBoard()
+    // Deliberately reads genRef.current at cleanup time, not a value
+    // captured when the effect ran — genRef isn't a DOM/node ref, just a
+    // monotonic counter, so there's no stale-node concern here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { genRef.current++ }
+    // fetchBoard is deliberately omitted — it's a plain function redefined
+    // every render, not stateful; re-running this effect for identity
+    // churn alone would refetch the whole board every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode, currentUserId])
+
+  // Catches up on anything missed while the realtime socket was actually
+  // disconnected (routine on mobile — see useOnResume.ts).
+  useOnResume(fetchBoard)
 
   useEffect(() => {
     if (!partyCode || !currentUserId) return

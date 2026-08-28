@@ -144,9 +144,14 @@ export function PaneView({
       className={`flex flex-col h-full min-h-0 min-w-0 rounded-lg overflow-hidden ring-1 transition-colors ${focused ? "ring-foreground/20" : "ring-border/60"}`}
       onMouseDownCapture={onFocus}
     >
-      {/* Tab strip */}
+      {/* Tab strip — same rounded-pill "bubble" look the compact single-pane
+          view (Dashboard.tsx) uses for its own tab strip, so splitting into
+          multiple panes doesn't also drop you into a visually different
+          tab style. Only the strip's own chrome (the muted bar it sits on,
+          drag-to-reorder, the split buttons) is specific to actually having
+          multiple panes. */}
       <div
-        className="flex items-stretch gap-0.5 px-1.5 pt-1.5 bg-muted/60 shrink-0 overflow-x-auto"
+        className="flex items-center gap-1 px-1.5 py-1.5 bg-muted/60 shrink-0 overflow-x-auto"
         onDragOver={e => { if (e.dataTransfer.types.includes(PANE_TAB_DRAG_TYPE)) e.preventDefault() }}
         onDrop={handleStripDrop}
       >
@@ -159,23 +164,23 @@ export function PaneView({
               onDragStart={e => e.dataTransfer.setData(PANE_TAB_DRAG_TYPE, JSON.stringify({ objectId: obj.id, fromPaneId: leaf.id }))}
               onClick={() => { onFocus(); onActivateTab(obj.id) }}
               title={obj.name}
-              className={`group flex items-center gap-1.5 max-w-[10rem] px-2.5 py-1.5 rounded-t-md text-xs cursor-pointer select-none shrink-0 transition-colors ${
-                isActive ? "bg-background text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+              className={`group flex items-center gap-1 max-w-[10rem] pl-3 pr-1.5 py-1.5 rounded-full text-xs cursor-pointer select-none shrink-0 transition-colors ${
+                isActive ? "bg-background text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-background/60"
               }`}
             >
               <span className="truncate">{obj.name || "Untitled"}</span>
-              <button
-                type="button"
+              <span
+                role="button"
                 onClick={e => { e.stopPropagation(); onCloseTab(obj.id) }}
-                className="shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-foreground/15 transition-opacity"
+                className="shrink-0 rounded-full p-0.5 opacity-60 hover:opacity-100 hover:bg-foreground/15"
               >
                 <X className="size-3" />
-              </button>
+              </span>
             </div>
           )
         })}
         {tabObjects.length > 0 && (
-          <div className="ml-auto flex items-center gap-0.5 pb-1 shrink-0">
+          <div className="ml-auto flex items-center gap-0.5 shrink-0">
             <button type="button" onClick={() => onSplit("row")} title="Split right"
               className="size-6 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors">
               <SplitSquareHorizontal className="size-3.5" />

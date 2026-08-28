@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { useChannelSuffix } from "../party/partyTypes"
+import { useOnResume } from "@/components/shared/useOnResume"
 import type { MapPinNote } from "../map/useMapBoard"
 
 // Just enough of a map tracker to know which NPC it's linked to (see
@@ -84,43 +85,63 @@ export function useNpcTrackers(partyCode: string, currentUserId: string) {
   const linkedTokenIdsRef = useRef<Set<string>>(new Set())
   useEffect(() => { linkedTokenIdsRef.current = new Set(tokenLinks.map(t => t.id)) }, [tokenLinks])
 
-  useEffect(() => {
+  // Guards every fetch below against a slow/late response landing after
+  // partyCode changed or the hook unmounted (bumped in the [partyCode]
+  // effect and on unmount) — same concern usePartyMessages' genRef
+  // addresses; matters more once useOnResume can also trigger these outside
+  // that effect's own lifecycle.
+  const genRef = useRef(0)
+
+  function fetchNpcs() {
     if (!partyCode) return
-    let cancelled = false
+    const gen = genRef.current
     setLoaded(false)
     supabase.from("npc_trackers").select("*").eq("party_code", partyCode).order("created_at", { ascending: true })
       .then(({ data, error }) => {
-        if (cancelled) return
+        if (gen !== genRef.current) return
         if (error) console.error("npc trackers load error:", error)
         if (data) setNpcs(data as NpcTracker[])
         setLoaded(true)
       })
-    return () => { cancelled = true }
-  }, [partyCode])
-
-  useEffect(() => {
+  }
+  function fetchPins() {
     if (!partyCode) return
-    let cancelled = false
+    const gen = genRef.current
     supabase.from("map_pins").select("id, name").eq("party_code", partyCode).order("name", { ascending: true })
       .then(({ data, error }) => {
-        if (cancelled) return
+        if (gen !== genRef.current) return
         if (error) console.error("npc trackers: pins load error:", error)
         if (data) setPins(data as PinOption[])
       })
-    return () => { cancelled = true }
-  }, [partyCode])
-
-  useEffect(() => {
+  }
+  function fetchTokenLinks() {
     if (!partyCode) return
-    let cancelled = false
+    const gen = genRef.current
     supabase.from("map_tokens").select("id, npc_tracker_id").eq("party_code", partyCode).not("npc_tracker_id", "is", null)
       .then(({ data, error }) => {
-        if (cancelled) return
+        if (gen !== genRef.current) return
         if (error) console.error("npc trackers: token links load error:", error)
         if (data) setTokenLinks(data as TokenLink[])
       })
-    return () => { cancelled = true }
+  }
+
+  useEffect(() => {
+    genRef.current++
+    fetchNpcs(); fetchPins(); fetchTokenLinks()
+    // Deliberately reads genRef.current at cleanup time, not a value
+    // captured when the effect ran — genRef isn't a DOM/node ref, just a
+    // monotonic counter, so there's no stale-node concern here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { genRef.current++ }
+    // fetchNpcs/fetchPins/fetchTokenLinks are deliberately omitted — plain
+    // functions redefined every render, not stateful; re-running this
+    // effect for identity churn alone would refetch everything every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode])
+  // Re-runs all three list fetches (plus the notes fetch below, which
+  // depends on tokenLinks and so re-fires on its own once that resolves)
+  // whenever the app/tab comes back from background — see useOnResume.ts.
+  useOnResume(() => { fetchNpcs(); fetchPins(); fetchTokenLinks() })
 
   // "Detail Notes" — the full sticky-note corkboard (see MapNotesPanel).
   // Reuses map_pin_notes rather than a parallel table: an NPC with no map

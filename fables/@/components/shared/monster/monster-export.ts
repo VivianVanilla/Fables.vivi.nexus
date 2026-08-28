@@ -9,6 +9,9 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import type { MonsterData, MonsterAction } from "./monster-types"
+import { Capacitor } from "@capacitor/core"
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem"
+import { Share } from "@capacitor/share"
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -165,13 +168,32 @@ export async function copyMonsterMarkdown(name: string, data: MonsterData): Prom
   await navigator.clipboard.writeText(monsterToMarkdown(name, data))
 }
 
-export function downloadMonsterMarkdown(name: string, data: MonsterData) {
+// Blob-URL + <a download> only ever triggers a real file download inside an
+// actual browser tab — a Capacitor WebView has no Downloads folder wired up
+// to catch it, so the native branch instead writes the file into app cache
+// storage and hands it to the OS share sheet (Filesystem + Share plugins),
+// which is what actually gets the .md file out to the user's Files app,
+// email, etc. on Android. Web keeps the original blob-download untouched.
+export async function downloadMonsterMarkdown(name: string, data: MonsterData) {
   const md = monsterToMarkdown(name, data)
+  const filename = `${(name || "monster").replace(/[^\w\- ]+/g, "").trim() || "monster"}.md`
+
+  if (Capacitor.isNativePlatform()) {
+    const { uri } = await Filesystem.writeFile({
+      path: filename,
+      data: md,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    })
+    await Share.share({ title: filename, url: uri })
+    return
+  }
+
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `${(name || "monster").replace(/[^\w\- ]+/g, "").trim() || "monster"}.md`
+  a.download = filename
   document.body.appendChild(a)
   a.click()
   a.remove()

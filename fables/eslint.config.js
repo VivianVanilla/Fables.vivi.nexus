@@ -6,7 +6,11 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // android — generated native project, not hand-maintained here.
+  // supabase/functions — Deno Edge Functions (Deno.serve, npm: specifiers,
+  // no DOM/Node globals) — a different runtime than the rest of this repo,
+  // linted (if at all) by `deno lint`, not this config.
+  globalIgnores(['dist', 'android', 'supabase/functions']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

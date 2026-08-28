@@ -49,8 +49,10 @@ export function MapPinViewer({
     setEditingName(false)
   }
 
+  // backdrop-blur-xs, not -sm — lighter compositing/blur cost, matters most
+  // on mobile GPUs; same backdrop look (see Modal.tsx's matching comment).
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-xs" onClick={onClose}>
       <div className="flex items-center justify-between px-5 py-3 shrink-0" onClick={e => e.stopPropagation()}>
         {editingName ? (
           <div className="flex items-center gap-1.5">

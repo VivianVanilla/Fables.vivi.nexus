@@ -295,8 +295,11 @@ export function HomebrewBrowserModal({
     e.description?.toLowerCase().includes(search.toLowerCase())
   )
 
+  // backdrop-blur-xs, not -sm — see Modal.tsx's comment on why: same
+  // backdrop look, a lighter compositing/blur cost that matters most on
+  // mobile GPUs.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
       <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
 
         {/* Header */}

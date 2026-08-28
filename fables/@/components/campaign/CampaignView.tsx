@@ -5,6 +5,7 @@ import { safeParseJson, computeAc, nanoid } from "@/components/shared/utils"
 import type { Feature } from "@/components/shared/types"
 import { SAVE_TO_ABILITY, ALL_CONDITIONS } from "@/components/shared/constants"
 import { CharacterSheet } from "@/components/character/CharacterSheet"
+import { FloatingPanel } from "@/components/shared/ui/FloatingPanel"
 import { PartyServer } from "@/components/party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "@/components/party/unread"
 import { InitiativeTracker } from "./InitiativeTracker"
@@ -612,6 +613,13 @@ export function CampaignView({ campaign }: Props) {
 // the main pane workspace in Dashboard.tsx. Deliberately excludes the party
 // code card and the Initiative/Chat tabs — just the roster, so it's small
 // enough to keep visible while you work on something else.
+// Starting geometry: docked toward the top-right, roughly where the old
+// fixed sidebar used to sit, so converting to a floating panel doesn't also
+// relocate it out of habit — narrower than the shared FloatingPanel default
+// (compact party cards don't need 420px) but still free to resize wider.
+const ROSTER_PANEL_W = 260
+const ROSTER_PANEL_H = 420
+
 export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
   campaign: SidebarObject
   onClose: () => void
@@ -622,21 +630,29 @@ export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
     updateRosterFields, updateDmDeathSaves, addConditionToMember, removeConditionFromMember,
   } = useCampaignRoster(campaign)
 
+  // Ephemeral position/size, same convention as CharacterSheet.tsx's
+  // familiar pop-outs (see FloatingPanel.tsx) — resets to this docked
+  // starting spot each time the roster panel is reopened rather than
+  // persisting across sessions.
+  const [pos, setPos] = useState(() => {
+    const w = Math.min(ROSTER_PANEL_W, window.innerWidth - 16)
+    const h = Math.min(ROSTER_PANEL_H, window.innerHeight - 16)
+    return { x: Math.max(8, window.innerWidth - w - 16), y: 80, w, h }
+  })
+
   const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
   const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
 
   return (
-    <div className="w-48 shrink-0 h-full min-h-0 flex flex-col rounded-xl bg-card ring-1 ring-border overflow-hidden text-foreground">
-      <div className="flex items-center gap-1.5 px-2 py-2 border-b border-foreground/10 shrink-0">
-        <p className="flex-1 min-w-0 text-xs font-bold tracking-wide truncate">{campaign.name}</p>
-        <RosterFieldsMenu rosterFields={campaignData.rosterFields} onChange={updateRosterFields} />
-        <button type="button" onClick={onClose} title="Hide roster sidebar"
-          className="size-5 flex items-center justify-center rounded-md hover:bg-foreground/10 text-foreground/50 hover:text-foreground shrink-0 transition-colors">
-          ✕
-        </button>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-auto p-1.5 flex flex-col gap-1.5">
+    <FloatingPanel
+      title={campaign.name}
+      headerExtra={<RosterFieldsMenu rosterFields={campaignData.rosterFields} onChange={updateRosterFields} />}
+      x={pos.x} y={pos.y} width={pos.w} height={pos.h}
+      onMove={(x, y) => setPos(p => ({ ...p, x, y }))}
+      onResize={(w, h, x) => setPos(p => ({ ...p, w, h, x }))}
+      onClose={onClose}
+    >
+      <div className="flex flex-col gap-1.5">
         {partyCode === "" && (
           <p className="text-[10px] text-foreground/30 italic text-center py-6">This campaign has no party code.</p>
         )}
@@ -661,7 +677,7 @@ export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
           />
         ))}
       </div>
-    </div>
+    </FloatingPanel>
   )
 }
 

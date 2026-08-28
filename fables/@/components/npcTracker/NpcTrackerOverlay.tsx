@@ -297,8 +297,9 @@ export function NpcTrackerOverlay({
           short blurb; this is the full sticky-note corkboard (same
           component pins/trackers use) for actual session-to-session notes,
           in its own full-screen layer so there's real room for it. */}
+      {/* backdrop-blur-xs, not -sm, below — lighter compositing/blur cost, see Modal.tsx */}
       {detailNotesNpc && createPortal(
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm" onClick={() => setDetailNotesId(null)}>
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur-xs" onClick={() => setDetailNotesId(null)}>
           <div className="flex items-center justify-between px-5 py-3 shrink-0" onClick={e => e.stopPropagation()}>
             <span className="text-sm font-semibold text-white">Detail Notes — {detailNotesNpc.name}</span>
             <button type="button" onClick={() => setDetailNotesId(null)} className="text-white/60 hover:text-white text-lg leading-none px-1">✕</button>

@@ -6,8 +6,9 @@
 //     usePartyLatestMessageAt below, without needing the whole panel mounted.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "../../../src/supabase"
+import { useOnResume } from "@/components/shared/useOnResume"
 import { useChannelSuffix } from "./partyTypes"
 
 const THREAD_PREFIX = "fables:seen:thread:"
@@ -55,11 +56,14 @@ interface LatestRow {
 export function usePartyLatestMessageAt(partyCode: string, currentUserId: string): string | null {
   const [latest, setLatest] = useState<string | null>(null)
   const suffix = useChannelSuffix()
+  // Guards against a slow/late response applying after partyCode/
+  // currentUserId changed or the hook unmounted — same concern
+  // usePartyMessages' genRef addresses, see that file's comment.
+  const genRef = useRef(0)
 
-  useEffect(() => {
+  function fetchLatest() {
     if (!partyCode || !currentUserId) return
-    let cancelled = false
-
+    const gen = genRef.current
     supabase
       .from("messages")
       .select("created_at, sender_id, recipient_id")
@@ -67,12 +71,22 @@ export function usePartyLatestMessageAt(partyCode: string, currentUserId: string
       .order("created_at", { ascending: false })
       .limit(30)
       .then(({ data, error }) => {
-        if (cancelled || error || !data) return
+        if (gen !== genRef.current || error || !data) return
         const relevant = (data as LatestRow[]).find(
           m => m.recipient_id === null || m.sender_id === currentUserId || m.recipient_id === currentUserId
         )
         setLatest(relevant?.created_at ?? null)
       })
+  }
+
+  // Catches up on anything missed while the realtime socket was actually
+  // disconnected (routine on mobile — see useOnResume.ts).
+  useOnResume(fetchLatest)
+
+  useEffect(() => {
+    genRef.current++
+    if (!partyCode || !currentUserId) return
+    fetchLatest()
 
     const ch = supabase
       .channel(`party-badge:${partyCode}:${currentUserId}:${suffix}`)
@@ -87,7 +101,15 @@ export function usePartyLatestMessageAt(partyCode: string, currentUserId: string
       })
       .subscribe()
 
-    return () => { cancelled = true; supabase.removeChannel(ch) }
+    // Deliberately reads genRef.current at cleanup time, not a value
+    // captured when the effect ran — genRef isn't a DOM/node ref, just a
+    // monotonic counter, so there's no stale-node concern here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { genRef.current++; supabase.removeChannel(ch) }
+    // fetchLatest is deliberately omitted — it's a plain function redefined
+    // every render, not stateful; re-running this effect (and resubscribing
+    // the channel) for identity churn alone would be wasteful.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode, currentUserId, suffix])
 
   return latest

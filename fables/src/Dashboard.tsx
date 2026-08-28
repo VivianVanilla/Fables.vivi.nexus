@@ -139,7 +139,10 @@ export default function Dashboard() {
               Loading…
             </div>
           ) : user ? (
-            <div className={`flex-1 min-h-0 flex ${rosterCampaign && !isMobile ? "gap-2" : ""}`}>
+            // CampaignRosterSidebar is a floating panel (position: fixed) now,
+            // not a docked flex sibling — it doesn't need (or want) a flex
+            // gap reserved for it, and floats over whichever view is below.
+            <div className="flex-1 min-h-0 flex">
               {useCompactView ? (
                 <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
                   {focusedActive ? (
@@ -166,7 +169,7 @@ export default function Dashboard() {
                   />
                 </div>
               )}
-              {rosterCampaign && !isMobile && (
+              {rosterCampaign && (
                 <CampaignRosterSidebar
                   campaign={rosterCampaign}
                   onClose={() => setRosterSidebarCampaignId(null)}

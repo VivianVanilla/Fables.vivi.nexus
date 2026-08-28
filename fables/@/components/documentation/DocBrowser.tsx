@@ -139,8 +139,10 @@ function SubclassModal({ sc, onClose, onEdit, canEdit }: {
     return acc
   }, {})
 
+  // backdrop-blur-xs, not -sm — lighter compositing/blur cost, matters most
+  // on mobile GPUs; same backdrop look (see Modal.tsx's matching comment).
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-xs p-4">
       <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div>

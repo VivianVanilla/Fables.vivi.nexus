@@ -1,0 +1,36 @@
+name: CI
+
+# Pure verification — no secrets, no deploys. Runs on every push and PR so a
+# broken build/typecheck/lint never reaches main unnoticed. The Android
+# release pipeline (android-release.yml) is separate and only runs on
+# actual release triggers.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fables
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: fables/package-lock.json
+
+      - run: npm ci
+      - run: npx tsc -b --force
+      - run: npm run build
+      # Non-blocking on purpose: the repo currently carries ~150 pre-existing
+      # lint errors unrelated to any single change (see the project's
+      # established convention of only fixing lint issues a given diff
+      # actually introduces). Flip this to a hard gate once that backlog is
+      # cleared — until then it's still useful as a visible report.
+      - run: npm run lint
+        continue-on-error: true

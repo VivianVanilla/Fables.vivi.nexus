@@ -1,0 +1,60 @@
+name: Android Debug Build
+
+# Produces a directly-installable, self-signed debug .apk as a downloadable
+# workflow artifact — for testing on a real device (push notifications
+# included, given GOOGLE_SERVICES_JSON below) without any of the Play Store
+# signing/publishing setup android-release.yml needs. Manual trigger only —
+# this is a testing tool, not something that should run on every push.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fables
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: fables/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+
+      # Optional — without it the build still succeeds, it just won't be
+      # able to register for push (see android/app/build.gradle's
+      # conditional google-services plugin apply). Same secret
+      # android-release.yml uses; set it once, both workflows pick it up.
+      - name: Write google-services.json
+        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Ensure gradlew is executable
+        working-directory: fables/android
+        run: chmod +x gradlew
+
+      # Debug builds sign with Android's built-in, well-known debug keystore
+      # automatically — no ANDROID_KEYSTORE_* secrets needed for this one.
+      - name: Build debug APK
+        working-directory: fables/android
+        run: ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fables-debug-apk
+          path: fables/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14

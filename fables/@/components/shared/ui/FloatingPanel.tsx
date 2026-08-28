@@ -9,6 +9,7 @@ import { useRef } from "react"
 
 interface FloatingPanelProps {
   title: string
+  headerExtra?: React.ReactNode  // an extra control (e.g. a settings menu button) between the title and ✕ — optional, most callers don't need one
   x: number
   y: number
   width?: number
@@ -24,7 +25,7 @@ const MIN_HEIGHT = 200
 export const DEFAULT_WIDTH  = 420
 export const DEFAULT_HEIGHT = 480
 
-export function FloatingPanel({ title, x, y, width, height, onMove, onResize, onClose, children }: FloatingPanelProps) {
+export function FloatingPanel({ title, headerExtra, x, y, width, height, onMove, onResize, onClose, children }: FloatingPanelProps) {
   const dragState   = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const resizeState = useRef<{ startX: number; startY: number; origX: number; origWidth: number; origHeight: number } | null>(null)
 
@@ -102,6 +103,7 @@ export function FloatingPanel({ title, x, y, width, height, onMove, onResize, on
         className="flex items-center gap-2 px-3 py-2 border-b border-white/10 cursor-grab active:cursor-grabbing select-none shrink-0 rounded-t-xl bg-white/5 touch-none"
       >
         <span className="text-sm font-bold text-white truncate flex-1">{title}</span>
+        {headerExtra && <span onPointerDown={e => e.stopPropagation()}>{headerExtra}</span>}
         <button type="button" onClick={onClose} onPointerDown={e => e.stopPropagation()}
           className="size-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/50 hover:text-white text-xs transition-colors shrink-0">
           ✕

@@ -251,7 +251,7 @@ function MarkdownExportMenu({ name, data }: { name: string; data: MonsterData })
             className="w-full text-left px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors whitespace-nowrap">
             {copied ? "✓ Copied!" : "📋 Copy to clipboard"}
           </button>
-          <button type="button" onClick={() => { setOpen(false); downloadMonsterMarkdown(name, data) }}
+          <button type="button" onClick={() => { setOpen(false); downloadMonsterMarkdown(name, data).catch(() => {}) }}
             className="w-full text-left px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors whitespace-nowrap">
             ⬇ Download .md file
           </button>
