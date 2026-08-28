@@ -307,15 +307,34 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 const style       = data.favoriteCategoryStyle?.[cat] ?? "none"
                 const sliderStyle = data.favoriteCategorySliderStyle?.[cat] ?? style
                 const color       = data.favoriteCategoryColors?.[cat] ?? DEFAULT_ACCENT_COLOR
+                const tagColor    = data.favoriteCategoryTagColors?.[cat] ?? DEFAULT_ACCENT_COLOR
+                const sliderColor = data.favoriteCategorySliderColors?.[cat] ?? DEFAULT_ACCENT_COLOR
                 const perClass    = cat === "class" && (data.classFeatureColorsByClass ?? false)
                 return (
                   <div key={cat} className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-white/70 shrink-0">{FAVORITE_CATEGORY_LABELS[cat]}</span>
                       {!perClass && (
-                        <input type="color" value={color} title="Accent color"
-                          onChange={e => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: e.target.value } })}
-                          className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <label className="flex flex-col items-center gap-0.5 cursor-pointer">
+                            <input type="color" value={color} title="Card color"
+                              onChange={e => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: e.target.value } })}
+                              className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                            <span className="text-[8px] text-white/30">Card</span>
+                          </label>
+                          <label className="flex flex-col items-center gap-0.5 cursor-pointer">
+                            <input type="color" value={tagColor} title="Tag & level indicator color"
+                              onChange={e => onUpdate({ favoriteCategoryTagColors: { ...data.favoriteCategoryTagColors, [cat]: e.target.value } })}
+                              className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                            <span className="text-[8px] text-white/30">Tag</span>
+                          </label>
+                          <label className="flex flex-col items-center gap-0.5 cursor-pointer">
+                            <input type="color" value={sliderColor} title="Tracking slider color"
+                              onChange={e => onUpdate({ favoriteCategorySliderColors: { ...data.favoriteCategorySliderColors, [cat]: e.target.value } })}
+                              className="size-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                            <span className="text-[8px] text-white/30">Slider</span>
+                          </label>
+                        </div>
                       )}
                     </div>
                     {cat === "class" && (

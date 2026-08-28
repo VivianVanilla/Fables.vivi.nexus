@@ -83,6 +83,8 @@ interface FeatureListProps {
   accentColor?: string
   accentStyle?: CardStyle
   sliderStyle?: CardStyle
+  tagColor?: string     // Settings — color of the small source tag AND the "Lv N" badge, independent of accentColor above
+  sliderColor?: string  // Settings — color of this category's own "Track uses" bars, independent of accentColor above
   perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — only used for Class Features when "Separate color per class" is on; falls back to accentColor when it returns undefined
   sortable?: boolean
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
@@ -210,7 +212,7 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, perItemAccentColor, sortable, showAddButton = true }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, tagColor, sliderColor, perItemAccentColor, sortable, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const [sortBy, setSortBy] = useState<"class" | "level">("class")
 
@@ -280,6 +282,8 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             accentColor={perItemAccentColor?.(f) ?? accentColor}
             accentStyle={accentStyle}
             sliderStyle={sliderStyle}
+            tagColor={tagColor}
+            sliderColor={sliderColor}
             onChange={patch => onChange(f.id, patch)}
             onRemove={() => onRemove(f.id)}
             onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
@@ -704,6 +708,8 @@ export function InfoTab({
   const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
   const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
   const favSliderStyle = (cat: FavoriteCategory) => data.favoriteCategorySliderStyle?.[cat]
+  const favTagColor    = (cat: FavoriteCategory) => data.favoriteCategoryTagColors?.[cat]
+  const favSliderColor = (cat: FavoriteCategory) => data.favoriteCategorySliderColors?.[cat]
 
   // Settings' "Separate color per class" — resolves each Class Feature's own
   // accent from its `source` (e.g. "Fighter (Champion)") instead of the one
@@ -856,6 +862,7 @@ export function InfoTab({
             suggestionSource="race" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("race")} accentStyle={favAccentStyle("race")} sliderStyle={favSliderStyle("race")}
+            tagColor={favTagColor("race")} sliderColor={favSliderColor("race")}
           />
           <FeatureList
             items={data.feats ?? []} allFeatures={allFeatures} label="Feats"
@@ -867,6 +874,7 @@ export function InfoTab({
             suggestionSource="feat" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")} sliderStyle={favSliderStyle("feat")}
+            tagColor={favTagColor("feat")} sliderColor={favSliderColor("feat")}
           />
           {showFeatPicker && (
             <FeatureSuggestionPickerModal
@@ -887,6 +895,7 @@ export function InfoTab({
               suggestionSource="invocation" userId={userId}
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")} sliderStyle={favSliderStyle("invocation")}
+              tagColor={favTagColor("invocation")} sliderColor={favSliderColor("invocation")}
             />
           )}
           {isArtificer && (
@@ -900,6 +909,7 @@ export function InfoTab({
               suggestionSource="infusion" userId={userId}
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("infusion")} accentStyle={favAccentStyle("infusion")} sliderStyle={favSliderStyle("infusion")}
+              tagColor={favTagColor("infusion")} sliderColor={favSliderColor("infusion")}
             />
           )}
         </div>
@@ -920,6 +930,7 @@ export function InfoTab({
             suggestionSource="class" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
+            tagColor={favTagColor("class")} sliderColor={favSliderColor("class")}
             perItemAccentColor={classFeatureAccentColor}
             sortable
           />

@@ -364,8 +364,10 @@ export interface CharacterData {
   infusions?: Feature[]    // Infusions (Artificer)
   favorites?: FavoriteRef[]
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category (race/class/feat/invocation/spell/equipment/familiar — "item" is deliberately excluded, see STYLING_CATEGORIES), applied everywhere that category renders, not just Favorites
+  favoriteCategoryTagColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the small source tag (e.g. class/race name) AND the "Lv N" badge per category, independent of the card accent color above — falls back to classColorClasses' fixed palette (tag) / the neutral bg-white/10 look (level) when unset
   favoriteCategoryStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: "none" (default/off), "outline" (colored border), or "galaxy" (animated background in that color) — mirrors magicItemStyle
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: separate look for that category's own "Track uses" bars, independent of favoriteCategoryStyle (the card background) — mirrors magicItemSliderStyle
+  favoriteCategorySliderColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of that category's own "Track uses" bars, independent of the card accent color above — falls back to favoriteCategoryColors when unset
   classFeatureColorsByClass?: boolean  // Settings — when true, Class Features cards are colored per-class (classFeatureColors) instead of the single favoriteCategoryColors.class accent
   classFeatureColors?: Record<string, string>  // Settings — accent color per class key (e.g. "fighter"), only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey/deriveCharacterClassNames
   uiScale?: 100 | 75 | 50  // Settings — "Modules and Font Size": sheet-wide zoom level, default 100

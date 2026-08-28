@@ -286,6 +286,8 @@ interface FeatureEntryProps {
   accentColor?:      string             // Settings — this feature's category color (Feature Stylings); resolved by the caller from its category (race/class/feat/invocation), applies everywhere it's rendered, not just Favorites
   accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" for the category card background above
   sliderStyle?:      CardStyle          // Settings — separate look for this category's own "Track uses" bars, independent of accentStyle (the card background)
+  tagColor?:         string             // Settings — color of the small source tag (class/race name) AND the "Lv N" badge, independent of accentColor above — falls back to classColorClasses' fixed palette (tag) / the neutral bg-white/10 look (level) when unset
+  sliderColor?:      string             // Settings — color of this category's own "Track uses" bars, independent of accentColor above — falls back to accentColor when unset
   autoEdit?:         boolean            // open the edit form immediately (newly-added feature/item) — same pattern as SpellEntry.tsx
   onAutoEditConsumed?: () => void
 }
@@ -389,7 +391,7 @@ export function FeatureEntry({
   isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, onAddPack, showAttunement, showItemExtras, showWeightColumn,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
-  accentColor, accentStyle, sliderStyle, autoEdit = false, onAutoEditConsumed,
+  accentColor, accentStyle, sliderStyle, tagColor, sliderColor, autoEdit = false, onAutoEditConsumed,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(autoEdit)
@@ -1039,7 +1041,7 @@ export function FeatureEntry({
   // since a feature can be both magic-flagged AND category-styled at once.
   const sliderSource = feature.isMagicItem
     ? { style: magicItemSliderStyle ?? magicItemStyle, color: magicItemColor ?? DEFAULT_ACCENT_COLOR }
-    : { style: sliderStyle ?? accentStyle, color: accentColor }
+    : { style: sliderStyle ?? accentStyle, color: sliderColor ?? accentColor }
   const barAnimated = sliderSource.style === "galaxy" && !!sliderSource.color
   const barColor     = sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1"
 
@@ -1074,8 +1076,8 @@ export function FeatureEntry({
 
           {!showItemExtras && feature.source && (
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${accentColor ? "" : classColorClasses(feature.source)}`}
-              style={accentColor ? { backgroundColor: accentColor + "26", color: accentColor } : undefined}
+              className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${tagColor ? "" : classColorClasses(feature.source)}`}
+              style={tagColor ? { backgroundColor: tagColor + "26", color: tagColor } : undefined}
               title={feature.source}
             >
               {feature.source}
@@ -1083,7 +1085,12 @@ export function FeatureEntry({
           )}
 
           {!showItemExtras && feature.level != null && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 shrink-0">Lv {feature.level}</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagColor ? "" : "bg-white/10 text-white/50"}`}
+              style={tagColor ? { backgroundColor: tagColor + "26", color: tagColor } : undefined}
+            >
+              Lv {feature.level}
+            </span>
           )}
 
           {showAttunement && feature.requiresAttunement && (

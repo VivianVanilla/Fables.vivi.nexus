@@ -70,8 +70,10 @@ interface FavoritesPanelProps {
   onReorder:         (fromIdx: number, toIdx: number) => void
   featureCategoryById:     Record<string, FavoriteCategory>  // resolves which of the 5 Feature lists a "feature"-type favorite came from
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings (Feature Stylings) — accent color per category
+  favoriteCategoryTagColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the source tag + "Lv N" badge per category, independent of the card accent color above
   favoriteCategoryStyle?:  Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (card background)
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (tracking slider, independent of the card background)
+  favoriteCategorySliderColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the tracking slider per category, independent of the card accent color above
   classFeatureColorsByClass?: boolean            // Settings — when true, favorited Class Features resolve their color from classFeatureColors (by source) instead of the shared favoriteCategoryColors.class
   classFeatureColors?: Record<string, string>    // Settings — accent color per class key, only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey
   onChangeSpell:     (id: string, patch: Partial<SpellItem>) => void
@@ -100,7 +102,7 @@ interface FavoritesPanelProps {
 export function FavoritesPanel({
   favorites, spellItems, equipItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
-  featureCategoryById, favoriteCategoryColors, favoriteCategoryStyle, favoriteCategorySliderStyle,
+  featureCategoryById, favoriteCategoryColors, favoriteCategoryTagColors, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
   classFeatureColorsByClass, classFeatureColors,
   onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
@@ -144,6 +146,12 @@ export function FavoritesPanel({
   }
   function sliderStyleFor(fav: FavoriteRef): CardStyle | undefined {
     return favoriteCategorySliderStyle?.[resolveCategory(fav)]
+  }
+  function tagColorFor(fav: FavoriteRef): string | undefined {
+    return favoriteCategoryTagColors?.[resolveCategory(fav)]
+  }
+  function sliderColorFor(fav: FavoriteRef): string | undefined {
+    return favoriteCategorySliderColors?.[resolveCategory(fav)]
   }
 
   // ── Reorder drag handlers ────────────────────────────────────────────────
@@ -221,6 +229,8 @@ export function FavoritesPanel({
             const accentColor = accentColorFor(fav)
             const accentStyle = accentStyleFor(fav)
             const sliderStyle = sliderStyleFor(fav)
+            const tagColor    = tagColorFor(fav)
+            const sliderColor = sliderColorFor(fav)
 
             // Resolve the entry to render — falls through to a "not found" row
             let entry: React.ReactNode
@@ -270,6 +280,7 @@ export function FavoritesPanel({
                     magicItemColor={magicItemColor}
                     magicItemSliderStyle={magicItemSliderStyle}
                     accentColor={accentColor} accentStyle={accentStyle} sliderStyle={sliderStyle}
+                    tagColor={tagColor} sliderColor={sliderColor}
                     onChange={patch => onUpdateFeature(fav.refId, patch)}
                     onRemove={() => onRemoveFeature(fav.refId)}
                     onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}
