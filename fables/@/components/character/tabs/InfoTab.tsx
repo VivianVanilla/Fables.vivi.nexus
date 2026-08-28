@@ -2,24 +2,21 @@
 // InfoTab.tsx — Info tab with Notes / Traits / Feats / Features / Armor & Items / Profs
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef } from "react"
-import { createPortal } from "react-dom"
+import { useState, useEffect } from "react"
 import type { userInfo } from "@/types/userInfo"
-import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, LinkedNoteRef, FamiliarRef } from "@/components/shared/types"
+import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, FamiliarRef } from "@/components/shared/types"
 import type { Theme } from "@/components/shared/themes"
 import type { PackItem } from "@/components/documentation/doc-types"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
-import { nanoid, profBonus, safeParseJson, uniqueName, weightExemptItemIds } from "@/components/shared/utils"
+import { nanoid, profBonus, weightExemptItemIds } from "@/components/shared/utils"
 import {
   LANGUAGE_SUGGESTIONS, ARMOR_PROFICIENCY_SUGGESTIONS, TOOL_PROFICIENCY_SUGGESTIONS, WEAPON_PROFICIENCY_SUGGESTIONS,
 } from "@/components/shared/constants"
-import { useUserContext } from "../../../../src/contexts/UserContext"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FeatureEntry, getSuggestions, type Suggestion, type SuggestionSource } from "../entries/FeatureEntry"
 import { FamiliarsTab } from "./FamiliarsTab"
-import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { matchOwnClassKey, deriveCharacterClassNames } from "@/components/shared/classColors"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { Modal } from "@/components/shared/ui/Modal"
@@ -38,9 +35,6 @@ interface InfoTabProps {
   card: string
   readOnly: boolean
   userId?: string | null
-  objects: userInfo.Objects[]
-  createObject: (payload: { name: string; type: string; parent_id?: string | null; data?: Record<string, unknown> }) => Promise<userInfo.Objects>
-  updateObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
   subTab: InfoSubTab
@@ -677,243 +671,6 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
   )
 }
 
-// ── Sub-component: Linked Notes ───────────────────────────────────────────────
-
-function getDescendantNotes(objects: userInfo.Objects[], folderId: string): userInfo.Objects[] {
-  const direct     = objects.filter(o => o.parent_id === folderId)
-  const notes      = direct.filter(o => o.type === "note")
-  const subfolders = direct.filter(o => o.type === "folder")
-  return [...notes, ...subfolders.flatMap(f => getDescendantNotes(objects, f.id))]
-}
-
-// Unlinking used to be a bare "✕" — easy to hit by accident while scanning the
-// list. It now lives behind a small edit menu so unlinking is a deliberate
-// two-click action instead of a hair-trigger one. Dropdowns triggered from
-// inside a note row need to escape that row's `overflow-hidden` (used for its
-// own rounded corners) or they render clipped — position is computed from the
-// trigger's screen rect and the menu is portaled to <body> as `position: fixed`
-// (see ../../collab/usePortalMenu), closing on click-outside rather than blur.
-function LinkMenu({ onUnlink, itemLabel }: { onUnlink: () => void; itemLabel: string }) {
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const pos = usePopoverPosition(open, triggerRef, contentRef)
-  useClickOutside(open, () => setOpen(false), triggerRef, contentRef)
-
-  return (
-    <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
-      <button type="button" ref={triggerRef}
-        onClick={() => setOpen(v => !v)}
-        title="Edit link"
-        className="text-white/30 hover:text-white text-xs size-5 flex items-center justify-center rounded hover:bg-white/10 transition-colors">
-        ✎
-      </button>
-      {open && pos && createPortal(
-        <div ref={contentRef} style={{ position: "fixed", top: pos.top, right: pos.right }}
-          className="z-50 bg-zinc-900 border border-white/15 rounded-lg shadow-xl overflow-hidden w-36 animate-in fade-in zoom-in-95 duration-150">
-          <button type="button" onClick={() => { setOpen(false); onUnlink() }}
-            className="w-full text-left px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors whitespace-nowrap">
-            Unlink {itemLabel}
-          </button>
-        </div>,
-        document.body
-      )}
-    </div>
-  )
-}
-
-// Note editor embedded inline in the character sheet — a linked note is a
-// plain single-owner note, same model as the standalone NoteView page.
-function InlineNote({ note, expanded, onToggle, onRemove, readOnly, autoEdit, onAutoEditConsumed }: {
-  note: userInfo.Objects
-  expanded: boolean
-  onToggle: () => void
-  onRemove?: () => void
-  readOnly: boolean
-  autoEdit?: boolean
-  onAutoEditConsumed?: () => void
-}) {
-  const { updateObject } = useUserContext()
-  const initialData = safeParseJson(note.data) as { content?: string }
-
-  const [content, setContent] = useState(initialData.content ?? "")
-  const [editing, setEditing] = useState(!!autoEdit)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Newly-created notes open straight into edit mode, once — mirrors the
-  // auto-edit-on-add pattern used for newly added spells.
-  useEffect(() => {
-    if (autoEdit) onAutoEditConsumed?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function handleChange(next: string) {
-    setContent(next)
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      updateObject(note.id, { data: { content: next } as unknown as JSON }).catch(e => console.error(e))
-    }, 700)
-  }
-
-  function handleEditClick() {
-    if (!expanded) onToggle()
-    setEditing(expanded ? v => !v : true)
-  }
-
-  return (
-    <div className="rounded-lg bg-white/5 border border-white/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white/10 transition-colors" onClick={onToggle}>
-        <span className="text-[10px] text-white/30 w-3 shrink-0">{expanded ? "▼" : "▶"}</span>
-        <span className="text-xs text-white/70 flex-1 min-w-0 truncate">{note.name}</span>
-        {!readOnly && (
-          <button type="button" onClick={e => { e.stopPropagation(); handleEditClick() }}
-            className="text-[10px] px-2 py-0.5 rounded-full transition-colors shrink-0 bg-white/10 hover:bg-white/20 text-white/60 hover:text-white">
-            {expanded && editing ? "👁 Preview" : "✎ Edit"}
-          </button>
-        )}
-        {onRemove && <LinkMenu onUnlink={onRemove} itemLabel="note" />}
-      </div>
-      {expanded && (
-        <div className="px-3 pb-2 max-h-64 overflow-y-auto">
-          {editing && !readOnly ? (
-            <MarkdownTextarea
-              value={content}
-              onChange={handleChange}
-              autoFocus
-              placeholder={`# Note title\n\nStart writing… Supports **bold**, *italic*, \`code\`, and - lists. Ctrl/Cmd+B/I/E for quick formatting.`}
-              className="w-full min-h-32 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 resize-none leading-relaxed font-mono"
-              wrapperClassName="flex flex-col gap-1"
-              variant="light"
-            />
-          ) : (
-            content.trim()
-              ? <Markdown text={content} tone="dark" size="xs" />
-              : <p className="text-[10px] text-white/20 italic">{readOnly ? "Empty note." : "Empty note — click ✎ Edit to start writing."}</p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function LinkedNotesSection({ objects, linkedRefs, onChange, onCreateNote, readOnly, card }: {
-  objects: userInfo.Objects[]
-  linkedRefs: LinkedNoteRef[]
-  onChange: (refs: LinkedNoteRef[]) => void
-  onCreateNote: () => Promise<string>
-  readOnly: boolean
-  card: string
-}) {
-  const [pickerValue, setPickerValue]     = useState("")
-  const [expandedId, setExpandedId]       = useState<string | null>(null)
-  const [pendingEditId, setPendingEditId] = useState<string | null>(null)
-  const [creating, setCreating]           = useState(false)
-
-  const linkable = objects.filter(o =>
-    (o.type === "note" || o.type === "folder") && !linkedRefs.some(r => r.id === o.id)
-  )
-
-  function handleAdd() {
-    if (!pickerValue) return
-    const obj = objects.find(o => o.id === pickerValue)
-    if (!obj) return
-    onChange([...linkedRefs, { id: obj.id, type: obj.type === "folder" ? "folder" : "note" }])
-    setPickerValue("")
-  }
-  function handleRemove(id: string) { onChange(linkedRefs.filter(r => r.id !== id)) }
-
-  async function handleCreate() {
-    setCreating(true)
-    try {
-      const id = await onCreateNote()
-      setExpandedId(id)
-      setPendingEditId(id)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className={`${card} p-3 flex flex-col gap-2`}>
-      <div className="flex items-center justify-between shrink-0 gap-2">
-        <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Linked Notes</span>
-        {!readOnly && (
-          <button type="button" onClick={handleCreate} disabled={creating}
-            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors disabled:opacity-40 ml-auto">
-            {creating ? "Creating…" : "+ New Note"}
-          </button>
-        )}
-      </div>
-
-      {!readOnly && linkable.length > 0 && (
-        <div className="flex items-center gap-2">
-          <select value={pickerValue} onChange={e => setPickerValue(e.target.value)}
-            className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-xs text-white outline-none">
-            <option value="" className="bg-zinc-800 text-white">Link a note or folder…</option>
-            {linkable.map(o => <option key={o.id} value={o.id} className="bg-zinc-800 text-white">{o.type === "folder" ? "📁 " : ""}{o.name}</option>)}
-          </select>
-          <button type="button" onClick={handleAdd} disabled={!pickerValue}
-            className="text-xs px-3 py-2 rounded-lg bg-primary/80 hover:bg-primary disabled:opacity-30 disabled:cursor-default text-white font-semibold transition-colors shrink-0">
-            Link
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1.5">
-        {linkedRefs.length === 0 && (
-          <p className="text-xs text-white/25 italic">No notes linked yet — click "+ New Note", or link an existing note/folder above.</p>
-        )}
-        {linkedRefs.map(ref => {
-          const obj = objects.find(o => o.id === ref.id)
-          if (!obj) {
-            return (
-              <div key={ref.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5">
-                <span className="text-xs text-white/30 italic">Not found (deleted?)</span>
-                {!readOnly && <LinkMenu onUnlink={() => handleRemove(ref.id)} itemLabel="reference" />}
-              </div>
-            )
-          }
-
-          if (ref.type === "folder") {
-            const notes = getDescendantNotes(objects, ref.id)
-            return (
-              <div key={ref.id} className="rounded-lg bg-white/5 border border-white/10 overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <span className="text-xs font-semibold text-white/70 flex-1 min-w-0 truncate">📁 {obj.name}</span>
-                  <span className="text-[10px] text-white/30 shrink-0">{notes.length} note{notes.length === 1 ? "" : "s"}</span>
-                  {!readOnly && <LinkMenu onUnlink={() => handleRemove(ref.id)} itemLabel="folder" />}
-                </div>
-                {notes.length > 0 && (
-                  <div className="flex flex-col gap-1 px-2 pb-2">
-                    {notes.map(n => (
-                      <InlineNote key={n.id} note={n} readOnly={readOnly}
-                        expanded={expandedId === n.id}
-                        onToggle={() => setExpandedId(expandedId === n.id ? null : n.id)}
-                        autoEdit={pendingEditId === n.id}
-                        onAutoEditConsumed={() => setPendingEditId(null)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          }
-
-          return (
-            <InlineNote key={ref.id} note={obj} readOnly={readOnly}
-              expanded={expandedId === ref.id}
-              onToggle={() => setExpandedId(expandedId === ref.id ? null : ref.id)}
-              onRemove={!readOnly ? () => handleRemove(ref.id) : undefined}
-              autoEdit={pendingEditId === ref.id}
-              onAutoEditConsumed={() => setPendingEditId(null)} />
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ── Main InfoTab component ────────────────────────────────────────────────────
 
 // "Armor & Items" moved out to its own top-level Tab in CharacterSheet.tsx
@@ -928,7 +685,7 @@ const SUB_TABS: [InfoSubTab, string][] = [
 ]
 
 export function InfoTab({
-  data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId, objects, createObject,
+  data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId,
   favorites, onToggleFavorite, subTab, onSubTabChange, isWarlock, isArtificer,
   familiars, monsters, poppedOutIds, onAddFamiliar, onUpdateFamiliar, onRemoveFamiliar, onToggleFamiliarFavorite, onPopOutFamiliar,
 }: InfoTabProps) {
@@ -1000,15 +757,6 @@ export function InfoTab({
       ? `*Prerequisite: ${s.meta.prerequisite}*\n\n${s.description}`
       : s.description
     addFeature(key, { name: s.name, description })
-  }
-
-  // ── Linked Notes helpers — create a real sidebar Note object and link it ──
-
-  async function handleCreateNote(): Promise<string> {
-    const name = uniqueName("New Note", objects.filter(o => o.type === "note").map(o => o.name))
-    const note = await createObject({ name, type: "note" })
-    update({ linkedNoteRefs: [...(data.linkedNoteRefs ?? []), { id: note.id, type: "note" }] })
-    return note.id
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -1089,15 +837,6 @@ export function InfoTab({
               <p className="text-[9px] text-white/40">Joined: <span className="text-white/70 font-mono">{data.partyCode}</span></p>
             )}
           </div>
-
-          <LinkedNotesSection
-            objects={objects}
-            linkedRefs={data.linkedNoteRefs ?? []}
-            onChange={refs => update({ linkedNoteRefs: refs })}
-            onCreateNote={handleCreateNote}
-            readOnly={readOnly}
-            card={card}
-          />
         </div>
       )}
 

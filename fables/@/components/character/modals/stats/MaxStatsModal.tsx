@@ -3,22 +3,39 @@ import { NumInput } from "@/components/shared/ui/NumInput"
 import type { CharacterData } from "@/components/shared/types"
 
 interface Props {
-  data: Pick<CharacterData, "maxHp" | "tempHp" | "maxHpMod">
+  data: Pick<CharacterData, "hp" | "maxHp" | "tempHp" | "maxHpMod">
   effectiveMax: number
+  extraMaxHpBonus?: number  // any other override already folded into effectiveMax (e.g. an active Form's maxHpBonus) — needed to recompute it locally after an edit made here
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
 }
 
-export function MaxStatsModal({ data, effectiveMax, onUpdate, onClose }: Props) {
+export function MaxStatsModal({ data, effectiveMax, extraMaxHpBonus = 0, onUpdate, onClose }: Props) {
   const maxHpMod   = data.maxHpMod ?? 0
+  const hp         = data.hp ?? 0
   // Split into a sign toggle + always-positive magnitude — some mobile numeric
   // keypads don't offer a "-" key on a plain number input, so typing a
   // negative modifier there isn't reliably possible; picking the sign as a
   // button sidesteps that entirely.
   const isNegative = maxHpMod < 0
   const magnitude  = Math.abs(maxHpMod)
-  function setSign(negative: boolean) { onUpdate({ maxHpMod: (negative ? -1 : 1) * magnitude }) }
-  function setMagnitude(mag: number)  { onUpdate({ maxHpMod: (isNegative ? -1 : 1) * Math.max(0, mag) }) }
+
+  // 5e rule for anything that lowers your hit point maximum: if current HP
+  // is now above the new maximum, it drops to match instead of just sitting
+  // there above an emptier bar. Without this, dropping Max HP below current
+  // HP left `hp` untouched while `effectiveMax` fell out from under it —
+  // e.g. 11/11 with a −10 Max HP Modifier read as "11 HP" on a bar whose max
+  // was now 1, instead of correctly reading 1/1.
+  function applyMaxChange(patch: Partial<CharacterData>) {
+    const nextMaxHp    = patch.maxHp    ?? data.maxHp ?? 0
+    const nextMaxHpMod = patch.maxHpMod ?? maxHpMod
+    const nextEffectiveMax = Math.max(0, nextMaxHp + nextMaxHpMod + extraMaxHpBonus)
+    if (nextEffectiveMax < hp) patch.hp = nextEffectiveMax
+    onUpdate(patch)
+  }
+
+  function setSign(negative: boolean) { applyMaxChange({ maxHpMod: (negative ? -1 : 1) * magnitude }) }
+  function setMagnitude(mag: number)  { applyMaxChange({ maxHpMod: (isNegative ? -1 : 1) * Math.max(0, mag) }) }
   return (
     <Modal onClose={onClose}>
       <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
@@ -34,7 +51,11 @@ export function MaxStatsModal({ data, effectiveMax, onUpdate, onClose }: Props) 
               <NumInput
                 value={(data[k] as number | undefined) ?? ""}
                 onFocus={e => e.target.select()}
-                onChange={e => onUpdate({ [k]: parseInt(e.target.value) || 0 })}
+                onChange={e => {
+                  const val = parseInt(e.target.value) || 0
+                  if (k === "maxHp") applyMaxChange({ maxHp: val })
+                  else onUpdate({ [k]: val })
+                }}
                 className="text-center bg-white/10 rounded-xl px-3 py-3 text-xl font-bold text-white outline-none focus:ring-2 focus:ring-white/30"
               />
             </label>

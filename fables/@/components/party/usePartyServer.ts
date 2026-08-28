@@ -111,6 +111,13 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
         const old = payload.old as Partial<Message>
         if (old?.id) setMessages(prev => prev.filter(m => m.id !== old.id))
       })
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "messages",
+        filter: `party_code=eq.${partyCode}`,
+      }, payload => {
+        const msg = payload.new as Message
+        setMessages(prev => prev.map(m => m.id === msg.id ? msg : m))
+      })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [partyCode, currentUserId, suffix])
@@ -182,5 +189,12 @@ export function usePartyMessages(partyCode: string, currentUserId: string) {
     if (error) { console.error("delete error:", error); setMessages(prev) }
   }
 
-  return { messages, loaded, sendMessage, deleteMessage }
+  async function editMessage(id: string, body: string) {
+    const prev = messages
+    setMessages(m => m.map(msg => msg.id === id ? { ...msg, body } : msg))
+    const { error } = await supabase.from("messages").update({ body }).eq("id", id)
+    if (error) { console.error("edit error:", error); setMessages(prev) }
+  }
+
+  return { messages, loaded, sendMessage, deleteMessage, editMessage }
 }

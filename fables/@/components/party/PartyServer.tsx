@@ -39,7 +39,7 @@ export function PartyServer({
 }) {
   const { updateObject } = useUserContext()
   const { channels, members, dmUserId } = usePartyRoster(partyCode, { presetCampaign: campaign, presetMembers: partyMembers })
-  const { messages, sendMessage, deleteMessage } = usePartyMessages(partyCode, currentUserId)
+  const { messages, sendMessage, deleteMessage, editMessage } = usePartyMessages(partyCode, currentUserId)
 
   const [activeView, setActiveView] = useState<ActiveView>({ type: "channel", id: DEFAULT_CHANNEL.id })
   const [addingChannel, setAddingChannel] = useState(false)
@@ -130,9 +130,10 @@ export function PartyServer({
 
       {/* Left rail — a permanent sidebar on md+, a slide-over drawer below that */}
       <div className={`
-        w-44 shrink-0 border-r border-border flex flex-col bg-muted/30 overflow-hidden
+        w-44 shrink-0 border-r border-border flex flex-col bg-card overflow-hidden
         fixed md:relative inset-y-0 left-0 z-30 md:z-auto
         transition-transform duration-200 md:transition-none
+        ${railOpen ? "shadow-2xl md:shadow-none" : ""}
         ${railOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}>
         <div className="px-3 pt-3 pb-1.5 flex items-center justify-between shrink-0">
@@ -227,6 +228,7 @@ export function PartyServer({
           partyCode={partyCode}
           canDelete={m => m.sender_id === currentUserId || isDM}
           onDelete={deleteMessage}
+          onEdit={editMessage}
           onSend={input => sendMessage({ ...input, senderName: currentUserName, channel: activeView.id, recipientId: null, type: input.payload ? "share" : "message" })}
           placeholder={`Message #${channels.find(c => c.id === activeView.id)?.name ?? activeView.id}…`}
           emptyText="No messages yet — say hello to your party!"
@@ -241,6 +243,7 @@ export function PartyServer({
           partyCode={partyCode}
           canDelete={m => m.sender_id === currentUserId || isDM}
           onDelete={deleteMessage}
+          onEdit={editMessage}
           onSend={input => sendMessage({ ...input, senderName: currentUserName, channel: null, recipientId: activeView.userId, type: input.payload ? "share" : "message" })}
           placeholder={`Message ${activeView.name} privately…`}
           emptyText={`No private messages with ${activeView.name} yet.`}

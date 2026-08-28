@@ -85,7 +85,7 @@ function conditionEffectText(c: ActiveCondition): string | undefined {
 // ════════════════════════════════════════════════════════════════════════════
 
 export function CharacterSheet({ character, readOnly = false }: Props) {
-  const { user, updateObject, createObject, objects } = useUserContext()
+  const { user, updateObject, objects } = useUserContext()
 
   // ── STATE ─────────────────────────────────────────────────────────────────
 
@@ -399,17 +399,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   function changeSpell(id: string, p: Partial<SpellItem>)     { update({ spellItems: spellItems.map(s => s.id === id ? { ...s, ...p } : s) }) }
   function removeSpell(id: string)                            { update({ spellItems: spellItems.filter(s => s.id !== id) }) }
 
-  // A brand-new Martial entry gets an Items-tab Feature of its own right away
-  // (linked via sourceFeatureId, landing in Carried Items) instead of staying
-  // a standalone weapon nobody's inventory knows about — same backlink every
-  // "+ Martial Tab" toggle already creates, just initiated from this side.
+  // A brand-new Martial entry is self-contained — no forced twin Items-tab
+  // Feature. The sourceFeatureId link (see addItemToEquipment below) is only
+  // for the reverse direction: an existing Gear item you deliberately send
+  // over to Martial. Weight is still counted for a standalone entry — see
+  // totalWeight above, which only skips equipment weight when sourceFeatureId
+  // is set (already counted via that linked Feature instead).
   function addEquip() {
-    const equipId = nanoid()
-    const featureId = nanoid()
-    update({
-      equipmentItems: [...equipItems, { id: equipId, name: "", type: "melee", sourceFeatureId: featureId }],
-      items: [...(data.items ?? []), { id: featureId, name: "", category: "item", equipKind: "weapon" }],
-    })
+    update({ equipmentItems: [...equipItems, { id: nanoid(), name: "", type: "melee" }] })
   }
   function removeEquip(id: string)                            { update({ equipmentItems: equipItems.filter(i => i.id !== id) }) }
 
@@ -1217,6 +1214,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onAddEquip={addEquip} onChangeEquip={changeEquip} onRemoveEquip={removeEquip}
           onCastSpell={spell => update(castSpellPatch(data, spell, multiFormEnabled))}
           favorites={favorites} onToggleEquipFavorite={toggleEquipmentFavorite}
+          onUpdate={update}
         />
       </div>
     )
@@ -1249,13 +1247,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   }
 
   return (
-    <div className={`flex flex-col h-full min-h-0 text-white rounded-xl overflow-auto ${effectiveBody}`}
+    <div className={`flex flex-col h-full min-h-0 text-white overflow-auto ${effectiveBody}`}
       style={rootStyle}>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
         <MaxStatsModal
-          data={data} effectiveMax={effectiveMax}
+          data={data} effectiveMax={effectiveMax} extraMaxHpBonus={ov?.maxHpBonus ?? 0}
           onUpdate={update} onClose={() => setShowMaxMenu(false)}
         />
       )}
@@ -1413,13 +1411,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {/* Two rows on narrow screens (portrait+info, then the Rest/Settings/
           Automation cluster below it) instead of cramming everything into
           one unbreakable row — collapses back to a single row at sm:. */}
-      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
 
         <div className="flex items-center gap-3 min-w-0">
         <button type="button"
           onClick={readOnly ? undefined : openPortraitPicker}
           title={portraitForm?.portraitUrl ? `${portraitForm.name} — click to change your base portrait (set from Automation)` : undefined}
-          className={`relative size-14 rounded-xl overflow-hidden ring-2 ${theme.ring} ${readOnly ? "" : "hover:ring-primary cursor-pointer"} shrink-0 ${theme.box} flex items-center justify-center transition-all`}>
+          className={`relative size-11 rounded-xl overflow-hidden ring-2 ${theme.ring} ${readOnly ? "" : "hover:ring-primary cursor-pointer"} shrink-0 ${theme.box} flex items-center justify-center transition-all`}>
           {uploading ? <span className="text-xs text-white/70">…</span>
             : (portraitForm?.portraitUrl || data.portrait) ? <img src={portraitForm?.portraitUrl || data.portrait} alt="portrait" className="w-full h-full object-cover" />
             : <span className="text-2xl leading-none select-none">IMAGE</span>}
@@ -1549,10 +1547,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-1 flex-wrap px-4 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+      <div className={`flex items-center gap-1 flex-wrap px-3 py-1.5 border-b border-white/10 shrink-0 ${effectiveBody}`}>
         {(["main", "details", "items", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-            className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
+            className={`relative px-3 py-1 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
             {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "items" ? "Armor & Items" : "Chat"}
             {tab === "chat" && partyChatUnread && (
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
@@ -1565,11 +1563,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       </div>{/* ── end sticky wrapper ── */}
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div className={`flex flex-col ${activeTab === "chat" ? "flex-1 min-h-0 overflow-hidden" : "shrink-0 p-4"} ${effectiveBody}`}>
+      <div className={`flex flex-col ${activeTab === "chat" ? "flex-1 min-h-0 overflow-hidden" : "shrink-0 p-3"} ${effectiveBody}`}>
         {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}
-            userId={user?.id ?? null} objects={objects} createObject={createObject} updateObject={updateObject}
+            userId={user?.id ?? null}
             subTab={infoSubTab} onSubTabChange={setInfoSubTab}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite}

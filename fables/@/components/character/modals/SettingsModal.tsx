@@ -101,6 +101,64 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
             )}
           </div>
 
+          {/* Interface options */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Options</p>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={!(data.plainSkills ?? false)}
+                onChange={e => onUpdate({ plainSkills: !e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Color-code skills by ability</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.hideDiceRoller ?? false}
+                onChange={e => onUpdate({ hideDiceRoller: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Remove dice roller</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.hideJumpCalculator ?? false}
+                onChange={e => onUpdate({ hideJumpCalculator: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Remove jump calculator</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.showResistanceTracker ?? false}
+                onChange={e => onUpdate({ showResistanceTracker: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Add resistance/vulnerability tracker</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.hideSpellsSection ?? false}
+                onChange={e => onUpdate({ hideSpellsSection: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Hide Spells (Martial-only character)</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.hideMartialSection ?? false}
+                onChange={e => onUpdate({ hideMartialSection: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className="text-sm text-white/70">Hide Martial (spellcaster-only character)</span>
+            </label>
+          </div>
+
+          {/* Modules and Font Size — shrinks the whole sheet (fonts, padding,
+              cards — everything) so more fits on screen at once. 100% is the
+              default/current size; 75%/50% zoom out from there. */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Modules and Font Size</p>
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
+              {UI_SCALES.map(scale => (
+                <button key={scale} type="button" onClick={() => onUpdate({ uiScale: scale })}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${uiScale === scale ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                  {scale}%{scale === 100 ? " (Default)" : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Styling below — Card Style, Background, Spell Slot Color, Feature Styling ── */}
+
           {/* Card style */}
           <div className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Card Style</p>
@@ -209,35 +267,6 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
             </div>
           </div>
 
-          {/* Interface options */}
-          <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Options</p>
-            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-              <input type="checkbox" checked={!(data.plainSkills ?? false)}
-                onChange={e => onUpdate({ plainSkills: !e.target.checked })}
-                className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Color-code skills by ability</span>
-            </label>
-            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-              <input type="checkbox" checked={data.hideDiceRoller ?? false}
-                onChange={e => onUpdate({ hideDiceRoller: e.target.checked })}
-                className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Remove dice roller</span>
-            </label>
-            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-              <input type="checkbox" checked={data.hideJumpCalculator ?? false}
-                onChange={e => onUpdate({ hideJumpCalculator: e.target.checked })}
-                className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Remove jump calculator</span>
-            </label>
-            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-              <input type="checkbox" checked={data.showResistanceTracker ?? false}
-                onChange={e => onUpdate({ showResistanceTracker: e.target.checked })}
-                className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Add resistance/vulnerability tracker</span>
-            </label>
-          </div>
-
           {/* Feature Styling — one row per category, Magical Items first
               (its style only ever applies to items individually flagged
               Magic Item in their own edit form; every other row applies to
@@ -316,21 +345,6 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                   </div>
                 )
               })}
-            </div>
-          </div>
-
-          {/* Modules and Font Size — shrinks the whole sheet (fonts, padding,
-              cards — everything) so more fits on screen at once. 100% is the
-              default/current size; 75%/50% zoom out from there. */}
-          <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Modules and Font Size</p>
-            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
-              {UI_SCALES.map(scale => (
-                <button key={scale} type="button" onClick={() => onUpdate({ uiScale: scale })}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${uiScale === scale ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-                  {scale}%{scale === 100 ? " (Default)" : ""}
-                </button>
-              ))}
             </div>
           </div>
 

@@ -8,6 +8,7 @@ import type { Theme, SlotTheme } from "@/components/shared/themes"
 import { profBonus } from "@/components/shared/utils"
 import { SAVE_TO_ABILITY, type FavoriteCategory } from "@/components/shared/constants"
 import { Modal } from "@/components/shared/ui/Modal"
+import { MartialModal } from "../modals/stats/MartialModal"
 
 // Master-toggle "Cast" button (Automation → Cast tab → "Show Cast button")
 // sitting next to the Cantrips stat rather than one button per spell row —
@@ -78,6 +79,7 @@ interface Props {
   onCastSpell?: (spell: SpellItem) => void  // Automation — wired only when data.castButtonEnabled shows the Cast button
   favorites?: FavoriteRef[]
   onToggleEquipFavorite?: (id: string, label: string) => void
+  onUpdate: (patch: Partial<CharacterData>) => void
 }
 
 export function SpellsEquipPanel({
@@ -88,9 +90,17 @@ export function SpellsEquipPanel({
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddEquip, onChangeEquip, onRemoveEquip,
   pendingSpellId, onAutoEditConsumed,
-  onCastSpell, favorites, onToggleEquipFavorite,
+  onCastSpell, favorites, onToggleEquipFavorite, onUpdate,
 }: Props) {
-  const showSpells = activeSubTab === "spells"
+  const [showMartialModal, setShowMartialModal] = useState(false)
+  // Settings — a martial-only or caster-only character can hide the side
+  // they never use so this panel stops reading as "half empty" whichever way
+  // they look. If someone somehow enables both at once, neither takes effect
+  // (falls back to showing the normal switcher) rather than hiding everything.
+  const spellsHidden  = !!data.hideSpellsSection  && !data.hideMartialSection
+  const martialHidden = !!data.hideMartialSection && !data.hideSpellsSection
+  const showSubTabSwitcher = !spellsHidden && !martialHidden
+  const showSpells = martialHidden ? true : spellsHidden ? false : activeSubTab === "spells"
   // Feature Stylings (Settings) applied sheet-wide, mirrors InfoTab.tsx's favAccentColor/favAccentStyle.
   const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
   const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
@@ -145,20 +155,29 @@ export function SpellsEquipPanel({
       {/* Header */}
       <div className="flex flex-col gap-2 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0">
-            <button type="button" onClick={() => onChangeSubTab("spells")}
-              className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Spells
-            </button>
-            <button type="button" onClick={() => onChangeSubTab("martial")}
-              className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${!showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Martial
-            </button>
-          </div>
+          {showSubTabSwitcher ? (
+            <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0">
+              <button type="button" onClick={() => onChangeSubTab("spells")}
+                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Spells
+              </button>
+              <button type="button" onClick={() => onChangeSubTab("martial")}
+                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${!showSpells ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                Martial
+              </button>
+            </div>
+          ) : (
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50 shrink-0">{showSpells ? "Spells" : "Martial"}</span>
+          )}
           {showSpells && (
             <button type="button" onClick={onShowSpellcastingModal}
               className="size-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
               title="Configure spellcasting">⚙</button>
+          )}
+          {!showSpells && (
+            <button type="button" onClick={() => setShowMartialModal(true)}
+              className="size-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors ml-auto shrink-0"
+              title="Configure Martial">⚙</button>
           )}
         </div>
 
@@ -209,7 +228,28 @@ export function SpellsEquipPanel({
             )}
           </div>
         )}
+
+        {/* Martial's own stat row — mirrors Spells' Save DC/Atk tiles above so
+            a martial character doesn't read as the "lesser" half of this
+            panel. Fully optional (unlike spellcasting, most martial
+            abilities don't call for a DC), set from its own modal (the ⚙
+            above) rather than a popover — same as Spellcasting's — and
+            entirely absent, not just blank, whenever nothing's set. */}
+        {!showSpells && !!data.martialSaveDC && (
+          <div className="flex items-center gap-4 flex-wrap min-w-0">
+            <button type="button" onClick={() => !readOnly && setShowMartialModal(true)}
+              className="flex flex-col items-center leading-none gap-0.5 hover:opacity-80 transition-opacity">
+              <span className="text-lg font-bold text-white tabular-nums">{data.martialSaveDC}</span>
+              <span className="text-[10px] text-white/40 uppercase tracking-wider">Martial DC</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {showMartialModal && (
+        <MartialModal data={data} readOnly={readOnly} onUpdate={onUpdate}
+          onClose={() => setShowMartialModal(false)} accentColor={theme.accent} />
+      )}
 
       {/* Spell slots — standalone block in Classic mode; Integrated mode merges them into the level headers below */}
       {showSpells && slotDisplay === "classic" && spellSlots.length > 0 && (

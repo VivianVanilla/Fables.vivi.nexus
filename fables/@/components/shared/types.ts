@@ -270,10 +270,6 @@ export interface ProficiencyEntry {
   favorite?: boolean
 }
 
-export interface LinkedNoteRef {
-  id: string             // object id — a note or a folder
-  type: "note" | "folder"
-}
 
 export interface FamiliarRef {
   id: string          // stable instance id, independent of the source monster
@@ -335,6 +331,9 @@ export interface CharacterData {
   showResistanceTracker?: boolean // opt-in (default off) — shows the Resistances/Vulnerabilities panel on the Combat tab, same column as the dice roller
   resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
   vulnerabilities?: string[]     // damage type names this character has vulnerability to
+  hideSpellsSection?: boolean    // Settings — hides the Spells side of the Spells/Martial panel for a martial-only character; ignored if hideMartialSection is also on
+  hideMartialSection?: boolean   // Settings — hides the Martial side for a caster-only character; ignored if hideSpellsSection is also on
+  martialSaveDC?: number         // manually-set flat DC for martial abilities/maneuvers that call for one (e.g. Battle Master) — shown on the Martial panel only when set
   // Settings → "Share Link" — set/cleared as a whole (never edited directly)
   // via SettingsModal's Generate/Revoke buttons. Presence = sharing is on;
   // the actual URL is /share/<object id>/<this token>, resolved by
@@ -403,9 +402,6 @@ export interface CharacterData {
   armorProfs?: ProficiencyEntry[] | string
   toolProfs?: ProficiencyEntry[] | string
   languageProfs?: ProficiencyEntry[] | string
-  // Notes linked into the character's Notes tab — either a specific note, or a
-  // whole folder (all notes found under it are shown).
-  linkedNoteRefs?: LinkedNoteRef[]
   // Death saving throws
   deathSaves?: { successes: number; failures: number; dead?: boolean }
   // Party / multiclass

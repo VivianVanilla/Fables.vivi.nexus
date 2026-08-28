@@ -1073,7 +1073,11 @@ export function FeatureEntry({
           )}
 
           {!showItemExtras && feature.source && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${classColorClasses(feature.source)}`} title={feature.source}>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${accentColor ? "" : classColorClasses(feature.source)}`}
+              style={accentColor ? { backgroundColor: accentColor + "26", color: accentColor } : undefined}
+              title={feature.source}
+            >
               {feature.source}
             </span>
           )}
@@ -1089,6 +1093,39 @@ export function FeatureEntry({
                 className="size-3.5 accent-white cursor-pointer" />
               Attuned
             </label>
+          )}
+
+          {/* Weapon/armor quick facts — always visible, not tucked behind
+              expand, so a Gear-tab weapon reads the same at a glance as the
+              same weapon does on the Martial tab (see EquipmentEntry.tsx's
+              compact row, which this mirrors). */}
+          {showItemExtras && feature.equipKind === "weapon" && feature.itemMeta?.magicBonus && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold shrink-0">{feature.itemMeta.magicBonus}</span>
+          )}
+          {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">
+              AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
+            </span>
+          )}
+          {showItemExtras && (feature.equipKind ?? "armor") === "armor" && (feature.itemMeta?.armorMode ?? "bonus") === "bonus" && !!feature.itemMeta?.acBonus && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">+{feature.itemMeta.acBonus} AC</span>
+          )}
+          {showItemExtras && feature.equipKind === "weapon" && (
+            <DamagePills segments={computeDamageSegments(feature.itemMeta ?? {})} size="xs" />
+          )}
+          {showItemExtras && feature.equipKind === "weapon" && (
+            feature.itemMeta?.weaponKind === "ranged"
+              ? feature.itemMeta?.range && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 shrink-0">⇒ {feature.itemMeta.range}</span>
+              : (feature.itemMeta?.meleeRange || feature.itemMeta?.throwRange) && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 shrink-0">
+                  {feature.itemMeta?.meleeRange && `↔ ${feature.itemMeta.meleeRange}`}
+                  {feature.itemMeta?.meleeRange && feature.itemMeta?.throwRange && " / "}
+                  {feature.itemMeta?.throwRange && `⇒ ${feature.itemMeta.throwRange}`}
+                </span>
+              )
+          )}
+          {showItemExtras && feature.equipKind === "weapon" && feature.itemMeta?.properties && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic shrink-0">{feature.itemMeta.properties}</span>
           )}
 
           {/* Passive readout only — expand the card to actually change it
@@ -1180,28 +1217,6 @@ export function FeatureEntry({
       <PopTransition show={expanded}>
         <div className="px-3 pb-2 border-t border-white/5 flex flex-col gap-2">
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">
-                AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
-              </span>
-            )}
-            {showItemExtras && (feature.equipKind ?? "armor") === "armor" && (feature.itemMeta?.armorMode ?? "bonus") === "bonus" && !!feature.itemMeta?.acBonus && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">+{feature.itemMeta.acBonus} AC</span>
-            )}
-            {showItemExtras && feature.equipKind === "weapon" && (
-              <DamagePills segments={computeDamageSegments(feature.itemMeta ?? {})} size="xs" />
-            )}
-            {showItemExtras && feature.equipKind === "weapon" && (
-              feature.itemMeta?.weaponKind === "ranged"
-                ? feature.itemMeta?.range && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">⇒ {feature.itemMeta.range}</span>
-                : (feature.itemMeta?.meleeRange || feature.itemMeta?.throwRange) && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">
-                    {feature.itemMeta?.meleeRange && `↔ ${feature.itemMeta.meleeRange}`}
-                    {feature.itemMeta?.meleeRange && feature.itemMeta?.throwRange && " / "}
-                    {feature.itemMeta?.throwRange && `⇒ ${feature.itemMeta.throwRange}`}
-                  </span>
-                )
-            )}
             {/* Opt-in (see the "Track Multiple" checkbox in edit mode) — only
                 lives here in the expanded view, not the collapsed header, so
                 one-off items don't carry a counter nobody uses. */}
