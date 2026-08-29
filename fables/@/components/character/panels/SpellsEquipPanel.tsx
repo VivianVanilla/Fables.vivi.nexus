@@ -316,6 +316,7 @@ export function SpellsEquipPanel({
                     <span className="text-sm font-bold uppercase tracking-widest text-white/75">🖈 Pinned</span>
                     <span className="text-xs text-white/40">({pinnedSpells.length})</span>
                   </div>
+                  
                   {pinnedSpells.map(spell => (
                     <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
                       compact={spellsDisplay === "bubbles"}

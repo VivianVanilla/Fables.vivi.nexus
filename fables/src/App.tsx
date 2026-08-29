@@ -7,6 +7,7 @@ import { supabase } from "./supabase"
 import { useEffect } from "react"
 import Documentation from "./Documentation"
 import ShareView from "./ShareView"
+import PrivacyPolicy from "./PrivacyPolicy"
 import { Capacitor } from "@capacitor/core"
 import { SplashScreen } from "@capacitor/splash-screen"
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton"
@@ -64,7 +65,7 @@ useEffect(() => {
     
     <Routes>
       <Route path="/" element={
-        <div className="min-h-screen bg-background overflow-hidden flex items-center justify-center">
+        <div className="relative min-h-screen bg-background overflow-hidden flex items-center justify-center">
           <div className="w-9/10 md:w-1/2 lg:w-1/2">
             <EncryptedText
               text="fables.vivi.nexus"
@@ -74,11 +75,18 @@ useEffect(() => {
             />
             <LoginForm className="" />
           </div>
+          <a
+            href="/privacy"
+            className="absolute bottom-4 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          >
+            Privacy Policy
+          </a>
         </div>
       } />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/documentation" element={<Documentation />} />
       <Route path="/share/:objectId/:token" element={<ShareView />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
     </Routes>
     </>
   )
