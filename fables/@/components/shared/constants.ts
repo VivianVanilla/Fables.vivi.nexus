@@ -166,7 +166,7 @@ export const SKILLS = [
 // there are freeform tags with no mechanical data behind them, so a static
 // list is enough; contrast with the weapon *items* seeded into the
 // `documentation` table (see documentation/seed-data.ts) that actually drive
-// EquipmentEntry's damage/weight autofill.
+// FeatureEntry's damage/weight autofill.
 
 export const LANGUAGE_SUGGESTIONS = [
   "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc",

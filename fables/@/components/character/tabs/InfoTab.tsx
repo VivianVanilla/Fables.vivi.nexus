@@ -8,7 +8,10 @@ import type { CharacterData, Feature, FavoriteRef, ProficiencyEntry, FamiliarRef
 import type { Theme } from "@/components/shared/themes"
 import type { PackItem } from "@/components/documentation/doc-types"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
-import { nanoid, profBonus, weightExemptItemIds } from "@/components/shared/utils"
+import { nanoid, profBonus, weightExemptItemIds, reorderSubset } from "@/components/shared/utils"
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
+import { SortableItem, useDragSensors } from "@/components/shared/SortableItem"
 import {
   LANGUAGE_SUGGESTIONS, ARMOR_PROFICIENCY_SUGGESTIONS, TOOL_PROFICIENCY_SUGGESTIONS, WEAPON_PROFICIENCY_SUGGESTIONS,
 } from "@/components/shared/constants"
@@ -69,12 +72,11 @@ interface FeatureListProps {
   card: string
   readOnly: boolean
   pb: number
+  statMods?: Record<string, number>
   suggestionSource?: SuggestionSource
   userId?: string | null
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
-  onAddToEquipment?: (feature: Feature) => void
-  equipmentLinkedIds?: Set<string>
   onAddPack?: (id: string, packItems: PackItem[]) => void  // only wired for the Items tab — a picked pack suggestion replaces feature `id` with every item it contains
   showAttunement?: boolean
   showItemExtras?: boolean
@@ -87,8 +89,9 @@ interface FeatureListProps {
   sliderStyle?: CardStyle
   tagColor?: string     // Settings — color of the small source tag AND the "Lv N" badge, independent of accentColor above
   sliderColor?: string  // Settings — color of this category's own "Track uses" bars, independent of accentColor above
-  perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — only used for Class Features when "Separate color per class" is on; falls back to accentColor when it returns undefined
-  sortable?: boolean
+  perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — used for Class Features' "Separate color per class" and Items' Martial-linked weapons; falls back to accentColor when it returns undefined
+  perItemAccentStyle?: (f: Feature) => CardStyle | undefined  // overrides accentStyle per feature, same fallback rule as perItemAccentColor
+  onReorder?: (newOrder: Feature[]) => void  // enables drag-to-reorder — omit to render a plain (non-draggable) list
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
 }
 
@@ -99,7 +102,7 @@ interface FeatureListProps {
 // know the exact spelling first. Manually typing a custom name still gets
 // that inline autofill same as always; this modal doesn't replace it, it's
 // just another way to reach the same pool before you've started typing.
-function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existingNames, classFilter, onPick, onClose }: {
+export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existingNames, classFilter, onPick, onClose }: {
   label: string
   suggestionSource: SuggestionSource
   userId?: string | null
@@ -214,15 +217,18 @@ function FeatureSuggestionPickerModal({ label, suggestionSource, userId, existin
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, suggestionSource, userId, favorites, onToggleFavorite, onAddToEquipment, equipmentLinkedIds, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, tagColor, sliderColor, perItemAccentColor, sortable, showAddButton = true }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, tagColor, sliderColor, perItemAccentColor, perItemAccentStyle, onReorder, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
-  const [sortBy, setSortBy] = useState<"class" | "level">("class")
+  const sensors = useDragSensors()
 
-  const displayedItems = sortable
-    ? items.slice().sort((a, b) => sortBy === "level"
-        ? (a.level ?? 0) - (b.level ?? 0) || (a.source ?? "").localeCompare(b.source ?? "")
-        : (a.source ?? "").localeCompare(b.source ?? "") || (a.level ?? 0) - (b.level ?? 0))
-    : items
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = items.findIndex(f => f.id === active.id)
+    const newIndex = items.findIndex(f => f.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    onReorder?.(arrayMove(items, oldIndex, newIndex))
+  }
 
   return (
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
@@ -235,21 +241,9 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             Attuned {attunedCount}/{MAX_ATTUNEMENTS}
           </span>
         )}
-        {sortable && (
-          <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 shrink-0 ml-auto">
-            <button type="button" onClick={() => setSortBy("class")}
-              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${sortBy === "class" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Sort: Class
-            </button>
-            <button type="button" onClick={() => setSortBy("level")}
-              className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${sortBy === "level" ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
-              Sort: Level
-            </button>
-          </div>
-        )}
         {!readOnly && showAddButton && (
           <button type="button" onClick={onAdd}
-            className={`text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ${sortable ? "shrink-0" : "ml-auto"}`}>
+            className="text-sm px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors ml-auto">
             + Add
           </button>
         )}
@@ -260,37 +254,41 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        {displayedItems.map(f => (
-          <FeatureEntry
-            key={f.id}
-            feature={f}
-            allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
-            theme={theme}
-            readOnly={readOnly}
-            pb={pb}
-            suggestionSource={suggestionSource}
-            userId={userId}
-            isFavorite={favorites.some(fav => fav.refId === f.id)}
-            onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
-            onAddToEquipment={onAddToEquipment}
-            inEquipment={equipmentLinkedIds?.has(f.id)}
-            onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
-            showAttunement={showAttunement}
-            showItemExtras={showItemExtras}
-            showMagicStar={showMagicStar}
-            magicItemStyle={magicItemStyle}
-            magicItemColor={magicItemColor}
-            magicItemSliderStyle={magicItemSliderStyle}
-            accentColor={perItemAccentColor?.(f) ?? accentColor}
-            accentStyle={accentStyle}
-            sliderStyle={sliderStyle}
-            tagColor={tagColor}
-            sliderColor={sliderColor}
-            onChange={patch => onChange(f.id, patch)}
-            onRemove={() => onRemove(f.id)}
-            onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
-          />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={items.map(f => f.id)} strategy={verticalListSortingStrategy}>
+            {items.map(f => (
+              <SortableItem key={f.id} id={f.id} disabled={readOnly || !onReorder}>
+                <FeatureEntry
+                  feature={f}
+                  allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
+                  theme={theme}
+                  readOnly={readOnly}
+                  pb={pb}
+                  statMods={statMods}
+                  suggestionSource={suggestionSource}
+                  userId={userId}
+                  isFavorite={favorites.some(fav => fav.refId === f.id)}
+                  onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
+                  onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
+                  showAttunement={showAttunement}
+                  showItemExtras={showItemExtras}
+                  showMagicStar={showMagicStar}
+                  magicItemStyle={magicItemStyle}
+                  magicItemColor={magicItemColor}
+                  magicItemSliderStyle={magicItemSliderStyle}
+                  accentColor={perItemAccentColor?.(f) ?? accentColor}
+                  accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
+                  sliderStyle={sliderStyle}
+                  tagColor={tagColor}
+                  sliderColor={sliderColor}
+                  onChange={patch => onChange(f.id, patch)}
+                  onRemove={() => onRemove(f.id)}
+                  onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
+                />
+              </SortableItem>
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   )
@@ -309,6 +307,7 @@ export interface ContainerItemsListProps {
   card: string
   readOnly: boolean
   pb: number
+  statMods?: Record<string, number>
   userId?: string | null
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
@@ -319,12 +318,33 @@ export interface ContainerItemsListProps {
   pendingItemId?: string | null   // set right after Add — opens that item straight into its edit form
   onAutoEditConsumed?: () => void
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
-  onAddToEquipment?: (feature: Feature) => void  // toggles this item's "+ Martial Tab" link — omit to hide the button
-  equipmentLinkedIds?: Set<string>               // sourceFeatureIds already linked into the Martial tab
   onAddPack?: (id: string, packItems: PackItem[]) => void  // a picked pack suggestion replaces feature `id` with every item it contains
+  onReorder?: (newOrder: Feature[]) => void  // reorders siblings (same parentId) — omit to render a plain (non-draggable) list
+  accentColor?: string
+  accentStyle?: CardStyle
+  perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — used for Martial-linked weapons; falls back to accentColor when it returns undefined
+  perItemAccentStyle?: (f: Feature) => CardStyle | undefined  // overrides accentStyle per feature, same fallback rule as perItemAccentColor
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddToEquipment, equipmentLinkedIds, onAddPack }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle }: ContainerItemsListProps) {
+  const sensors = useDragSensors()
+
+  // Reorders within a sibling group (same parentId) only — dropping onto an
+  // item from a different group is ignored here; moving an item into a
+  // different container is still the job of the existing drag-to-container/
+  // "Move to container" dropdown above, unchanged.
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const activeItem = items.find(i => i.id === active.id)
+    if (!activeItem) return
+    const group = items.filter(i => i.parentId === activeItem.parentId)
+    const oldIndex = group.findIndex(i => i.id === active.id)
+    const newIndex = group.findIndex(i => i.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reorderedGroup = arrayMove(group, oldIndex, newIndex)
+    onReorder?.(reorderSubset(items, i => i.parentId === activeItem.parentId, reorderedGroup))
+  }
   // Which containers (isContainer feature ids) have their contents shown —
   // per-container, not a whole-panel toggle; hidden by default; ephemeral
   // (resets on reload), same as FeatureEntry's own expanded/collapsed state.
@@ -383,35 +403,38 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
       .map(i => ({ id: i.id, name: i.name }))
     return (
       <div key={f.id} className="flex flex-col gap-1" style={{ marginLeft: depth * 16 }}>
-        <FeatureEntry
-          feature={f}
-          allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
-          theme={theme}
-          readOnly={readOnly}
-          pb={pb}
-          suggestionSource="item"
-          userId={userId}
-          isFavorite={favorites.some(fav => fav.refId === f.id)}
-          onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
-          showItemExtras
-          showWeightColumn
-          showMagicStar={showMagicStar}
-          magicItemStyle={magicItemStyle}
-          magicItemColor={magicItemColor}
-          magicItemSliderStyle={magicItemSliderStyle}
-          containerOptions={containerOptions}
-          onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
-          containerContentsOpen={f.isContainer ? contentsOpen : undefined}
-          onToggleContainerContents={f.isContainer ? () => toggleContainerOpen(f.id) : undefined}
-          onChange={patch => onChange(f.id, patch)}
-          onRemove={() => onRemove(f.id)}
-          onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
-          autoEdit={f.id === pendingItemId}
-          onAutoEditConsumed={onAutoEditConsumed}
-          onAddToEquipment={onAddToEquipment}
-          inEquipment={equipmentLinkedIds?.has(f.id)}
-          onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
-        />
+        <SortableItem id={f.id} disabled={readOnly || !onReorder}>
+          <FeatureEntry
+            feature={f}
+            allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
+            theme={theme}
+            readOnly={readOnly}
+            pb={pb}
+            statMods={statMods}
+            suggestionSource="item"
+            userId={userId}
+            isFavorite={favorites.some(fav => fav.refId === f.id)}
+            onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
+            showItemExtras
+            showWeightColumn
+            showMagicStar={showMagicStar}
+            magicItemStyle={magicItemStyle}
+            magicItemColor={magicItemColor}
+            magicItemSliderStyle={magicItemSliderStyle}
+            accentColor={perItemAccentColor?.(f) ?? accentColor}
+            accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
+            containerOptions={containerOptions}
+            onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
+            containerContentsOpen={f.isContainer ? contentsOpen : undefined}
+            onToggleContainerContents={f.isContainer ? () => toggleContainerOpen(f.id) : undefined}
+            onChange={patch => onChange(f.id, patch)}
+            onRemove={() => onRemove(f.id)}
+            onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
+            autoEdit={f.id === pendingItemId}
+            onAutoEditConsumed={onAutoEditConsumed}
+            onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
+          />
+        </SortableItem>
         <PopTransition show={!!f.isContainer}>
           <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"
             onDragOver={e => { if (!readOnly) e.preventDefault() }}
@@ -423,7 +446,9 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
             )}
             {contentsOpen && (
               <>
-                {children.map(c => renderItem(c, depth + 1))}
+                <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                  {children.map(c => renderItem(c, depth + 1))}
+                </SortableContext>
                 {children.length === 0 && (
                   <p className="text-[10px] text-white/20 italic text-center py-2 border border-dashed border-white/10 rounded-lg">
                     Drag items here
@@ -461,7 +486,11 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        {roots.map(f => renderItem(f, 0))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={roots.map(f => f.id)} strategy={verticalListSortingStrategy}>
+            {roots.map(f => renderItem(f, 0))}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   )
@@ -480,7 +509,7 @@ function toProfEntries(value: ProficiencyEntry[] | string | undefined): Proficie
 // Static name suggestions surfaced through ProficiencyPickerModal's
 // searchable grid — proficiencies are freeform tags with no mechanical data
 // behind them (contrast with the weapon *items* seeded into the
-// `documentation` table, which drive EquipmentEntry's damage/weight
+// `documentation` table, which drive FeatureEntry's damage/weight
 // autofill instead). No inline <datalist> autofill on the manual rename
 // input below — the modal is the one place to pick from this list now.
 const PROFICIENCY_SUGGESTIONS: Record<string, readonly string[]> = {
@@ -763,6 +792,8 @@ export function InfoTab({
   // by hand still gets that inline autofill untouched.
   const [showFeatPicker, setShowFeatPicker] = useState(false)
   const [showClassFeaturePicker, setShowClassFeaturePicker] = useState(false)
+  const [showRacialTraitPicker, setShowRacialTraitPicker] = useState(false)
+  const [showInvocationPicker, setShowInvocationPicker] = useState(false)
 
   function addFeatureFromSuggestion(key: FeatureKey, s: Suggestion) {
     const description = s.meta?.prerequisite
@@ -860,7 +891,7 @@ export function InfoTab({
         <div className={`grid grid-cols-1 md:grid-cols-2 ${extraCols === 1 ? "lg:grid-cols-3" : extraCols === 2 ? "lg:grid-cols-4" : ""} gap-3 flex-1 min-h-0`}>
           <FeatureList
             items={data.racialTraits ?? []} allFeatures={allFeatures} label="Racial Traits"
-            onAdd={() => addFeature("racialTraits")}
+            onAdd={() => setShowRacialTraitPicker(true)}
             onChange={onChangeFeature}
             onRemove={onRemoveFeature}
             onLinkToggle={onLinkToggle}
@@ -869,7 +900,16 @@ export function InfoTab({
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("race")} accentStyle={favAccentStyle("race")} sliderStyle={favSliderStyle("race")}
             tagColor={favTagColor("race")} sliderColor={favSliderColor("race")}
+            onReorder={newOrder => update({ racialTraits: newOrder })}
           />
+          {showRacialTraitPicker && (
+            <FeatureSuggestionPickerModal
+              label="Racial Trait" suggestionSource="race" userId={userId}
+              existingNames={(data.racialTraits ?? []).map(f => f.name)}
+              onPick={s => addFeatureFromSuggestion("racialTraits", s)}
+              onClose={() => setShowRacialTraitPicker(false)}
+            />
+          )}
           <FeatureList
             items={data.feats ?? []} allFeatures={allFeatures} label="Feats"
             onAdd={() => setShowFeatPicker(true)}
@@ -881,6 +921,7 @@ export function InfoTab({
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")} sliderStyle={favSliderStyle("feat")}
             tagColor={favTagColor("feat")} sliderColor={favSliderColor("feat")}
+            onReorder={newOrder => update({ feats: newOrder })}
           />
           {showFeatPicker && (
             <FeatureSuggestionPickerModal
@@ -893,7 +934,7 @@ export function InfoTab({
           {isWarlock && (
             <FeatureList
               items={data.invocations ?? []} allFeatures={allFeatures} label="Eldritch Invocations"
-              onAdd={() => addFeature("invocations")}
+              onAdd={() => setShowInvocationPicker(true)}
               onChange={onChangeFeature}
               onRemove={onRemoveFeature}
               onLinkToggle={onLinkToggle}
@@ -902,6 +943,15 @@ export function InfoTab({
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")} sliderStyle={favSliderStyle("invocation")}
               tagColor={favTagColor("invocation")} sliderColor={favSliderColor("invocation")}
+              onReorder={newOrder => update({ invocations: newOrder })}
+            />
+          )}
+          {showInvocationPicker && (
+            <FeatureSuggestionPickerModal
+              label="Eldritch Invocation" suggestionSource="invocation" userId={userId}
+              existingNames={(data.invocations ?? []).map(f => f.name)}
+              onPick={s => addFeatureFromSuggestion("invocations", s)}
+              onClose={() => setShowInvocationPicker(false)}
             />
           )}
           {isArtificer && (
@@ -938,7 +988,7 @@ export function InfoTab({
             accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
             tagColor={favTagColor("class")} sliderColor={favSliderColor("class")}
             perItemAccentColor={classFeatureAccentColor}
-            sortable
+            onReorder={newOrder => update({ classFeatures: newOrder })}
           />
           {showClassFeaturePicker && (
             <FeatureSuggestionPickerModal

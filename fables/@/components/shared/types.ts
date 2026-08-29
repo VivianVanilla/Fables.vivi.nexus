@@ -13,38 +13,37 @@ export interface DamageEntry {
   damageType?: string
 }
 
+// LEGACY — pre-merge Martial tab shape. A weapon used to exist as two synced
+// records (a Feature here in Gear, a separate EquipmentItem in the Martial
+// tab, linked via sourceFeatureId). Martial weapons are now plain Features
+// (see Feature.inMartial/martialOnly) rendered once via FeatureEntry in both
+// places — this type and CharacterData.equipmentItems only still exist so
+// migrateEquipmentItems() (CharacterSheet.tsx) has something typed to read
+// from on a character's first load after the merge, before clearing it.
+// Nothing renders from this shape anymore.
 export interface EquipmentItem {
   id: string
   name: string
-  toHit?: string       // manual override when attackStat is not set
+  toHit?: string
   damage?: string
   damageType?: string
-  multiDamage?: boolean   // toggle — on splits damage across `damages` instead of the single damage/damageType pair
-  damages?: DamageEntry[] // additional damage instances beyond the primary damage/damageType, only used when multiDamage is on
-  type?: string        // "melee" | "ranged" | "armor" | "misc"
+  multiDamage?: boolean
+  damages?: DamageEntry[]
+  type?: string
   notes?: string
-  cost?: string        // e.g. "15 gp" — autofilled from Documentation's item data, same as damage/weight
-  magicBonus?: string  // e.g. "+1", "+2"
-  properties?: string  // e.g. "Versatile, Finesse"
+  cost?: string
+  magicBonus?: string
+  properties?: string
   proficient?: boolean
   attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
-  extraToHit?: number  // flat bonus added to computed to-hit
-  extraDamage?: number // flat bonus added to computed damage
-  meleeRange?: string  // reach, e.g. "5 ft." — melee weapons
-  throwRange?: string  // e.g. "20/60 ft." — thrown melee weapons
-  range?: string       // e.g. "80/320 ft." — ranged weapons
-  weight?: number      // lb — rolled into the character's total carried weight
-  sourceFeatureId?: string  // set when toggled in from an Armor & Equipment item — its weight is
-                             // already counted via that Feature, so it's excluded here to avoid double-counting
-  isMagicItem?: boolean  // mirrors Feature.isMagicItem — mirrored both ways by equipmentFieldsFromFeature/
-                          // featureFieldsFromEquipment (character.tsx) so the Martial tab shows the same
-                          // ✨ badge / card treatment as the Items tab for the same physical item
-  // Tracked uses — same fields/semantics as the matching ones on Feature (see
-  // UseTracker below), mirrored both ways by equipmentFieldsFromFeature/
-  // featureFieldsFromEquipment whenever this item is linked via sourceFeatureId,
-  // so a weapon's charges/uses stay in sync between the Martial and Items tabs
-  // (and show up wherever this item renders — Martial list, Favorites — since
-  // both read straight off EquipmentEntry).
+  extraToHit?: number
+  extraDamage?: number
+  meleeRange?: string
+  throwRange?: string
+  range?: string
+  weight?: number
+  sourceFeatureId?: string
+  isMagicItem?: boolean
   trackable?: boolean
   trackerLabel?: string
   maxUses?: number
@@ -155,6 +154,8 @@ export interface Feature {
   trackAmount?: boolean      // Items tab, generic items only — opt-in: shows a −/+ stepper (in the expanded description view) for consumables you add/remove one at a time; off by default so one-off items don't carry a counter nobody uses
   category?: "armor" | "item" // Items tab only — which stat fields this item's edit form shows (armor/weapon fields vs. generic amount/container fields); no longer determines which list (Equipped vs Carried) it shows in
   equipKind?: "armor" | "weapon" | "misc" // Armor & Equipment section only — which stat fields apply
+  inMartial?: boolean    // weapon-only — also shown in the Martial tab (same record, not a copy — see FeatureEntry.tsx's "+ Martial Tab" toggle)
+  martialOnly?: boolean  // weapon-only — created directly from the Martial tab ("+ Add Weapon", e.g. fists/natural attacks); stays out of Gear's own Equipped/Carried lists. Implies inMartial.
   isContainer?: boolean      // Items tab only — acts like a folder; other items can be placed inside it
   maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
   containerIgnoresWeight?: boolean  // Items tab, containers only — "Bag of Holding": items placed inside don't count toward the character's total carried weight (the container's own weight, and its own maxWeight capacity check, are unaffected)
@@ -180,10 +181,10 @@ export interface Feature {
     meleeRange?: string       // e.g. "5 ft."
     throwRange?: string       // e.g. "20/60 ft." — thrown melee weapons
     range?: string            // e.g. "80/320 ft." — ranged weapons
-    // The rest mirror EquipmentItem's attack-roll fields 1:1 so a weapon edited
-    // here and one edited on the Martial tab (EquipmentEntry.tsx) offer the
-    // exact same options — see equipmentFieldsFromFeature/featureFieldsFromEquipment
-    // in character.tsx, which mirror edits made on either side onto the other.
+    // The rest are the weapon's attack-roll fields — computed into a live
+    // to-hit/damage display by the shared helpers in damageTypes.ts whenever
+    // equipKind is "weapon", whether this Feature is showing in Gear, in the
+    // Martial tab (inMartial/martialOnly), or both — it's the same record.
     attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
     magicBonus?: string       // e.g. "+1", "+2"
     toHit?: string            // manual override when attackStat is not set
@@ -195,6 +196,9 @@ export interface Feature {
 
 export interface FavoriteRef {
   refId: string
+  // "equipment" is legacy (pre Gear/Martial merge) — migrateEquipmentItems()
+  // remaps any surviving "equipment" favorite to "feature" on load, so
+  // nothing should ever create a new one.
   refType: "spell" | "equipment" | "feature" | "familiar"
   label: string   // snapshot of the item name at time of favoriting
 }
@@ -352,7 +356,7 @@ export interface CharacterData {
   slotTheme?: string
   slotCustomColor?: string  // accent color for slotTheme "custom" — see character-themes.ts SLOT_THEMES
   slotAnimated?: boolean    // Settings — shimmering iridescent slot bars instead of a flat color
-  equipmentItems?: EquipmentItem[]
+  equipmentItems?: EquipmentItem[]  // LEGACY — see EquipmentItem's comment. Read once by migrateEquipmentItems() then cleared to []; nothing else should read or write this.
   spellItems?: SpellItem[]
   hitDicePools?: HitDicePool[]
   spellSlots?: SpellSlot[]

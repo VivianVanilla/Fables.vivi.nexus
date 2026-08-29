@@ -74,6 +74,18 @@ export function nanoid(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
+/**
+ * Folds a reordered filtered subset (e.g. drag-reordering just the
+ * "Equipped" items) back into its full source array without disturbing the
+ * position of items that don't match `predicate`. `newOrder` must be a
+ * permutation of exactly the items `full` that satisfy `predicate` — true by
+ * construction when it comes from reordering that same filtered view.
+ */
+export function reorderSubset<T>(full: T[], predicate: (item: T) => boolean, newOrder: T[]): T[] {
+  let i = 0
+  return full.map(item => predicate(item) ? newOrder[i++] : item)
+}
+
 /** Parses JSON safely, returns an empty object on failure */
 export function safeParseJson(value: unknown): Record<string, unknown> {
   try {

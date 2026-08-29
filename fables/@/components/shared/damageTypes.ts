@@ -80,3 +80,45 @@ export function computeDamageSegments(fields: MultiDamageFields, modifier = 0): 
     damageType: e.damageType,
   }))
 }
+
+// ── Weapon to-hit/damage math — shared by any weapon-shaped record ──────────
+//
+// A weapon's live to-hit/damage total (stat mod + magic bonus + extra +
+// proficiency) is the same computation whether the record is a Feature's
+// itemMeta (Gear/Martial, see FeatureEntry.tsx) or the legacy EquipmentItem
+// shape (migrateEquipmentItems, CharacterSheet.tsx) — both satisfy this
+// structural shape as-is, no adapter needed.
+
+export interface WeaponAttackFields extends MultiDamageFields {
+  attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
+  magicBonus?: string
+  toHit?: string        // manual override when attackStat is not set
+  extraToHit?: number
+  extraDamage?: number
+  proficient?: boolean
+}
+
+function parseMagicBonus(s?: string): number {
+  if (!s) return 0
+  return parseInt(s.replace(/\+/, ""), 10) || 0
+}
+
+/** Live to-hit total ("+6") from ability mod + magic bonus + extra + proficiency, or the manual override when there's no attackStat. */
+export function computeToHit(fields: WeaponAttackFields, statMods: Record<string, number>, pb: number): string | null {
+  if (!fields.attackStat) return fields.toHit ?? null
+  const mod   = statMods[fields.attackStat] ?? 0
+  const magic = parseMagicBonus(fields.magicBonus)
+  const extra = fields.extraToHit ?? 0
+  const prof  = fields.proficient ? pb : 0
+  const total = mod + magic + extra + prof
+  return total >= 0 ? `+${total}` : `${total}`
+}
+
+/** Damage segments with the ability mod + magic bonus + extra folded into the first segment, matching computeToHit's inputs. */
+export function computeWeaponDamageSegments(fields: WeaponAttackFields, statMods: Record<string, number>): DamageSegment[] {
+  if (!fields.attackStat) return computeDamageSegments(fields)
+  const mod   = statMods[fields.attackStat] ?? 0
+  const magic = parseMagicBonus(fields.magicBonus)
+  const extra = fields.extraDamage ?? 0
+  return computeDamageSegments(fields, mod + magic + extra)
+}

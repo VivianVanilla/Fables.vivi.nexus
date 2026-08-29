@@ -2,24 +2,30 @@
 // FavoritesPanel.tsx — drag-drop favorites panel
 //
 // Cards render the exact same entry component used elsewhere (SpellEntry,
-// EquipmentEntry, FeatureEntry) — favorites only adds a reorder grip and an
-// unfavorite star around it, it never re-implements the item's own display.
+// FeatureEntry) — favorites only adds an unfavorite star around it, it
+// never re-implements the item's own display.
 //
-// Drag grip to reorder. ★ removes from favorites (not the underlying item).
+// Press and hold a card (mouse or touch) to reorder it — same SortableItem
+// mechanism as every other reorderable list on the sheet. Dragging a card in
+// from elsewhere (Gear, Spells, Martial) to add it as a favorite is a
+// separate, pre-existing native-HTML5-drag mechanism (onDragOver/onDrop
+// below) — unrelated event system, so the two don't conflict.
+// ★ removes from favorites (not the underlying item).
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react"
 import type { userInfo } from "@/types/userInfo"
-import type { FavoriteRef, SpellItem, EquipmentItem, Feature, FamiliarRef } from "@/components/shared/types"
+import type { FavoriteRef, SpellItem, Feature, FamiliarRef } from "@/components/shared/types"
 import type { MonsterData } from "@/components/shared/monster/monster-types"
 import { SpellEntry } from "../entries/SpellEntry"
-import { EquipmentEntry } from "../entries/EquipmentEntry"
 import { FeatureEntry, categoryAccentStyle } from "../entries/FeatureEntry"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "@/components/shared/utils"
 import { matchOwnClassKey } from "@/components/shared/classColors"
 import type { Theme } from "@/components/shared/themes"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { SortableItem, useDragSensors } from "@/components/shared/SortableItem"
 
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 
@@ -58,7 +64,6 @@ function FamiliarFavoriteEntry({
 interface FavoritesPanelProps {
   favorites:         FavoriteRef[]
   spellItems:        SpellItem[]
-  equipItems:        EquipmentItem[]
   features:          Feature[]
   familiars:         FamiliarRef[]
   monsters:          userInfo.Objects[]
@@ -78,8 +83,6 @@ interface FavoritesPanelProps {
   classFeatureColors?: Record<string, string>    // Settings — accent color per class key, only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey
   onChangeSpell:     (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell:     (id: string) => void
-  onChangeEquip:     (id: string, patch: Partial<EquipmentItem>) => void
-  onRemoveEquip:     (id: string) => void
   onUpdateFeature:   (featureId: string, patch: Partial<Feature>) => void
   onRemoveFeature:   (featureId: string) => void
   onLinkToggle:      (featureId: string, otherId: string) => void
@@ -100,22 +103,29 @@ interface FavoritesPanelProps {
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function FavoritesPanel({
-  favorites, spellItems, equipItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
+  favorites, spellItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
   featureCategoryById, favoriteCategoryColors, favoriteCategoryTagColors, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
   classFeatureColorsByClass, classFeatureColors,
-  onChangeSpell, onRemoveSpell, onChangeEquip, onRemoveEquip,
+  onChangeSpell, onRemoveSpell,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
   theme, card, readOnly, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle,
   dragOver, onDragOver, onDragLeave, onDrop,
 }: FavoritesPanelProps) {
-  const [reorderDragIdx, setReorderDragIdx] = useState<number | null>(null)
-  const [reorderOverIdx, setReorderOverIdx] = useState<number | null>(null)
+  const dragSensors = useDragSensors()
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const fromIdx = favorites.findIndex(f => f.refId === active.id)
+    const toIdx   = favorites.findIndex(f => f.refId === over.id)
+    if (fromIdx === -1 || toIdx === -1) return
+    onReorder(fromIdx, toIdx)
+  }
 
   // ── Resolve helpers ──────────────────────────────────────────────────────
 
   function resolveSpell(refId: string)    { return spellItems.find(s => s.id === refId) }
-  function resolveEquip(refId: string)    { return equipItems.find(i => i.id === refId) }
   function resolveFeature(refId: string)  { return features.find(f => f.id === refId) }
   function resolveFamiliar(refId: string) { return familiars.find(f => f.id === refId) }
 
@@ -154,49 +164,14 @@ export function FavoritesPanel({
     return favoriteCategorySliderColors?.[resolveCategory(fav)]
   }
 
-  // ── Reorder drag handlers ────────────────────────────────────────────────
-
-  function handleReorderDragStart(e: React.DragEvent, idx: number) {
-    // Use a separate data key so it doesn't conflict with x-fable-ref drops
-    e.dataTransfer.setData("x-fable-reorder", String(idx))
-    e.dataTransfer.effectAllowed = "move"
-    setReorderDragIdx(idx)
-  }
-
-  function handleReorderDragOver(e: React.DragEvent, idx: number) {
-    if (!e.dataTransfer.types.includes("x-fable-reorder")) return
-    e.preventDefault()
-    e.stopPropagation()
-    setReorderOverIdx(idx)
-  }
-
-  function handleReorderDrop(e: React.DragEvent, toIdx: number) {
-    if (reorderDragIdx === null) return
-    e.preventDefault()
-    e.stopPropagation()
-    if (reorderDragIdx !== toIdx) onReorder(reorderDragIdx, toIdx)
-    setReorderDragIdx(null)
-    setReorderOverIdx(null)
-  }
-
-  function handleReorderDragEnd() {
-    setReorderDragIdx(null)
-    setReorderOverIdx(null)
-  }
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className={`${card} flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden`}>
       <div className="flex flex-col gap-2 flex-1 min-h-0"
-        onDragOver={e => {
-          // Only handle x-fable-ref drops at the panel level
-          if (!e.dataTransfer.types.includes("x-fable-reorder")) onDragOver(e)
-        }}
+        onDragOver={onDragOver}
         onDragLeave={onDragLeave}
-        onDrop={e => {
-          if (!e.dataTransfer.types.includes("x-fable-reorder")) onDrop(e)
-        }}>
+        onDrop={onDrop}>
 
         {/* Header */}
         <div className="flex items-center gap-2 shrink-0 px-3 pt-3">
@@ -214,9 +189,9 @@ export function FavoritesPanel({
             </div>
           )}
 
-          {favorites.map((fav, idx) => {
-            const isReorderTarget = reorderOverIdx === idx && reorderDragIdx !== idx
-
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={favorites.map(f => f.refId)} strategy={verticalListSortingStrategy}>
+          {favorites.map(fav => {
             // Star toggle removes the item from favorites — each entry type shows it
             // next to its own edit affordance instead of a separate side column.
             const onToggleFavorite = readOnly ? undefined : () => onRemove(fav.refId)
@@ -231,6 +206,10 @@ export function FavoritesPanel({
             const sliderStyle = sliderStyleFor(fav)
             const tagColor    = tagColorFor(fav)
             const sliderColor = sliderColorFor(fav)
+            // Only Gear/Martial items get the weight/rarity/weapon-stat extras —
+            // a favorited Feat or Racial Trait shouldn't suddenly show item-only
+            // edit fields just because it shares this render branch.
+            const isItemFavorite = resolveCategory(fav) === "item" || resolveCategory(fav) === "equipment"
 
             // Resolve the entry to render — falls through to a "not found" row
             let entry: React.ReactNode
@@ -242,19 +221,7 @@ export function FavoritesPanel({
                     accentColor={accentColor} accentStyle={accentStyle}
                     onChange={p => onChangeSpell(fav.refId, p)}
                     onRemove={() => onRemoveSpell(fav.refId)} />
-                : <p className="text-sm text-white/30 italic px-3 py-2.5">Spell not found.</p>
-            } else if (fav.refType === "equipment") {
-              const item = resolveEquip(fav.refId)
-              entry = item
-                ? <EquipmentEntry item={item} theme={theme} readOnly={readOnly} statMods={statMods} pb={pb}
-                    isFavorite onToggleFavorite={onToggleFavorite}
-                    showMagicStar={showMagicStar}
-                    magicItemStyle={magicItemStyle}
-                    magicItemColor={magicItemColor}
-                    accentColor={accentColor} accentStyle={accentStyle}
-                    onChange={p => onChangeEquip(fav.refId, p)}
-                    onRemove={() => onRemoveEquip(fav.refId)} />
-                : <p className="text-sm text-white/30 italic px-3 py-2.5">Item not found.</p>
+                : <NotFoundRow label="Spell not found." onRemove={onToggleFavorite} />
             } else if (fav.refType === "familiar") {
               const fam = resolveFamiliar(fav.refId)
               const monster = fam ? monsters.find(m => m.id === fam.monsterId) : undefined
@@ -264,7 +231,7 @@ export function FavoritesPanel({
                     onPopOut={() => onPopOutFamiliar(fam.id)}
                     isFavorite onToggleFavorite={onToggleFavorite}
                     accentColor={accentColor} accentStyle={accentStyle} bgHex={theme.boxHex} />
-                : <p className="text-sm text-white/30 italic px-3 py-2.5">Familiar not found.</p>
+                : <NotFoundRow label="Familiar not found." onRemove={onToggleFavorite} />
             } else {
               const feat = resolveFeature(fav.refId)
               entry = feat
@@ -273,8 +240,9 @@ export function FavoritesPanel({
                     allFeatures={features.filter(f => f.id !== feat.id && f.trackable)}
                     theme={theme}
                     readOnly={readOnly}
-                    pb={pb}
+                    pb={pb} statMods={statMods}
                     isFavorite onToggleFavorite={onToggleFavorite}
+                    showItemExtras={isItemFavorite}
                     showMagicStar={showMagicStar}
                     magicItemStyle={magicItemStyle}
                     magicItemColor={magicItemColor}
@@ -285,32 +253,33 @@ export function FavoritesPanel({
                     onRemove={() => onRemoveFeature(fav.refId)}
                     onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}
                   />
-                : <p className="text-sm text-white/30 italic px-3 py-2.5">Feature not found.</p>
+                : <NotFoundRow label="Feature not found." onRemove={onToggleFavorite} />
             }
 
             return (
-              <div key={fav.refId}
-                className={`flex items-center gap-1 rounded-xl transition-all ${
-                  isReorderTarget ? "ring-1 ring-primary/60" : ""
-                } ${reorderDragIdx === idx ? "opacity-40" : ""}`}
-                onDragOver={e => handleReorderDragOver(e, idx)}
-                onDrop={e => handleReorderDrop(e, idx)}
-              >
-                {!readOnly && (
-                  <span
-                    draggable
-                    onDragStart={e => handleReorderDragStart(e, idx)}
-                    onDragEnd={handleReorderDragEnd}
-                    className="text-white/15 hover:text-white/40 cursor-grab active:cursor-grabbing text-sm shrink-0 px-0.5 select-none"
-                    title="Drag to reorder">⠿</span>
-                )}
-
-                <div className="flex-1 min-w-0">{entry}</div>
-              </div>
+              <SortableItem key={fav.refId} id={fav.refId} disabled={readOnly}>
+                {entry}
+              </SortableItem>
             )
           })}
+          </SortableContext>
+          </DndContext>
         </div>
       </div>
+    </div>
+  )
+}
+
+function NotFoundRow({ label, onRemove }: { label: string; onRemove?: () => void }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2.5">
+      <p className="text-sm text-white/30 italic flex-1">{label}</p>
+      {onRemove && (
+        <button type="button" onClick={onRemove}
+          className="text-xs text-white/30 hover:text-white/60 transition-colors shrink-0">
+          Remove
+        </button>
+      )}
     </div>
   )
 }

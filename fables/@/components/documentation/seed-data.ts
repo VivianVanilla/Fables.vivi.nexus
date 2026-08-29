@@ -247,11 +247,11 @@ export const SEED_DATA: Record<DocSingular, SeedEntry[]> = {
              description:"7 charges. Cast Magic Missile at 1st-level (1 charge) or higher (+1 per level). Regains 1d6+1 charges at dawn." }},
 
     // ── Mundane weapons (item_type: "weapon") ────────────────────────────────
-    // Powers EquipmentEntry.tsx's name-autocomplete: typing a weapon name in
-    // the Martial tab suggests these and autofills damage/damage_type/
+    // Powers FeatureEntry.tsx's name-autocomplete: typing a weapon name in
+    // Gear or Martial suggests these and autofills damage/damage_type/
     // properties/weight. `description` doubles as the outer list tag (source
-    // category + cost, since EquipmentItem has no cost field of its own) and
-    // the text dropped into the item's notes on selection.
+    // category + cost) and the text dropped into the item's description on
+    // selection.
     { id:"club", name:"Club", description:"Simple Melee Weapon · 1 sp",
       data:{ item_type:"weapon", damage:"1d4", damage_type:"bludgeoning", properties:"Light", weight:2,
              description:"Simple Melee Weapon · 1 sp", cost:"1 sp" }},

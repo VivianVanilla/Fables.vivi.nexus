@@ -1,14 +1,17 @@
 import { useState } from "react"
-import type { CharacterData, SpellItem, EquipmentItem, SpellSlot, FavoriteRef } from "@/components/shared/types"
+import type { CharacterData, SpellItem, Feature, SpellSlot, FavoriteRef } from "@/components/shared/types"
 import { SpellEntry } from "../entries/SpellEntry"
-import { EquipmentEntry } from "../entries/EquipmentEntry"
+import { FeatureEntry } from "../entries/FeatureEntry"
 import { TracingSlider }  from "../../ui/tracing-slider"
 import { slotLevelColor, slotLevelGradient } from "@/components/shared/themes"
 import type { Theme, SlotTheme } from "@/components/shared/themes"
-import { profBonus } from "@/components/shared/utils"
+import { profBonus, reorderSubset } from "@/components/shared/utils"
 import { SAVE_TO_ABILITY, type FavoriteCategory } from "@/components/shared/constants"
 import { Modal } from "@/components/shared/ui/Modal"
 import { MartialModal } from "../modals/stats/MartialModal"
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
+import { SortableItem, useDragSensors } from "@/components/shared/SortableItem"
 
 // Master-toggle "Cast" button (Automation → Cast tab → "Show Cast button")
 // sitting next to the Cantrips stat rather than one button per spell row —
@@ -59,7 +62,7 @@ interface Props {
   readOnly?: boolean
   userId?: string | null
   spellItems: SpellItem[]
-  equipItems: EquipmentItem[]
+  allFeatures: Feature[]
   spellSlots: SpellSlot[]
   slotTheme: SlotTheme
   slotAnimated?: boolean
@@ -73,24 +76,25 @@ interface Props {
   onRemoveSpell: (id: string) => void
   pendingSpellId?: string | null
   onAutoEditConsumed?: () => void
-  onAddEquip: () => void
-  onChangeEquip: (id: string, patch: Partial<EquipmentItem>) => void
-  onRemoveEquip: (id: string) => void
+  onAddMartialWeapon: () => void
+  onChangeFeature: (id: string, patch: Partial<Feature>) => void
+  onRemoveFeature: (id: string) => void
+  onLinkToggle: (featureId: string, otherId: string) => void
   onCastSpell?: (spell: SpellItem) => void  // Automation — wired only when data.castButtonEnabled shows the Cast button
   favorites?: FavoriteRef[]
-  onToggleEquipFavorite?: (id: string, label: string) => void
+  onToggleFeatureFavorite?: (id: string, label: string) => void
   onUpdate: (patch: Partial<CharacterData>) => void
 }
 
 export function SpellsEquipPanel({
   card, theme, data, readOnly, userId,
-  spellItems, equipItems, spellSlots, slotTheme, slotAnimated, characterId,
+  spellItems, allFeatures, spellSlots, slotTheme, slotAnimated, characterId,
   activeSubTab, onChangeSubTab,
   onShowSpellcastingModal, onChangeSlot,
   onAddSpell, onChangeSpell, onRemoveSpell,
-  onAddEquip, onChangeEquip, onRemoveEquip,
+  onAddMartialWeapon, onChangeFeature, onRemoveFeature, onLinkToggle,
   pendingSpellId, onAutoEditConsumed,
-  onCastSpell, favorites, onToggleEquipFavorite, onUpdate,
+  onCastSpell, favorites, onToggleFeatureFavorite, onUpdate,
 }: Props) {
   const [showMartialModal, setShowMartialModal] = useState(false)
   // Settings — a martial-only or caster-only character can hide the side
@@ -121,10 +125,75 @@ export function SpellsEquipPanel({
   const preparedCount  = spellItems.filter(s => s.prepared && !s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
   const knownCount     = spellItems.filter(s => s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
   const cantripCount   = spellItems.filter(s => (s.level ?? 0) === 0 && !s.freeSpell).length
+  const isSpellVisible = (s: SpellItem) => !hideUnprepared || s.prepared || s.alwaysPrepared || (s.level ?? 0) === 0
   const visibleSpells  = spellItems
-    .filter(s => !hideUnprepared || s.prepared || s.alwaysPrepared || (s.level ?? 0) === 0)
+    .filter(isSpellVisible)
     .slice()
     .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
+
+  // Hoisted out of the render below so handleSpellDragEnd can determine
+  // which group (Pinned, or a given level) a dragged spell belongs to —
+  // same grouping the render uses to actually draw the Pinned section and
+  // level headers.
+  const pinnedSpells = visibleSpells.filter(s => s.pinned)
+  const groupedSpells = new Map<number, SpellItem[]>()
+  for (const s of visibleSpells) {
+    const lvl = s.level ?? 0
+    if (!groupedSpells.has(lvl)) groupedSpells.set(lvl, [])
+    groupedSpells.get(lvl)!.push(s)
+  }
+  if (slotDisplay === "integrated") {
+    for (const slot of spellSlots) {
+      if (!groupedSpells.has(slot.level)) groupedSpells.set(slot.level, [])
+    }
+  }
+  const spellLevels = Array.from(groupedSpells.keys()).sort((a, b) => a - b)
+
+  const dragSensors = useDragSensors()
+
+  // Reordering only makes sense within a group: dragging one pinned spell
+  // past another, or one same-level spell past another — cross-group drops
+  // (a level change) stay the job of editing the spell's Level field, same
+  // as the comment on levels.flatMap below already explains. Merges back
+  // into spellItems via the same isSpellVisible predicate the visible
+  // groups were built from, so a "Prepared only" filter hiding some
+  // same-level spells doesn't throw off the fold-back.
+  function handleSpellDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    if (pinnedSpells.some(s => s.id === active.id) && pinnedSpells.some(s => s.id === over.id)) {
+      const oldIndex = pinnedSpells.findIndex(s => s.id === active.id)
+      const newIndex = pinnedSpells.findIndex(s => s.id === over.id)
+      const reordered = arrayMove(pinnedSpells, oldIndex, newIndex)
+      onUpdate({ spellItems: reorderSubset(spellItems, s => !!s.pinned && isSpellVisible(s), reordered) })
+      return
+    }
+    const activeSpell = spellItems.find(s => s.id === active.id)
+    if (!activeSpell) return
+    const lvl = activeSpell.level ?? 0
+    const group = groupedSpells.get(lvl) ?? []
+    const oldIndex = group.findIndex(s => s.id === active.id)
+    const newIndex = group.findIndex(s => s.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(group, oldIndex, newIndex)
+    onUpdate({ spellItems: reorderSubset(spellItems, s => (s.level ?? 0) === lvl && isSpellVisible(s), reordered) })
+  }
+
+  // A weapon shows here either because it was sent over from Gear
+  // (inMartial) or made directly here (martialOnly, e.g. fists/natural
+  // attacks) — same Feature, same FeatureEntry card, wherever it renders.
+  const isMartialWeapon = (i: Feature) => i.equipKind === "weapon" && !!(i.inMartial || i.martialOnly)
+  const martialWeapons = (data.items ?? []).filter(isMartialWeapon)
+
+  function handleMartialDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = martialWeapons.findIndex(i => i.id === active.id)
+    const newIndex = martialWeapons.findIndex(i => i.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(martialWeapons, oldIndex, newIndex)
+    onUpdate({ items: reorderSubset(data.items ?? [], isMartialWeapon, reordered) })
+  }
 
   const statMods = {
     str: Math.floor(((data.strength     ?? 10) - 10) / 2),
@@ -306,137 +375,133 @@ export function SpellsEquipPanel({
       {/* Spell / martial list */}
       <div className="flex flex-col gap-1.5">
         {showSpells ? (
-          <>
-            {(() => {
-              const pinnedSpells = visibleSpells.filter(s => s.pinned)
-              if (pinnedSpells.length === 0) return null
-              return (
-                <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"} mb-2 pb-2 border-b border-white/10`}>
-                  <div className="w-full flex items-center gap-2 px-1 py-1">
-                    <span className="text-sm font-bold uppercase tracking-widest text-white/75">🖈 Pinned</span>
-                    <span className="text-xs text-white/40">({pinnedSpells.length})</span>
-                  </div>
-                  
-                  {pinnedSpells.map(spell => (
-                    <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
-                      compact={spellsDisplay === "bubbles"}
-                      accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
-                      isPinned onTogglePin={() => onChangeSpell(spell.id, { pinned: false })}
-                      onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
-                  ))}
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleSpellDragEnd}>
+            {pinnedSpells.length > 0 && (
+              <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"} mb-2 pb-2 border-b border-white/10`}>
+                <div className="w-full flex items-center gap-2 px-1 py-1">
+                  <span className="text-sm font-bold uppercase tracking-widest text-white/75">🖈 Pinned</span>
+                  <span className="text-xs text-white/40">({pinnedSpells.length})</span>
                 </div>
-              )
-            })()}
-            {(() => {
-              const grouped = new Map<number, typeof visibleSpells>()
-              for (const s of visibleSpells) {
-                const lvl = s.level ?? 0
-                if (!grouped.has(lvl)) grouped.set(lvl, [])
-                grouped.get(lvl)!.push(s)
-              }
-              // Levels that only have slots (no visible spells yet) still get a header, so their slider stays reachable
-              if (slotDisplay === "integrated") {
-                for (const slot of spellSlots) {
-                  if (!grouped.has(slot.level)) grouped.set(slot.level, [])
-                }
-              }
-              const levels = Array.from(grouped.keys()).sort((a, b) => a - b)
-              // Rendered as ONE flat list of siblings (not nested per-level containers) so
-              // that changing a spell's level — which moves it between groups — reorders it
-              // within the same parent instead of unmounting/remounting it (which would lose
-              // the spell's own open edit/detail modal state).
-              return (
-                <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"}`}>
-                  {levels.flatMap(lvl => {
-                    const spells       = grouped.get(lvl)!
-                    const isOpen       = !collapsedLevels.has(lvl)
-                    const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
-                    const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
-                    const nodes: React.ReactNode[] = [
-                      <div key={`header-${lvl}`} className="w-full flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
-                        <button type="button"
-                          onClick={() => setCollapsedLevels(prev => {
-                            const next = new Set(prev)
-                            next.has(lvl) ? next.delete(lvl) : next.add(lvl)
-                            try { localStorage.setItem(`fables-spell-collapsed-${characterId}`, JSON.stringify([...next])) } catch {}
-                            return next
-                          })}
-                          className="flex items-center gap-2 shrink-0 select-none">
-                          <span className="text-sm font-bold uppercase tracking-widest text-white/75">{groupLabel}</span>
-                          <span className="text-xs text-white/40">({spells.length})</span>
-                        </button>
-                        {matchingSlots.length > 0 && (
-                          <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
-                            {matchingSlots.map(slot => {
-                              const rem = Math.max(0, slot.total - slot.used)
-                              return (
-                                <div key={slot.id} className="flex items-center gap-1.5 flex-1 min-w-35">
-                                  {slot.pact && (
-                                    <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none shrink-0">Pact</span>
-                                  )}
-                                  <TracingSlider
-                                    value={rem} max={slot.total} disabled={readOnly}
-                                    showButtons buttonSize="sm"
-                                    color={slotAnimated ? slotLevelGradient(slotTheme, slot.level) : slotLevelColor(slotTheme, slot.level)}
-                                    animated={slotAnimated}
-                                    onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
-                                    className="flex-1 min-w-0"
-                                  />
-                                  <span className="text-xs text-white/30 tabular-nums shrink-0">{rem}/{slot.total}</span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
+
+                <SortableContext items={pinnedSpells.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                  {pinnedSpells.map(spell => (
+                    <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spellsDisplay === "bubbles"}>
+                      <SpellEntry spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
+                        compact={spellsDisplay === "bubbles"}
+                        accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
+                        isPinned onTogglePin={() => onChangeSpell(spell.id, { pinned: false })}
+                        onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+                    </SortableItem>
+                  ))}
+                </SortableContext>
+              </div>
+            )}
+            {/* Rendered as ONE flat list of siblings (not nested per-level containers) so
+                that changing a spell's level — which moves it between groups — reorders it
+                within the same parent instead of unmounting/remounting it (which would lose
+                the spell's own open edit/detail modal state). */}
+            <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"}`}>
+              {spellLevels.flatMap(lvl => {
+                const spells       = groupedSpells.get(lvl)!
+                const isOpen       = !collapsedLevels.has(lvl)
+                const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
+                const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
+                const nodes: React.ReactNode[] = [
+                  <div key={`header-${lvl}`} className="w-full flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
+                    <button type="button"
+                      onClick={() => setCollapsedLevels(prev => {
+                        const next = new Set(prev)
+                        next.has(lvl) ? next.delete(lvl) : next.add(lvl)
+                        try { localStorage.setItem(`fables-spell-collapsed-${characterId}`, JSON.stringify([...next])) } catch {}
+                        return next
+                      })}
+                      className="flex items-center gap-2 shrink-0 select-none">
+                      <span className="text-sm font-bold uppercase tracking-widest text-white/75">{groupLabel}</span>
+                      <span className="text-xs text-white/40">({spells.length})</span>
+                    </button>
+                    {matchingSlots.length > 0 && (
+                      <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
+                        {matchingSlots.map(slot => {
+                          const rem = Math.max(0, slot.total - slot.used)
+                          return (
+                            <div key={slot.id} className="flex items-center gap-1.5 flex-1 min-w-35">
+                              {slot.pact && (
+                                <span className="text-[10px] px-1 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold leading-none shrink-0">Pact</span>
+                              )}
+                              <TracingSlider
+                                value={rem} max={slot.total} disabled={readOnly}
+                                showButtons buttonSize="sm"
+                                color={slotAnimated ? slotLevelGradient(slotTheme, slot.level) : slotLevelColor(slotTheme, slot.level)}
+                                animated={slotAnimated}
+                                onChange={val => onChangeSlot(slot.id, { used: Math.max(0, slot.total - val) })}
+                                className="flex-1 min-w-0"
+                              />
+                              <span className="text-xs text-white/30 tabular-nums shrink-0">{rem}/{slot.total}</span>
+                            </div>
+                          )
+                        })}
                       </div>
-                    ]
-                    if (isOpen) {
-                      for (const spell of spells) {
-                        nodes.push(
-                          <SpellEntry key={spell.id} spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
+                    )}
+                  </div>
+                ]
+                if (isOpen) {
+                  nodes.push(
+                    <SortableContext key={`group-${lvl}`} items={spells.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                      {spells.map(spell => (
+                        <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spellsDisplay === "bubbles"}>
+                          <SpellEntry spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
                             compact={spellsDisplay === "bubbles"}
                             autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
                             accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
                             isPinned={spell.pinned} onTogglePin={() => onChangeSpell(spell.id, { pinned: !spell.pinned })}
                             onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
-                        )
-                      }
-                    }
-                    return nodes
-                  })}
-                </div>
-              )
-            })()}
+                        </SortableItem>
+                      ))}
+                    </SortableContext>
+                  )
+                }
+                return nodes
+              })}
+            </div>
             {!readOnly && (
               <button type="button" onClick={onAddSpell}
                 className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors shrink-0">
                 + Add Spell
               </button>
             )}
-          </>
+          </DndContext>
         ) : (
-          <>
-            {equipItems.map(item => (
-              <EquipmentEntry key={item.id} item={item} theme={theme} readOnly={readOnly}
-                onChange={p => onChangeEquip(item.id, p)} onRemove={() => onRemoveEquip(item.id)}
-                statMods={statMods}
-                pb={profBonus(data.level ?? 1)}
-                userId={userId}
-                showMagicStar={data.showMagicItemStar}
-                magicItemStyle={data.magicItemStyle}
-                magicItemColor={data.magicItemColor}
-                isFavorite={favorites?.some(f => f.refId === item.id)}
-                onToggleFavorite={onToggleEquipFavorite ? () => onToggleEquipFavorite(item.id, item.name || "Item") : undefined}
-                accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")}
-              />
-            ))}
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleMartialDragEnd}>
+            <SortableContext items={martialWeapons.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              {martialWeapons.map(feature => (
+                <SortableItem key={feature.id} id={feature.id} disabled={readOnly}>
+                  <FeatureEntry
+                    feature={feature}
+                    allFeatures={allFeatures.filter(a => a.id !== feature.id && a.trackable)}
+                    theme={theme} readOnly={readOnly} pb={pb} statMods={statMods}
+                    suggestionSource="item" userId={userId}
+                    isFavorite={favorites?.some(f => f.refId === feature.id)}
+                    onToggleFavorite={onToggleFeatureFavorite ? () => onToggleFeatureFavorite(feature.id, feature.name || "Item") : undefined}
+                    showItemExtras
+                    showMagicStar={data.showMagicItemStar}
+                    magicItemStyle={data.magicItemStyle}
+                    magicItemColor={data.magicItemColor}
+                    magicItemSliderStyle={data.magicItemSliderStyle}
+                    accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")}
+                    onChange={patch => onChangeFeature(feature.id, patch)}
+                    onRemove={() => onRemoveFeature(feature.id)}
+                    onLinkToggle={otherId => onLinkToggle(feature.id, otherId)}
+                  />
+                </SortableItem>
+              ))}
+            </SortableContext>
             {!readOnly && (
-              <button type="button" onClick={onAddEquip}
+              <button type="button" onClick={onAddMartialWeapon}
                 className="text-sm text-white/40 hover:text-white border border-dashed border-white/15 hover:border-white/30 rounded-xl py-2.5 transition-colors shrink-0">
                 + Add Weapon
               </button>
             )}
-          </>
+          </DndContext>
         )}
       </div>
     </div>

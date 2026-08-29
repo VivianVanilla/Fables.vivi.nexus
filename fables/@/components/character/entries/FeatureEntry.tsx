@@ -20,7 +20,7 @@ import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "@/components/shared/ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
-import { computeDamageSegments } from "@/components/shared/damageTypes"
+import { computeToHit, computeWeaponDamageSegments } from "@/components/shared/damageTypes"
 import { ITEM_RARITIES, RARITY_COLORS, DEFAULT_ACCENT_COLOR, type CardStyle } from "@/components/shared/constants"
 import { classColorClasses } from "@/components/shared/classColors"
 import { supabase } from "../../../../src/supabase"
@@ -52,8 +52,6 @@ export interface Suggestion {
   }
 }
 
-// Shared with EquipmentEntry.tsx (the Martial tab) so a weapon's Attack Stat
-// options are identical whichever side it's edited from.
 export const STAT_OPTIONS = [
   { value: "",    label: "None" },
   { value: "str", label: "STR" },
@@ -222,7 +220,7 @@ function capitalizeRarity(raw?: string): Feature["rarity"] {
 // weapon/armor entry (category/equipKind) the way picking a real weapon off
 // a shelf would. Only fires for suggestionSource "item" — other sources
 // (race/class/feat/invocation/infusion) never carry this shape of meta.
-function itemPatchFromSuggestion(suggestionSource: SuggestionSource | undefined, s: Suggestion, feature: Feature): Partial<Feature> {
+export function itemPatchFromSuggestion(suggestionSource: SuggestionSource | undefined, s: Suggestion, feature: Feature): Partial<Feature> {
   if (suggestionSource !== "item" || !s.meta) return {}
   const m = s.meta
   const isWeapon = m.item_type === "weapon"
@@ -265,12 +263,11 @@ interface FeatureEntryProps {
   theme:            Theme
   readOnly?:        boolean
   pb:               number            // current proficiency bonus
+  statMods?:        Record<string, number>  // ability modifiers by short key ("str","dex",...) — weapon to-hit/damage math, only meaningful when showItemExtras && equipKind === "weapon"
   suggestionSource?: SuggestionSource  // which doc type to autocomplete from
   userId?:          string | null
   isFavorite?:       boolean
   onToggleFavorite?: () => void        // omit to hide the star
-  onAddToEquipment?: (feature: Feature) => void  // only wired for the Items tab — toggles into/out of Martial
-  inEquipment?:      boolean            // whether this feature already has a linked copy in the Martial list
   onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
@@ -364,12 +361,12 @@ export function coloredNebulaBg(color: string, bgHex?: string): CSSProperties {
   }
 }
 
-// Shared with EquipmentEntry.tsx, SpellEntry.tsx, and FamiliarsTab.tsx's inline
-// card — one formula for the category accent so it renders identically
-// everywhere a category color/style is applied, not just Favorites.
+// Shared with SpellEntry.tsx and FamiliarsTab.tsx's inline card — one
+// formula for the category accent so it renders identically everywhere a
+// category color/style is applied, not just Favorites.
 //
 // Sets both a plain `borderColor` (cards styled with a `border` class, e.g.
-// FeatureEntry/EquipmentEntry/SpellEntry) and Tailwind's `--tw-ring-color`
+// FeatureEntry/SpellEntry) and Tailwind's `--tw-ring-color`
 // custom property (cards styled with a `ring` class instead, e.g. the shared
 // `card` className used by FamiliarsTab) — whichever one the target actually
 // has a utility class for is the one that visibly picks it up, the other is
@@ -387,8 +384,8 @@ export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: s
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FeatureEntry({
-  feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddToEquipment, inEquipment, onAddPack, showAttunement, showItemExtras, showWeightColumn,
+  feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, statMods = {}, suggestionSource, userId,
+  isFavorite, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showWeightColumn,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
   accentColor, accentStyle, sliderStyle, tagColor, sliderColor, autoEdit = false, onAutoEditConsumed,
@@ -1045,6 +1042,25 @@ export function FeatureEntry({
   const barAnimated = sliderSource.style === "galaxy" && !!sliderSource.color
   const barColor     = sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1"
 
+  // Live to-hit/damage — same math as the old Martial-only EquipmentEntry,
+  // now computed here too since a weapon is one record shown in both places.
+  const isWeapon    = showItemExtras && feature.equipKind === "weapon"
+  const weaponMeta  = feature.itemMeta ?? {}
+  const toHit       = isWeapon ? computeToHit(weaponMeta, statMods, pb) : null
+  const dmgSegments = isWeapon ? computeWeaponDamageSegments(weaponMeta, statMods) : []
+
+  function toHitBreakdown(): string {
+    if (!weaponMeta.attackStat) return toHit ?? ""
+    const parts: string[] = []
+    const mod = statMods[weaponMeta.attackStat] ?? 0
+    parts.push(`(${weaponMeta.attackStat.toUpperCase()}) ${mod}`)
+    if (weaponMeta.proficient) parts.push(`(Proficiency) ${pb} `)
+    const magic = weaponMeta.magicBonus ? parseInt(weaponMeta.magicBonus.replace(/\+/, ""), 10) || 0 : 0
+    if (magic) parts.push(`Magic +${magic}`)
+    if (weaponMeta.extraToHit) parts.push(`(Extra) ${weaponMeta.extraToHit}`)
+    return parts.join(" + ").replace(/\+ -/g, "− ")
+  }
+
   return (
     <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
       style={{
@@ -1102,13 +1118,6 @@ export function FeatureEntry({
             </label>
           )}
 
-          {/* Weapon/armor quick facts — always visible, not tucked behind
-              expand, so a Gear-tab weapon reads the same at a glance as the
-              same weapon does on the Martial tab (see EquipmentEntry.tsx's
-              compact row, which this mirrors). */}
-          {showItemExtras && feature.equipKind === "weapon" && feature.itemMeta?.magicBonus && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold shrink-0">{feature.itemMeta.magicBonus}</span>
-          )}
           {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">
               AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
@@ -1116,23 +1125,6 @@ export function FeatureEntry({
           )}
           {showItemExtras && (feature.equipKind ?? "armor") === "armor" && (feature.itemMeta?.armorMode ?? "bonus") === "bonus" && !!feature.itemMeta?.acBonus && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">+{feature.itemMeta.acBonus} AC</span>
-          )}
-          {showItemExtras && feature.equipKind === "weapon" && (
-            <DamagePills segments={computeDamageSegments(feature.itemMeta ?? {})} size="xs" />
-          )}
-          {showItemExtras && feature.equipKind === "weapon" && (
-            feature.itemMeta?.weaponKind === "ranged"
-              ? feature.itemMeta?.range && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 shrink-0">⇒ {feature.itemMeta.range}</span>
-              : (feature.itemMeta?.meleeRange || feature.itemMeta?.throwRange) && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 shrink-0">
-                  {feature.itemMeta?.meleeRange && `↔ ${feature.itemMeta.meleeRange}`}
-                  {feature.itemMeta?.meleeRange && feature.itemMeta?.throwRange && " / "}
-                  {feature.itemMeta?.throwRange && `⇒ ${feature.itemMeta.throwRange}`}
-                </span>
-              )
-          )}
-          {showItemExtras && feature.equipKind === "weapon" && feature.itemMeta?.properties && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic shrink-0">{feature.itemMeta.properties}</span>
           )}
 
           {/* Passive readout only — expand the card to actually change it
@@ -1171,6 +1163,40 @@ export function FeatureEntry({
             <span className="text-[9px] text-primary/60 shrink-0" title="Synced with other feature(s)">⟳</span>
           )}
         </div>
+
+        {/* Weapon quick facts — own full-width row below the name, same
+            two-tier layout the old Martial-only card used (name on top,
+            facts below) instead of crowding into the top row with the
+            chevron/attunement/etc. Reads exactly the same whether it's
+            showing in Gear or Martial — same record, same badges, same
+            order (see damageTypes.ts's shared computeToHit/computeWeaponDamageSegments). */}
+        {isWeapon && (
+          <div className="flex items-center gap-1.5 mt-1 pl-5 flex-wrap">
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 capitalize shrink-0">{feature.itemMeta?.weaponKind ?? "melee"}</span>
+            {feature.itemMeta?.magicBonus && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold shrink-0">{feature.itemMeta.magicBonus}</span>
+            )}
+            {toHit && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 shrink-0">{toHit} to hit</span>
+            )}
+            <DamagePills segments={dmgSegments} size="sm" />
+            {feature.itemMeta?.weaponKind === "ranged"
+              ? feature.itemMeta?.range && <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 shrink-0">⇒ {feature.itemMeta.range}</span>
+              : (feature.itemMeta?.meleeRange || feature.itemMeta?.throwRange) && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 shrink-0">
+                  {feature.itemMeta?.meleeRange && `↔ ${feature.itemMeta.meleeRange}`}
+                  {feature.itemMeta?.meleeRange && feature.itemMeta?.throwRange && " / "}
+                  {feature.itemMeta?.throwRange && `⇒ ${feature.itemMeta.throwRange}`}
+                </span>
+              )}
+            {feature.itemMeta?.properties && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/45 italic shrink-0">{feature.itemMeta.properties}</span>
+            )}
+            {!showWeightColumn && !!feature.weight && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/40 shrink-0">{feature.weight} lb</span>
+            )}
+          </div>
+        )}
 
         {/* Uses-tracking bar — always its own full-width row below the name,
             so it never has to fight the name/badges for space (these cards
@@ -1240,7 +1266,7 @@ export function FeatureEntry({
                 )}
               </span>
             )}
-            {showItemExtras && !!feature.weight && (
+            {showItemExtras && !isWeapon && !!feature.weight && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/40">{feature.weight} lb</span>
             )}
             {showItemExtras && !!feature.value && (
@@ -1250,13 +1276,13 @@ export function FeatureEntry({
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${RARITY_COLORS[feature.rarity] ?? "bg-white/10 text-white/40"}`}>{feature.rarity}</span>
             )}
             <div className="flex items-center gap-1 ml-auto">
-              {onAddToEquipment && !readOnly && feature.equipKind === "weapon" && (
-                <button type="button" onClick={e => { e.stopPropagation(); onAddToEquipment(feature) }}
-                  title={inEquipment ? "Remove from the Martial list" : "Send to the Martial list"}
+              {showItemExtras && !readOnly && feature.equipKind === "weapon" && !feature.martialOnly && (
+                <button type="button" onClick={e => { e.stopPropagation(); onChange({ inMartial: !feature.inMartial }) }}
+                  title={feature.inMartial ? "Remove from the Martial tab" : "Show in the Martial tab"}
                   className={`text-[10px] px-2 py-1 rounded-full transition-colors shrink-0 ${
-                    inEquipment ? "bg-primary/30 text-primary hover:bg-primary/20" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
+                    feature.inMartial ? "bg-primary/30 text-primary hover:bg-primary/20" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
                   }`}>
-                  {inEquipment ? "◯ In Martial" : "+ Martial Tab"}
+                  {feature.inMartial ? "◯ In Martial" : "+ Martial Tab"}
                 </button>
               )}
               {onToggleFavorite && (
@@ -1270,6 +1296,9 @@ export function FeatureEntry({
               )}
             </div>
           </div>
+          {isWeapon && weaponMeta.attackStat && toHit && (
+            <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
+          )}
           {feature.description ? (
             <Markdown text={feature.description} tone="dark" />
           ) : !readOnly ? (
