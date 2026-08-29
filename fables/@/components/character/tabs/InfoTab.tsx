@@ -14,6 +14,8 @@ import {
 } from "@/components/shared/constants"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
+import { useWikiLinks } from "@/components/shared/wikiLinks"
+import { NpcQuickViewModal } from "@/components/npcTracker/NpcQuickViewModal"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import { FeatureEntry, getSuggestions, type Suggestion, type SuggestionSource } from "../entries/FeatureEntry"
 import { FamiliarsTab } from "./FamiliarsTab"
@@ -701,6 +703,10 @@ export function InfoTab({
   // showing a raw editable textarea.
   const [editingBackground, setEditingBackground] = useState(false)
 
+  // [[Name]] mentions in Background resolve against this character's party's
+  // NPCs and the viewer's own notes/characters — see wikiLinks.ts.
+  const { linkify: linkifyNotes, onInternalLink: onNotesInternalLink, npcs: linkableNpcs, quickViewNpc, selectNpc, closeQuickView } = useWikiLinks(data.partyCode)
+
   // Feature Stylings (Settings) applied sheet-wide — same source of truth
   // FavoritesPanel.tsx reads, just resolved per fixed list here since each of
   // these lists is a single, known category. "item" (the Items tab) is
@@ -808,7 +814,7 @@ export function InfoTab({
                 className="bg-white/5 rounded-lg px-2.5 py-1.5 outline-none text-xs text-white placeholder:text-white/20 resize-none"
               />
             ) : data.background ? (
-              <Markdown text={data.background} tone="auto" size="sm" />
+              <Markdown text={linkifyNotes(data.background)} tone="auto" size="sm" onInternalLink={onNotesInternalLink} />
             ) : (
               <p className="text-xs text-white/25 italic">{readOnly ? "No background yet." : "No background yet — click Edit to add one."}</p>
             )}
@@ -977,6 +983,19 @@ export function InfoTab({
           <ProficiencyList label="Tools"     value={data.toolProfs}     onChange={v => update({ toolProfs:     v })} readOnly={readOnly} card={card} />
           <ProficiencyList label="Languages" value={data.languageProfs} onChange={v => update({ languageProfs: v })} readOnly={readOnly} card={card} />
         </div>
+      )}
+
+      {/* Popup for a [[Name]] mention in Background that resolved to an NPC —
+          see wikiLinks.ts. An "object:" mention navigates straight there
+          instead (see onNotesInternalLink), so needs no modal of its own. */}
+      {quickViewNpc && (
+        <NpcQuickViewModal
+          npc={quickViewNpc}
+          npcs={linkableNpcs}
+          locationName={null}
+          onClose={closeQuickView}
+          onSelectNpc={selectNpc}
+        />
       )}
 
     </div>

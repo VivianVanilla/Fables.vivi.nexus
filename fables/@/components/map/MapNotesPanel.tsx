@@ -13,6 +13,7 @@
 import { useRef, useState } from "react"
 import { Pencil, Trash2, X, ImagePlus, Loader2, MoreVertical } from "lucide-react"
 import { Markdown } from "../ui/Markdown"
+import { MarkdownTextarea } from "../ui/MarkdownTextarea"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { Modal } from "@/components/shared/ui/Modal"
@@ -192,12 +193,13 @@ export function MapNotesPanel({
           so what you're typing stays visible as you type it. Plain Enter
           inserts a newline like any note app; Ctrl/Cmd+Enter posts. */}
       <div className="rounded-lg border-2 border-dashed border-white/25 bg-zinc-50 p-3 mb-5 shadow-lg">
-        <textarea
-          value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
+        <MarkdownTextarea
+          value={noteDraft} onChange={setNoteDraft}
           onPaste={e => handlePaste(e, setNoteDraft)}
           onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitNote() } }}
           placeholder={placeholder}
           rows={4}
+          variant="paper"
           className="w-full resize-none bg-transparent outline-none text-sm text-zinc-800 placeholder:text-zinc-400 leading-snug"
         />
         <div className="flex items-center justify-between mt-2">
@@ -241,11 +243,12 @@ export function MapNotesPanel({
               </div>
               {isEditingNote ? (
                 <div>
-                  <textarea
-                    autoFocus value={noteEditDraft} onChange={e => setNoteEditDraft(e.target.value)}
+                  <MarkdownTextarea
+                    autoFocus value={noteEditDraft} onChange={setNoteEditDraft}
                     onPaste={e => handlePaste(e, setNoteEditDraft)}
                     onKeyDown={e => { if (e.key === "Escape") setEditingNoteId(null) }}
                     rows={4}
+                    variant="paper"
                     className="w-full resize-none bg-black/5 rounded-md px-2 py-1.5 text-xs text-zinc-800 outline-none leading-snug"
                   />
                   <div className="flex items-center justify-between mt-1.5">

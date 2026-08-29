@@ -67,7 +67,11 @@ useEffect(() => {
     
     <Routes>
       <Route path="/" element={
-        <div className="relative min-h-screen bg-background overflow-hidden flex items-center justify-center">
+        /* pt-(--native-top-pad): see index.css's comment on why this lives
+           per-page now instead of on body — body's own padding-top was
+           conflicting with Radix's scroll-lock whenever a Dialog/Sheet
+           (e.g. the sidebar) opened elsewhere in the app. */
+        <div className="relative min-h-screen bg-background overflow-hidden flex items-center justify-center pt-(--native-top-pad)">
           <div className="w-9/10 md:w-1/2 lg:w-1/2">
             <EncryptedText
               text="fables.vivi.nexus"

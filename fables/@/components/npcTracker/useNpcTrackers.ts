@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "../../../src/supabase"
 import { useChannelSuffix } from "../party/partyTypes"
 import { useOnResume } from "@/components/shared/useOnResume"
+import { linkifyMentions } from "@/components/shared/wikiLinks"
 import type { MapPinNote } from "../map/useMapBoard"
 
 // Just enough of a map tracker to know which NPC it's linked to (see
@@ -37,26 +38,13 @@ export interface NpcTracker {
 
 export type NpcTrackerDraft = Pick<NpcTracker, "name" | "subtitle" | "details" | "image_url" | "goal" | "location_pin_id">
 
-// Rewrites `[[Name]]` wiki-link mentions into real markdown links pointing
-// at a "#internal:npc:<id>" pseudo-URL — Markdown.tsx's onInternalLink
-// callback intercepts that scheme instead of navigating. Deliberately
-// prefixed with "#" rather than a bare "internal:" scheme: react-markdown's
-// built-in link sanitizer only allows a safelist of real protocols
-// (http/https/mailto/...) and silently rewrites anything else to an empty
-// href — which made the very first version of this fall through to a real
-// `<a href="" target="_blank">` (i.e. opened a blank new tab) instead of
-// ever reaching our onInternalLink handler. A leading "#" reads as a
-// same-page fragment to that sanitizer, so it passes the href through
-// unchanged. Unmatched mentions (typos, or an NPC not on this party's
-// shelf) are left as literal `[[Name]]` text rather than silently dropped,
-// so a bad link stays visible instead of vanishing.
-const WIKI_LINK_RE = /\[\[([^[\]]+)\]\]/g
+// Rewrites `[[Name]]` wiki-link mentions against this party's NPCs — see
+// wikiLinks.ts's linkifyMentions for the actual matching/rewrite logic and
+// why the pseudo-link is shaped the way it is. Kept as a named wrapper
+// (rather than inlining the "npc" scheme at every call site) since this is
+// the original, most-used call shape.
 export function linkifyNpcMentions(text: string, npcs: Pick<NpcTracker, "id" | "name">[]): string {
-  return text.replace(WIKI_LINK_RE, (match, rawName: string) => {
-    const name = rawName.trim()
-    const npc = npcs.find(n => n.name.toLowerCase() === name.toLowerCase())
-    return npc ? `[${name}](#internal:npc:${npc.id})` : match
-  })
+  return linkifyMentions(text, npcs, "npc")
 }
 
 // Just enough of a map pin to populate the "which city" picker — a full

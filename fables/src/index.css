@@ -565,7 +565,52 @@
     }
   body {
     @apply bg-background text-foreground;
+    /* Edge-to-edge on Android (capacitor.config.ts's adjustMarginsForEdgeToEdge:
+       'auto' hands inset-handling to CSS) — without this, the gesture-nav
+       area at the bottom paints the system's default gray instead of the
+       app's own background, since nothing else claims that space. Padding
+       (not margin) so body's own background still extends into it. Top is
+       deliberately left alone — the StatusBar plugin's overlaysWebView:false
+       already reserves that space natively; adding safe-area-inset-top here
+       too would double it up. */
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
     }
+  /* Extra top breathing room on native only (see main.tsx's .native-app
+     class) — overlaysWebView:false already reserves exact status bar
+     height, but "exact" means the app's own top bar sits flush against
+     that boundary with zero buffer, which is awkward to tap precisely.
+     A CSS variable (0 on web) rather than a plain body rule, because
+     @/components/ui/sidebar.tsx's own panel is `position: fixed` (and its
+     mobile Sheet variant is too) — fixed elements ignore an ancestor's
+     padding entirely, so body's own padding-top never reached it. Sidebar.tsx
+     applies this directly via Tailwind's pt-(--native-top-pad). */
+  :root {
+    --native-top-pad: 0px;
+    }
+  html.native-app {
+    /* Fixed px, deliberately not vh/svh — the sidebar Sheet is a Radix
+       Portal, and mounting a new portal can make Android transiently
+       report different viewport metrics for a moment (an inset
+       recalculation, not a CSS bug) — any viewport-relative unit here
+       recalculates right along with that blip, which is exactly the
+       "pushed up, then settles" glitch this went through several rounds
+       to pin down. A fixed value has nothing left to recalculate. */
+    --native-top-pad: 40px;
+    }
+  /* No body-level padding-top at all, on purpose — Radix's scroll-lock
+     (active for as long as any Dialog/Sheet is open) conflicts with body
+     having its own padding-top, causing a "pushed up, then settles" glitch
+     when the sidebar opens. Confirmed by direct testing; a conditional
+     (toggling it off in sync with the Sheet's real open state, even via
+     useLayoutEffect for pre-paint timing) still didn't fully clear it, so
+     rather than keep chasing that interaction, body just never carries
+     this padding at all. SheetContent already has its own
+     pt-(--native-top-pad)! (sidebar.tsx), so the sidebar itself is
+     unaffected. Any other plain, non-Sheet page that needs this padding
+     applies --native-top-pad to its own root directly instead (e.g.
+     App.tsx's login screen) — see that usage for the pattern to follow. */
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
     }

@@ -9,6 +9,20 @@
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
+import rehypeRaw from "rehype-raw"
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
+
+// Underline has no CommonMark/GFM syntax, so MarkdownTextarea's Underline
+// button writes literal <u> tags (see toggleWrap there) and this renderer
+// needs rehype-raw to turn that raw HTML back into a real element. Anything
+// else raw gets stripped by rehype-sanitize — NPC Tracker notes are
+// realtime-synced to other party members (useNpcTrackers.ts), so allowing
+// unsanitized HTML here would be a stored-XSS vector affecting other users,
+// not just whoever typed it.
+const sanitizeSchema = {
+  ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames ?? []), "u"],
+}
 
 // Users often type/paste table rows or list items separated by blank lines.
 // A GFM table requires its rows on consecutive lines (a stray blank line
@@ -84,6 +98,7 @@ export function Markdown({ text, tone = "dark", size = "sm", className = "", onI
     <div className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${c.text} space-y-2 ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
         components={{
           p:  ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
           h1: ({ children }) => <h1 className={`text-lg font-bold ${c.heading}`}>{children}</h1>,

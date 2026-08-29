@@ -99,6 +99,17 @@ function SidebarProvider({
         event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
         (event.metaKey || event.ctrlKey)
       ) {
+        // Ctrl/Cmd+B is also the notes editor's Bold shortcut
+        // (MarkdownTextarea.tsx) — don't steal it while a text field has
+        // focus, or bolding text closes the sidebar out from under you.
+        const active = document.activeElement
+        const isTyping = active instanceof HTMLElement && (
+          active.tagName === "TEXTAREA" ||
+          active.tagName === "INPUT" ||
+          active.isContentEditable
+        )
+        if (isTyping) return
+
         event.preventDefault()
         toggleSidebar()
       }
@@ -186,7 +197,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className="w-(--sidebar-width) bg-sidebar px-0 pb-0 pt-(--native-top-pad)! text-sidebar-foreground [&>button]:hidden"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -198,6 +209,13 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
+          {/* Top padding now lives directly on SheetContent's own className
+              above, not here — SheetContent is the element Radix actually
+              animates (slide-in-from-left transform). Padding on a *child*
+              of the animated element caused a visible one-frame lag where
+              the slide-in briefly showed the old (unpadded) layout before
+              catching up. Padding on SheetContent itself moves as one rigid
+              box with the transform from frame one, no catch-up needed. */}
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>
@@ -229,7 +247,7 @@ function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) pt-(--native-top-pad)! transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
@@ -238,6 +256,11 @@ function Sidebar({
         )}
         {...props}
       >
+        {/* Top padding lives on sidebar-container above (this div's fixed
+            ancestor), not here — same reasoning as the mobile Sheet branch's
+            comment on SheetContent: put it on the element that's actually
+            animated/positioned (this transitions left/right/width), not a
+            static child of it. */}
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
@@ -303,10 +326,16 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 
 function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
   return (
+    // pt-(--native-top-pad): every page using SidebarInset (Documentation,
+    // Dashboard, character sheets, ...) needs this same top breathing room
+    // — including for their own SidebarTrigger button, the thing that
+    // opens the sidebar in the first place. Safe here specifically because
+    // this is position:relative (confirmed), unlike the Sheet/Sidebar
+    // panel itself — no Radix scroll-lock conflict risk the way body had.
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 min-h-0 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        "relative flex w-full flex-1 min-h-0 flex-col bg-background pt-(--native-top-pad) md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className
       )}
       {...props}

@@ -13,6 +13,8 @@ import { useUserContext } from "../../../src/contexts/UserContext"
 import { safeParseJson } from "./utils"
 import { MarkdownTextarea } from "@/components/ui/MarkdownTextarea"
 import { Markdown } from "@/components/ui/Markdown"
+import { useWikiLinks } from "@/components/shared/wikiLinks"
+import { NpcQuickViewModal } from "@/components/npcTracker/NpcQuickViewModal"
 
 interface NoteData {
   content?: string
@@ -31,6 +33,10 @@ export function NoteView({ note }: NoteViewProps) {
   const [saving, setSaving] = useState(false)
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // A standalone note has no party — [[Name]] here only resolves against
+  // the viewer's own other notes/characters, not NPCs (see wikiLinks.ts).
+  const { linkify, onInternalLink, npcs: linkableNpcs, quickViewNpc, selectNpc, closeQuickView } = useWikiLinks(null)
 
   function handleChange(next: string) {
     setContent(next)
@@ -78,7 +84,7 @@ export function NoteView({ note }: NoteViewProps) {
         ) : (
           <div className="max-w-prose cursor-pointer" onClick={() => setEditing(true)} title="Click to edit">
             {content.trim()
-              ? <Markdown text={content} tone="dark" size="sm" />
+              ? <Markdown text={linkify(content)} tone="dark" size="sm" onInternalLink={onInternalLink} />
               : <p className="text-muted-foreground/60 italic text-sm">Empty note — click to start writing.</p>
             }
           </div>
@@ -88,9 +94,19 @@ export function NoteView({ note }: NoteViewProps) {
       {/* Footer hint */}
       <div className="px-5 py-2 border-t border-border/50 bg-card/50 shrink-0">
         <p className="text-[10px] text-muted-foreground/50">
-          Supports: <span className="font-mono"># headers</span>  <span className="font-mono">**bold**</span>  <span className="font-mono">*italic*</span>  <span className="font-mono">`code`</span>  <span className="font-mono">- lists</span>  <span className="font-mono">tables</span>  <span className="font-mono">images</span>  <span className="font-mono">Ctrl/Cmd+B/I/E</span>
+          Supports: <span className="font-mono"># headers</span>  <span className="font-mono">**bold**</span>  <span className="font-mono">*italic*</span>  <span className="font-mono">`code`</span>  <span className="font-mono">- lists</span>  <span className="font-mono">tables</span>  <span className="font-mono">images</span>  <span className="font-mono">[[links]]</span>  <span className="font-mono">Ctrl/Cmd+B/I/U/E</span>
         </p>
       </div>
+
+      {quickViewNpc && (
+        <NpcQuickViewModal
+          npc={quickViewNpc}
+          npcs={linkableNpcs}
+          locationName={null}
+          onClose={closeQuickView}
+          onSelectNpc={selectNpc}
+        />
+      )}
     </div>
   )
 }

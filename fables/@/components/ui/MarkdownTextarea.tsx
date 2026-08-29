@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Bold, Italic, Code as CodeIcon, Table2, ImageIcon, Loader2 } from "lucide-react"
+import { Bold, Italic, Underline, Code as CodeIcon, Table2, ImageIcon, Loader2 } from "lucide-react"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "@/components/shared/imageGallery"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 
@@ -16,31 +16,39 @@ interface MarkdownTextareaProps {
   className?: string
   wrapperClassName?: string
   autoFocus?: boolean
-  variant?: "docs" | "light"
+  variant?: "docs" | "light" | "paper"
   userId?: string | null  // when set, shows an image-upload toolbar button (uploads to the shared "fableimages" bucket)
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void
+  // Called after this component's own shortcuts (bold/italic/underline/
+  // code/list-continuation) have had a chance to handle the key — lets a
+  // caller layer in its own bindings (e.g. Ctrl+Enter to submit) without
+  // fighting the built-in ones.
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
-// Wraps (or unwraps) the current selection with `marker` — e.g. Ctrl/Cmd+B
-// wraps in **bold**. Mirrors the toggle behavior of Google Docs/Notion-style
-// keyboard shortcuts: hitting the shortcut again on already-wrapped text
-// removes the marker instead of double-wrapping.
-function toggleWrap(el: HTMLTextAreaElement, value: string, onChange: (v: string) => void, marker: string) {
+// Wraps (or unwraps) the current selection with `open`/`close` — e.g.
+// Ctrl/Cmd+B wraps in **bold**. Mirrors the toggle behavior of Google
+// Docs/Notion-style keyboard shortcuts: hitting the shortcut again on
+// already-wrapped text removes the markers instead of double-wrapping.
+// `close` defaults to `open` for symmetric markers (**, *, `); underline's
+// <u>/</u> is the one asymmetric case.
+function toggleWrap(el: HTMLTextAreaElement, value: string, onChange: (v: string) => void, open: string, close: string = open) {
   const start = el.selectionStart
   const end = el.selectionEnd
   const before = value.slice(0, start)
   const selected = value.slice(start, end)
   const after = value.slice(end)
-  const alreadyWrapped = before.endsWith(marker) && after.startsWith(marker)
+  const alreadyWrapped = before.endsWith(open) && after.startsWith(close)
 
   let next: string, nextStart: number, nextEnd: number
   if (alreadyWrapped) {
-    next = before.slice(0, -marker.length) + selected + after.slice(marker.length)
-    nextStart = start - marker.length
-    nextEnd = end - marker.length
+    next = before.slice(0, -open.length) + selected + after.slice(close.length)
+    nextStart = start - open.length
+    nextEnd = end - open.length
   } else {
-    next = before + marker + selected + marker + after
-    nextStart = start + marker.length
-    nextEnd = end + marker.length
+    next = before + open + selected + close + after
+    nextStart = start + open.length
+    nextEnd = end + open.length
   }
   onChange(next)
   requestAnimationFrame(() => { el.focus(); el.selectionStart = nextStart; el.selectionEnd = nextEnd })
@@ -87,7 +95,7 @@ function handleListEnter(el: HTMLTextAreaElement, value: string, onChange: (v: s
 export function MarkdownTextarea({
   value, onChange, placeholder, rows = 4,
   className = "", wrapperClassName, autoFocus, variant = "docs",
-  userId,
+  userId, onPaste, onKeyDown: onKeyDownProp,
 }: MarkdownTextareaProps) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -97,8 +105,10 @@ export function MarkdownTextarea({
   const [galleryLoading, setGalleryLoading] = useState(false)
 
   function insertTable() {
-    const prefix = value && !value.endsWith("\n") ? "\n\n" : value ? "\n" : ""
-    onChange(value + prefix + MARKDOWN_TABLE)
+    const el = innerRef.current
+    const before = value.slice(0, el?.selectionStart ?? value.length)
+    const prefix = before && !before.endsWith("\n") ? "\n\n" : before ? "\n" : ""
+    insertAtCursor(el, value, onChange, prefix + MARKDOWN_TABLE)
   }
 
   async function openImagePicker() {
@@ -132,12 +142,16 @@ export function MarkdownTextarea({
     const mod = e.metaKey || e.ctrlKey
     if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleWrap(el, value, onChange, "**"); return }
     if (mod && e.key.toLowerCase() === "i") { e.preventDefault(); toggleWrap(el, value, onChange, "*"); return }
+    if (mod && e.key.toLowerCase() === "u") { e.preventDefault(); toggleWrap(el, value, onChange, "<u>", "</u>"); return }
     if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); toggleWrap(el, value, onChange, "`"); return }
     if (e.key === "Enter") handleListEnter(el, value, onChange, e)
+    onKeyDownProp?.(e)
   }
 
   const toolCls = variant === "docs"
     ? "size-6 flex items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground hover:border-border transition-colors disabled:opacity-40"
+    : variant === "paper"
+    ? "size-6 flex items-center justify-center rounded border border-zinc-900/15 text-zinc-500 hover:text-zinc-900 hover:border-zinc-900/30 transition-colors disabled:opacity-40"
     : "size-6 flex items-center justify-center rounded border border-white/15 text-white/40 hover:text-white/80 hover:border-white/30 transition-colors disabled:opacity-40"
 
   return (
@@ -150,6 +164,10 @@ export function MarkdownTextarea({
         <button type="button" className={toolCls} title="Italic (Ctrl/Cmd+I)"
           onClick={() => innerRef.current && toggleWrap(innerRef.current, value, onChange, "*")}>
           <Italic className="size-3.5" />
+        </button>
+        <button type="button" className={toolCls} title="Underline (Ctrl/Cmd+U)"
+          onClick={() => innerRef.current && toggleWrap(innerRef.current, value, onChange, "<u>", "</u>")}>
+          <Underline className="size-3.5" />
         </button>
         <button type="button" className={toolCls} title="Code (Ctrl/Cmd+E)"
           onClick={() => innerRef.current && toggleWrap(innerRef.current, value, onChange, "`")}>
@@ -184,6 +202,7 @@ export function MarkdownTextarea({
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onPaste={onPaste}
         placeholder={placeholder}
         rows={rows}
         className={className}

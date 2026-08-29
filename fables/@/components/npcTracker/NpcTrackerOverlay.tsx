@@ -8,12 +8,15 @@
 
 import { useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { useNavigate } from "react-router-dom"
 import { Plus, Pencil, Trash2, X, Check, ImagePlus, Loader2, BookOpen, MapPin, StickyNote } from "lucide-react"
 import { Markdown } from "../ui/Markdown"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "../shared/imageGallery"
 import { PortraitModal } from "../shared/PortraitModal"
 import { MAP_PARTY_CODE } from "../shared/constants"
 import { MapNotesPanel } from "../map/MapNotesPanel"
+import { linkifyMentions } from "../shared/wikiLinks"
+import { useObjects } from "../../../src/contexts/UserContext"
 import { useNpcTrackers, linkifyNpcMentions, type NpcTracker, type NpcTrackerDraft } from "./useNpcTrackers"
 import { NpcQuickViewModal } from "./NpcQuickViewModal"
 
@@ -32,6 +35,12 @@ export function NpcTrackerOverlay({
   focusNpcId?: string | null
 }) {
   const { npcs, pins, notesForNpc, createNpc, updateNpc, deleteNpc, addNpcNote, editNpcNote, deleteNpcNote } = useNpcTrackers(partyCode, currentUserId)
+  const navigate = useNavigate()
+  // Detail Notes' [[Name]] mentions resolve against this party's NPCs (see
+  // openQuickView below) as well as the viewer's own notes/characters —
+  // scoped to their own objects (owner-scoped RLS) so this never exposes
+  // another party member's private content, same as an unmatched mention.
+  const linkableObjects = useObjects().filter(o => o.type === "note" || o.type === "character")
   const [detailNotesId, setDetailNotesId] = useState<string | null>(null)
   const [quickViewId, setQuickViewId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(focusNpcId ?? null)
@@ -69,6 +78,17 @@ export function NpcTrackerOverlay({
     if (!target.startsWith("npc:")) return
     const id = target.slice("npc:".length)
     if (sorted.some(n => n.id === id)) setQuickViewId(id)
+  }
+
+  // Detail Notes' version of the above — also handles "object:" links (a
+  // note/character mentioned from an NPC's notes), which just navigates
+  // straight to it rather than popping a modal.
+  function handleDetailNotesLink(target: string) {
+    if (target.startsWith("object:")) {
+      navigate(`/dashboard?open=${encodeURIComponent(target.slice("object:".length))}`)
+      return
+    }
+    openQuickView(target)
   }
 
   function startEdit(npc: NpcTracker) {
@@ -312,8 +332,8 @@ export function NpcTrackerOverlay({
               onAddNote={content => addNpcNote(detailNotesNpc.id, currentUserName, content)}
               onEditNote={editNpcNote}
               onDeleteNote={deleteNpcNote}
-              linkify={text => linkifyNpcMentions(text, sorted)}
-              onInternalLink={openQuickView}
+              linkify={text => linkifyMentions(linkifyNpcMentions(text, sorted), linkableObjects, "object")}
+              onInternalLink={handleDetailNotesLink}
             />
           </div>
         </div>,
