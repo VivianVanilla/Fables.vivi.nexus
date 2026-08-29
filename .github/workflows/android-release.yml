@@ -11,6 +11,20 @@ name: Android Release
 # to run unattended on every push. Promoting to a wider track (production
 # included) is a deliberate, separate action: run this workflow manually
 # ("Run workflow" in the Actions tab) and pick the track — never automatic.
+#
+# Debounced: a push-triggered run's first step sleeps an hour before doing
+# anything else. If another push lands before that sleep finishes, the
+# concurrency group below cancels this run outright and starts a fresh one
+# (with its own hour-long sleep) for the new commit. Only a push that goes
+# uninterrupted for a full hour ever reaches checkout/build/upload — so
+# a burst of rapid pushes produces exactly one release, for whatever was
+# HEAD when things finally went quiet, instead of one release per push.
+# Manual (workflow_dispatch) runs skip the sleep and their own concurrency
+# group, so they're never delayed or cancelled by unrelated pushes.
+concurrency:
+  group: android-release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -32,6 +46,12 @@ jobs:
       run:
         working-directory: fables
     steps:
+      # See the debounce note above — this is what makes a burst of pushes
+      # collapse into a single release instead of one per push.
+      - name: Debounce — wait an hour for pushes to settle
+        if: github.event_name == 'push'
+        run: sleep 3600
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
