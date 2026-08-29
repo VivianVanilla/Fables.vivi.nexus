@@ -4,12 +4,12 @@ name: Android Release
 # android/RELEASE.md for the one-time setup this depends on (keystore,
 # Play service account, and exactly which GitHub Secrets to create).
 #
-# Automatic pushes to main go to the "internal" testing track — that
-# requires no Google review and is only ever visible to testers you've
-# explicitly added in Play Console, so it's safe to run unattended on every
-# push. Promoting to a wider track (production included) is a deliberate,
-# separate action: run this workflow manually ("Run workflow" in the
-# Actions tab) and pick the track — never automatic.
+# Automatic pushes to main go to the "alpha" (closed testing) track — that
+# requires no per-release Google review and is only ever visible to testers
+# you've explicitly added in Play Console, so it's safe to run unattended on
+# every push. Promoting to a wider track (production included) is a
+# deliberate, separate action: run this workflow manually ("Run workflow" in
+# the Actions tab) and pick the track — never automatic.
 on:
   push:
     branches: [main]
@@ -22,7 +22,7 @@ on:
         description: 'Play Console track to upload to'
         type: choice
         options: [internal, alpha, beta, production]
-        default: internal
+        default: alpha
 
 jobs:
   build-and-upload:
@@ -126,7 +126,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ env.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: nexus.fables.vivi
           releaseFiles: fables/android/app/build/outputs/bundle/release/app-release.aab
-          track: ${{ inputs.track || 'internal' }}
+          track: ${{ inputs.track || 'alpha' }}
           status: completed
 
       - name: Clean up keystore

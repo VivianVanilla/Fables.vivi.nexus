@@ -1,10 +1,11 @@
 # Android release pipeline — setup
 
 `.github/workflows/android-release.yml` builds a signed `.aab` on every push
-to `main` and uploads it to the Play Console's **internal testing** track
-automatically (safe — no Google review, only visible to testers you've
-explicitly added). Uploading to `alpha`/`beta`/`production` is manual only:
-Actions tab → **Android Release** → **Run workflow** → pick the track.
+to `main` and uploads it to the Play Console's **alpha (closed testing)**
+track automatically (safe — no per-release Google review, only visible to
+testers you've explicitly added). Uploading to `internal`/`beta`/`production`
+is manual only: Actions tab → **Android Release** → **Run workflow** → pick
+the track.
 
 One-time setup, in order:
 
