@@ -18,6 +18,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Discord OAuth callback (see useOAuthDeepLink.ts) — Supabase
+                 redirects here after sign-in since the OAuth flow itself
+                 happens in the system browser, outside this app's WebView. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nexus.fables.vivi" android:host="login-callback" />
+            </intent-filter>
         </activity>
 
         <provider

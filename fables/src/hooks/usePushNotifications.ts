@@ -22,13 +22,29 @@ import { supabase } from "../supabase"
 export function usePushNotifications(userId: string | null | undefined) {
   useEffect(() => {
     if (!userId || !Capacitor.isNativePlatform()) return
+
+    // Firebase (and therefore this whole plugin) only initializes when
+    // google-services.json was present at build time (see build.gradle's
+    // conditional google-services plugin apply). When it's missing,
+    // PushNotifications.register() throws a native IllegalStateException
+    // that crashes the whole app outright — it does NOT reject as a JS
+    // promise, so no try/catch here can contain it; the only real fix is
+    // never calling it in that case. VITE_PUSH_NOTIFICATIONS_ENABLED is set
+    // by the same GOOGLE_SERVICES_JSON check that gates writing the file
+    // (see android-release.yml / android-debug-build.yml).
+    if (import.meta.env.VITE_PUSH_NOTIFICATIONS_ENABLED !== "true") return
+
     let cancelled = false
 
     async function register() {
-      const { receive } = await PushNotifications.checkPermissions()
-      const granted = receive === "granted" ? receive : (await PushNotifications.requestPermissions()).receive
-      if (granted !== "granted" || cancelled) return
-      await PushNotifications.register()
+      try {
+        const { receive } = await PushNotifications.checkPermissions()
+        const granted = receive === "granted" ? receive : (await PushNotifications.requestPermissions()).receive
+        if (granted !== "granted" || cancelled) return
+        await PushNotifications.register()
+      } catch (err) {
+        console.error("Push notification setup unavailable:", err)
+      }
     }
 
     const regSub = PushNotifications.addListener("registration", token => {

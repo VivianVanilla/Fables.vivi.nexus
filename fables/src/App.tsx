@@ -12,6 +12,7 @@ import { Capacitor } from "@capacitor/core"
 import { SplashScreen } from "@capacitor/splash-screen"
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton"
 import { usePushNotifications } from "./hooks/usePushNotifications"
+import { useOAuthDeepLink } from "./hooks/useOAuthDeepLink"
 import { useUser } from "./contexts/UserContext"
 
 
@@ -29,6 +30,7 @@ const user = useUser();
 
 useAndroidBackButton();
 usePushNotifications(user?.id);
+useOAuthDeepLink();
 
 // Native splash screen (see capacitor.config.ts — launchAutoHide: false)
 // stays up until this fires, so the first paint the user sees is the real

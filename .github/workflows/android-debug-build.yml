@@ -48,6 +48,12 @@ jobs:
         env:
           VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
           VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
+          # Same condition that gates writing google-services.json above —
+          # usePushNotifications.ts uses this to skip ever calling
+          # PushNotifications.register() when Firebase won't be initialized,
+          # since that throws natively and crashes the app outright rather
+          # than rejecting as a catchable JS promise.
+          VITE_PUSH_NOTIFICATIONS_ENABLED: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
         run: npm run build
       - run: npx cap sync android
 

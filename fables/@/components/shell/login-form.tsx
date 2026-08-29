@@ -1,4 +1,5 @@
 import { type ComponentProps, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { cn } from "@/lib/utils";
 
 import { supabase } from "../../../src/supabase";
@@ -17,7 +18,15 @@ type LoginFormProps = ComponentProps<"div">;
 
 
 async function signInWithDiscord() {
-  const redirectTo = `${window.location.origin}/dashboard`;
+  // Native: window.location.origin is the WebView's own internal origin,
+  // not a real address Supabase's redirect allowlist can send a browser
+  // back to — the OAuth flow runs in the system browser, not this WebView.
+  // Use the custom-scheme deep link instead (see useOAuthDeepLink.ts and
+  // AndroidManifest.xml's intent-filter); it must also be added to
+  // Supabase's Authentication -> URL Configuration -> Redirect URLs.
+  const redirectTo = Capacitor.isNativePlatform()
+    ? "nexus.fables.vivi://login-callback"
+    : `${window.location.origin}/dashboard`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "discord",

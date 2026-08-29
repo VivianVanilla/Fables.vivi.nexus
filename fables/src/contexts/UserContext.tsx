@@ -66,8 +66,24 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   // navigate) is used because UserProvider sits outside <BrowserRouter> in
   // main.tsx and has no router context to navigate with; the flag survives
   // that reload so the login page can show why it bounced you back.
+  //
+  // SIGNED_IN matters too, not just SIGNED_OUT: on web, Discord's OAuth
+  // redirect is a full page reload, so the mount effect above already sees
+  // the new session via getUser() and this listener firing SIGNED_IN is
+  // redundant there. On native there's no reload — useOAuthDeepLink.ts
+  // completes sign-in with setSession() on an already-running app, which
+  // fires SIGNED_IN with nothing else to pick it up, leaving user/objects
+  // stuck at their pre-login empty state forever without this.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        setUser(session.user)
+        getObjectsForUser(session.user.id)
+          .then(setObjects)
+          .catch(err => console.error("Error calling getObjectsForUser:", err))
+        return
+      }
+
       if (event !== "SIGNED_OUT") return
       setUser(null)
       setObjects([])
