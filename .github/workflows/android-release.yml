@@ -57,7 +57,17 @@ jobs:
         if: ${{ env.GOOGLE_SERVICES_JSON != '' }}
         run: echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
+      # Without these, supabase.ts's createClient() gets undefined for both
+      # args and throws synchronously on import — before React ever mounts,
+      # so SplashScreen.hide() (App.tsx) never fires and the app is stuck on
+      # the native splash screen forever. VITE_PUBLIC_SUPABASE_ANON_KEY is
+      # Supabase's anon/publishable key — meant to ship in client bundles,
+      # not a sensitive secret, but still sourced from GitHub Secrets here
+      # since that's this workflow's existing convention for build inputs.
       - name: Build web bundle
+        env:
+          VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Sync into the native Android project

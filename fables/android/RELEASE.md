@@ -45,6 +45,10 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 | `ANDROID_KEY_PASSWORD` | the key password from step 1 |
 | `PLAY_SERVICE_ACCOUNT_JSON` | see step 4 |
 | `GOOGLE_SERVICES_JSON` | optional — see `supabase/PUSH_NOTIFICATIONS.md`; only needed for push notifications, the release build works fine without it |
+| `VITE_PUBLIC_SUPABASE_URL` | copy from `fables/.env.local` |
+| `VITE_PUBLIC_SUPABASE_ANON_KEY` | copy from `fables/.env.local` — this is Supabase's anon/publishable key, meant to ship in client bundles, not sensitive the way the others here are |
+
+Skipping the last two doesn't fail the build — it fails *silently* at runtime instead: `src/supabase.ts`'s `createClient()` gets `undefined` for both arguments and throws immediately on import, before React ever mounts, so the app never gets past the native splash screen. If a build ever gets stuck on a gray screen with the Capacitor logo, this is the first thing to check.
 
 ## 4. Create a Play Console service account (lets CI publish on your behalf)
 

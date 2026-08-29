@@ -40,7 +40,15 @@ jobs:
         if: ${{ env.GOOGLE_SERVICES_JSON != '' }}
         run: echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
-      - run: npm run build
+      # Without these, supabase.ts's createClient() gets undefined for both
+      # args and throws synchronously on import — before React ever mounts,
+      # so SplashScreen.hide() (App.tsx) never fires and the app is stuck on
+      # the native splash screen forever.
+      - name: Build web bundle
+        env:
+          VITE_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_PUBLIC_SUPABASE_URL }}
+          VITE_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run build
       - run: npx cap sync android
 
       - name: Ensure gradlew is executable
