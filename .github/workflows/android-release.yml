@@ -93,10 +93,27 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew bundleRelease
 
+      # Downloadable from the run's Summary page regardless of whether the
+      # Play Console upload below succeeds — useful for the required-by-
+      # Google one-time manual first release (see RELEASE.md step 5), and
+      # as a general "grab this exact build" escape hatch.
+      - name: Upload .aab as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fables-release-aab
+          path: fables/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      # Skips cleanly (not a failure) until PLAY_SERVICE_ACCOUNT_JSON is set
+      # up — see RELEASE.md step 4. Until then, use the artifact above for
+      # manual uploads.
       - name: Upload to Play Console
+        if: ${{ env.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJsonPlainText: ${{ env.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: nexus.fables.vivi
           releaseFiles: fables/android/app/build/outputs/bundle/release/app-release.aab
           track: ${{ inputs.track || 'internal' }}

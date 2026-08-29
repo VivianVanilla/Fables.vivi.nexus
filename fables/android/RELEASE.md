@@ -48,20 +48,24 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 ## 4. Create a Play Console service account (lets CI publish on your behalf)
 
-1. [Google Play Console](https://play.google.com/console) → **Setup → API access**.
-2. If no Cloud project is linked yet, click **Choose a project** / **Create
-   new project** and link it (it can be the same Firebase project from
-   `supabase/PUSH_NOTIFICATIONS.md`, or a separate one — either works).
-3. **Create new service account** — this hands off to Google Cloud Console;
-   create it there (any name, e.g. "play-publisher"), no roles needed at
-   the Cloud IAM level.
-4. Back in Play Console's API access page, find that service account under
-   **Service accounts**, click **Grant access**, and give it at least:
-   **Release manager** access to this app (specifically the "Release to
-   testing tracks" and "Release to production" permissions, under Releases).
-5. In Google Cloud Console, open that service account → **Keys → Add key →
-   JSON** → downloads a JSON file. Its *entire contents* (plain JSON, not
-   base64) is the `PLAY_SERVICE_ACCOUNT_JSON` secret above.
+Google moved this off the old Play Console "Setup → API access" page — do it
+from Cloud Console plus Play Console's Users and permissions page instead:
+
+1. [Google Cloud Console → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts)
+   → create/select a project → **Create Service Account** (any name, e.g.
+   "play-publisher"), no roles needed at the Cloud IAM level. (Can be the
+   same Firebase project from `supabase/PUSH_NOTIFICATIONS.md`, or a
+   separate one — either works.)
+2. On that service account → **Keys → Add key → JSON** → downloads a JSON
+   file. Its *entire contents* (plain JSON, not base64) is the
+   `PLAY_SERVICE_ACCOUNT_JSON` secret above.
+3. Copy the service account's **email address** (shown on its details page,
+   looks like `play-publisher@your-project-id.iam.gserviceaccount.com`).
+4. [Play Console → Users and permissions](https://play.google.com/console/users-and-permissions)
+   → **Invite new users** → paste that email → under this app's
+   permissions grant at least **Release manager** access (specifically
+   "Release to testing tracks" and "Release to production", under
+   Releases). Only the account Owner (or an Admin) can see this page.
 
 ## 5. One manual upload first (unavoidable Google API limitation)
 
