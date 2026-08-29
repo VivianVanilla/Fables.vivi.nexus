@@ -1,15 +1,16 @@
 name: Android Release
 
-# Builds a signed .aab and uploads it to the Play Console. See
-# android/RELEASE.md for the one-time setup this depends on (keystore,
-# Play service account, and exactly which GitHub Secrets to create).
+# Builds a signed .aab and uploads it to the Play Console. Depends on a
+# one-time setup: keystore secrets, a Play Console service account, and
+# (for the app itself to run at all) the VITE_PUBLIC_SUPABASE_* secrets —
+# see this workflow's own secrets.* references below for the full list.
 #
-# Automatic pushes to main go to the "alpha" (closed testing) track — that
-# requires no per-release Google review and is only ever visible to testers
-# you've explicitly added in Play Console, so it's safe to run unattended on
-# every push. Promoting to a wider track (production included) is a
-# deliberate, separate action: run this workflow manually ("Run workflow" in
-# the Actions tab) and pick the track — never automatic.
+# Automatic pushes to main go to the "Fables.vivi.nexus Beta" closed testing
+# track — that requires no per-release Google review and is only ever
+# visible to testers you've explicitly added in Play Console, so it's safe
+# to run unattended on every push. Promoting to a wider track (production
+# included) is a deliberate, separate action: run this workflow manually
+# ("Run workflow" in the Actions tab) and pick the track — never automatic.
 on:
   push:
     branches: [main]
@@ -21,8 +22,8 @@ on:
       track:
         description: 'Play Console track to upload to'
         type: choice
-        options: [internal, alpha, beta, production]
-        default: alpha
+        options: [internal, alpha, beta, production, 'Fables.vivi.nexus Beta']
+        default: 'Fables.vivi.nexus Beta'
 
 jobs:
   build-and-upload:
@@ -126,7 +127,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ env.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: nexus.fables.vivi
           releaseFiles: fables/android/app/build/outputs/bundle/release/app-release.aab
-          track: ${{ inputs.track || 'alpha' }}
+          track: ${{ inputs.track || 'Fables.vivi.nexus Beta' }}
           status: completed
 
       - name: Clean up keystore
