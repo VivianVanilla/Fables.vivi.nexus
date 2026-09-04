@@ -84,6 +84,7 @@ interface FavoritesPanelProps {
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings (Feature Stylings) — accent color per category
   tagTextColor?:  "black" | "white"  // Settings — global override for the source tag + "Lv N" badge text color
   bodyTextColor?: "black" | "white"  // Settings — global override for each card's own description text color
+  showKnownBadge?: boolean  // Settings (SpellcastingModal) — opt-in "K" tag on spells with alwaysPrepared set
   favoriteCategoryStyle?:  Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (card background)
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (tracking slider, independent of the card background)
   favoriteCategorySliderColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the tracking slider per category, independent of the card accent color above
@@ -117,7 +118,7 @@ interface FavoritesPanelProps {
 export function FavoritesPanel({
   favorites, spellItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
-  featureCategoryById, favoriteCategoryColors, tagTextColor, bodyTextColor, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
+  featureCategoryById, favoriteCategoryColors, tagTextColor, bodyTextColor, showKnownBadge, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
   classFeatureColorsByClass, classFeatureColors, classFeatureSliderColors,
   onChangeSpell, onRemoveSpell,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
@@ -215,7 +216,7 @@ export function FavoritesPanel({
       return spell
         ? <SpellEntry spell={spell} theme={theme} readOnly={readOnly} showPrepToggle={false} classes={classes}
             isFavorite onToggleFavorite={onToggleFavorite}
-            accentColor={accentColor} accentStyle={accentStyle} bodyTextColor={bodyTextColor}
+            accentColor={accentColor} accentStyle={accentStyle} bodyTextColor={bodyTextColor} showKnownBadge={showKnownBadge}
             onChange={p => onChangeSpell(fav.refId, p)}
             onRemove={() => onRemoveSpell(fav.refId)} />
         : <NotFoundRow label="Spell not found." onRemove={onToggleFavorite} />

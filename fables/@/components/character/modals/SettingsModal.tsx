@@ -20,10 +20,10 @@ interface Props {
 // One None/Outline(or Flat)/Animated toggle group, shared by every Feature
 // Styling row's Background and Tracking Slider sub-controls — "outline"
 // reads as "Flat" for the slider since there's no border to outline there.
-function StyleToggle({ label, value, onChange, slider }: { label: string; value: CardStyle; onChange: (s: CardStyle) => void; slider?: boolean }) {
+function StyleToggle({ label, value, onChange, slider, dark }: { label: string; value: CardStyle; onChange: (s: CardStyle) => void; slider?: boolean; dark?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-2 pl-2">
-      <span className="text-[10px] text-white/40 shrink-0">{label}</span>
+      <span className={`text-[10px] ${dark ? "text-black/50" : "text-white/40"} shrink-0`}>{label}</span>
       <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
         {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
           <button key={s} type="button" title={s === "galaxy" ? "Animated" : undefined}
@@ -46,6 +46,25 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
   const slotCustomColor = data.slotCustomColor ?? DEFAULT_ACCENT_COLOR
   const classNames      = deriveCharacterClassNames(data)
   const uiScale         = data.uiScale ?? 100
+  // Same convention already used elsewhere for the sheet-wide Text Color
+  // setting (tagTextColor/bodyTextColor in InfoTab.tsx etc.) — this modal's
+  // own shell already inherits the character's Card Style background (see
+  // the `card` prop), instead of a fixed color, so its own labels should
+  // follow the same text-color choice rather than always being white.
+  // Written as full literal class strings (not built from a template) so
+  // Tailwind's scanner actually generates them — deliberately left off of
+  // swatch/toggle active-state text below, which has its own selection-
+  // state meaning independent of this setting, same scoping every other
+  // use of this pattern in the app already follows.
+  const dark    = data.textColorOverride === "dark"
+  const cTitle  = dark ? "text-black"    : "text-white"
+  const cHead   = dark ? "text-black/70" : "text-white/40"
+  const c70     = dark ? "text-black/80" : "text-white/70"
+  const c50     = dark ? "text-black/60" : "text-white/50"
+  const c40     = dark ? "text-black/50" : "text-white/40"
+  const c30     = dark ? "text-black/40" : "text-white/30"
+  const cHover  = dark ? "hover:text-black" : "hover:text-white"
+  const cHover60 = dark ? "hover:text-black/70" : "hover:text-white/60"
   const [copied, setCopied] = useState(false)
   const shareUrl = data.shareToken ? `${window.location.origin}/share/${characterId}/${data.shareToken}` : ""
 
@@ -61,32 +80,32 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
       <div className={`${card} shadow-2xl w-[min(520px,92vw)] max-h-[88vh] flex flex-col overflow-hidden`}>
 
         <div className="px-5 py-3 border-b border-white/10 shrink-0 flex items-center justify-between gap-3">
-          <p className="text-base font-bold text-white">Settings</p>
+          <p className={`text-base font-bold ${cTitle}`}>Settings</p>
           <button type="button" onClick={onClose}
-            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">✕</button>
+            className={`size-7 flex items-center justify-center rounded-lg hover:bg-white/10 ${c40} ${cHover} shrink-0`}>✕</button>
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-5">
 
           {/* Share Link */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Share Link</p>
-            <p className="text-[10px] text-white/30 -mt-1">
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Share Link</p>
+            <p className={`text-[10px] ${c30} -mt-1`}>
               Anyone with this link can view this character/
             </p>
             {data.shareToken ? (
               <>
                 <div className="flex items-center gap-1.5">
                   <input readOnly value={shareUrl} onFocus={e => e.target.select()}
-                    className="flex-1 min-w-0 bg-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/70 outline-none truncate" />
+                    className={`flex-1 min-w-0 bg-white/10 rounded-lg px-2.5 py-1.5 text-xs ${c70} outline-none truncate`} />
                   <button type="button" onClick={copyLink}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors shrink-0">
+                    className={`text-xs px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 ${c70} ${cHover} transition-colors shrink-0`}>
                     {copied ? "Copied!" : "Copy"}
                   </button>
                 </div>
                 <div className="flex items-center gap-3">
                   <button type="button" onClick={() => onUpdate({ shareToken: nanoid() })}
-                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors">
+                    className={`text-[10px] ${c30} ${cHover60} transition-colors`}>
                     Regenerate (invalidates the old link)
                   </button>
                   <button type="button" onClick={() => onUpdate({ shareToken: undefined })}
@@ -97,7 +116,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               </>
             ) : (
               <button type="button" onClick={() => onUpdate({ shareToken: nanoid() })}
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors self-start">
+                className={`text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 ${c70} ${cHover} transition-colors self-start`}>
                 Generate Share Link
               </button>
             )}
@@ -105,42 +124,36 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
 
           {/* Interface options */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Options</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Options</p>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={!(data.plainSkills ?? false)}
                 onChange={e => onUpdate({ plainSkills: !e.target.checked })}
                 className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Color-code skills by ability</span>
-            </label>
-            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-              <input type="checkbox" checked={data.hideDiceRoller ?? false}
-                onChange={e => onUpdate({ hideDiceRoller: e.target.checked })}
-                className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Remove dice roller</span>
+              <span className={`text-sm ${c70}`}>Color-code skills by ability</span>
             </label>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.hideJumpCalculator ?? false}
                 onChange={e => onUpdate({ hideJumpCalculator: e.target.checked })}
                 className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Remove jump calculator</span>
+              <span className={`text-sm ${c70}`}>Remove jump calculator</span>
             </label>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.showResistanceTracker ?? false}
                 onChange={e => onUpdate({ showResistanceTracker: e.target.checked })}
                 className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Add resistance/vulnerability tracker</span>
+              <span className={`text-sm ${c70}`}>Add resistance/vulnerability tracker</span>
             </label>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.hideSpellsSection ?? false}
                 onChange={e => onUpdate({ hideSpellsSection: e.target.checked })}
                 className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Hide Spells (Martial-only character)</span>
+              <span className={`text-sm ${c70}`}>Hide Spells (Martial-only character)</span>
             </label>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.hideMartialSection ?? false}
                 onChange={e => onUpdate({ hideMartialSection: e.target.checked })}
                 className="accent-primary size-4 rounded" />
-              <span className="text-sm text-white/70">Hide Martial (spellcaster-only character)</span>
+              <span className={`text-sm ${c70}`}>Hide Martial (spellcaster-only character)</span>
             </label>
           </div>
 
@@ -149,7 +162,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               once. 100% is the default/current size; 75% zooms out, 125%
               zooms in. Also home to the sheet-wide text color switch below. */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Modules and Font Size</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Modules and Font Size</p>
             <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
               {UI_SCALES.map(scale => (
                 <button key={scale} type="button" onClick={() => onUpdate({ uiScale: scale })}
@@ -163,7 +176,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 matching light background theme, which doesn't exist yet.
                 "Dark" is here as groundwork for that. */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-white/50">Text Color</span>
+              <span className={`text-xs ${c50}`}>Text Color</span>
               <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
                 {TEXT_COLOR_OPTIONS.map(opt => (
                   <button key={opt} type="button" onClick={() => onUpdate({ textColorOverride: opt })}
@@ -179,7 +192,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
 
           {/* Card style */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Card Style</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Card Style</p>
             <div className="grid grid-cols-5 gap-1.5">
               {Object.entries(THEMES).map(([key, t]) => {
                 const isActive = key === activeThemeKey
@@ -206,7 +219,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               })}
             </div>
             {activeThemeKey === CUSTOM_THEME_KEY && (
-              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer px-1">
+              <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer px-1`}>
                 Custom color
                 <ColorSwatchInput value={themeCustomColor} onChange={v => onUpdate({ themeCustomColor: v })} />
               </label>
@@ -215,7 +228,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
 
           {/* Background */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Background</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Background</p>
             <div className="grid grid-cols-5 gap-1.5">
               {Object.entries(BG_OPTIONS).map(([key, bg]) => {
                 const isActive = key === activeBgKey
@@ -231,7 +244,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               })}
             </div>
             {activeBgKey === CUSTOM_THEME_KEY && (
-              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer px-1">
+              <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer px-1`}>
                 Custom color
                 <ColorSwatchInput value={themeBgCustomColor} onChange={v => onUpdate({ themeBgCustomColor: v })} />
               </label>
@@ -240,7 +253,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
 
           {/* Spell slot color */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slot Color</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Spell Slot Color</p>
             <div className="grid grid-cols-5 gap-1.5">
               {Object.entries(SLOT_THEMES).map(([key, st]) => {
                 const isActive = key === activeSlotKey
@@ -265,12 +278,12 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
             </div>
             <div className="flex items-center justify-between px-1">
               {activeSlotKey === CUSTOM_SLOT_THEME_KEY ? (
-                <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer">
+                <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer`}>
                   Custom color
                   <ColorSwatchInput value={slotCustomColor} onChange={v => onUpdate({ slotCustomColor: v })} />
                 </label>
               ) : <span />}
-              <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
+              <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer select-none`}>
                 <input type="checkbox" checked={data.slotAnimated ?? false}
                   onChange={e => onUpdate({ slotAnimated: e.target.checked })}
                   className="accent-primary size-4 rounded" />
@@ -288,7 +301,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               Slider look for that category's "Track uses" bars — the two
               are independent */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Feature Styling</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Feature Styling</p>
             
             <div className="flex flex-col gap-2">
               {/* Magical Items row — flat single accent color by default
@@ -297,32 +310,32 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                   color per rarity" is checked. */}
               <div className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-white/70 shrink-0">Magical Items</span>
+                  <span className={`text-sm ${c70} shrink-0`}>Magical Items</span>
                   {!(data.magicItemColorsByRarity ?? false) && (
                     <label className="flex flex-col items-center gap-0.5 cursor-pointer shrink-0">
                       <ColorSwatchInput value={data.magicItemColor ?? DEFAULT_ACCENT_COLOR} title="Accent color"
                         onChange={v => onUpdate({ magicItemColor: v })} />
-                      <span className="text-[8px] text-white/30">Color</span>
+                      <span className={`text-[8px] ${c30}`}>Color</span>
                     </label>
                   )}
                 </div>
 
                 <StyleToggle label="Background" value={data.magicItemStyle ?? "galaxy"}
-                  onChange={s => onUpdate({ magicItemStyle: s })} />
+                  onChange={s => onUpdate({ magicItemStyle: s })} dark={dark} />
 
                 {/* Mirrors Background until explicitly set otherwise — see
                     FeatureEntry.tsx's sliderSource for why. */}
                 <StyleToggle label="Tracking Slider" value={data.magicItemSliderStyle ?? data.magicItemStyle ?? "galaxy"}
-                  onChange={s => onUpdate({ magicItemSliderStyle: s })} slider />
+                  onChange={s => onUpdate({ magicItemSliderStyle: s })} slider dark={dark} />
 
-                <label className="flex items-center gap-2 text-[11px] text-white/50 cursor-pointer select-none pl-2">
+                <label className={`flex items-center gap-2 text-[11px] ${c50} cursor-pointer select-none pl-2`}>
                   <input type="checkbox" checked={data.showMagicItemStar ?? true}
                     onChange={e => onUpdate({ showMagicItemStar: e.target.checked })}
                     className="accent-primary size-3.5 rounded" />
                   ✨ Star on magic items
                 </label>
 
-                <label className="flex items-center gap-2 text-[11px] text-white/50 cursor-pointer select-none pl-2">
+                <label className={`flex items-center gap-2 text-[11px] ${c50} cursor-pointer select-none pl-2`}>
                   <input type="checkbox" checked={data.magicItemColorsByRarity ?? false}
                     onChange={e => onUpdate({ magicItemColorsByRarity: e.target.checked })}
                     className="accent-primary size-3.5 rounded" />
@@ -333,17 +346,17 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                   <div className="flex flex-col gap-1.5 pl-2 py-1">
                     {(["Common","Uncommon","Rare","Very Rare","Legendary","Artifact"] as const).map(tier => (
                       <div key={tier} className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-white/50">{tier}</span>
+                        <span className={`text-[10px] ${c50}`}>{tier}</span>
                         <div className="flex items-center gap-2.5 shrink-0">
                           <label className="flex flex-col items-center gap-0.5 cursor-pointer">
                             <ColorSwatchInput value={data.magicItemRarityColors?.[tier] ?? DEFAULT_RARITY_HEX[tier]} title={`${tier} card color`}
                               onChange={v => onUpdate({ magicItemRarityColors: { ...data.magicItemRarityColors, [tier]: v } })} />
-                            <span className="text-[8px] text-white/30">Card</span>
+                            <span className={`text-[8px] ${c30}`}>Card</span>
                           </label>
                           <label className="flex flex-col items-center gap-0.5 cursor-pointer">
                             <ColorSwatchInput value={data.magicItemRaritySliderColors?.[tier] ?? data.magicItemRarityColors?.[tier] ?? DEFAULT_RARITY_HEX[tier]} title={`${tier} tracking slider color`}
                               onChange={v => onUpdate({ magicItemRaritySliderColors: { ...data.magicItemRaritySliderColors, [tier]: v } })} />
-                            <span className="text-[8px] text-white/30">Slider</span>
+                            <span className={`text-[8px] ${c30}`}>Slider</span>
                           </label>
                         </div>
                       </div>
@@ -362,29 +375,29 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 return (
                   <div key={cat} className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-white/70 shrink-0">{FAVORITE_CATEGORY_LABELS[cat]}</span>
+                      <span className={`text-sm ${c70} shrink-0`}>{FAVORITE_CATEGORY_LABELS[cat]}</span>
                       {!perClass && (
                         <div className="flex items-center gap-2.5 shrink-0">
                           <label className="flex flex-col items-center gap-0.5 cursor-pointer">
                             <ColorSwatchInput value={color} title="Card color"
                               onChange={v => onUpdate({ favoriteCategoryColors: { ...data.favoriteCategoryColors, [cat]: v } })} />
-                            <span className="text-[8px] text-white/30">Card</span>
+                            <span className={`text-[8px] ${c30}`}>Card</span>
                           </label>
                           <label className="flex flex-col items-center gap-0.5 cursor-pointer">
                             <ColorSwatchInput value={sliderColor} title="Tracking slider color"
                               onChange={v => onUpdate({ favoriteCategorySliderColors: { ...data.favoriteCategorySliderColors, [cat]: v } })} />
-                            <span className="text-[8px] text-white/30">Slider</span>
+                            <span className={`text-[8px] ${c30}`}>Slider</span>
                           </label>
                         </div>
                       )}
                     </div>
                 
                     <StyleToggle label="Background" value={style}
-                      onChange={s => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })} />
+                      onChange={s => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })} dark={dark} />
                     <StyleToggle label="Tracking Slider" value={sliderStyle}
-                      onChange={s => onUpdate({ favoriteCategorySliderStyle: { ...data.favoriteCategorySliderStyle, [cat]: s } })} slider />
+                      onChange={s => onUpdate({ favoriteCategorySliderStyle: { ...data.favoriteCategorySliderStyle, [cat]: s } })} slider dark={dark} />
                       {cat === "class" && (
-                      <label className="flex items-center gap-2 text-[11px] text-white/50 cursor-pointer select-none pl-2">
+                      <label className={`flex items-center gap-2 text-[11px] ${c50} cursor-pointer select-none pl-2`}>
                         <input type="checkbox" checked={data.classFeatureColorsByClass ?? false}
                           onChange={e => onUpdate({ classFeatureColorsByClass: e.target.checked })}
                           className="accent-primary size-3.5 rounded" />
@@ -393,22 +406,22 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                     )}
                     {perClass && (
                       <div className="flex flex-col gap-1.5 pl-2 py-1">
-                        <p className="text-[10px] text-white/30 pb-0.5">
+                        <p className={`text-[10px] ${c30} pb-0.5`}>
                           One color per Source written on a Class Feature.
                         </p>
                         {classNames.map(key => (
                           <div key={key} className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] text-white/50">{classLabel(key)}</span>
+                            <span className={`text-[10px] ${c50}`}>{classLabel(key)}</span>
                             <div className="flex items-center gap-2.5 shrink-0">
                               <label className="flex flex-col items-center gap-0.5 cursor-pointer">
                                 <ColorSwatchInput value={data.classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR} title={`${classLabel(key)} card color`}
                                   onChange={v => onUpdate({ classFeatureColors: { ...data.classFeatureColors, [key]: v } })} />
-                                <span className="text-[8px] text-white/30">Card</span>
+                                <span className={`text-[8px] ${c30}`}>Card</span>
                               </label>
                               <label className="flex flex-col items-center gap-0.5 cursor-pointer">
                                 <ColorSwatchInput value={data.classFeatureSliderColors?.[key] ?? data.classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR} title={`${classLabel(key)} tracking slider color`}
                                   onChange={v => onUpdate({ classFeatureSliderColors: { ...data.classFeatureSliderColors, [key]: v } })} />
-                                <span className="text-[8px] text-white/30">Slider</span>
+                                <span className={`text-[8px] ${c30}`}>Slider</span>
                               </label>
                             </div>
                           </div>

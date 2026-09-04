@@ -17,6 +17,7 @@ import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
+import { Modal } from "@/components/shared/ui/Modal"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "@/components/shared/ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
@@ -269,6 +270,7 @@ interface FeatureEntryProps {
   onToggleFavorite?: () => void        // omit to hide the star
   onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
+  showInfusedToggle?: boolean           // only true for the Infusions list — shows an "Infused" checkbox, no gating field needed (every infusion is eligible, unlike Attuned which needs requiresAttunement first)
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
   showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
   containerOptions?: { id: string; name: string }[]  // Carried Items only — other containers this item could be moved into; omit/empty hides the control
@@ -384,11 +386,32 @@ export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: s
   return style === "galaxy" ? { ...base, ...coloredNebulaBg(color, bgHex) } : base
 }
 
+// A "manual" tracker has no periodic Rest to regain it, so recovering more
+// than one at a time otherwise means clicking the slider bar by bar — this
+// is the same step-then-apply shape the HP +/- stepper uses (CharacterSheet
+// .tsx), just a single "Regain" direction instead of separate damage/heal,
+// since spending is already what the slider itself does.
+function BulkRegainRow({ label, onRegain }: { label?: string; onRegain: (amount: number) => void }) {
+  const [step, setStep] = useState(1)
+  return (
+    <div className="flex items-center gap-2 pl-5" onClick={e => e.stopPropagation()}>
+      {label && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{label}</span>}
+      <NumInput value={step} onFocus={e => e.target.select()}
+        onChange={e => setStep(Math.max(1, parseInt(e.target.value) || 1))} min={1}
+        className="w-12 text-center text-xs bg-white/10 rounded px-2 py-1 text-white outline-none" />
+      <button type="button" onClick={() => { onRegain(step); setStep(1) }}
+        className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 hover:bg-green-900 text-white/70 hover:text-green-200 font-semibold transition-colors">
+        + Regain
+      </button>
+    </div>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, statMods = {}, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showWeightColumn,
+  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, showItemExtras, showWeightColumn,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
   magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors,
@@ -399,6 +422,11 @@ export function FeatureEntry({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [showSuggest, setShowSuggest] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  // Set while a use is being spent on a feature with triggerVariants (see
+  // Automation's "multiple possible effects" — Enhance Ability, etc.) —
+  // holds the usesUsed value the slider was about to commit, until a
+  // variant is actually chosen below.
+  const [pendingVariantUses, setPendingVariantUses] = useState<number | null>(null)
 
   const namePlaceholder = showItemExtras ? "Item name" : "Feature name"
   const unnamedLabel    = showItemExtras ? "Unnamed Item" : "Unnamed"
@@ -908,6 +936,20 @@ export function FeatureEntry({
                     <option value="manual" className="bg-zinc-800 text-white">Manual</option>
                   </select>
                 </label>
+                {/* Only "manual" trackers get a bulk-regain stepper — short/
+                    long/dawn already regain fully via Rest; "manual" is the
+                    one case with no automatic recovery at all, so a wand
+                    that comes back "1d6 charges, whenever" needs its own way
+                    to apply more than one at a time instead of clicking the
+                    slider bar by bar. */}
+                {feature.resetsOn === "manual" && (
+                  <label className="flex items-center gap-1.5 text-white/50 cursor-pointer select-none">
+                    <input type="checkbox" checked={feature.manualBulkRegain ?? false}
+                      onChange={e => onChange({ manualBulkRegain: e.target.checked })}
+                    />
+                    Bulk regain
+                  </label>
+                )}
               </div>
 
               {/* Linked features — only features with matching max uses are eligible to sync,
@@ -998,6 +1040,14 @@ export function FeatureEntry({
                             <option value="manual" className="bg-zinc-800 text-white">Manual</option>
                           </select>
                         </label>
+                        {t.resetsOn === "manual" && (
+                          <label className="flex items-center gap-1.5 text-white/50 cursor-pointer select-none">
+                            <input type="checkbox" checked={t.manualBulkRegain ?? false}
+                              onChange={e => changeTracker(t.id, { manualBulkRegain: e.target.checked })}
+                            />
+                            Bulk regain
+                          </label>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1144,6 +1194,15 @@ export function FeatureEntry({
             </label>
           )}
 
+          {showInfusedToggle && (
+            <label className="flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer text-amber-300" onClick={e => e.stopPropagation()} title="Infused — currently imbued into an item">
+              <input type="checkbox" checked={feature.infused ?? false} disabled={readOnly}
+                onChange={e => onChange({ infused: e.target.checked })}
+                className="size-3.5 accent-amber-500 cursor-pointer" />
+              Infused
+            </label>
+          )}
+
           {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">
               AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
@@ -1237,7 +1296,14 @@ export function FeatureEntry({
               color={barAnimated ? accentShimmerGradient(barColor) : barColor}
               animated={barAnimated}
               showButtons buttonSize="sm" className="flex-1 min-w-0"
-              onChange={val => onChange({ usesUsed: effectiveMax - val })}
+              onChange={val => {
+                const nextUsed = effectiveMax - val
+                // Only pause for a picker when a use is actually being
+                // spent (usesUsed going up) — dragging back up to refund a
+                // use shouldn't re-ask which effect to apply.
+                if ((feature.triggerVariants?.length ?? 0) > 0 && nextUsed > usesUsed) setPendingVariantUses(nextUsed)
+                else onChange({ usesUsed: nextUsed })
+              }}
             />
             <span className="text-xs text-white/50 shrink-0 tabular-nums w-8 text-right">
               {usesRemaining}/{effectiveMax}
@@ -1322,6 +1388,20 @@ export function FeatureEntry({
               )}
             </div>
           </div>
+          {hasUses && feature.resetsOn === "manual" && feature.manualBulkRegain && (
+            <BulkRegainRow label={feature.trackerLabel}
+              onRegain={amount => onChange({ usesUsed: Math.max(0, usesUsed - amount) })} />
+          )}
+          {feature.multiTracking && (feature.trackers ?? []).map(t => {
+            const trMax = t.maxUsesFormula === "pb" ? pb : (t.maxUses ?? 0)
+            if (trMax <= 0 || t.resetsOn !== "manual" || !t.manualBulkRegain) return null
+            return (
+              <BulkRegainRow key={t.id} label={t.label}
+                onRegain={amount => onChange({
+                  trackers: (feature.trackers ?? []).map(x => x.id === t.id ? { ...x, usesUsed: Math.max(0, (x.usesUsed ?? 0) - amount) } : x),
+                })} />
+            )
+          })}
           {isWeapon && weaponMeta.attackStat && toHit && (
             <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
           )}
@@ -1332,6 +1412,38 @@ export function FeatureEntry({
           ) : null}
         </div>
       </PopTransition>
+
+      {/* Automation "sub-tree" picker — a feature with triggerVariants set
+          (Automation → Features → "multiple possible effects") asks which
+          one applies each time a use is spent, instead of always firing the
+          same single Form/Conditional. Picking one just writes its ids onto
+          this feature's own triggerFormId/triggerConditionalId alongside the
+          usesUsed bump — featureUsePatch (shared/utils.ts) then fires them
+          exactly as it already does for a non-variant feature. */}
+      {pendingVariantUses != null && (
+        <Modal onClose={() => setPendingVariantUses(null)}>
+          <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-white/10">
+              <p className="text-sm font-bold text-white">Which effect?</p>
+              <p className="text-[10px] text-white/40 mt-0.5 truncate">{feature.name || unnamedLabel}</p>
+            </div>
+            <div className="p-3 flex flex-col gap-1.5 max-h-80 overflow-y-auto">
+              {(feature.triggerVariants ?? []).map(v => (
+                <button key={v.id} type="button"
+                  onClick={() => { onChange({ usesUsed: pendingVariantUses, triggerFormId: v.triggerFormId, triggerConditionalId: v.triggerConditionalId }); setPendingVariantUses(null) }}
+                  className="text-left text-sm px-3 py-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-white/80 hover:text-white transition-colors truncate">
+                  {v.label || "Unnamed variant"}
+                </button>
+              ))}
+              <button type="button"
+                onClick={() => { onChange({ usesUsed: pendingVariantUses, triggerFormId: undefined, triggerConditionalId: undefined }); setPendingVariantUses(null) }}
+                className="text-left text-xs px-3 py-2 rounded-lg text-white/40 hover:text-white/70 transition-colors mt-1">
+                Skip — spend the use with no effect
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { safeParseJson, computeAc, nanoid } from "@/components/shared/utils"
 import type { Feature } from "@/components/shared/types"
-import { SAVE_TO_ABILITY, ALL_CONDITIONS } from "@/components/shared/constants"
+import { SAVE_TO_ABILITY, ALL_CONDITIONS, MAP_PARTY_CODE } from "@/components/shared/constants"
 import { CharacterSheet } from "@/components/character/CharacterSheet"
 import { FloatingPanel } from "@/components/shared/ui/FloatingPanel"
 import { PartyServer } from "@/components/party/PartyServer"
@@ -27,6 +27,13 @@ interface CampaignData {
   // (not the character's own data) so it's genuinely independent of — and
   // invisible to — whatever the player is tracking on their own sheet.
   dmDeathSaves?: Record<string, DmDeathSaves>
+  // "High Pressure Mode" — a one-off feature for the MAP_PARTY_CODE campaign
+  // only (see constants.ts). DM toggles it on/off for the whole campaign;
+  // while on, every character's roster card shows a plain 3-dot tracker
+  // (HighPressureTracker below), independent per character, same storage
+  // shape/reasoning as dmDeathSaves above.
+  highPressureModeActive?: boolean
+  highPressureDots?: Record<string, number>
 }
 
 interface CharData {
@@ -312,6 +319,17 @@ function useCampaignRoster(campaign: SidebarObject) {
     updateObject(campaign.id, { data: { ...campaignData, dmDeathSaves: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
   }
 
+  // "High Pressure Mode" (MAP_PARTY_CODE campaign only, see constants.ts) —
+  // same storage shape as updateDmDeathSaves above, just a single 0-3 count
+  // per character instead of a successes/failures pair.
+  function toggleHighPressureMode() {
+    updateObject(campaign.id, { data: { ...campaignData, highPressureModeActive: !campaignData.highPressureModeActive } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateHighPressureDots(characterId: string, next: number) {
+    const current = campaignData.highPressureDots ?? {}
+    updateObject(campaign.id, { data: { ...campaignData, highPressureDots: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
+  }
+
   // Polls every 20s as a safety net on top of the realtime subscription below —
   // if postgres_changes ever misses an event (dropped connection, a realtime
   // config gap on the `objects` table, etc.) the roster still catches up on
@@ -437,6 +455,7 @@ function useCampaignRoster(campaign: SidebarObject) {
   return {
     campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
     updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
+    toggleHighPressureMode, updateHighPressureDots,
   }
 }
 
@@ -447,6 +466,7 @@ export function CampaignView({ campaign }: Props) {
   const {
     campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
     updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
+    toggleHighPressureMode, updateHighPressureDots,
   } = useCampaignRoster(campaign)
 
   const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
@@ -563,6 +583,15 @@ export function CampaignView({ campaign }: Props) {
             </span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-foreground/30">{partyMembers.length} character{partyMembers.length !== 1 ? "s" : ""}</span>
+              {partyCode === MAP_PARTY_CODE && (
+                <button type="button" onClick={toggleHighPressureMode}
+                  title="Shows a 3-dot tracker on every character's card"
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${
+                    campaignData.highPressureModeActive ? "bg-foreground text-background" : "bg-foreground/10 text-foreground/50 hover:text-foreground/80"
+                  }`}>
+                  High Pressure Mode
+                </button>
+              )}
               <RosterFieldsMenu rosterFields={campaignData.rosterFields} onChange={updateRosterFields} />
             </div>
           </div>
@@ -589,6 +618,8 @@ export function CampaignView({ campaign }: Props) {
               kicking={kicking}
               dmDeathSaves={campaignData.dmDeathSaves?.[char.id] ?? { successes: 0, failures: 0 }}
               onChangeDmDeathSaves={next => updateDmDeathSaves(char.id, next)}
+              highPressureValue={campaignData.highPressureDots?.[char.id]}
+              onChangeHighPressure={partyCode === MAP_PARTY_CODE && campaignData.highPressureModeActive ? next => updateHighPressureDots(char.id, next) : undefined}
               onExpand={() => setExpandedId(char.id)}
               onKickConfirm={() => setKickConfirmId(char.id)}
               onKickCancel={() => setKickConfirmId(null)}
@@ -628,6 +659,7 @@ export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
   const {
     campaignData, partyCode, partyMembers,
     updateRosterFields, updateDmDeathSaves, addConditionToMember, removeConditionFromMember,
+    updateHighPressureDots,
   } = useCampaignRoster(campaign)
 
   // Ephemeral position/size, same convention as CharacterSheet.tsx's
@@ -671,6 +703,8 @@ export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
             compact
             dmDeathSaves={campaignData.dmDeathSaves?.[char.id] ?? { successes: 0, failures: 0 }}
             onChangeDmDeathSaves={next => updateDmDeathSaves(char.id, next)}
+            highPressureValue={campaignData.highPressureDots?.[char.id]}
+            onChangeHighPressure={partyCode === MAP_PARTY_CODE && campaignData.highPressureModeActive ? next => updateHighPressureDots(char.id, next) : undefined}
             onExpand={() => onOpenCharacter(char.id)}
             onAddCondition={name => addConditionToMember(char.id, name)}
             onRemoveCondition={id => removeConditionFromMember(char.id, id)}
@@ -721,10 +755,33 @@ function DmDeathSaveTracker({ saves, onChange }: { saves: DmDeathSaves; onChange
   )
 }
 
+// "High Pressure Mode" — MAP_PARTY_CODE campaign only (see constants.ts).
+// Deliberately plain/neutral (no color-coding, no glyph) unlike
+// DmDeathSaveTracker above — just 3 dots, filled or empty, same toggle
+// semantics (click fills one more; clicking the last filled dot un-fills it).
+function HighPressureTracker({ value, onChange }: { value: number; onChange: (next: number) => void }) {
+  function toggle(i: number) {
+    const filled = i < value
+    const next = filled && i === value - 1 ? value - 1 : Math.min(3, value + 1)
+    onChange(next)
+  }
+  return (
+    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()} title="High Pressure">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <button key={i} type="button" onClick={() => toggle(i)}
+          className={`size-3 rounded-full border transition-colors ${
+            i < value ? "bg-foreground border-foreground" : "border-foreground/25 hover:border-foreground/50"
+          }`} />
+      ))}
+    </div>
+  )
+}
+
 function PartyMemberCard({
   char, charData, enabledStatCells, showConditions,
   kickConfirmId, kicking,
   dmDeathSaves, onChangeDmDeathSaves,
+  highPressureValue, onChangeHighPressure,
   onExpand, onKickConfirm, onKickCancel, onKick,
   onAddCondition, onRemoveCondition,
   compact = false,
@@ -737,6 +794,8 @@ function PartyMemberCard({
   kicking?: boolean
   dmDeathSaves: DmDeathSaves
   onChangeDmDeathSaves: (next: DmDeathSaves) => void
+  highPressureValue?: number  // omit (rather than false) to hide the tracker — only shown when the campaign has High Pressure Mode active
+  onChangeHighPressure?: (next: number) => void
   onExpand: () => void
   onKickConfirm?: () => void
   onKickCancel?: () => void
@@ -771,7 +830,12 @@ function PartyMemberCard({
         )}
 
         <div className="flex-1 min-w-0">
-          <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-foreground truncate`}>{char.name}</p>
+          <div className="flex items-center gap-2">
+            <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-foreground truncate`}>{char.name}</p>
+            {onChangeHighPressure && (
+              <HighPressureTracker value={highPressureValue ?? 0} onChange={onChangeHighPressure} />
+            )}
+          </div>
           {!compact && (
             <p className="text-[10px] text-foreground/50 uppercase tracking-wider truncate">
               {charData.race && `${charData.race} · `}{charData.class && charData.class}{charData.level && ` Lv ${charData.level}`}

@@ -79,6 +79,11 @@ interface FeatureListProps {
   onToggleFavorite: (id: string, label: string) => void
   onAddPack?: (id: string, packItems: PackItem[]) => void  // only wired for the Items tab — a picked pack suggestion replaces feature `id` with every item it contains
   showAttunement?: boolean
+  maxAttuned?: number  // defaults to DEFAULT_MAX_ATTUNEMENTS (3) when unset
+  onChangeMaxAttuned?: (n: number) => void
+  showInfusedToggle?: boolean  // Artificer's Infusions list only — "Infused" checkbox per entry (Feature.infused) + a counter badge, same shape as showAttunement/attuned
+  maxInfused?: number
+  onChangeMaxInfused?: (n: number) => void
   showItemExtras?: boolean
   showMagicStar?: boolean
   magicItemStyle?: "none" | "outline" | "galaxy"
@@ -119,7 +124,6 @@ export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, 
   const [all, setAll] = useState<Suggestion[]>([])
   const [loaded, setLoaded] = useState(false)
   const [query, setQuery] = useState("")
-  const [customName, setCustomName] = useState("")
   // Clicking a grid tile opens it for a look (full description) rather than
   // adding it immediately — Add is a separate, deliberate confirm step from
   // there. Clearing this returns to the grid (still open, so picking a few
@@ -142,11 +146,16 @@ export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, 
     !existing.has(s.name.toLowerCase()) && (!q || s.name.toLowerCase().includes(q))
   )
 
+  // A zero-match search reuses the typed query itself as the new item's
+  // name — replaces the old separate "type a custom name" box below the
+  // grid with a single inline result, one fewer field to fill in. Query
+  // clears after adding so the modal's ready for the next one right away
+  // (same "stays open, add several in a row" behavior custom-add already had).
   function addCustom() {
-    const name = customName.trim()
+    const name = query.trim()
     if (!name) return
     onPick({ name, description: "" })
-    setCustomName("")
+    setQuery("")
   }
 
   return (
@@ -181,16 +190,21 @@ export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, 
           <div className="p-4 flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
             <input
               autoFocus value={query} onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && available.length === 0 && q) addCustom() }}
               placeholder={`Search ${label.toLowerCase()}…`}
               className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 shrink-0"
             />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto flex-1 min-h-0 content-start">
               {!loaded ? (
                 <p className="col-span-full text-xs text-white/30 italic text-center py-6">Loading…</p>
+              ) : available.length === 0 && q ? (
+                <button type="button" onClick={addCustom}
+                  className="col-span-full text-left text-xs px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-white border border-dashed border-white/20 hover:border-white/40 transition-colors flex items-center gap-2">
+                  <span className="text-white/40">+</span>
+                  <span>Add new — <span className="font-medium text-white">{query.trim()}</span></span>
+                </button>
               ) : available.length === 0 ? (
-                <p className="col-span-full text-xs text-white/30 italic text-center py-6">
-                  {q ? "No matches — add it as custom below." : "All suggestions already added."}
-                </p>
+                <p className="col-span-full text-xs text-white/30 italic text-center py-6">All suggestions already added.</p>
               ) : available.map(s => (
                 <button key={s.name} type="button" onClick={() => setSelected(s)}
                   className="text-left text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 transition-colors flex flex-col gap-0.5">
@@ -201,18 +215,6 @@ export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, 
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 pt-3 border-t border-white/10 shrink-0">
-              <input
-                value={customName} onChange={e => setCustomName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && addCustom()}
-                placeholder="Custom — type here…"
-                className="flex-1 min-w-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
-              />
-              <button type="button" onClick={addCustom} disabled={!customName.trim()}
-                className="text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors disabled:opacity-40 shrink-0">
-                Add
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -220,10 +222,50 @@ export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, 
   )
 }
 
-const MAX_ATTUNEMENTS = 3
+const DEFAULT_MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true }: FeatureListProps) {
+// "Attuned 2/3" or "Infused 1/2" — the count itself is read-only (derived
+// from how many items/infusions actually have the flag set), but the max
+// is a per-character number that varies (attunement is usually 3 but not
+// always; infusions scale with Artificer level) — click it to edit in place
+// rather than needing a separate Settings field for something this small.
+function EditableCounterBadge({ label, count, max, onChangeMax, readOnly, positiveClass }: {
+  label: string; count: number; max: number; onChangeMax: (n: number) => void; readOnly?: boolean; positiveClass: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(max))
+
+  function commit() {
+    const n = parseInt(draft, 10)
+    onChangeMax(Number.isFinite(n) ? Math.max(0, n) : max)
+    setEditing(false)
+  }
+
+  return (
+    <span className={`flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${count > max ? "bg-red-500/20 text-red-300" : positiveClass}`}>
+      {label} {count}/
+      {editing ? (
+        <input
+          autoFocus value={draft} onChange={e => setDraft(e.target.value.replace(/[^\d]/g, ""))}
+          onBlur={commit} onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false) }}
+          onClick={e => e.stopPropagation()}
+          className="w-6 bg-transparent outline-none text-center border-b border-current/50"
+        />
+      ) : (
+        <button type="button" disabled={readOnly}
+          onClick={e => { e.stopPropagation(); setDraft(String(max)); setEditing(true) }}
+          title={readOnly ? undefined : "Click to edit max"}
+          className="disabled:cursor-default">
+          {max}
+        </button>
+      )}
+    </span>
+  )
+}
+
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, showInfusedToggle, maxInfused, onChangeMaxInfused, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
+  const infusedCount = showInfusedToggle ? items.filter(f => f.infused).length : 0
   const sensors = useDragSensors()
   // Which item is currently being dragged — drives the floating
   // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
@@ -257,6 +299,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
         onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
         onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
         showAttunement={showAttunement}
+        showInfusedToggle={showInfusedToggle}
         showItemExtras={showItemExtras}
         showMagicStar={showMagicStar}
         magicItemStyle={magicItemStyle}
@@ -283,11 +326,14 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
       <div className="flex items-center justify-between shrink-0 gap-2">
         <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">{label}</span>
         {showAttunement && (
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${
-            attunedCount > MAX_ATTUNEMENTS ? "bg-red-500/20 text-red-300" : "bg-purple-500/15 text-purple-300"
-          }`}>
-            Attuned {attunedCount}/{MAX_ATTUNEMENTS}
-          </span>
+          <EditableCounterBadge label="Attuned" count={attunedCount} max={maxAttuned ?? DEFAULT_MAX_ATTUNEMENTS}
+            onChangeMax={onChangeMaxAttuned ?? (() => {})} readOnly={readOnly || !onChangeMaxAttuned}
+            positiveClass="bg-purple-500/15 text-purple-300" />
+        )}
+        {showInfusedToggle && (
+          <EditableCounterBadge label="Infused" count={infusedCount} max={maxInfused ?? 0}
+            onChangeMax={onChangeMaxInfused ?? (() => {})} readOnly={readOnly || !onChangeMaxInfused}
+            positiveClass="bg-amber-500/15 text-amber-300" />
         )}
         {!readOnly && showAddButton && (
           <button type="button" onClick={onAdd}
@@ -1072,7 +1118,9 @@ export function InfoTab({
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("infusion")} accentStyle={favAccentStyle("infusion")} sliderStyle={favSliderStyle("infusion")}
               tagTextColor={tagTextColor} sliderColor={favSliderColor("infusion")}
-            bodyTextColor={bodyTextColor}
+              bodyTextColor={bodyTextColor}
+              showAttunement
+              showInfusedToggle maxInfused={data.maxInfusedItems} onChangeMaxInfused={n => update({ maxInfusedItems: n })}
             />
           )}
         </div>

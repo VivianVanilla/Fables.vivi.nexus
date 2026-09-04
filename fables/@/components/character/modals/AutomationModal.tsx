@@ -507,6 +507,17 @@ function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCan
     set({ castGrantConditions: current.includes(name) ? current.filter(n => n !== name) : [...current, name] })
   }
 
+  const hasVariants = (draft.castVariants?.length ?? 0) > 0
+  function addVariant() {
+    set({ castVariants: [...(draft.castVariants ?? []), { id: nanoid(), label: "" }] })
+  }
+  function changeVariant(id: string, patch: Partial<NonNullable<SpellItem["castVariants"]>[number]>) {
+    set({ castVariants: (draft.castVariants ?? []).map(v => v.id === id ? { ...v, ...patch } : v) })
+  }
+  function removeVariant(id: string) {
+    set({ castVariants: (draft.castVariants ?? []).filter(v => v.id !== id) })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <button type="button" onClick={onCancel} className="text-xs text-white/40 hover:text-white self-start transition-colors">← Back to Spells</button>
@@ -539,22 +550,71 @@ function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCan
             <p className="text-[10px] text-white/30">Warlocks: pick your Pact slot here, not a same-level regular slot.</p>
           </label>
         )}
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider">Activate Form</span>
-          <select value={draft.castFormId ?? ""} onChange={e => set({ castFormId: e.target.value || undefined })}
-            className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
-            <option value="" className="bg-zinc-800 text-white">— None —</option>
-            {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
-          </select>
+        <label className="flex items-center gap-2 cursor-pointer text-white/60 text-sm">
+          <input type="checkbox" checked={hasVariants}
+            onChange={e => set({ castVariants: e.target.checked ? [{ id: nanoid(), label: "" }] : undefined })}
+            className="accent-purple-500" />
+          This spell has multiple possible effects
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider">Trigger Conditional</span>
-          <select value={draft.castConditionalId ?? ""} onChange={e => set({ castConditionalId: e.target.value || undefined })}
-            className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
-            <option value="" className="bg-zinc-800 text-white">— None —</option>
-            {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
-          </select>
-        </label>
+
+        {!hasVariants ? (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] text-white/40 uppercase tracking-wider">Activate Form</span>
+              <select value={draft.castFormId ?? ""} onChange={e => set({ castFormId: e.target.value || undefined })}
+                className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+                <option value="" className="bg-zinc-800 text-white">— None —</option>
+                {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] text-white/40 uppercase tracking-wider">Trigger Conditional</span>
+              <select value={draft.castConditionalId ?? ""} onChange={e => set({ castConditionalId: e.target.value || undefined })}
+                className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+                <option value="" className="bg-zinc-800 text-white">— None —</option>
+                {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
+              </select>
+            </label>
+          </>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {(draft.castVariants ?? []).map(v => (
+              <div key={v.id} className="flex flex-col gap-1.5 bg-white/5 rounded-lg p-2.5">
+                <div className="flex items-center gap-2">
+                  <input value={v.label} placeholder="e.g. Fire damage"
+                    onChange={e => changeVariant(v.id, { label: e.target.value })}
+                    className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 border-b border-white/10 pb-1" />
+                  <button type="button" onClick={() => removeVariant(v.id)}
+                    className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+                </div>
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                  <label className="flex items-center gap-1.5 text-white/50">
+                    Form
+                    <select value={v.castFormId ?? ""} onChange={e => changeVariant(v.id, { castFormId: e.target.value || undefined })}
+                      className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                      <option value="" className="bg-zinc-800 text-white">— None —</option>
+                      {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-white/50">
+                    Conditional
+                    <select value={v.castConditionalId ?? ""} onChange={e => changeVariant(v.id, { castConditionalId: e.target.value || undefined })}
+                      className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                      <option value="" className="bg-zinc-800 text-white">— None —</option>
+                      {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addVariant}
+              className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors self-start">
+              + Add Variant
+            </button>
+            <p className="text-[10px] text-white/30">Casting asks which of these to apply.</p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1">
           <span className="text-[10px] text-white/40 uppercase tracking-wider">Grant Conditions</span>
           <ConditionChips options={ALL_CONDITIONS} selected={draft.castGrantConditions ?? []} onToggle={toggleCondition} />
@@ -580,6 +640,13 @@ function CastTab({ data, onUpdate, onCast, multiFormEnabled }: {
   const enabledSpells = spells.filter(s => s.castEnabled)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [picking, setPicking] = useState(false)
+  const [pickQuery, setPickQuery] = useState("")
+  // Set while choosing which of a spell's castVariants applies to this one
+  // cast — mirrors Feature.triggerVariants (Automation → Features), just
+  // resolved directly into castSpellPatch's input instead of being written
+  // back onto the spell, since a Cast is a one-shot action with nothing to
+  // persist between casts (unlike a feature's use-tracking slider).
+  const [variantPromptSpell, setVariantPromptSpell] = useState<SpellItem | null>(null)
 
   const editingSpell = editingId ? spells.find(s => s.id === editingId) ?? null : null
 
@@ -588,8 +655,15 @@ function CastTab({ data, onUpdate, onCast, multiFormEnabled }: {
     setEditingId(null)
   }
   function cast(spell: SpellItem) {
+    if (spell.castVariants?.length) { setVariantPromptSpell(spell); return }
     onUpdate(castSpellPatch(data, spell, multiFormEnabled))
     onCast(`Cast: ${spell.name || "spell"}`)
+    setPicking(false)
+  }
+  function castVariant(spell: SpellItem, variant: NonNullable<SpellItem["castVariants"]>[number]) {
+    onUpdate(castSpellPatch(data, { ...spell, castFormId: variant.castFormId, castConditionalId: variant.castConditionalId }, multiFormEnabled))
+    onCast(`Cast: ${spell.name || "spell"} (${variant.label || "variant"})`)
+    setVariantPromptSpell(null)
     setPicking(false)
   }
   // Reorders the underlying spellItems array itself (not just this list's
@@ -604,6 +678,24 @@ function CastTab({ data, onUpdate, onCast, multiFormEnabled }: {
     onUpdate({ spellItems: next })
   }
 
+  if (variantPromptSpell) {
+    return (
+      <div className="flex flex-col gap-3">
+        <button type="button" onClick={() => setVariantPromptSpell(null)} className="text-xs text-white/40 hover:text-white self-start transition-colors">← Back</button>
+        <p className="text-sm font-bold text-white">Which effect?</p>
+        <p className="text-[10px] text-white/40 -mt-2 truncate">{variantPromptSpell.name || "Unnamed Spell"}</p>
+        <div className="flex flex-col gap-1.5">
+          {(variantPromptSpell.castVariants ?? []).map(v => (
+            <button key={v.id} type="button" onClick={() => castVariant(variantPromptSpell, v)}
+              className="text-left text-sm px-3 py-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-white/80 hover:text-white transition-colors truncate">
+              {v.label || "Unnamed variant"}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   if (editingSpell) {
     return (
       <SpellCastEditor spell={editingSpell} forms={forms} conditionals={conditionals} spellSlots={data.spellSlots ?? []}
@@ -612,12 +704,24 @@ function CastTab({ data, onUpdate, onCast, multiFormEnabled }: {
   }
 
   if (picking) {
+    const q = pickQuery.trim().toLowerCase()
+    const matchingSpells = q ? enabledSpells.filter(s => (s.name || "").toLowerCase().includes(q)) : enabledSpells
     return (
       <div className="flex flex-col gap-3">
-        <button type="button" onClick={() => setPicking(false)} className="text-xs text-white/40 hover:text-white self-start transition-colors">← Back</button>
+        <button type="button" onClick={() => { setPicking(false); setPickQuery("") }} className="text-xs text-white/40 hover:text-white self-start transition-colors">← Back</button>
         <p className="text-sm font-bold text-white">Cast which spell?</p>
+        {enabledSpells.length > 6 && (
+          <input
+            autoFocus value={pickQuery} onChange={e => setPickQuery(e.target.value)}
+            placeholder="Search spells…"
+            className="bg-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+          />
+        )}
         <div className="grid grid-cols-2 gap-2">
-          {enabledSpells.map(s => (
+          {matchingSpells.length === 0 && (
+            <p className="col-span-full text-xs text-white/30 italic text-center py-4">No matching spells.</p>
+          )}
+          {matchingSpells.map(s => (
             <button key={s.id} type="button" onClick={() => cast(s)}
               className="text-left text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-purple-500/20 text-white/80 hover:text-white border border-white/10 transition-colors truncate">
               {s.name || "Unnamed Spell"}
@@ -680,28 +784,90 @@ function FeatureTriggerEditor({ feature, forms, conditionals, onChange, onBack }
   feature: Feature; forms: CharacterForm[]; conditionals: CharacterConditional[]
   onChange: (patch: Partial<Feature>) => void; onBack: () => void
 }) {
+  const hasVariants = (feature.triggerVariants?.length ?? 0) > 0
+
+  function addVariant() {
+    onChange({ triggerVariants: [...(feature.triggerVariants ?? []), { id: nanoid(), label: "" }] })
+  }
+  function changeVariant(id: string, patch: Partial<NonNullable<Feature["triggerVariants"]>[number]>) {
+    onChange({ triggerVariants: (feature.triggerVariants ?? []).map(v => v.id === id ? { ...v, ...patch } : v) })
+  }
+  function removeVariant(id: string) {
+    onChange({ triggerVariants: (feature.triggerVariants ?? []).filter(v => v.id !== id) })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <button type="button" onClick={onBack} className="text-xs text-white/40 hover:text-white self-start transition-colors">← Back to Features</button>
       <p className="text-sm font-bold text-white truncate">{feature.name || "Unnamed Feature"}</p>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-[10px] text-white/40 uppercase tracking-wider">Activate Form</span>
-        <select value={feature.triggerFormId ?? ""} onChange={e => onChange({ triggerFormId: e.target.value || undefined })}
-          className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
-          <option value="" className="bg-zinc-800 text-white">— None —</option>
-          {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
-        </select>
+      <label className="flex items-center gap-2 cursor-pointer text-white/60 text-sm">
+        <input type="checkbox" checked={hasVariants}
+          onChange={e => onChange({ triggerVariants: e.target.checked ? [{ id: nanoid(), label: "" }] : undefined })}
+          className="accent-purple-500" />
+        This feature has multiple possible effects (e.g. Enhance Ability)
       </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-[10px] text-white/40 uppercase tracking-wider">Trigger Conditional</span>
-        <select value={feature.triggerConditionalId ?? ""} onChange={e => onChange({ triggerConditionalId: e.target.value || undefined })}
-          className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
-          <option value="" className="bg-zinc-800 text-white">— None —</option>
-          {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
-        </select>
-      </label>
-      <p className="text-[10px] text-white/30">Spending a use of this feature (the −/+ bar on its card) fires these automatically.</p>
+
+      {!hasVariants ? (
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-white/40 uppercase tracking-wider">Activate Form</span>
+            <select value={feature.triggerFormId ?? ""} onChange={e => onChange({ triggerFormId: e.target.value || undefined })}
+              className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+              <option value="" className="bg-zinc-800 text-white">— None —</option>
+              {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-white/40 uppercase tracking-wider">Trigger Conditional</span>
+            <select value={feature.triggerConditionalId ?? ""} onChange={e => onChange({ triggerConditionalId: e.target.value || undefined })}
+              className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+              <option value="" className="bg-zinc-800 text-white">— None —</option>
+              {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
+            </select>
+          </label>
+          <p className="text-[10px] text-white/30">Spending a use of this feature (the −/+ bar on its card) fires these automatically.</p>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col gap-2">
+            {(feature.triggerVariants ?? []).map(v => (
+              <div key={v.id} className="flex flex-col gap-1.5 bg-white/5 rounded-lg p-2.5">
+                <div className="flex items-center gap-2">
+                  <input value={v.label} placeholder="e.g. Bear's Endurance"
+                    onChange={e => changeVariant(v.id, { label: e.target.value })}
+                    className="flex-1 min-w-0 bg-transparent outline-none text-xs text-white/80 placeholder:text-white/20 border-b border-white/10 pb-1" />
+                  <button type="button" onClick={() => removeVariant(v.id)}
+                    className="text-white/20 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+                </div>
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                  <label className="flex items-center gap-1.5 text-white/50">
+                    Form
+                    <select value={v.triggerFormId ?? ""} onChange={e => changeVariant(v.id, { triggerFormId: e.target.value || undefined })}
+                      className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                      <option value="" className="bg-zinc-800 text-white">— None —</option>
+                      {forms.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-white/50">
+                    Conditional
+                    <select value={v.triggerConditionalId ?? ""} onChange={e => changeVariant(v.id, { triggerConditionalId: e.target.value || undefined })}
+                      className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs">
+                      <option value="" className="bg-zinc-800 text-white">— None —</option>
+                      {conditionals.map(c => <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addVariant}
+              className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors self-start">
+              + Add Variant
+            </button>
+          </div>
+          <p className="text-[10px] text-white/30">Spending a use of this feature asks which of these to apply.</p>
+        </>
+      )}
     </div>
   )
 }
@@ -730,7 +896,7 @@ function FeaturesTab({ data, allFeatures, onChangeFeature }: {
           <p className="text-sm text-white/30 italic text-center py-8">No trackable features yet — turn on "Track uses" on a feature (Race & Feats, Class Features, Items, etc.) first.</p>
         )}
         {trackable.map(f => {
-          const linked = !!(f.triggerFormId || f.triggerConditionalId)
+          const linked = !!(f.triggerFormId || f.triggerConditionalId || f.triggerVariants?.length)
           return (
             <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5">
               <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${linked ? "bg-purple-500/30 text-purple-200" : "bg-white/10 text-white/30"}`}>

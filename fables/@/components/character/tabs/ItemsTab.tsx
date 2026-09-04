@@ -137,7 +137,7 @@ export function ItemsTab({
           suggestionSource="item" userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
           onAddPack={addPackToInventory}
-          showAttunement
+          showAttunement maxAttuned={data.maxAttunedItems} onChangeMaxAttuned={n => update({ maxAttunedItems: n })}
           showItemExtras
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}

@@ -18,13 +18,13 @@ import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formA
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
+import { deriveCharacterClassNames } from "@/components/shared/classColors"
 import { migrateEquipmentItems } from "./migrateMartialItems"
 
 // UI primitives
 import { NumInput }              from "@/components/shared/ui/NumInput"
 
 // Panels
-import { DiceRoller }            from "./panels/DiceRoller"
 import { ResistanceTracker }     from "./panels/ResistanceTracker"
 import { CurrencyTracker }       from "./panels/CurrencyTracker"
 import { HitDice }               from "./panels/HitDice"
@@ -79,6 +79,19 @@ type Tab = "main" | "details" | "items" | "chat"
 // condition uses.
 function conditionEffectText(c: ActiveCondition): string | undefined {
   return c.name === "Exhaustion" ? EXHAUSTION_EFFECTS[c.level ?? 1] : CONDITION_EFFECTS[c.name]
+}
+
+// Whether a given rest `type` fires a tracker whose own reset trigger is
+// `resetsOn` — a Long Rest also fires anything set to reset on a Short Rest
+// (you got the short rest's recovery for free along the way), but a Short
+// Rest only fires short-rest trackers, and Dawn only fires dawn trackers.
+// "manual" never fires here — those only ever reset via the slider itself
+// (or the bulk-regain stepper — see FeatureEntry.tsx's manualBulkRegain).
+function restFires(type: "long" | "short" | "dawn", resetsOn: "short" | "long" | "dawn" | "manual" | undefined): boolean {
+  const resets = resetsOn ?? "long"
+  return type === "long" ? resets === "long" || resets === "short"
+    : type === "short" ? resets === "short"
+    : resets === "dawn"
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -541,13 +554,20 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     for (const key of KEYS) {
       const features = data[key] ?? []
       const updated = features.map(f => {
-        if (!f.trackable) return f
-        const resets = f.resetsOn ?? "long"
-        const should =
-          type === "long"  ? resets === "long" || resets === "short" :
-          type === "short" ? resets === "short" :
-          resets === "dawn"
-        return should ? { ...f, usesUsed: 0 } : f
+        const primaryShould = f.trackable && restFires(type, f.resetsOn)
+        // Multi-tracking trackers (feature.trackers) each fire on their own
+        // resetsOn independently of the primary tracker's — a staff's
+        // "Charges" might reset on Long Rest while a linked "1/Day Recall"
+        // tracker resets at Dawn, say.
+        const trackersChanged = f.multiTracking && (f.trackers ?? []).some(t => restFires(type, t.resetsOn))
+        if (!primaryShould && !trackersChanged) return f
+        return {
+          ...f,
+          usesUsed: primaryShould ? 0 : f.usesUsed,
+          trackers: f.multiTracking
+            ? (f.trackers ?? []).map(t => restFires(type, t.resetsOn) ? { ...t, usesUsed: 0 } : t)
+            : f.trackers,
+        }
       })
       if (updated.some((f, i) => f !== features[i])) patch[key] = updated
     }
@@ -763,7 +783,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const favPanelProps = {
     favorites, spellItems, features: allFeatures, familiars, monsters,
     poppedOutIds: new Set(Object.keys(openPopouts)),
-    pb, statMods, classes: availableClasses,
+    // Must match InfoTab.tsx's own ownClassNames / SettingsModal.tsx's own
+    // classNames exactly (both use deriveCharacterClassNames) — this is the
+    // same key space classFeatureColors/classFeatureSliderColors are keyed
+    // by (lowercase, one entry per distinct Class Feature Source string when
+    // any exist, e.g. "fighter (eldritch knight)" as its own subclass key).
+    // availableClasses below is the character's raw typed class list
+    // instead (e.g. "Fighter", original casing, no per-Source split) — using
+    // it here made matchOwnClassKey resolve a different, usually-unmatching
+    // key for favorited Class Features, so their per-class/subclass color
+    // silently fell back to the default instead of matching the real one.
+    pb, statMods, classes: deriveCharacterClassNames(data),
     onRemove: removeFavorite,
     onReorder: reorderFavorites,
     onChangeSpell: changeSpell,
@@ -781,6 +811,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     featureCategoryById,
     favoriteCategoryColors: data.favoriteCategoryColors,
     tagTextColor, bodyTextColor,
+    showKnownBadge: data.showKnownBadge,
     favoriteCategoryStyle: data.favoriteCategoryStyle,
     favoriteCategorySliderStyle: data.favoriteCategorySliderStyle,
     favoriteCategorySliderColors: data.favoriteCategorySliderColors,
@@ -1048,7 +1079,6 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
               onRemove={removeCondition}
               onUpdateLevel={updateConditionLevel}
             />
-            {!data.hideDiceRoller && <DiceRoller card={card} />}
             {data.showResistanceTracker && (
               <ResistanceTracker card={card} readOnly={readOnly}
                 resistances={data.resistances ?? []} vulnerabilities={data.vulnerabilities ?? []}

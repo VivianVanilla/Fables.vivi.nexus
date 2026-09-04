@@ -114,6 +114,28 @@ function rgbToHue(r: number, g: number, b: number): number {
   return h * 360
 }
 
+// Full hue/saturation/lightness — unlike rgbToHue above (which slotLevelColor/
+// slotLevelGradient used to rely on alone), this keeps the picked color's
+// actual saturation and lightness instead of discarding them, so a
+// deliberately dark or muted custom pick reads as dark/muted through the
+// whole level sweep instead of always snapping to a fixed vibrant, medium-
+// bright palette regardless of what was actually chosen.
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r,g,b), min = Math.min(r,g,b)
+  const l = (max + min) / 2
+  if (max === min) return [0, 0, l * 100]
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h = 0
+  switch (max) {
+    case r: h = ((g-b)/d + (g < b ? 6 : 0)) / 6; break
+    case g: h = ((b-r)/d + 2) / 6; break
+    case b: h = ((r-g)/d + 4) / 6; break
+  }
+  return [h * 360, s * 100, l * 100]
+}
+
 function hslToHex(h: number, s: number, l: number): string {
   s /= 100; l /= 100
   const a = s * Math.min(l, 1 - l)
@@ -135,22 +157,25 @@ function normalizeSlotInput(input: SlotAccentInput): { accent: string; mode?: Sl
 
 /**
  * Compute the slot bar color for a given spell level (1–9).
- * Level 1 starts at the theme's exact accent hue, then each higher level
- * sweeps further around the color wheel (`range` degrees total, default 260)
- * so levels read as genuinely different colors rather than just lighter/
- * darker shades of one hue. "grayscale" themes desaturate instead of
- * sweeping hue at all. Lightness only tapers slightly (62% → 50%, or
- * 82% → 22% for grayscale) to keep every level readable.
+ * Level 1 starts at the theme's exact accent color — its own saturation and
+ * lightness, not a forced-vibrant reinterpretation of just its hue, so a
+ * deliberately dark or muted custom pick actually looks dark/muted — then
+ * each higher level sweeps further around the color wheel (`range` degrees
+ * total, default 260) so levels read as genuinely different colors rather
+ * than just lighter/darker shades of one hue. "grayscale" themes desaturate
+ * instead of sweeping hue at all. Lightness only tapers slightly across
+ * levels (clamped to a legible 15–88% band either way) to keep every level
+ * readable without erasing how light or dark the chosen color actually was.
  */
 export function slotLevelColor(input: SlotAccentInput, level: number): string {
   const { accent, mode, range = 260 } = normalizeSlotInput(input)
   if (!accent || !accent.startsWith("#")) return accent ?? "#6B7280"
   const [r, g, b] = hexToRgb(accent)
-  const hue = rgbToHue(r, g, b)
-  const t   = (level - 1) / 8
-  if (mode === "grayscale") return hslToHex(hue, 0, 82 - t * 60)
-  const l   = 62 - t * 12
-  return hslToHex((hue + t * range) % 360, 80, l)
+  const [hue, sat, lightness] = rgbToHsl(r, g, b)
+  const t = (level - 1) / 8
+  const baseL = Math.max(15, Math.min(88, lightness))
+  if (mode === "grayscale") return hslToHex(hue, 0, baseL - t * 45)
+  return hslToHex((hue + t * range) % 360, sat, Math.max(10, baseL - t * 12))
 }
 
 /**
@@ -178,15 +203,16 @@ export function slotLevelGradient(input: SlotAccentInput, level: number): string
   const { accent, mode, range = 260 } = normalizeSlotInput(input)
   if (!accent || !accent.startsWith("#")) return `linear-gradient(90deg, ${accent}, ${accent})`
   const [r, g, b] = hexToRgb(accent)
-  const hue = rgbToHue(r, g, b)
-  const t   = (level - 1) / 8
+  const [hue, sat, lightness] = rgbToHsl(r, g, b)
+  const t = (level - 1) / 8
+  const baseL = Math.max(15, Math.min(88, lightness))
   if (mode === "grayscale") {
-    const base = 82 - t * 60
+    const base = baseL - t * 45
     const stops = [-30, -15, 0, 15, 30].map(o => hslToHex(hue, 0, Math.max(8, Math.min(92, base + o))))
     return `linear-gradient(90deg, ${stops.join(", ")})`
   }
-  const l = 62 - t * 12
+  const l = Math.max(10, baseL - t * 12)
   const baseHue = hue + t * range
-  const stops = [-40, -20, 0, 20, 40].map(o => hslToHex((baseHue + o + 360) % 360, 85, l))
+  const stops = [-40, -20, 0, 20, 40].map(o => hslToHex((baseHue + o + 360) % 360, sat, Math.max(8, Math.min(92, l + o))))
   return `linear-gradient(90deg, ${stops.join(", ")})`
 }

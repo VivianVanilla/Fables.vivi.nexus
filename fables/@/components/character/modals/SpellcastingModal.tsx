@@ -139,6 +139,14 @@ export function SpellcastingModal({
             </p>
           </div>
 
+          {/* Known badge */}
+          <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+            <input type="checkbox" checked={data.showKnownBadge ?? false} disabled={readOnly}
+              onChange={e => onUpdate({ showKnownBadge: e.target.checked })}
+              className="accent-primary size-4 rounded" />
+            <span className="text-sm text-white/70">Show a "K" tag on Known spells</span>
+          </label>
+
           {/* Spell slots */}
           <div className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Spell Slots</p>

@@ -38,6 +38,7 @@ interface SpellEntryProps {
   accentColor?: string     // Settings — this spell's category color (category is "spell"), see FeatureEntry.tsx's categoryAccentStyle
   accentStyle?: CardStyle  // Settings — "none" (default), "outline", or "galaxy" for the category accent above
   bodyTextColor?: "black" | "white"  // Settings — global override for this card's own description text color — omit/undefined keeps the default
+  showKnownBadge?: boolean  // Settings (SpellcastingModal) — opt-in "K" badge (same slot/style as the Prepared "P" toggle) on spells with alwaysPrepared set
 }
 
 // ── Spell name input with autofill ────────────────────────────────────────────
@@ -207,7 +208,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, isPinned, onTogglePin, accentColor, accentStyle, bodyTextColor }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, isPinned, onTogglePin, accentColor, accentStyle, bodyTextColor, showKnownBadge }: SpellEntryProps) {
   const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -367,10 +368,16 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
                   <input type="checkbox" checked={spell.concentration ?? false} onChange={e => onChange({ concentration: e.target.checked })} className="accent-primary" />
                   Concentration
                 </label>
-                <PopTransition show={!!spell.alwaysPrepared} className="flex">
-                  <label className="flex items-center gap-2 cursor-pointer text-emerald-300/90 whitespace-nowrap" title="Granted free by a subclass/domain — doesn't count toward Known or Cantrips totals">
+                {/* Shown for either Known or Prepared — the counting math
+                    (SpellsEquipPanel.tsx's preparedCount/knownCount) already
+                    excludes freeSpell from both totals; this just exposes
+                    the checkbox for a plain Prepared spell too (e.g. a feat/
+                    magic item that grants an extra prepared spell "for
+                    free," not just a domain/subclass Known spell). */}
+                <PopTransition show={!!spell.alwaysPrepared || !!spell.prepared} className="flex">
+                  <label className="flex items-center gap-2 cursor-pointer text-emerald-300/90 whitespace-nowrap" title="Doesn't count toward your Known or Prepared spell totals">
                     <input type="checkbox" checked={spell.freeSpell ?? false} onChange={e => onChange({ freeSpell: e.target.checked })} className="accent-emerald-500" />
-                    Not counted toward Known Spells
+                    {spell.alwaysPrepared ? "Not counted toward Known Spells" : "Not counted toward Prepared Spells"}
                   </label>
                 </PopTransition>
               </div>
@@ -420,7 +427,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
         className={`rounded-lg ${theme.box} border border-white/10 px-2 py-1.5 flex items-center gap-1.5 min-h-8 cursor-pointer hover:border-white/20 transition-colors ${compact ? "w-auto max-w-72 shrink-0" : "shrink-0"}`}
         style={categoryAccentStyle(accentColor, accentStyle, theme.boxHex)}
       >
-        {/* Prep indicator — plain on/off; "known" (alwaysPrepared) spells and cantrips have no mark at all */}
+        {/* Prep indicator — plain on/off; cantrips have no mark at all */}
         {showPrepToggle && !spell.alwaysPrepared && spell.level !== 0 && (
           <button
             type="button"
@@ -434,6 +441,39 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             }`}
           >
             P
+          </button>
+        )}
+        {/* Known indicator — same slot/shape/interactivity as Prepared above,
+            for the one case Prepared skips (alwaysPrepared) instead of
+            leaving that slot blank. Click un-marks Known, same one-click
+            toggle as Prepared — the moment that happens this spell no
+            longer matches this condition and the Prepared "P" button above
+            takes its place instead, same live swap either way. */}
+        {showPrepToggle && showKnownBadge && spell.alwaysPrepared && spell.level !== 0 && (
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={e => { e.stopPropagation(); onChange({ alwaysPrepared: false }) }}
+            title="Known — click to unmark"
+            className="size-4 rounded shrink-0 text-[8px] font-bold flex items-center justify-center border bg-zinc-500 border-zinc-500 text-white hover:brightness-110 transition-all"
+          >
+            K
+          </button>
+        )}
+        {/* Free indicator — same slot/shape/interactivity as Known above,
+            for "Not counted toward Known/Prepared Spells" — shows next to
+            either Known or Prepared, since freeSpell now applies to both
+            (a plain Prepared spell can be granted "for free" too, not just
+            a domain/subclass Known one). Click un-marks it. */}
+        {showPrepToggle && showKnownBadge && spell.freeSpell && spell.level !== 0 && (
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={e => { e.stopPropagation(); onChange({ freeSpell: false }) }}
+            title="Not counted toward Known Spells — click to unmark"
+            className="size-4 rounded shrink-0 text-[8px] font-bold flex items-center justify-center border bg-emerald-600 border-emerald-600 text-white hover:brightness-110 transition-all"
+          >
+            F
           </button>
         )}
 
@@ -452,9 +492,6 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
             )}
             {spell.concentration && (
               <span className="text-[9px] border border-sky-400/40 text-sky-400/80 rounded px-1 leading-tight shrink-0">Conc.</span>
-            )}
-            {spell.freeSpell && (
-              <span className="text-[9px] border border-emerald-400/40 text-emerald-400/80 rounded px-1 leading-tight shrink-0">Free</span>
             )}
             {spell.requiresMaterial && (
               <span className={`text-[9px] border rounded px-1 leading-tight shrink-0 ${

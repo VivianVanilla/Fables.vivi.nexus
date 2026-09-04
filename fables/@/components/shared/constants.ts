@@ -1,10 +1,11 @@
 // Static lookup tables for ability scores and saving throws
 
-// The Hjolland interactive map is a one-off feature scoped to a single,
-// hardcoded campaign rather than a general per-party tool — used both to
-// gate the Map button itself (party/PartyServer.tsx) and to gate map-only
-// NPC Tracker fields like "last seen at" (npcTracker/NpcTrackerOverlay.tsx),
-// which reference map pins that don't exist for any other party.
+// This one campaign gets a handful of one-off features scoped to it alone
+// rather than general per-party tools: the Hjolland interactive map (gates
+// the Map button in party/PartyServer.tsx, and map-only NPC Tracker fields
+// like "last seen at" in npcTracker/NpcTrackerOverlay.tsx, which reference
+// map pins that don't exist for any other party) and "High Pressure Mode"
+// (campaign/CampaignView.tsx's HighPressureTracker).
 export const MAP_PARTY_CODE = "KOQK21"
 
 export const ABILITY_KEYS = [

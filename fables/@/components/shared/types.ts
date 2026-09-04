@@ -54,6 +54,15 @@ export interface SpellItem {
   castFormId?: string            // activates this Form (see CharacterForm) when cast
   castConditionalId?: string     // triggers this Conditional (see CharacterConditional) when cast
   castGrantConditions?: string[] // condition names (from ALL_CONDITIONS) applied when cast
+  // Automation — set when a spell can trigger one of several alternate
+  // effects (mirrors Feature.triggerVariants — same reasoning, e.g. a
+  // spell that lets you pick a damage type or one of a few outcomes).
+  // Casting with variants set shows a small picker (AutomationModal.tsx's
+  // CastTab) that resolves castFormId/castConditionalId for that one cast
+  // — nothing is written back onto the spell itself, unlike a feature's
+  // use-tracking variants, since a Cast is a one-shot action, not a slider
+  // whose state persists between spends.
+  castVariants?: { id: string; label: string; castFormId?: string; castConditionalId?: string }[]
 }
 
 export interface HitDicePool {
@@ -85,6 +94,7 @@ export interface UseTracker {
   maxUsesFormula?: "pb"
   usesUsed?: number
   resetsOn?: "short" | "long" | "dawn" | "manual"
+  manualBulkRegain?: boolean  // resetsOn "manual" only — shows a step number + "Regain" button on the card (like the HP +/- stepper) so recovering several at once doesn't mean clicking the slider one at a time
 }
 
 export interface Feature {
@@ -99,13 +109,24 @@ export interface Feature {
   maxUsesFormula?: "pb"      // when set, max uses = proficiency bonus
   usesUsed?: number
   resetsOn?: "short" | "long" | "dawn" | "manual"
+  manualBulkRegain?: boolean  // resetsOn "manual" only — see UseTracker.manualBulkRegain, same semantics
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
   triggerFormId?: string          // Automation — activates this Form (see CharacterForm) whenever a use of this feature is spent (see utils.ts's featureUsePatch)
   triggerConditionalId?: string   // Automation — triggers this Conditional (see CharacterConditional) whenever a use of this feature is spent
+  // Automation — set when a feature can trigger one of several alternate
+  // effects (e.g. Enhance Ability: Bear's Endurance vs. Cat's Grace vs. …).
+  // Spending a use with variants set shows a small picker (FeatureEntry.tsx)
+  // that copies the chosen variant's ids onto triggerFormId/
+  // triggerConditionalId above before the use is spent — featureUsePatch
+  // itself never needs to know variants exist, it just reads those two
+  // fields as always. Empty/absent falls back to the single triggerFormId/
+  // triggerConditionalId above with no picker, unchanged from before this existed.
+  triggerVariants?: { id: string; label: string; triggerFormId?: string; triggerConditionalId?: string }[]
   multiTracking?: boolean    // toggle — on splits use-tracking across `trackers` instead of just the single trackable/maxUses/usesUsed triplet
   trackers?: UseTracker[]    // additional tracked bars beyond the primary trackable/maxUses/usesUsed, only used when multiTracking is on
   requiresAttunement?: boolean // does this item require attunement at all?
   attuned?: boolean          // is the character currently attuned to this item?
+  infused?: boolean          // Artificer's Infusions list only — is this infusion currently "in use" (imbued into an item)? Counted against CharacterData.maxInfusedItems the same way attuned counts against maxAttunedItems
   equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
   isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight
@@ -288,11 +309,13 @@ export interface CharacterData {
   cantripsKnown?: number
   spellsKnown?: number
   invocationsKnown?: number   // Eldritch Invocations known (Warlock)
+  maxInfusedItems?: number   // Artificer's Infusions list — how many infusions can be "in use" (Feature.infused) at once; click the counter badge on the list to edit, unlike maxAttunedItems this has no default (varies by level, only set once you're actually an Artificer)
+  maxAttunedItems?: number   // Items list — how many items can be attuned at once; click the counter badge to edit, defaults to 3 (the standard 5e rule) when unset
   spellSlotDisplay?: "integrated" | "classic"   // integrated = slot sliders next to level headers; classic = standalone block at the top
   spellsDisplay?: "list" | "bubbles"            // list = one spell per row; bubbles = spells size to their content and wrap to pack multiple per line
-  hideDiceRoller?: boolean       // true = hide the dice roller panel on the Combat tab
+  showKnownBadge?: boolean                      // opt-in — shows a small "K" tag on spells with alwaysPrepared set (Known — e.g. a Sorcerer/Warlock spell that's always available, not just prepared today)
   hideJumpCalculator?: boolean   // true = hide the jump distance calculator on the Combat tab
-  showResistanceTracker?: boolean // opt-in (default off) — shows the Resistances/Vulnerabilities panel on the Combat tab, same column as the dice roller
+  showResistanceTracker?: boolean // opt-in (default off) — shows the Resistances/Vulnerabilities panel on the Combat tab
   resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
   vulnerabilities?: string[]     // damage type names this character has vulnerability to
   hideSpellsSection?: boolean    // Settings — hides the Spells side of the Spells/Martial panel for a martial-only character; ignored if hideMartialSection is also on

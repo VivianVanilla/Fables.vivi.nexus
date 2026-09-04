@@ -20,6 +20,21 @@ import { SortableItem, DragOverlayCard, useDragSensors } from "@/components/shar
 // Cast in Automation, styled with the character's own theme.
 function CastButton({ theme, spells, onCast }: { theme: Theme; spells: SpellItem[]; onCast: (spell: SpellItem) => void }) {
   const [open, setOpen] = useState(false)
+  // Set while choosing which of a spell's castVariants applies — mirrors
+  // AutomationModal.tsx's CastTab variant prompt, needed here too since
+  // this button is the other (more commonly used) way to actually cast.
+  const [variantSpell, setVariantSpell] = useState<SpellItem | null>(null)
+
+  function pick(s: SpellItem) {
+    if (s.castVariants?.length) { setVariantSpell(s); return }
+    onCast(s)
+    setOpen(false)
+  }
+  function pickVariant(s: SpellItem, v: NonNullable<SpellItem["castVariants"]>[number]) {
+    onCast({ ...s, castFormId: v.castFormId, castConditionalId: v.castConditionalId })
+    setVariantSpell(null)
+    setOpen(false)
+  }
 
   return (
     <div className="flex flex-col items-center leading-none gap-0.5 shrink-0">
@@ -30,23 +45,40 @@ function CastButton({ theme, spells, onCast }: { theme: Theme; spells: SpellItem
       </button>
 
       {open && (
-        <Modal onClose={() => setOpen(false)}>
+        <Modal onClose={() => { setOpen(false); setVariantSpell(null) }}>
           <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,92vw)] max-h-[80vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-              <p className={`text-sm font-bold ${theme.color}`}>Cast a Spell</p>
-              <button type="button" onClick={() => setOpen(false)}
+              <p className={`text-sm font-bold ${theme.color}`}>
+                {variantSpell ? `Which effect? — ${variantSpell.name || "Unnamed Spell"}` : "Cast a Spell"}
+              </p>
+              <button type="button" onClick={() => { setOpen(false); setVariantSpell(null) }}
                 className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
             </div>
             <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-1.5">
-              {spells.length === 0 && (
-                <p className="text-sm text-white/30 italic text-center py-6">No spells enabled for Cast — set that up in Automation.</p>
+              {variantSpell ? (
+                <>
+                  <button type="button" onClick={() => setVariantSpell(null)}
+                    className="text-xs text-white/40 hover:text-white self-start transition-colors mb-1">← Back</button>
+                  {(variantSpell.castVariants ?? []).map(v => (
+                    <button key={v.id} type="button" onClick={() => pickVariant(variantSpell, v)}
+                      className={`text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
+                      {v.label || "Unnamed variant"}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {spells.length === 0 && (
+                    <p className="text-sm text-white/30 italic text-center py-6">No spells enabled for Cast — set that up in Automation.</p>
+                  )}
+                  {spells.map(s => (
+                    <button key={s.id} type="button" onClick={() => pick(s)}
+                      className={`text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
+                      {s.name || "Unnamed Spell"}
+                    </button>
+                  ))}
+                </>
               )}
-              {spells.map(s => (
-                <button key={s.id} type="button" onClick={() => { onCast(s); setOpen(false) }}
-                  className={`text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
-                  {s.name || "Unnamed Spell"}
-                </button>
-              ))}
             </div>
           </div>
         </Modal>
@@ -113,6 +145,13 @@ export function SpellsEquipPanel({
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
+  // Rituals are castable whether or not they're prepared, so "Prepared
+  // only" alone hides exactly the spells this filter exists to surface —
+  // an unprepared ritual you'd forgotten you had. Independent of (and ANDed
+  // with) hideUnprepared, not a replacement for it.
+  const [ritualOnly, setRitualOnly] = useState(() => {
+    try { return localStorage.getItem(`fables-ritual-filter-${characterId}`) === "1" } catch { return false }
+  })
   const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(() => {
     try {
       const raw = localStorage.getItem(`fables-spell-collapsed-${characterId}`)
@@ -127,7 +166,9 @@ export function SpellsEquipPanel({
   const preparedCount  = spellItems.filter(s => s.prepared && !s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
   const knownCount     = spellItems.filter(s => s.alwaysPrepared && !s.freeSpell && (s.level ?? 0) > 0).length
   const cantripCount   = spellItems.filter(s => (s.level ?? 0) === 0 && !s.freeSpell).length
-  const isSpellVisible = (s: SpellItem) => !hideUnprepared || s.prepared || s.alwaysPrepared || (s.level ?? 0) === 0
+  const isSpellVisible = (s: SpellItem) =>
+    !!(!hideUnprepared || s.prepared || s.alwaysPrepared || (s.level ?? 0) === 0) &&
+    (!ritualOnly || !!s.ritual)
   const visibleSpells  = spellItems
     .filter(isSpellVisible)
     .slice()
@@ -215,6 +256,7 @@ export function SpellsEquipPanel({
         compact={spellsDisplay === "bubbles"}
         autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
         accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")} bodyTextColor={bodyTextColor}
+        showKnownBadge={data.showKnownBadge}
         isPinned={!!spell.pinned} onTogglePin={() => onChangeSpell(spell.id, { pinned: !spell.pinned })}
         onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
     )
@@ -417,8 +459,19 @@ export function SpellsEquipPanel({
             className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors border ${hideUnprepared ? "bg-primary/20 border-primary/50 text-white" : "border-white/15 text-white/40 hover:text-white/70 hover:border-white/30"}`}>
             Prepared only
           </button>
-          {hideUnprepared && visibleSpells.length === 0 && (
-            <span className="text-xs text-white/25 italic">No prepared spells</span>
+          <button type="button" title="Rituals can be cast whether prepared or not — this ignores Prepared only"
+            onClick={() => setRitualOnly(r => {
+              const next = !r
+              try { localStorage.setItem(`fables-ritual-filter-${characterId}`, next ? "1" : "0") } catch {}
+              return next
+            })}
+            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors border ${ritualOnly ? "bg-amber-500/20 border-amber-400/50 text-white" : "border-white/15 text-white/40 hover:text-white/70 hover:border-white/30"}`}>
+            Ritual only
+          </button>
+          {(hideUnprepared || ritualOnly) && visibleSpells.length === 0 && (
+            <span className="text-xs text-white/25 italic">
+              {ritualOnly && hideUnprepared ? "No prepared rituals" : ritualOnly ? "No rituals" : "No prepared spells"}
+            </span>
           )}
         </div>
       )}
@@ -448,13 +501,16 @@ export function SpellsEquipPanel({
                 within the same parent instead of unmounting/remounting it (which would lose
                 the spell's own open edit/detail modal state). */}
             <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"}`}>
-              {spellLevels.flatMap(lvl => {
+              {spellLevels.flatMap((lvl, idx) => {
                 const spells       = groupedSpells.get(lvl)!
                 const isOpen       = !collapsedLevels.has(lvl)
                 const groupLabel   = lvl === 0 ? "Cantrips" : `Level ${lvl}`
                 const matchingSlots = slotDisplay === "integrated" ? spellSlots.filter(s => s.level === lvl) : []
+                // A visual break between level groups — skipped on the very
+                // first group (nothing above it to separate from).
                 const nodes: React.ReactNode[] = [
-                  <div key={`header-${lvl}`} className="w-full flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors">
+                  <div key={`header-${lvl}`}
+                    className={`w-full flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 transition-colors ${idx > 0 ? "mt-2 pt-3 border-t border-white/10" : ""}`}>
                     <button type="button"
                       onClick={() => setCollapsedLevels(prev => {
                         const next = new Set(prev)
