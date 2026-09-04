@@ -1,6 +1,7 @@
 // All data shapes used by the character sheet
 
 import type { FavoriteCategory, CardStyle } from "./constants"
+import type { EquipmentItem } from "./deprecated/legacyEquipment"  // DEPRECATED — see deprecated/legacyEquipment.ts
 
 // One damage instance ("2d6" fire, "1d4" cold, etc.) — the base damage/damageType
 // fields on weapons/actions/items stay as the single/primary instance for backward
@@ -13,47 +14,6 @@ export interface DamageEntry {
   damageType?: string
 }
 
-// LEGACY — pre-merge Martial tab shape. A weapon used to exist as two synced
-// records (a Feature here in Gear, a separate EquipmentItem in the Martial
-// tab, linked via sourceFeatureId). Martial weapons are now plain Features
-// (see Feature.inMartial/martialOnly) rendered once via FeatureEntry in both
-// places — this type and CharacterData.equipmentItems only still exist so
-// migrateEquipmentItems() (CharacterSheet.tsx) has something typed to read
-// from on a character's first load after the merge, before clearing it.
-// Nothing renders from this shape anymore.
-export interface EquipmentItem {
-  id: string
-  name: string
-  toHit?: string
-  damage?: string
-  damageType?: string
-  multiDamage?: boolean
-  damages?: DamageEntry[]
-  type?: string
-  notes?: string
-  cost?: string
-  magicBonus?: string
-  properties?: string
-  proficient?: boolean
-  attackStat?: "str" | "dex" | "con" | "int" | "wis" | "cha"
-  extraToHit?: number
-  extraDamage?: number
-  meleeRange?: string
-  throwRange?: string
-  range?: string
-  weight?: number
-  sourceFeatureId?: string
-  isMagicItem?: boolean
-  trackable?: boolean
-  trackerLabel?: string
-  maxUses?: number
-  maxUsesFormula?: "pb"
-  usesUsed?: number
-  resetsOn?: "short" | "long" | "dawn" | "manual"
-  multiTracking?: boolean
-  trackers?: UseTracker[]
-}
-
 export interface SpellItem {
   id: string
   name: string
@@ -61,7 +21,7 @@ export interface SpellItem {
   school?: string               // "Evocation", "Conjuration", etc.
   toHit?: string                // attack bonus string
   saveAttr?: string             // "Dex", "Con", etc.
-  saveType?: string             // legacy field (kept for compat)
+  saveType?: string             // DEPRECATED field (kept for compat)
   range?: string
   castTime?: string             // "1 action", "Bonus Action", etc.
   duration?: string             // "Instantaneous", "1 minute", etc.
@@ -196,7 +156,7 @@ export interface Feature {
 
 export interface FavoriteRef {
   refId: string
-  // "equipment" is legacy (pre Gear/Martial merge) — migrateEquipmentItems()
+  // "equipment" is DEPRECATED (pre Gear/Martial merge) — migrateEquipmentItems()
   // remaps any surviving "equipment" favorite to "feature" on load, so
   // nothing should ever create a new one.
   refType: "spell" | "equipment" | "feature" | "familiar"
@@ -298,7 +258,7 @@ export interface CharacterData {
   eyes?: string
   skin?: string
   hair?: string
-  ac?: number          // legacy manual AC — only read as a fallback for characters that predate acAbility (see computeAc)
+  ac?: number          // DEPRECATED manual AC — only read as a fallback for characters that predate acAbility (see computeAc)
   acBase?: number      // base number the ability mod(s) are added to (formula is acBase + mods); default 10
   acAbility?: "str" | "dex" | "con" | "int" | "wis" | "cha"   // ability feeding the base AC formula; default "dex"
   acAbility2?: "str" | "dex" | "con" | "int" | "wis" | "cha"  // optional 2nd ability for dual-stat AC (Monk Wis, Barbarian Con); unset = off
@@ -320,8 +280,8 @@ export interface CharacterData {
   wisdom?: number
   charisma?: number
   savingThrowProfs?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", boolean>>
-  spellSaveDC?: number         // legacy manual value, superseded by computed 8 + PB + mod + spellSaveDCBonus
-  spellAttackBonus?: number    // legacy manual value, superseded by computed PB + mod + spellAttackBonusBonus
+  spellSaveDC?: number         // DEPRECATED manual value, superseded by computed 8 + PB + mod + spellSaveDCBonus
+  spellAttackBonus?: number    // DEPRECATED manual value, superseded by computed PB + mod + spellAttackBonusBonus
   spellSaveDCBonus?: number       // extra flat bonus (magic items, feats, etc.) added on top of the computed save DC
   spellAttackBonusBonus?: number  // extra flat bonus added on top of the computed spell attack bonus
   spellcastingAbility?: string
@@ -348,6 +308,9 @@ export interface CharacterData {
   showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
   magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy" is labeled "Animated" in the UI
   magicItemColor?: string  // accent color for both magicItemStyle and magicItemSliderStyle — default DEFAULT_ACCENT_COLOR
+  magicItemColorsByRarity?: boolean // Yes or no to Specific Raririty Colors
+  magicItemRarityColors?: Partial<Record<"Common"|"Uncommon"|"Rare"|"Very Rare"|"Legendary"|"Artifact", string>> // A way to record each individual color
+  magicItemRaritySliderColors?: Partial<Record<"Common"|"Uncommon"|"Rare"|"Very Rare"|"Legendary"|"Artifact", string>>  // this rarity tier's own "Track uses" bar color, only used when magicItemColorsByRarity is on — falls back to magicItemRarityColors when unset
   magicItemSliderStyle?: "none" | "outline" | "galaxy"  // default "none" — separate look for magic items' own "Track uses" bars, independent of magicItemStyle (the card background)
   notes?: string
   backgroundImage?: string
@@ -356,7 +319,7 @@ export interface CharacterData {
   slotTheme?: string
   slotCustomColor?: string  // accent color for slotTheme "custom" — see character-themes.ts SLOT_THEMES
   slotAnimated?: boolean    // Settings — shimmering iridescent slot bars instead of a flat color
-  equipmentItems?: EquipmentItem[]  // LEGACY — see EquipmentItem's comment. Read once by migrateEquipmentItems() then cleared to []; nothing else should read or write this.
+  equipmentItems?: EquipmentItem[]  // DEPRECATED — see EquipmentItem's comment. Read once by migrateEquipmentItems() then cleared to []; nothing else should read or write this.
   spellItems?: SpellItem[]
   hitDicePools?: HitDicePool[]
   spellSlots?: SpellSlot[]
@@ -368,13 +331,31 @@ export interface CharacterData {
   infusions?: Feature[]    // Infusions (Artificer)
   favorites?: FavoriteRef[]
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings — accent color per category (race/class/feat/invocation/spell/equipment/familiar — "item" is deliberately excluded, see STYLING_CATEGORIES), applied everywhere that category renders, not just Favorites
-  favoriteCategoryTagColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the small source tag (e.g. class/race name) AND the "Lv N" badge per category, independent of the card accent color above — falls back to classColorClasses' fixed palette (tag) / the neutral bg-white/10 look (level) when unset
+  favoriteCategoryTagColors?: Partial<Record<FavoriteCategory, string>>  // DEPRECATED — per-category tag color, superseded by the single global tagTextColor below. Kept only so old saved values don't error; nothing new writes to this.
   favoriteCategoryStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: "none" (default/off), "outline" (colored border), or "galaxy" (animated background in that color) — mirrors magicItemStyle
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — per category: separate look for that category's own "Track uses" bars, independent of favoriteCategoryStyle (the card background) — mirrors magicItemSliderStyle
   favoriteCategorySliderColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of that category's own "Track uses" bars, independent of the card accent color above — falls back to favoriteCategoryColors when unset
-  classFeatureColorsByClass?: boolean  // Settings — when true, Class Features cards are colored per-class (classFeatureColors) instead of the single favoriteCategoryColors.class accent
-  classFeatureColors?: Record<string, string>  // Settings — accent color per class key (e.g. "fighter"), only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey/deriveCharacterClassNames
-  uiScale?: 100 | 75 | 50  // Settings — "Modules and Font Size": sheet-wide zoom level, default 100
+  classFeatureColorsByClass?: boolean  // Settings — when true, Class Features cards are colored per-class (classFeatureColors/classFeatureSliderColors) instead of the single favoriteCategoryColors.class/favoriteCategorySliderColors accent
+  classFeatureColors?: Record<string, string>  // Settings — card accent color per class key (e.g. "fighter"), only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey/deriveCharacterClassNames
+  classFeatureSliderColors?: Record<string, string>  // Settings — this class's own "Track uses" bar color, independent of classFeatureColors above — falls back to classFeatureColors when unset, same fallback rule favoriteCategorySliderColors has against favoriteCategoryColors
+  uiScale?: 125 | 100 | 75  // Settings — "Modules and Font Size": sheet-wide zoom level, default 100
+  // Settings — "Modules and Font Size": one sheet-wide switch, for a future
+  // light background theme — "dark" flips essentially every white/light-gray
+  // text element on the character sheet to matching-opacity black ("what if
+  // someone wants a light theme"). "white" (default) is today's look,
+  // unchanged. Two consumers: (1) CharacterSheet.tsx sets
+  // data-sheet-text="dark" on its own root div, which index.css's bulk
+  // text-white* override block (the only tractable way to reach the
+  // hundreds of scattered white-text classes at once) responds to; (2) it's
+  // also translated to "black"/"white" and threaded as the existing
+  // tagTextColor/bodyTextColor props into FeatureEntry/SpellEntry, which
+  // need finer control (also the tag badge's own background, not just its
+  // text — see FeatureEntry.tsx's source-tag rendering, no longer
+  // per-class-colored, this switch is now its only color source). NOTE:
+  // this only recolors text — card/panel backgrounds are still always dark,
+  // so "dark" text reads correctly only once a matching light background
+  // theme also exists; that doesn't yet.
+  textColorOverride?: "white" | "dark"
   carryCapacityBonus?: number  // flat lb bonus added on top of the computed STR × 15 carrying capacity — set via clicking the ⚖ carry-weight badge
   conditions?: ActiveCondition[]
   forms?: CharacterForm[]           // Automation — reusable alternate-form/buff presets, see CharacterForm
@@ -402,7 +383,7 @@ export interface CharacterData {
   themeBg?: string             // background override key from BG_OPTIONS
   themeBgCustomColor?: string  // background color for themeBg "custom" — see character-themes.ts BG_OPTIONS
   plainSkills?: boolean    // when true, disable ability-color-coding on skills
-  // Proficiencies — entry lists per category (legacy characters may still have
+  // Proficiencies — entry lists per category (DEPRECATED characters may still have
   // these as a single free-text string; components normalize on read).
   weaponProfs?: ProficiencyEntry[] | string
   armorProfs?: ProficiencyEntry[] | string

@@ -622,3 +622,61 @@
     color-scheme: dark;
   }
 }
+
+/* Settings' "Text Color: Dark" (character sheet → Modules and Font Size) —
+   sheet-wide override flipping every text-white* utility actually used on
+   the character sheet to matching-opacity black. Set via
+   data-sheet-text="dark" on CharacterSheet.tsx's own root div.
+   Deliberately UNLAYERED (not inside @layer base/components/utilities) —
+   Tailwind's own utilities live in @layer utilities, which always beats
+   @layer base regardless of selector specificity, so overriding them from
+   inside a layer wouldn't reliably win; unlayered CSS sits above every
+   layer and always wins instead. This is the only tractable way to reach
+   the hundreds of text-white* usages scattered across every character
+   sheet component at once — see CharacterSheet.tsx's textColorOverride
+   comment for the couple of places (FeatureEntry/SpellEntry's tag badge and
+   description text) that need finer control and are handled separately
+   via props instead. NOTE: text only — every card/panel background is
+   still always dark, so this only reads correctly once a matching light
+   background theme also exists, which it doesn't yet; low-opacity variants
+   (originally dim white-on-dark, now dim black-on-still-dark) will look
+   washed out/low-contrast until one does. */
+[data-sheet-text="dark"] .text-white { color: #000; }
+[data-sheet-text="dark"] .text-white\/10 { color: rgb(0 0 0 / 0.10); }
+[data-sheet-text="dark"] .text-white\/15 { color: rgb(0 0 0 / 0.15); }
+[data-sheet-text="dark"] .text-white\/20 { color: rgb(0 0 0 / 0.20); }
+[data-sheet-text="dark"] .text-white\/25 { color: rgb(0 0 0 / 0.25); }
+[data-sheet-text="dark"] .text-white\/30 { color: rgb(0 0 0 / 0.30); }
+[data-sheet-text="dark"] .text-white\/35 { color: rgb(0 0 0 / 0.35); }
+[data-sheet-text="dark"] .text-white\/40 { color: rgb(0 0 0 / 0.40); }
+[data-sheet-text="dark"] .text-white\/45 { color: rgb(0 0 0 / 0.45); }
+[data-sheet-text="dark"] .text-white\/50 { color: rgb(0 0 0 / 0.50); }
+[data-sheet-text="dark"] .text-white\/55 { color: rgb(0 0 0 / 0.55); }
+[data-sheet-text="dark"] .text-white\/60 { color: rgb(0 0 0 / 0.60); }
+[data-sheet-text="dark"] .text-white\/70 { color: rgb(0 0 0 / 0.70); }
+[data-sheet-text="dark"] .text-white\/75 { color: rgb(0 0 0 / 0.75); }
+[data-sheet-text="dark"] .text-white\/80 { color: rgb(0 0 0 / 0.80); }
+[data-sheet-text="dark"] .text-white\/90 { color: rgb(0 0 0 / 0.90); }
+
+/* Opt back OUT of the override above — every modal (Modal.tsx, used by
+   Settings and every other modal in the app) marks its own root
+   data-sheet-text="auto" since it's chrome, not sheet content, and stays
+   dark-background/white-text regardless of the sheet-wide switch. Higher
+   specificity than the plain [data-sheet-text="dark"] rules above (two
+   attribute selectors instead of one), so this correctly wins inside one. */
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white { color: #fff; }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/10 { color: rgb(255 255 255 / 0.10); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/15 { color: rgb(255 255 255 / 0.15); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/20 { color: rgb(255 255 255 / 0.20); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/25 { color: rgb(255 255 255 / 0.25); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/30 { color: rgb(255 255 255 / 0.30); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/35 { color: rgb(255 255 255 / 0.35); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/40 { color: rgb(255 255 255 / 0.40); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/45 { color: rgb(255 255 255 / 0.45); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/50 { color: rgb(255 255 255 / 0.50); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/55 { color: rgb(255 255 255 / 0.55); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/60 { color: rgb(255 255 255 / 0.60); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/70 { color: rgb(255 255 255 / 0.70); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/75 { color: rgb(255 255 255 / 0.75); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/80 { color: rgb(255 255 255 / 0.80); }
+[data-sheet-text="dark"] [data-sheet-text="auto"] .text-white\/90 { color: rgb(255 255 255 / 0.90); }

@@ -743,6 +743,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     cha: Math.floor(((effectiveData.charisma     ?? 10) - 10) / 2),
   }
 
+  // Settings' "Modules and Font Size" — one sheet-wide text color switch
+  // (see types.ts's textColorOverride comment). Bulk of the app's white
+  // text is flipped via index.css's [data-sheet-text="dark"] override block
+  // (see rootStyle below); FeatureEntry/SpellEntry need finer per-element
+  // control (tag vs. description), so the same source value is also
+  // threaded down as these two props, translated to "black"/undefined.
+  const sheetTextDark  = data.textColorOverride === "dark"
+  const tagTextColor  = sheetTextDark ? "black" as const : "white" as const
+  const bodyTextColor = sheetTextDark ? "black" as const : undefined
+
   const availableClasses = data.multiclass && data.classes?.length
     ? data.classes.map(c => c.cls).filter(Boolean)
     : (data.class ? [data.class] : [])
@@ -765,14 +775,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     theme, card, readOnly,
     showMagicStar: data.showMagicItemStar, magicItemStyle: data.magicItemStyle, magicItemColor: data.magicItemColor,
     magicItemSliderStyle: data.magicItemSliderStyle,
+    magicItemColorsByRarity: data.magicItemColorsByRarity,
+    magicItemRarityColors: data.magicItemRarityColors,
+    magicItemRaritySliderColors: data.magicItemRaritySliderColors,
     featureCategoryById,
     favoriteCategoryColors: data.favoriteCategoryColors,
-    favoriteCategoryTagColors: data.favoriteCategoryTagColors,
+    tagTextColor, bodyTextColor,
     favoriteCategoryStyle: data.favoriteCategoryStyle,
     favoriteCategorySliderStyle: data.favoriteCategorySliderStyle,
     favoriteCategorySliderColors: data.favoriteCategorySliderColors,
     classFeatureColorsByClass: data.classFeatureColorsByClass,
     classFeatureColors: data.classFeatureColors,
+    classFeatureSliderColors: data.classFeatureSliderColors,
     dragOver: favDragOver,
     onDragOver:  (e: React.DragEvent) => { e.preventDefault(); setFavDragOver(true) },
     onDragLeave: () => setFavDragOver(false),
@@ -1117,7 +1131,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   return (
     <div className={`flex flex-col h-full min-h-0 text-white overflow-auto ${effectiveBody}`}
-      style={rootStyle}>
+      style={rootStyle} data-sheet-text={sheetTextDark ? "dark" : undefined}>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
@@ -1186,17 +1200,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       )}
       {showSettingsModal && (
         <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)}
-          isWarlock={isWarlock} isArtificer={isArtificer} characterId={character.id} />
+          isWarlock={isWarlock} isArtificer={isArtificer} characterId={character.id} card={card} />
       )} 
 
 
       {showAutomationModal && (
         <AutomationModal data={data} onUpdate={update} onClose={() => setShowAutomationModal(false)} userId={user?.id ?? null}
-          allFeatures={allFeatures} onChangeFeature={patchFeature} multiFormEnabled={multiFormEnabled} />
+          allFeatures={allFeatures} onChangeFeature={patchFeature} multiFormEnabled={multiFormEnabled} card={card} />
       )}
       {showRestModal && (
         <Modal onClose={() => setShowRestModal(false)}>
-          <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(320px,calc(100vw-2rem))] overflow-hidden">
+          <div className={`${card} shadow-2xl w-[min(320px,calc(100vw-2rem))] overflow-hidden`}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <h3 className="text-sm font-bold text-white">Take a Rest</h3>
               <button onClick={() => setShowRestModal(false)}

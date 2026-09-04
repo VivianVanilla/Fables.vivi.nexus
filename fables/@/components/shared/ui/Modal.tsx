@@ -25,6 +25,12 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
       // -xs (not -sm) matches the lighter blur dialog.tsx/sheet.tsx already
       // use for exactly this reason — same backdrop look, smaller kernel.
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      // Every modal in the app — Settings included — is chrome, not sheet
+      // content, and its own background is always dark regardless of the
+      // sheet-wide Text Color switch, so it opts back out of that override
+      // here (see index.css's [data-sheet-text="dark"] block) rather than
+      // going washed-out/low-contrast along with it.
+      data-sheet-text="auto"
       // Gated on mousedown (not click) hitting the backdrop *itself* — not
       // just bubbling up to it — so dragging to select text inside the modal
       // (e.g. across a line in a textarea) and releasing over the backdrop

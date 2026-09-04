@@ -79,6 +79,11 @@ interface MarkdownProps {
   tone?: "dark" | "slate" | "auto" | "paper"
   size?: "sm" | "xs"
   className?: string
+  // Opt-in override of just the base body-text color (not headings/code/
+  // links, which stay tone-driven) — used only by the character sheet's own
+  // Settings' "Body Text" choice (FeatureEntry.tsx/SpellEntry.tsx), never by
+  // other Markdown callers (NPC tracker, map notes, docs, chat).
+  textColorOverride?: "black" | "white"
   // Called instead of navigating for links whose href starts with
   // "internal:" (e.g. NPC Tracker's `[[Name]]` mentions, rewritten to
   // "internal:npc:<id>" before the text reaches this component) — lets a
@@ -87,15 +92,16 @@ interface MarkdownProps {
   onInternalLink?: (target: string) => void
 }
 
-export function Markdown({ text, tone = "dark", size = "sm", className = "", onInternalLink }: MarkdownProps) {
+export function Markdown({ text, tone = "dark", size = "sm", className = "", textColorOverride, onInternalLink }: MarkdownProps) {
   const c = TONES[tone]
+  const textClass = textColorOverride === "black" ? "text-black" : textColorOverride === "white" ? "text-white" : c.text
 
   return (
     // `space-y-*` only spaces DIRECT children of this div — unlike a margin baked into
     // the `p`/`h1`/etc. components themselves, it never touches a `<p>` nested inside a
     // `<li>` (which happens whenever a list has a blank line between items), so list
     // items stay flush against their bullet instead of getting pushed down.
-    <div className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${c.text} space-y-2 ${className}`}>
+    <div className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${textClass} space-y-2 ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}

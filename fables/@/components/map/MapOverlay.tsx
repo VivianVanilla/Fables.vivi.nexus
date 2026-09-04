@@ -7,6 +7,7 @@ import { useMapPanZoom } from "./useMapPanZoom"
 import { useMapBoard, PIN_COLORS, DEFAULT_PIN_COLOR, type StrokePoint, type PinType } from "./useMapBoard"
 import { PIN_TYPES, pinTypeIcon } from "./pinTypes"
 import { MapPinViewer } from "./MapPinViewer"
+import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import { MapTrackerViewer } from "./MapTrackerViewer"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
 import { PortraitModal } from "@/components/shared/PortraitModal"
@@ -488,9 +489,8 @@ export function MapOverlay({
                 style={{ backgroundColor: color }}
                 className={`size-5 rounded-full transition-transform ${!erasing && brushColor === color ? "ring-2 ring-offset-2 ring-offset-background ring-foreground scale-110" : "hover:scale-110"}`} />
             ))}
-            <input type="color" value={brushColor} title="Custom color"
-              onChange={e => { setBrushColor(e.target.value); setErasing(false) }}
-              className="size-6 rounded-md border border-border bg-transparent cursor-pointer p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none" />
+            <ColorSwatchInput value={brushColor} title="Custom color"
+              onChange={v => { setBrushColor(v); setErasing(false) }} size="size-6" />
             <button type="button" onClick={() => setErasing(v => !v)} title="Eraser"
               className={`size-6 flex items-center justify-center rounded-lg transition-colors ${erasing ? "bg-violet-500/25 text-violet-200" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/70"}`}>
               <Eraser className="size-3.5" />
@@ -698,9 +698,7 @@ export function MapOverlay({
                     style={{ backgroundColor: color }}
                     className={`size-5 rounded-full transition-transform ${pinColorDraft === color ? "ring-2 ring-offset-2 ring-offset-card ring-foreground scale-110" : "hover:scale-110"}`} />
                 ))}
-                <input type="color" value={pinColorDraft} title="Custom color"
-                  onChange={e => setPinColorDraft(e.target.value)}
-                  className="size-6 rounded-md border border-border bg-transparent cursor-pointer p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none" />
+                <ColorSwatchInput value={pinColorDraft} title="Custom color" onChange={setPinColorDraft} size="size-6" />
               </div>
               <div className="flex items-center gap-1.5 mb-3">
                 {PIN_TYPES.map(({ value, label, Icon }) => (

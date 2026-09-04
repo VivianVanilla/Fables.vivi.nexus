@@ -95,6 +95,15 @@ export const RARITY_COLORS: Record<string, string> = {
   "Wondrous":  "bg-teal-500/15 text-teal-300",
 }
 
+// Default per-rarity accent hex for Settings' "Separate color per rarity"
+// grid — shared with FeatureEntry.tsx so a tier's actual card/slider falls
+// back to this SAME preset the moment the toggle is on, instead of falling
+// through to the old flat magicItemColor until someone explicitly repicks
+// every tier by hand.
+export const DEFAULT_RARITY_HEX: Record<"Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact" | "Wondrous", string> = {
+  Common: "#ffffff", Uncommon: "#1eff00", Rare: "#0070dd", "Very Rare": "#a335ee", Legendary: "#ff8000", Artifact: "#e6cc80", Wondrous: "#14b8a6",
+}
+
 // ── Feature Stylings (category accent colors) ────────────────────────────────
 // Configured once per category in Settings (CharacterData.favoriteCategoryColors
 // + favoriteCategoryStyle) and applied automatically to every card of that
@@ -137,7 +146,12 @@ export const DEFAULT_ACCENT_COLOR = "#8b5cf6"
 // Settings — "Modules and Font Size": sheet-wide zoom level. 100% is the
 // current/default size; 75%/50% shrink everything (fonts, padding, cards) to
 // fit more on screen at once.
-export const UI_SCALES = [100, 75, 50] as const
+export const UI_SCALES = [75, 100, 125] as const
+
+// CharacterData.textColorOverride (types.ts) — "white" is today's look;
+// "dark" flips text to black/gray, groundwork for a future light
+// background theme.
+export const TEXT_COLOR_OPTIONS = ["white", "dark"] as const
 
 export const SKILLS = [
   { name: "Acrobatics",       ability: "dex" },

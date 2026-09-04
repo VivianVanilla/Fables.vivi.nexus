@@ -21,8 +21,7 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "@/components/shared/ui/NumInput"
 import { DamageEditor, DamagePills } from "../ui/DamageFields"
 import { computeToHit, computeWeaponDamageSegments } from "@/components/shared/damageTypes"
-import { ITEM_RARITIES, RARITY_COLORS, DEFAULT_ACCENT_COLOR, type CardStyle } from "@/components/shared/constants"
-import { classColorClasses } from "@/components/shared/classColors"
+import { ITEM_RARITIES, RARITY_COLORS, DEFAULT_ACCENT_COLOR, DEFAULT_RARITY_HEX, type CardStyle } from "@/components/shared/constants"
 import { supabase } from "../../../../src/supabase"
 
 // ── Feature suggestion cache — per doc type, per homebrew scope ───────────────
@@ -278,12 +277,16 @@ interface FeatureEntryProps {
   onToggleContainerContents?: () => void // Carried Items only, containers only — flips containerContentsOpen
   showMagicStar?:    boolean            // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
   magicItemStyle?:   "none" | "outline" | "galaxy"  // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy" is labeled "Animated" in Settings
-  magicItemColor?:   string             // Settings — accent color for magicItemStyle/magicItemSliderStyle, default DEFAULT_ACCENT_COLOR
+  magicItemColor?:   string             // Settings — accent color for magicItemStyle/magicItemSliderStyle, default DEFAULT_ACCENT_COLOR — also the fallback whenever magicItemColorsByRarity is on but this item's own rarity has no color set
   magicItemSliderStyle?: "none" | "outline" | "galaxy"  // Settings choice (default "none") — separate look for magic items' own "Track uses" bars, independent of the card background above
+  magicItemColorsByRarity?: boolean  // Settings — when true, a magic item's card/border color comes from its own `rarity` (magicItemRarityColors) instead of the one flat magicItemColor
+  magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>  // Settings — card/border color per rarity tier, only used when magicItemColorsByRarity is on
+  magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>  // Settings — this rarity tier's own "Track uses" bar color — falls back to magicItemRarityColors when unset, same fallback pattern as favoriteCategorySliderColors
   accentColor?:      string             // Settings — this feature's category color (Feature Stylings); resolved by the caller from its category (race/class/feat/invocation), applies everywhere it's rendered, not just Favorites
   accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" for the category card background above
   sliderStyle?:      CardStyle          // Settings — separate look for this category's own "Track uses" bars, independent of accentStyle (the card background)
-  tagColor?:         string             // Settings — color of the small source tag (class/race name) AND the "Lv N" badge, independent of accentColor above — falls back to classColorClasses' fixed palette (tag) / the neutral bg-white/10 look (level) when unset
+  tagTextColor?:     "black" | "white"   // Settings — global (not per-category) override for the small source tag (class/race name) AND "Lv N" badge text color — omit/undefined keeps each badge's own existing background+text color as-is
+  bodyTextColor?:    "black" | "white"   // Settings — global override for this card's own description text color — omit/undefined keeps the default
   sliderColor?:      string             // Settings — color of this category's own "Track uses" bars, independent of accentColor above — falls back to accentColor when unset
   autoEdit?:         boolean            // open the edit form immediately (newly-added feature/item) — same pattern as SpellEntry.tsx
   onAutoEditConsumed?: () => void
@@ -388,7 +391,8 @@ export function FeatureEntry({
   isFavorite, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showWeightColumn,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
-  accentColor, accentStyle, sliderStyle, tagColor, sliderColor, autoEdit = false, onAutoEditConsumed,
+  magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors,
+  accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, autoEdit = false, onAutoEditConsumed,
 }: FeatureEntryProps) {
   const [expanded,    setExpanded]    = useState(false)
   const [editing,     setEditing]     = useState(autoEdit)
@@ -1020,9 +1024,28 @@ export function FeatureEntry({
 
   // The style itself (None/Outline/Galaxy) is a sheet-wide Settings choice,
   // not per item — an item only decides whether it's magic at all.
+  // Source tag + "Lv N" badge — a plain monochrome pill driven entirely by
+  // the sheet-wide Text Color switch (Settings' Modules and Font Size),
+  // same as the rest of the sheet's text. No more per-class palette here —
+  // that's the one piece of "customization" for tags this switch replaced.
+  const tagBadgeClass = tagTextColor === "black" ? "bg-black/10 text-black" : "bg-white/10 text-white"
+
   const magicStar  = feature.isMagicItem && showMagicStar
   const magicStyle = feature.isMagicItem && magicItemStyle !== "none" ? magicItemStyle : null
-  const cardStyle  = magicStyle === "galaxy" ? coloredNebulaBg(magicItemColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex) : undefined
+  // "Separate color per rarity" (Settings' Magical Items row) — this item's
+  // own rarity picks its color instead of the one flat magicItemColor, when
+  // it's on and this item actually has a rarity set. Falls back to
+  // DEFAULT_RARITY_HEX (the SAME preset Settings' swatch grid shows for that
+  // tier) before ever falling back to the flat color — otherwise a tier
+  // nobody has explicitly repicked yet would silently keep showing the old
+  // flat accent instead of the preset its own swatch displays.
+  const resolvedMagicCardColor = magicItemColorsByRarity && feature.rarity
+    ? (magicItemRarityColors?.[feature.rarity] ?? DEFAULT_RARITY_HEX[feature.rarity])
+    : magicItemColor
+  const resolvedMagicSliderColor = magicItemColorsByRarity && feature.rarity
+    ? (magicItemRaritySliderColors?.[feature.rarity] ?? magicItemRarityColors?.[feature.rarity] ?? DEFAULT_RARITY_HEX[feature.rarity])
+    : magicItemColor
+  const cardStyle  = magicStyle === "galaxy" ? coloredNebulaBg(resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex) : undefined
 
   // Uses-tracking bar look is its own Settings choice per category (Feature
   // Stylings — "Tracking Slider" row), so it CAN be set independently of the
@@ -1037,10 +1060,17 @@ export function FeatureEntry({
   // NOT inferred from whether accentColor/accentStyle happen to be defined,
   // since a feature can be both magic-flagged AND category-styled at once.
   const sliderSource = feature.isMagicItem
-    ? { style: magicItemSliderStyle ?? magicItemStyle, color: magicItemColor ?? DEFAULT_ACCENT_COLOR }
+    ? { style: magicItemSliderStyle ?? magicItemStyle, color: resolvedMagicSliderColor ?? DEFAULT_ACCENT_COLOR }
     : { style: sliderStyle ?? accentStyle, color: sliderColor ?? accentColor }
   const barAnimated = sliderSource.style === "galaxy" && !!sliderSource.color
-  const barColor     = sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1"
+  // Magic items always show their rarity color on the tracking bar, even
+  // when the "Tracking Slider" style is set to None — None only turns off
+  // the fancy border/background treatment, it shouldn't also mean "ignore
+  // the color and show generic indigo" for something that's rarity-colored
+  // on purpose. Non-magic (category-styled) items keep the old behavior.
+  const barColor = feature.isMagicItem
+    ? (sliderSource.color ?? "#6366f1")
+    : (sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1")
 
   // Live to-hit/damage — same math as the old Martial-only EquipmentEntry,
   // now computed here too since a weapon is one record shown in both places.
@@ -1065,7 +1095,7 @@ export function FeatureEntry({
     <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
       style={{
         ...cardStyle,
-        ...(magicStyle ? { borderColor: magicItemColor ?? DEFAULT_ACCENT_COLOR } : {}),
+        ...(magicStyle ? { borderColor: resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR } : {}),
         ...categoryAccentStyle(accentColor, accentStyle, theme.boxHex),
       }}>
 
@@ -1092,8 +1122,7 @@ export function FeatureEntry({
 
           {!showItemExtras && feature.source && (
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${tagColor ? "" : classColorClasses(feature.source)}`}
-              style={tagColor ? { backgroundColor: tagColor + "26", color: tagColor } : undefined}
+              className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${tagBadgeClass}`}
               title={feature.source}
             >
               {feature.source}
@@ -1101,10 +1130,7 @@ export function FeatureEntry({
           )}
 
           {!showItemExtras && feature.level != null && (
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagColor ? "" : "bg-white/10 text-white/50"}`}
-              style={tagColor ? { backgroundColor: tagColor + "26", color: tagColor } : undefined}
-            >
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagBadgeClass}`}>
               Lv {feature.level}
             </span>
           )}
@@ -1300,7 +1326,7 @@ export function FeatureEntry({
             <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
           )}
           {feature.description ? (
-            <Markdown text={feature.description} tone="dark" />
+            <Markdown text={feature.description} tone="dark" textColorOverride={bodyTextColor} />
           ) : !readOnly ? (
             <p className="text-xs text-white/20 italic">No description — click ✎ to add one.</p>
           ) : null}

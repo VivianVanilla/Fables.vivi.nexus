@@ -105,6 +105,11 @@ export function ItemsTab({
   const martialAccentColor = (f: Feature) => isMartialWeapon(f) ? data.favoriteCategoryColors?.equipment : undefined
   const martialAccentStyle = (f: Feature) => isMartialWeapon(f) ? data.favoriteCategoryStyle?.equipment : undefined
 
+  // Settings' "Modules and Font Size" — sheet-wide text color switch
+  // (tagTextColor is deliberately not wired here — Gear items never used
+  // the old per-category tag color either).
+  const bodyTextColor = data.textColorOverride === "dark" ? "black" as const : undefined
+
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       {!readOnly && (
@@ -134,8 +139,9 @@ export function ItemsTab({
           onAddPack={addPackToInventory}
           showAttunement
           showItemExtras
-          showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
+          showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}
+          bodyTextColor={bodyTextColor}
           onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => i.category === "armor" && !!i.equipped && !i.martialOnly, newOrder) })}
         />
         {/* Everything not equipped lands here — armor/weapons you own but
@@ -153,8 +159,9 @@ export function ItemsTab({
           userId={userId}
           favorites={favorites} onToggleFavorite={onToggleFavorite}
           onAddPack={addPackToInventory}
-          showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle}
+          showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}
+          bodyTextColor={bodyTextColor}
           pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
           onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => !(i.category === "armor" && !!i.equipped) && !i.martialOnly, newOrder) })}
         />

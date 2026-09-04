@@ -9,11 +9,11 @@ import type { Theme } from "@/components/shared/themes"
 import type { PackItem } from "@/components/documentation/doc-types"
 import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
 import { nanoid, profBonus, weightExemptItemIds, reorderSubset } from "@/components/shared/utils"
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
+import { DndContext, DragOverlay, closestCenter, pointerWithin, type DragEndEvent, type CollisionDetection } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
-import { SortableItem, useDragSensors } from "@/components/shared/SortableItem"
+import { SortableItem, DropZone, DragOverlayCard, useDragSensors } from "@/components/shared/SortableItem"
 import {
-  LANGUAGE_SUGGESTIONS, ARMOR_PROFICIENCY_SUGGESTIONS, TOOL_PROFICIENCY_SUGGESTIONS, WEAPON_PROFICIENCY_SUGGESTIONS,
+  LANGUAGE_SUGGESTIONS, ARMOR_PROFICIENCY_SUGGESTIONS, TOOL_PROFICIENCY_SUGGESTIONS, WEAPON_PROFICIENCY_SUGGESTIONS, DEFAULT_ACCENT_COLOR,
 } from "@/components/shared/constants"
 import { Markdown } from "../../ui/Markdown"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
@@ -84,13 +84,18 @@ interface FeatureListProps {
   magicItemStyle?: "none" | "outline" | "galaxy"
   magicItemColor?: string
   magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  magicItemColorsByRarity?: boolean
+  magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
+  magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
   accentColor?: string
   accentStyle?: CardStyle
   sliderStyle?: CardStyle
-  tagColor?: string     // Settings — color of the small source tag AND the "Lv N" badge, independent of accentColor above
+  tagTextColor?: "black" | "white"   // Settings — global override for the small source tag AND "Lv N" badge text color
+  bodyTextColor?: "black" | "white"  // Settings — global override for each card's own description text color
   sliderColor?: string  // Settings — color of this category's own "Track uses" bars, independent of accentColor above
   perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — used for Class Features' "Separate color per class" and Items' Martial-linked weapons; falls back to accentColor when it returns undefined
   perItemAccentStyle?: (f: Feature) => CardStyle | undefined  // overrides accentStyle per feature, same fallback rule as perItemAccentColor
+  perItemSliderColor?: (f: Feature) => string | undefined  // overrides sliderColor per feature, same fallback rule as perItemAccentColor
   onReorder?: (newOrder: Feature[]) => void  // enables drag-to-reorder — omit to render a plain (non-draggable) list
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
 }
@@ -217,17 +222,60 @@ export function FeatureSuggestionPickerModal({ label, suggestionSource, userId, 
 
 const MAX_ATTUNEMENTS = 3
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, accentColor, accentStyle, sliderStyle, tagColor, sliderColor, perItemAccentColor, perItemAccentStyle, onReorder, showAddButton = true }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const sensors = useDragSensors()
+  // Which item is currently being dragged — drives the floating
+  // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
+  // doesn't try to follow the pointer itself).
+  const [activeId, setActiveId] = useState<string | null>(null)
 
   function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
     const oldIndex = items.findIndex(f => f.id === active.id)
     const newIndex = items.findIndex(f => f.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
     onReorder?.(arrayMove(items, oldIndex, newIndex))
+  }
+
+  // Shared by the normal list render below AND the DragOverlay clone, so the
+  // floating "picked up" copy is pixel-identical to the row it came from.
+  function renderCard(f: Feature) {
+    return (
+      <FeatureEntry
+        feature={f}
+        allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
+        theme={theme}
+        readOnly={readOnly}
+        pb={pb}
+        statMods={statMods}
+        suggestionSource={suggestionSource}
+        userId={userId}
+        isFavorite={favorites.some(fav => fav.refId === f.id)}
+        onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
+        onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
+        showAttunement={showAttunement}
+        showItemExtras={showItemExtras}
+        showMagicStar={showMagicStar}
+        magicItemStyle={magicItemStyle}
+        magicItemColor={magicItemColor}
+        magicItemSliderStyle={magicItemSliderStyle}
+        magicItemColorsByRarity={magicItemColorsByRarity}
+        magicItemRarityColors={magicItemRarityColors}
+        magicItemRaritySliderColors={magicItemRaritySliderColors}
+        accentColor={perItemAccentColor?.(f) ?? accentColor}
+        accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
+        sliderStyle={sliderStyle}
+        tagTextColor={tagTextColor}
+        bodyTextColor={bodyTextColor}
+        sliderColor={perItemSliderColor?.(f) ?? sliderColor}
+        onChange={patch => onChange(f.id, patch)}
+        onRemove={() => onRemove(f.id)}
+        onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
+      />
+    )
   }
 
   return (
@@ -254,40 +302,20 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={e => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
           <SortableContext items={items.map(f => f.id)} strategy={verticalListSortingStrategy}>
             {items.map(f => (
               <SortableItem key={f.id} id={f.id} disabled={readOnly || !onReorder}>
-                <FeatureEntry
-                  feature={f}
-                  allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
-                  theme={theme}
-                  readOnly={readOnly}
-                  pb={pb}
-                  statMods={statMods}
-                  suggestionSource={suggestionSource}
-                  userId={userId}
-                  isFavorite={favorites.some(fav => fav.refId === f.id)}
-                  onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
-                  onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
-                  showAttunement={showAttunement}
-                  showItemExtras={showItemExtras}
-                  showMagicStar={showMagicStar}
-                  magicItemStyle={magicItemStyle}
-                  magicItemColor={magicItemColor}
-                  magicItemSliderStyle={magicItemSliderStyle}
-                  accentColor={perItemAccentColor?.(f) ?? accentColor}
-                  accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
-                  sliderStyle={sliderStyle}
-                  tagColor={tagColor}
-                  sliderColor={sliderColor}
-                  onChange={patch => onChange(f.id, patch)}
-                  onRemove={() => onRemove(f.id)}
-                  onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
-                />
+                {renderCard(f)}
               </SortableItem>
             ))}
           </SortableContext>
+          <DragOverlay>
+            {(() => {
+              const activeItem = activeId ? items.find(f => f.id === activeId) : undefined
+              return activeItem ? <DragOverlayCard>{renderCard(activeItem)}</DragOverlayCard> : null
+            })()}
+          </DragOverlay>
         </DndContext>
       </div>
     </div>
@@ -315,6 +343,9 @@ export interface ContainerItemsListProps {
   magicItemStyle?: "none" | "outline" | "galaxy"
   magicItemColor?: string
   magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  magicItemColorsByRarity?: boolean
+  magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
+  magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
   pendingItemId?: string | null   // set right after Add — opens that item straight into its edit form
   onAutoEditConsumed?: () => void
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
@@ -324,23 +355,64 @@ export interface ContainerItemsListProps {
   accentStyle?: CardStyle
   perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — used for Martial-linked weapons; falls back to accentColor when it returns undefined
   perItemAccentStyle?: (f: Feature) => CardStyle | undefined  // overrides accentStyle per feature, same fallback rule as perItemAccentColor
+  bodyTextColor?: "black" | "white"  // Settings — global override for each card's own description text color
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle, bodyTextColor }: ContainerItemsListProps) {
   const sensors = useDragSensors()
+  // Which item is currently being dragged — drives the floating
+  // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
+  // doesn't try to follow the pointer itself).
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
-  // Reorders within a sibling group (same parentId) only — dropping onto an
-  // item from a different group is ignored here; moving an item into a
-  // different container is still the job of the existing drag-to-container/
-  // "Move to container" dropdown above, unchanged.
+  // A container's own DropZone (id "container:<id>") wraps its own
+  // SortableItem, so the two nearly-overlap in the same spot — plain
+  // closestCenter can't reliably tell "drop reparents into this container"
+  // apart from "drop reorders as this container's own sibling", and was
+  // silently picking the sibling-reorder interpretation, which is why drops
+  // onto a bag looked like they did nothing. pointerWithin (literal
+  // geometric containment, not nearest-center) checked first and made to
+  // always prefer a "container:"-prefixed zone when the pointer is
+  // genuinely over one — falling back to plain closestCenter otherwise —
+  // makes "drop directly on a container" unambiguous. Prefers the most
+  // specific (non-root) container hit when a drop is over a nested
+  // container that's itself inside another's DropZone.
+  const containerAwareCollision: CollisionDetection = args => {
+    const hits = pointerWithin(args).filter(c => typeof c.id === "string" && c.id.startsWith("container:"))
+    const specific = hits.find(c => c.id !== "container:root")
+    if (specific) return [specific]
+    if (hits.length > 0) return [hits[0]]
+    return closestCenter(args)
+  }
+
+  // Two things can happen on drop: reorder within a sibling group (same
+  // parentId — dropping onto a sibling's own sortable slot), or reparent
+  // into a different container (dropping onto one of the DropZones
+  // renderItem/the root wrap below register, id "container:<id>" or
+  // "container:root"). Both share this one handler since both come through
+  // the same DndContext.
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null)
     const { active, over } = event
-    if (!over || active.id === over.id) return
-    const activeItem = items.find(i => i.id === active.id)
+    if (!over) return
+    const activeId = String(active.id)
+    const overId   = String(over.id)
+
+    const containerMatch = /^container:(.+)$/.exec(overId)
+    if (containerMatch) {
+      const targetId = containerMatch[1] === "root" ? undefined : containerMatch[1]
+      if (activeId === targetId || (targetId && isSelfOrDescendant(targetId, activeId))) return
+      const activeItem = items.find(i => i.id === activeId)
+      if (activeItem && activeItem.parentId !== targetId) onChange(activeId, { parentId: targetId })
+      return
+    }
+
+    if (activeId === overId) return
+    const activeItem = items.find(i => i.id === activeId)
     if (!activeItem) return
     const group = items.filter(i => i.parentId === activeItem.parentId)
-    const oldIndex = group.findIndex(i => i.id === active.id)
-    const newIndex = group.findIndex(i => i.id === over.id)
+    const oldIndex = group.findIndex(i => i.id === activeId)
+    const newIndex = group.findIndex(i => i.id === overId)
     if (oldIndex === -1 || newIndex === -1) return
     const reorderedGroup = arrayMove(group, oldIndex, newIndex)
     onReorder?.(reorderSubset(items, i => i.parentId === activeItem.parentId, reorderedGroup))
@@ -376,24 +448,9 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
     return false
   }
 
-  function handleDrop(targetId: string | undefined, e: React.DragEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    if (readOnly) return
-    const raw = e.dataTransfer.getData("x-fable-ref")
-    if (!raw) return
-    let ref: { refId?: string; refType?: string }
-    try { ref = JSON.parse(raw) } catch { return }
-    if (ref.refType !== "feature" || !ref.refId) return
-    if (!items.some(i => i.id === ref.refId)) return // only reparent items that live in this generic-items list
-    if (targetId && (ref.refId === targetId || isSelfOrDescendant(targetId, ref.refId))) return // no self/cycle
-    onChange(ref.refId, { parentId: targetId })
-  }
-
-  function renderItem(f: Feature, depth: number) {
-    const children     = items.filter(c => c.parentId === f.id)
-    const childWeight  = children.reduce((sum, c) => sum + (c.weight ?? 0) * (c.amount ?? 1), 0)
-    const overCapacity = f.maxWeight != null && childWeight > f.maxWeight
+  // Shared by the normal render below AND the DragOverlay clone, so the
+  // floating "picked up" copy is pixel-identical to the row it came from.
+  function renderCard(f: Feature) {
     const contentsOpen = openContainers.has(f.id)
     // Same button-based fallback as the drop targets below (handleDrop) —
     // every other container is a valid destination except this item's own
@@ -402,43 +459,64 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
       .filter(i => i.isContainer && i.id !== f.id && !isSelfOrDescendant(i.id, f.id))
       .map(i => ({ id: i.id, name: i.name }))
     return (
+      <FeatureEntry
+        feature={f}
+        allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
+        theme={theme}
+        readOnly={readOnly}
+        pb={pb}
+        statMods={statMods}
+        suggestionSource="item"
+        userId={userId}
+        isFavorite={favorites.some(fav => fav.refId === f.id)}
+        onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
+        showItemExtras
+        showWeightColumn
+        showMagicStar={showMagicStar}
+        magicItemStyle={magicItemStyle}
+        magicItemColor={magicItemColor}
+        magicItemSliderStyle={magicItemSliderStyle}
+        magicItemColorsByRarity={magicItemColorsByRarity}
+        magicItemRarityColors={magicItemRarityColors}
+        magicItemRaritySliderColors={magicItemRaritySliderColors}
+        accentColor={perItemAccentColor?.(f) ?? accentColor}
+        accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
+        bodyTextColor={bodyTextColor}
+        containerOptions={containerOptions}
+        onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
+        containerContentsOpen={f.isContainer ? contentsOpen : undefined}
+        onToggleContainerContents={f.isContainer ? () => toggleContainerOpen(f.id) : undefined}
+        onChange={patch => onChange(f.id, patch)}
+        onRemove={() => onRemove(f.id)}
+        onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
+        autoEdit={f.id === pendingItemId}
+        onAutoEditConsumed={onAutoEditConsumed}
+        onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
+      />
+    )
+  }
+
+  function renderItem(f: Feature, depth: number) {
+    const children     = items.filter(c => c.parentId === f.id)
+    const childWeight  = children.reduce((sum, c) => sum + (c.weight ?? 0) * (c.amount ?? 1), 0)
+    const overCapacity = f.maxWeight != null && childWeight > f.maxWeight
+    const contentsOpen = openContainers.has(f.id)
+    const row = (
+      <SortableItem id={f.id} disabled={readOnly || !onReorder}>
+        {renderCard(f)}
+      </SortableItem>
+    )
+    return (
       <div key={f.id} className="flex flex-col gap-1" style={{ marginLeft: depth * 16 }}>
-        <SortableItem id={f.id} disabled={readOnly || !onReorder}>
-          <FeatureEntry
-            feature={f}
-            allFeatures={allFeatures.filter(a => a.id !== f.id && a.trackable)}
-            theme={theme}
-            readOnly={readOnly}
-            pb={pb}
-            statMods={statMods}
-            suggestionSource="item"
-            userId={userId}
-            isFavorite={favorites.some(fav => fav.refId === f.id)}
-            onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
-            showItemExtras
-            showWeightColumn
-            showMagicStar={showMagicStar}
-            magicItemStyle={magicItemStyle}
-            magicItemColor={magicItemColor}
-            magicItemSliderStyle={magicItemSliderStyle}
-            accentColor={perItemAccentColor?.(f) ?? accentColor}
-            accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
-            containerOptions={containerOptions}
-            onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
-            containerContentsOpen={f.isContainer ? contentsOpen : undefined}
-            onToggleContainerContents={f.isContainer ? () => toggleContainerOpen(f.id) : undefined}
-            onChange={patch => onChange(f.id, patch)}
-            onRemove={() => onRemove(f.id)}
-            onLinkToggle={otherId => onLinkToggle(f.id, otherId)}
-            autoEdit={f.id === pendingItemId}
-            onAutoEditConsumed={onAutoEditConsumed}
-            onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
-          />
-        </SortableItem>
+        {/* A container's own row is a drop target regardless of open/closed
+            state — dropping an item onto it (from anywhere in this list)
+            reparents into it. Only containers register this; a plain item's
+            row is just its SortableItem, nothing more. */}
+        {f.isContainer && !readOnly
+          ? <DropZone id={`container:${f.id}`}>{row}</DropZone>
+          : row}
         <PopTransition show={!!f.isContainer}>
-          <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors"
-            onDragOver={e => { if (!readOnly) e.preventDefault() }}
-            onDrop={e => handleDrop(f.id, e)}>
+          <div className="ml-4 border-l border-white/10 pl-2 flex flex-col gap-1 rounded-r-lg transition-colors">
             {(childWeight > 0 || f.maxWeight != null) && (
               <span className={`text-[9px] px-2 py-0.5 rounded-full self-start ${overCapacity ? "bg-red-500/20 text-red-300" : "bg-white/10 text-white/40"}`}>
                 {childWeight % 1 === 0 ? childWeight : childWeight.toFixed(1)}{f.maxWeight != null ? `/${f.maxWeight}` : ""} lb
@@ -463,9 +541,7 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
   }
 
   return (
-    <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}
-      onDragOver={e => { if (!readOnly) e.preventDefault() }}
-      onDrop={e => handleDrop(undefined, e)}>
+    <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
       <div className="flex items-center justify-between shrink-0 gap-2">
         <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">Carried Items</span>
         {totalWeight > 0 && (
@@ -486,10 +562,20 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
             {readOnly ? "None" : "None yet — click Add"}
           </p>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={roots.map(f => f.id)} strategy={verticalListSortingStrategy}>
-            {roots.map(f => renderItem(f, 0))}
-          </SortableContext>
+        <DndContext sensors={sensors} collisionDetection={containerAwareCollision} onDragStart={e => setActiveDragId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragId(null)}>
+          {/* Dropping on any blank space here (not onto a container) moves
+              the dragged item back to the top level. */}
+          <DropZone id="container:root" disabled={readOnly} className="flex-1 min-h-0">
+            <SortableContext items={roots.map(f => f.id)} strategy={verticalListSortingStrategy}>
+              {roots.map(f => renderItem(f, 0))}
+            </SortableContext>
+          </DropZone>
+          <DragOverlay>
+            {(() => {
+              const activeItem = activeDragId ? items.find(i => i.id === activeDragId) : undefined
+              return activeItem ? <DragOverlayCard>{renderCard(activeItem)}</DragOverlayCard> : null
+            })()}
+          </DragOverlay>
         </DndContext>
       </div>
     </div>
@@ -743,8 +829,10 @@ export function InfoTab({
   const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
   const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
   const favSliderStyle = (cat: FavoriteCategory) => data.favoriteCategorySliderStyle?.[cat]
-  const favTagColor    = (cat: FavoriteCategory) => data.favoriteCategoryTagColors?.[cat]
   const favSliderColor = (cat: FavoriteCategory) => data.favoriteCategorySliderColors?.[cat]
+  // Global (not per-category) — Settings' "Modules and Font Size" Tag Text / Body Text switches.
+  const tagTextColor  = data.textColorOverride === "dark" ? "black" as const : "white" as const
+  const bodyTextColor = data.textColorOverride === "dark" ? "black" as const : undefined
 
   // Settings' "Separate color per class" — resolves each Class Feature's own
   // accent from its `source` (e.g. "Fighter (Champion)") instead of the one
@@ -753,10 +841,25 @@ export function InfoTab({
   // just the 13 built-in presets, so a homebrew class's features get colored
   // too as long as its name appears in the feature's source.
   const ownClassNames = deriveCharacterClassNames(data)
+  // Once "Separate by Class/Subclass" is on, every matched class commits to
+  // its own color — falling back to the same DEFAULT_ACCENT_COLOR Settings'
+  // own swatch shows when a class hasn't been explicitly repicked yet, never
+  // quietly back to the whole category's one shared flat color (that's the
+  // opposite of what turning per-class ON means).
   const classFeatureAccentColor = data.classFeatureColorsByClass
     ? (f: Feature) => {
         const key = matchOwnClassKey(f.source, ownClassNames)
-        return key ? data.classFeatureColors?.[key] : undefined
+        return key ? (data.classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR) : undefined
+      }
+    : undefined
+  // Same per-class resolution, for the "Track uses" bar — falls back to the
+  // class's own Card color (not just undefined) when no Slider color was
+  // set for it, same fallback favoriteCategorySliderColors has against
+  // favoriteCategoryColors sheet-wide.
+  const classFeatureSliderColor = data.classFeatureColorsByClass
+    ? (f: Feature) => {
+        const key = matchOwnClassKey(f.source, ownClassNames)
+        return key ? (data.classFeatureSliderColors?.[key] ?? data.classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR) : undefined
       }
     : undefined
 
@@ -899,7 +1002,8 @@ export function InfoTab({
             suggestionSource="race" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("race")} accentStyle={favAccentStyle("race")} sliderStyle={favSliderStyle("race")}
-            tagColor={favTagColor("race")} sliderColor={favSliderColor("race")}
+            tagTextColor={tagTextColor} sliderColor={favSliderColor("race")}
+            bodyTextColor={bodyTextColor}
             onReorder={newOrder => update({ racialTraits: newOrder })}
           />
           {showRacialTraitPicker && (
@@ -920,7 +1024,8 @@ export function InfoTab({
             suggestionSource="feat" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("feat")} accentStyle={favAccentStyle("feat")} sliderStyle={favSliderStyle("feat")}
-            tagColor={favTagColor("feat")} sliderColor={favSliderColor("feat")}
+            tagTextColor={tagTextColor} sliderColor={favSliderColor("feat")}
+            bodyTextColor={bodyTextColor}
             onReorder={newOrder => update({ feats: newOrder })}
           />
           {showFeatPicker && (
@@ -942,7 +1047,8 @@ export function InfoTab({
               suggestionSource="invocation" userId={userId}
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")} sliderStyle={favSliderStyle("invocation")}
-              tagColor={favTagColor("invocation")} sliderColor={favSliderColor("invocation")}
+              tagTextColor={tagTextColor} sliderColor={favSliderColor("invocation")}
+            bodyTextColor={bodyTextColor}
               onReorder={newOrder => update({ invocations: newOrder })}
             />
           )}
@@ -965,7 +1071,8 @@ export function InfoTab({
               suggestionSource="infusion" userId={userId}
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("infusion")} accentStyle={favAccentStyle("infusion")} sliderStyle={favSliderStyle("infusion")}
-              tagColor={favTagColor("infusion")} sliderColor={favSliderColor("infusion")}
+              tagTextColor={tagTextColor} sliderColor={favSliderColor("infusion")}
+            bodyTextColor={bodyTextColor}
             />
           )}
         </div>
@@ -986,8 +1093,10 @@ export function InfoTab({
             suggestionSource="class" userId={userId}
             favorites={favorites} onToggleFavorite={onToggleFavorite}
             accentColor={favAccentColor("class")} accentStyle={favAccentStyle("class")} sliderStyle={favSliderStyle("class")}
-            tagColor={favTagColor("class")} sliderColor={favSliderColor("class")}
+            tagTextColor={tagTextColor} sliderColor={favSliderColor("class")}
+            bodyTextColor={bodyTextColor}
             perItemAccentColor={classFeatureAccentColor}
+            perItemSliderColor={classFeatureSliderColor}
             onReorder={newOrder => update({ classFeatures: newOrder })}
           />
           {showClassFeaturePicker && (

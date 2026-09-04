@@ -7,9 +7,15 @@
 //
 // Press and hold a card (mouse or touch) to reorder it — same SortableItem
 // mechanism as every other reorderable list on the sheet. Dragging a card in
-// from elsewhere (Gear, Spells, Martial) to add it as a favorite is a
-// separate, pre-existing native-HTML5-drag mechanism (onDragOver/onDrop
-// below) — unrelated event system, so the two don't conflict.
+// from elsewhere (Gear, Spells, Martial) to add it as a favorite is still
+// the older native-HTML5-drag mechanism (onDragOver/onDrop below,
+// FeatureEntry.tsx/SpellEntry.tsx's own dragAttrs) — NOT yet migrated to
+// dnd-kit (that needs one shared DndContext lifted above this panel and
+// SpellsEquipPanel, a bigger change than the container-drag fix got). It
+// likely has the same silent conflict on Spells/Martial rows (also
+// SortableItem-wrapped there for reordering) that broke drag-to-container
+// before that fix — the ⭐ click is the one favoriting path guaranteed to
+// work everywhere in the meantime.
 // ★ removes from favorites (not the underlying item).
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -22,10 +28,11 @@ import { FavoriteStar } from "../ui/FavoriteStar"
 import { safeParseJson } from "@/components/shared/utils"
 import { matchOwnClassKey } from "@/components/shared/classColors"
 import type { Theme } from "@/components/shared/themes"
-import type { FavoriteCategory, CardStyle } from "@/components/shared/constants"
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
+import { DEFAULT_ACCENT_COLOR, type FavoriteCategory, type CardStyle } from "@/components/shared/constants"
+import { useState } from "react"
+import { DndContext, DragOverlay, closestCenter, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { SortableItem, useDragSensors } from "@/components/shared/SortableItem"
+import { SortableItem, DragOverlayCard, useDragSensors } from "@/components/shared/SortableItem"
 
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 
@@ -75,12 +82,14 @@ interface FavoritesPanelProps {
   onReorder:         (fromIdx: number, toIdx: number) => void
   featureCategoryById:     Record<string, FavoriteCategory>  // resolves which of the 5 Feature lists a "feature"-type favorite came from
   favoriteCategoryColors?: Partial<Record<FavoriteCategory, string>>  // Settings (Feature Stylings) — accent color per category
-  favoriteCategoryTagColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the source tag + "Lv N" badge per category, independent of the card accent color above
+  tagTextColor?:  "black" | "white"  // Settings — global override for the source tag + "Lv N" badge text color
+  bodyTextColor?: "black" | "white"  // Settings — global override for each card's own description text color
   favoriteCategoryStyle?:  Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (card background)
   favoriteCategorySliderStyle?: Partial<Record<FavoriteCategory, CardStyle>>  // Settings — none/outline/galaxy per category (tracking slider, independent of the card background)
   favoriteCategorySliderColors?: Partial<Record<FavoriteCategory, string>>  // Settings — color of the tracking slider per category, independent of the card accent color above
   classFeatureColorsByClass?: boolean            // Settings — when true, favorited Class Features resolve their color from classFeatureColors (by source) instead of the shared favoriteCategoryColors.class
-  classFeatureColors?: Record<string, string>    // Settings — accent color per class key, only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey
+  classFeatureColors?: Record<string, string>    // Settings — card accent color per class key, only used when classFeatureColorsByClass is on — see character-class-colors.ts's matchClassKey
+  classFeatureSliderColors?: Record<string, string>  // Settings — this class's own "Track uses" bar color — falls back to classFeatureColors when unset
   onChangeSpell:     (id: string, patch: Partial<SpellItem>) => void
   onRemoveSpell:     (id: string) => void
   onUpdateFeature:   (featureId: string, patch: Partial<Feature>) => void
@@ -94,6 +103,9 @@ interface FavoritesPanelProps {
   magicItemStyle?:   "none" | "outline" | "galaxy"
   magicItemColor?:   string
   magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  magicItemColorsByRarity?: boolean
+  magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
+  magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
   dragOver:          boolean
   onDragOver:        (e: React.DragEvent) => void
   onDragLeave:       () => void
@@ -105,16 +117,25 @@ interface FavoritesPanelProps {
 export function FavoritesPanel({
   favorites, spellItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
   onRemove, onReorder,
-  featureCategoryById, favoriteCategoryColors, favoriteCategoryTagColors, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
-  classFeatureColorsByClass, classFeatureColors,
+  featureCategoryById, favoriteCategoryColors, tagTextColor, bodyTextColor, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
+  classFeatureColorsByClass, classFeatureColors, classFeatureSliderColors,
   onChangeSpell, onRemoveSpell,
   onUpdateFeature, onRemoveFeature, onLinkToggle, onPopOutFamiliar,
   theme, card, readOnly, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle,
+  magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors,
   dragOver, onDragOver, onDragLeave, onDrop,
 }: FavoritesPanelProps) {
   const dragSensors = useDragSensors()
+  // Which favorite is currently being dragged — drives the floating
+  // DragOverlayCard clone below (see SortableItem.tsx's comment on why the
+  // in-place row doesn't try to follow the pointer itself).
+  const [activeId, setActiveId] = useState<string | null>(null)
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id))
+  }
   function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
     const fromIdx = favorites.findIndex(f => f.refId === active.id)
@@ -146,8 +167,11 @@ export function FavoritesPanel({
     const category = resolveCategory(fav)
     if (category === "class" && classFeatureColorsByClass) {
       const key = matchOwnClassKey(resolveFeature(fav.refId)?.source, classes)
-      const perClass = key ? classFeatureColors?.[key] : undefined
-      if (perClass) return perClass
+      // Once per-class is on, a matched class commits to its own color —
+      // the same DEFAULT_ACCENT_COLOR Settings' own swatch shows before it's
+      // been explicitly repicked, never quietly back to the whole
+      // category's one shared flat color below.
+      if (key) return classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR
     }
     return favoriteCategoryColors?.[category]
   }
@@ -157,11 +181,80 @@ export function FavoritesPanel({
   function sliderStyleFor(fav: FavoriteRef): CardStyle | undefined {
     return favoriteCategorySliderStyle?.[resolveCategory(fav)]
   }
-  function tagColorFor(fav: FavoriteRef): string | undefined {
-    return favoriteCategoryTagColors?.[resolveCategory(fav)]
-  }
   function sliderColorFor(fav: FavoriteRef): string | undefined {
-    return favoriteCategorySliderColors?.[resolveCategory(fav)]
+    const category = resolveCategory(fav)
+    if (category === "class" && classFeatureColorsByClass) {
+      const key = matchOwnClassKey(resolveFeature(fav.refId)?.source, classes)
+      if (key) return classFeatureSliderColors?.[key] ?? classFeatureColors?.[key] ?? DEFAULT_ACCENT_COLOR
+    }
+    return favoriteCategorySliderColors?.[category]
+  }
+
+  // Builds the exact card shown for one favorite — shared by the normal
+  // list render below AND the DragOverlay clone, so the floating "picked up"
+  // copy is pixel-identical to the row it came from, not a re-derived look.
+  function renderFavoriteEntry(fav: FavoriteRef): React.ReactNode {
+    const onToggleFavorite = readOnly ? undefined : () => onRemove(fav.refId)
+
+    // Resolved once per favorite and passed straight into the entry
+    // component's own accentColor/accentStyle props — the accent
+    // renders on the item's own card, the same as everywhere else
+    // it's shown, so there's no separate Favorites-only styling
+    // layer to keep in sync.
+    const accentColor = accentColorFor(fav)
+    const accentStyle = accentStyleFor(fav)
+    const sliderStyle = sliderStyleFor(fav)
+    const sliderColor = sliderColorFor(fav)
+    // Only Gear/Martial items get the weight/rarity/weapon-stat extras —
+    // a favorited Feat or Racial Trait shouldn't suddenly show item-only
+    // edit fields just because it shares this render branch.
+    const isItemFavorite = resolveCategory(fav) === "item" || resolveCategory(fav) === "equipment"
+
+    if (fav.refType === "spell") {
+      const spell = resolveSpell(fav.refId)
+      return spell
+        ? <SpellEntry spell={spell} theme={theme} readOnly={readOnly} showPrepToggle={false} classes={classes}
+            isFavorite onToggleFavorite={onToggleFavorite}
+            accentColor={accentColor} accentStyle={accentStyle} bodyTextColor={bodyTextColor}
+            onChange={p => onChangeSpell(fav.refId, p)}
+            onRemove={() => onRemoveSpell(fav.refId)} />
+        : <NotFoundRow label="Spell not found." onRemove={onToggleFavorite} />
+    } else if (fav.refType === "familiar") {
+      const fam = resolveFamiliar(fav.refId)
+      const monster = fam ? monsters.find(m => m.id === fam.monsterId) : undefined
+      return fam && monster
+        ? <FamiliarFavoriteEntry fam={fam} monster={monster}
+            poppedOut={poppedOutIds.has(fam.id)}
+            onPopOut={() => onPopOutFamiliar(fam.id)}
+            isFavorite onToggleFavorite={onToggleFavorite}
+            accentColor={accentColor} accentStyle={accentStyle} bgHex={theme.boxHex} />
+        : <NotFoundRow label="Familiar not found." onRemove={onToggleFavorite} />
+    } else {
+      const feat = resolveFeature(fav.refId)
+      return feat
+        ? <FeatureEntry
+            feature={feat}
+            allFeatures={features.filter(f => f.id !== feat.id && f.trackable)}
+            theme={theme}
+            readOnly={readOnly}
+            pb={pb} statMods={statMods}
+            isFavorite onToggleFavorite={onToggleFavorite}
+            showItemExtras={isItemFavorite}
+            showMagicStar={showMagicStar}
+            magicItemStyle={magicItemStyle}
+            magicItemColor={magicItemColor}
+            magicItemSliderStyle={magicItemSliderStyle}
+            magicItemColorsByRarity={magicItemColorsByRarity}
+            magicItemRarityColors={magicItemRarityColors}
+            magicItemRaritySliderColors={magicItemRaritySliderColors}
+            accentColor={accentColor} accentStyle={accentStyle} sliderStyle={sliderStyle}
+            tagTextColor={tagTextColor} bodyTextColor={bodyTextColor} sliderColor={sliderColor}
+            onChange={patch => onUpdateFeature(fav.refId, patch)}
+            onRemove={() => onRemoveFeature(fav.refId)}
+            onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}
+          />
+        : <NotFoundRow label="Feature not found." onRemove={onToggleFavorite} />
+    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -189,80 +282,20 @@ export function FavoritesPanel({
             </div>
           )}
 
-          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
           <SortableContext items={favorites.map(f => f.refId)} strategy={verticalListSortingStrategy}>
-          {favorites.map(fav => {
-            // Star toggle removes the item from favorites — each entry type shows it
-            // next to its own edit affordance instead of a separate side column.
-            const onToggleFavorite = readOnly ? undefined : () => onRemove(fav.refId)
-
-            // Resolved once per favorite and passed straight into the entry
-            // component's own accentColor/accentStyle props — the accent
-            // renders on the item's own card, the same as everywhere else
-            // it's shown, so there's no separate Favorites-only styling
-            // layer to keep in sync.
-            const accentColor = accentColorFor(fav)
-            const accentStyle = accentStyleFor(fav)
-            const sliderStyle = sliderStyleFor(fav)
-            const tagColor    = tagColorFor(fav)
-            const sliderColor = sliderColorFor(fav)
-            // Only Gear/Martial items get the weight/rarity/weapon-stat extras —
-            // a favorited Feat or Racial Trait shouldn't suddenly show item-only
-            // edit fields just because it shares this render branch.
-            const isItemFavorite = resolveCategory(fav) === "item" || resolveCategory(fav) === "equipment"
-
-            // Resolve the entry to render — falls through to a "not found" row
-            let entry: React.ReactNode
-            if (fav.refType === "spell") {
-              const spell = resolveSpell(fav.refId)
-              entry = spell
-                ? <SpellEntry spell={spell} theme={theme} readOnly={readOnly} showPrepToggle={false} classes={classes}
-                    isFavorite onToggleFavorite={onToggleFavorite}
-                    accentColor={accentColor} accentStyle={accentStyle}
-                    onChange={p => onChangeSpell(fav.refId, p)}
-                    onRemove={() => onRemoveSpell(fav.refId)} />
-                : <NotFoundRow label="Spell not found." onRemove={onToggleFavorite} />
-            } else if (fav.refType === "familiar") {
-              const fam = resolveFamiliar(fav.refId)
-              const monster = fam ? monsters.find(m => m.id === fam.monsterId) : undefined
-              entry = fam && monster
-                ? <FamiliarFavoriteEntry fam={fam} monster={monster}
-                    poppedOut={poppedOutIds.has(fam.id)}
-                    onPopOut={() => onPopOutFamiliar(fam.id)}
-                    isFavorite onToggleFavorite={onToggleFavorite}
-                    accentColor={accentColor} accentStyle={accentStyle} bgHex={theme.boxHex} />
-                : <NotFoundRow label="Familiar not found." onRemove={onToggleFavorite} />
-            } else {
-              const feat = resolveFeature(fav.refId)
-              entry = feat
-                ? <FeatureEntry
-                    feature={feat}
-                    allFeatures={features.filter(f => f.id !== feat.id && f.trackable)}
-                    theme={theme}
-                    readOnly={readOnly}
-                    pb={pb} statMods={statMods}
-                    isFavorite onToggleFavorite={onToggleFavorite}
-                    showItemExtras={isItemFavorite}
-                    showMagicStar={showMagicStar}
-                    magicItemStyle={magicItemStyle}
-                    magicItemColor={magicItemColor}
-                    magicItemSliderStyle={magicItemSliderStyle}
-                    accentColor={accentColor} accentStyle={accentStyle} sliderStyle={sliderStyle}
-                    tagColor={tagColor} sliderColor={sliderColor}
-                    onChange={patch => onUpdateFeature(fav.refId, patch)}
-                    onRemove={() => onRemoveFeature(fav.refId)}
-                    onLinkToggle={otherId => onLinkToggle(fav.refId, otherId)}
-                  />
-                : <NotFoundRow label="Feature not found." onRemove={onToggleFavorite} />
-            }
-
-            return (
-              <SortableItem key={fav.refId} id={fav.refId} disabled={readOnly}>
-                {entry}
-              </SortableItem>
-            )
-          })}
+          {favorites.map(fav => (
+            <SortableItem key={fav.refId} id={fav.refId} disabled={readOnly}>
+              {renderFavoriteEntry(fav)}
+            </SortableItem>
+          ))}
           </SortableContext>
+          <DragOverlay>
+            {(() => {
+              const activeFav = activeId ? favorites.find(f => f.refId === activeId) : undefined
+              return activeFav ? <DragOverlayCard>{renderFavoriteEntry(activeFav)}</DragOverlayCard> : null
+            })()}
+          </DragOverlay>
           </DndContext>
         </div>
       </div>

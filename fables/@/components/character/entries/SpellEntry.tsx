@@ -37,6 +37,7 @@ interface SpellEntryProps {
   onTogglePin?: () => void       // omit to hide the pin button
   accentColor?: string     // Settings — this spell's category color (category is "spell"), see FeatureEntry.tsx's categoryAccentStyle
   accentStyle?: CardStyle  // Settings — "none" (default), "outline", or "galaxy" for the category accent above
+  bodyTextColor?: "black" | "white"  // Settings — global override for this card's own description text color — omit/undefined keeps the default
 }
 
 // ── Spell name input with autofill ────────────────────────────────────────────
@@ -125,10 +126,11 @@ function Pill({ label, value, color = "bg-white/10 text-white/60" }: { label: st
 
 // ── Spell detail modal (shows SpellItem's own stored data) ────────────────────
 
-function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onToggleFavorite, isPinned, onTogglePin }: {
+function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onToggleFavorite, isPinned, onTogglePin, bodyTextColor }: {
   spell: SpellItem; onClose: () => void; onEdit: () => void; readOnly: boolean
   isFavorite?: boolean; onToggleFavorite?: () => void
   isPinned?: boolean; onTogglePin?: () => void
+  bodyTextColor?: "black" | "white"
 }) {
   return (
     <Modal onClose={onClose}>
@@ -194,7 +196,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
         {/* Description */}
         <div className="px-6 sm:px-8 py-4 sm:py-6 overflow-y-auto flex-1 sm:text-base sm:leading-relaxed">
           {spell.notes
-            ? <Markdown text={spell.notes} tone="dark" />
+            ? <Markdown text={spell.notes} tone="dark" textColorOverride={bodyTextColor} />
             : <p className="text-sm text-white/25 italic">No description saved.</p>
           }
         </div>
@@ -205,7 +207,7 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, isPinned, onTogglePin, accentColor, accentStyle }: SpellEntryProps) {
+export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false, showPrepToggle = true, classes = [], compact = false, autoEdit = false, onAutoEditConsumed, isFavorite, onToggleFavorite, isPinned, onTogglePin, accentColor, accentStyle, bodyTextColor }: SpellEntryProps) {
   const [editing, setEditing] = useState(autoEdit)
   const [showDetail, setShowDetail] = useState(false)
 
@@ -247,7 +249,7 @@ export function SpellEntry({ spell, onChange, onRemove, theme, readOnly = false,
         <SpellDetailModal spell={spell} readOnly={readOnly} onClose={() => setShowDetail(false)}
           onEdit={() => { setShowDetail(false); setEditing(true) }}
           isFavorite={isFavorite} onToggleFavorite={onToggleFavorite}
-          isPinned={isPinned} onTogglePin={onTogglePin} />
+          isPinned={isPinned} onTogglePin={onTogglePin} bodyTextColor={bodyTextColor} />
       )}
 
       {/* ── Edit form modal ─────────────────────────────────────────────── */}

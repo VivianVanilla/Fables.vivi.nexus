@@ -38,6 +38,7 @@ interface Props {
   onChangeFeature: (id: string, patch: Partial<Feature>) => void
   multiFormEnabled?: boolean // see CharacterSheet.tsx — passed through to castSpellPatch/conditionalTriggerPatch
                               // so a Cast/Trigger from in here activates a form the same way it would from the sheet
+  card: string  // this character's own card styling (theme.box + ring) — this modal's shell inherits it instead of a fixed generic look
 }
 
 const HELP_TEXT: Record<Tab, string> = {
@@ -751,7 +752,7 @@ function FeaturesTab({ data, allFeatures, onChangeFeature }: {
 type Tab = "forms" | "conditionals" | "cast" | "features"
 const TABS: [Tab, string][] = [["forms", "Forms"], ["conditionals", "Conditionals"], ["cast", "Cast"], ["features", "Features"]]
 
-export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, onChangeFeature, multiFormEnabled }: Props) {
+export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, onChangeFeature, multiFormEnabled, card }: Props) {
   const [tab, setTab] = useState<Tab>("forms")
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -765,7 +766,7 @@ export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, 
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(520px,92vw)] max-h-[88vh] flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-[min(520px,92vw)] max-h-[88vh] flex flex-col overflow-hidden`}>
 
         <div className="px-5 py-3 border-b border-white/10 shrink-0 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">

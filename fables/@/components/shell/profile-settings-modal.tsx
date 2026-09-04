@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { TrashIcon, UploadIcon } from "lucide-react"
+import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import {
   Dialog,
   DialogContent,
@@ -180,12 +181,7 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
           {appTheme === "custom" && (
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               Custom color
-              <input
-                type="color"
-                value={customThemeColor}
-                onChange={e => setCustomThemeColor(e.target.value)}
-                className="size-6 cursor-pointer rounded border-0 bg-transparent p-0"
-              />
+              <ColorSwatchInput value={customThemeColor} onChange={setCustomThemeColor} size="size-6" />
             </label>
           )}
         </div>

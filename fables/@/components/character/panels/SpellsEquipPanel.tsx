@@ -9,9 +9,9 @@ import { profBonus, reorderSubset } from "@/components/shared/utils"
 import { SAVE_TO_ABILITY, type FavoriteCategory } from "@/components/shared/constants"
 import { Modal } from "@/components/shared/ui/Modal"
 import { MartialModal } from "../modals/stats/MartialModal"
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
+import { DndContext, DragOverlay, closestCenter, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
-import { SortableItem, useDragSensors } from "@/components/shared/SortableItem"
+import { SortableItem, DragOverlayCard, useDragSensors } from "@/components/shared/SortableItem"
 
 // Master-toggle "Cast" button (Automation → Cast tab → "Show Cast button")
 // sitting next to the Cantrips stat rather than one button per spell row —
@@ -108,6 +108,8 @@ export function SpellsEquipPanel({
   // Feature Stylings (Settings) applied sheet-wide, mirrors InfoTab.tsx's favAccentColor/favAccentStyle.
   const favAccentColor = (cat: FavoriteCategory) => data.favoriteCategoryColors?.[cat]
   const favAccentStyle = (cat: FavoriteCategory) => data.favoriteCategoryStyle?.[cat]
+  // Settings' "Modules and Font Size" — sheet-wide text color switch.
+  const bodyTextColor = data.textColorOverride === "dark" ? "black" as const : undefined
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
@@ -150,6 +152,12 @@ export function SpellsEquipPanel({
   const spellLevels = Array.from(groupedSpells.keys()).sort((a, b) => a - b)
 
   const dragSensors = useDragSensors()
+  // Which row is currently being dragged — drives the floating
+  // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
+  // doesn't try to follow the pointer itself). Spells and Martial weapons
+  // never show at the same time (showSpells toggles between them), so one
+  // id tracks whichever DndContext is actually active.
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
   // Reordering only makes sense within a group: dragging one pinned spell
   // past another, or one same-level spell past another — cross-group drops
@@ -159,6 +167,7 @@ export function SpellsEquipPanel({
   // groups were built from, so a "Prepared only" filter hiding some
   // same-level spells doesn't throw off the fold-back.
   function handleSpellDragEnd(event: DragEndEvent) {
+    setActiveDragId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
     if (pinnedSpells.some(s => s.id === active.id) && pinnedSpells.some(s => s.id === over.id)) {
@@ -186,6 +195,7 @@ export function SpellsEquipPanel({
   const martialWeapons = (data.items ?? []).filter(isMartialWeapon)
 
   function handleMartialDragEnd(event: DragEndEvent) {
+    setActiveDragId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
     const oldIndex = martialWeapons.findIndex(i => i.id === active.id)
@@ -193,6 +203,47 @@ export function SpellsEquipPanel({
     if (oldIndex === -1 || newIndex === -1) return
     const reordered = arrayMove(martialWeapons, oldIndex, newIndex)
     onUpdate({ items: reorderSubset(data.items ?? [], isMartialWeapon, reordered) })
+  }
+
+  // Shared by both the Pinned section and per-level groups below AND the
+  // DragOverlay clone — pixel-identical to whichever row it came from.
+  // Pinned rows always have spell.pinned true, so `{ pinned: !spell.pinned }`
+  // unpins there exactly like the old pinned-only handler did.
+  function renderSpellCard(spell: SpellItem) {
+    return (
+      <SpellEntry spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
+        compact={spellsDisplay === "bubbles"}
+        autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
+        accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")} bodyTextColor={bodyTextColor}
+        isPinned={!!spell.pinned} onTogglePin={() => onChangeSpell(spell.id, { pinned: !spell.pinned })}
+        onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+    )
+  }
+
+  // Shared by the Martial list below AND its DragOverlay clone.
+  function renderMartialCard(feature: Feature) {
+    return (
+      <FeatureEntry
+        feature={feature}
+        allFeatures={allFeatures.filter(a => a.id !== feature.id && a.trackable)}
+        theme={theme} readOnly={readOnly} pb={pb} statMods={statMods}
+        suggestionSource="item" userId={userId}
+        isFavorite={favorites?.some(f => f.refId === feature.id)}
+        onToggleFavorite={onToggleFeatureFavorite ? () => onToggleFeatureFavorite(feature.id, feature.name || "Item") : undefined}
+        showItemExtras
+        showMagicStar={data.showMagicItemStar}
+        magicItemStyle={data.magicItemStyle}
+        magicItemColor={data.magicItemColor}
+        magicItemSliderStyle={data.magicItemSliderStyle}
+        magicItemColorsByRarity={data.magicItemColorsByRarity}
+        magicItemRarityColors={data.magicItemRarityColors}
+        magicItemRaritySliderColors={data.magicItemRaritySliderColors}
+        accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")} bodyTextColor={bodyTextColor}
+        onChange={patch => onChangeFeature(feature.id, patch)}
+        onRemove={() => onRemoveFeature(feature.id)}
+        onLinkToggle={otherId => onLinkToggle(feature.id, otherId)}
+      />
+    )
   }
 
   const statMods = {
@@ -375,7 +426,7 @@ export function SpellsEquipPanel({
       {/* Spell / martial list */}
       <div className="flex flex-col gap-1.5">
         {showSpells ? (
-          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleSpellDragEnd}>
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragStart={e => setActiveDragId(String(e.active.id))} onDragEnd={handleSpellDragEnd} onDragCancel={() => setActiveDragId(null)}>
             {pinnedSpells.length > 0 && (
               <div className={`flex ${spellsDisplay === "bubbles" ? "flex-wrap gap-1.5" : "flex-col gap-1"} mb-2 pb-2 border-b border-white/10`}>
                 <div className="w-full flex items-center gap-2 px-1 py-1">
@@ -386,11 +437,7 @@ export function SpellsEquipPanel({
                 <SortableContext items={pinnedSpells.map(s => s.id)} strategy={verticalListSortingStrategy}>
                   {pinnedSpells.map(spell => (
                     <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spellsDisplay === "bubbles"}>
-                      <SpellEntry spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
-                        compact={spellsDisplay === "bubbles"}
-                        accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
-                        isPinned onTogglePin={() => onChangeSpell(spell.id, { pinned: false })}
-                        onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+                      {renderSpellCard(spell)}
                     </SortableItem>
                   ))}
                 </SortableContext>
@@ -449,12 +496,7 @@ export function SpellsEquipPanel({
                     <SortableContext key={`group-${lvl}`} items={spells.map(s => s.id)} strategy={verticalListSortingStrategy}>
                       {spells.map(spell => (
                         <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spellsDisplay === "bubbles"}>
-                          <SpellEntry spell={spell} theme={theme} readOnly={readOnly} classes={availableClasses}
-                            compact={spellsDisplay === "bubbles"}
-                            autoEdit={spell.id === pendingSpellId} onAutoEditConsumed={onAutoEditConsumed}
-                            accentColor={favAccentColor("spell")} accentStyle={favAccentStyle("spell")}
-                            isPinned={spell.pinned} onTogglePin={() => onChangeSpell(spell.id, { pinned: !spell.pinned })}
-                            onChange={p => onChangeSpell(spell.id, p)} onRemove={() => onRemoveSpell(spell.id)} />
+                          {renderSpellCard(spell)}
                         </SortableItem>
                       ))}
                     </SortableContext>
@@ -469,29 +511,19 @@ export function SpellsEquipPanel({
                 + Add Spell
               </button>
             )}
+            <DragOverlay>
+              {(() => {
+                const activeSpell = activeDragId ? visibleSpells.find(s => s.id === activeDragId) : undefined
+                return activeSpell ? <DragOverlayCard>{renderSpellCard(activeSpell)}</DragOverlayCard> : null
+              })()}
+            </DragOverlay>
           </DndContext>
         ) : (
-          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleMartialDragEnd}>
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragStart={e => setActiveDragId(String(e.active.id))} onDragEnd={handleMartialDragEnd} onDragCancel={() => setActiveDragId(null)}>
             <SortableContext items={martialWeapons.map(i => i.id)} strategy={verticalListSortingStrategy}>
               {martialWeapons.map(feature => (
                 <SortableItem key={feature.id} id={feature.id} disabled={readOnly}>
-                  <FeatureEntry
-                    feature={feature}
-                    allFeatures={allFeatures.filter(a => a.id !== feature.id && a.trackable)}
-                    theme={theme} readOnly={readOnly} pb={pb} statMods={statMods}
-                    suggestionSource="item" userId={userId}
-                    isFavorite={favorites?.some(f => f.refId === feature.id)}
-                    onToggleFavorite={onToggleFeatureFavorite ? () => onToggleFeatureFavorite(feature.id, feature.name || "Item") : undefined}
-                    showItemExtras
-                    showMagicStar={data.showMagicItemStar}
-                    magicItemStyle={data.magicItemStyle}
-                    magicItemColor={data.magicItemColor}
-                    magicItemSliderStyle={data.magicItemSliderStyle}
-                    accentColor={favAccentColor("equipment")} accentStyle={favAccentStyle("equipment")}
-                    onChange={patch => onChangeFeature(feature.id, patch)}
-                    onRemove={() => onRemoveFeature(feature.id)}
-                    onLinkToggle={otherId => onLinkToggle(feature.id, otherId)}
-                  />
+                  {renderMartialCard(feature)}
                 </SortableItem>
               ))}
             </SortableContext>
@@ -501,6 +533,12 @@ export function SpellsEquipPanel({
                 + Add Weapon
               </button>
             )}
+            <DragOverlay>
+              {(() => {
+                const activeFeature = activeDragId ? martialWeapons.find(i => i.id === activeDragId) : undefined
+                return activeFeature ? <DragOverlayCard>{renderMartialCard(activeFeature)}</DragOverlayCard> : null
+              })()}
+            </DragOverlay>
           </DndContext>
         )}
       </div>

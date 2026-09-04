@@ -33,7 +33,11 @@ const DEFAULT_COLOR: ClassColor = { text: "text-white/50", bg: "bg-white/10" }
 export const CLASS_NAMES = Object.keys(CLASS_COLORS)
 
 export function classLabel(key: string): string {
-  return key.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+  // \b\w capitalizes the first letter of each word even when it's preceded
+  // by punctuation instead of a space — "fighter (eldritch knight)" needs
+  // "Eldritch" capitalized right after the "(", which a plain split(" ")
+  // scheme misses.
+  return key.replace(/\b\w/g, c => c.toUpperCase())
 }
 
 /**
@@ -58,42 +62,58 @@ export function classColorClasses(source?: string): string {
   return `${color.bg} ${color.text}`
 }
 
-// Which classes to show a color swatch for in Settings' "Separate color per
-// class" grid — the character's own typed class(es) (single-class or
-// multiclass), whatever they actually are, not just the 13 built-in presets
-// (a homebrew class like "Blood Hunter" gets its own swatch same as
-// "Fighter" would). Only falls back to scanning the Class Features list
-// (matched against the known preset list — free-text feature sources are
-// noisier to pattern-match than the character's own Class field) and then to
-// every known class name, in that order, when the character has no class
-// typed at all yet, so the control is never empty on a freshly-created sheet.
+// Which categories to show a color swatch for in Settings' "Separate by
+// Class/Subclass" grid. Each DISTINCT Source string written on a Class
+// Feature is its own category — same text, same category (case/whitespace-
+// insensitive); different text is automatically a new one. That's what
+// makes a subclass splittable from its main class: type the subclass's
+// features with a different Source (e.g. "Fighter" vs "Fighter (Eldritch
+// Knight)") and it gets its own swatch here, no separate "subclass" concept
+// needed anywhere else in the app. Falls back to the character's own typed
+// class(es), and then to every known class name, in that order, only when
+// no Class Features have been written yet, so the control is never empty on
+// a freshly-created sheet.
 export function deriveCharacterClassNames(data: Pick<CharacterData, "class" | "classes" | "classFeatures">): string[] {
+  const fromFeatures = (data.classFeatures ?? [])
+    .map(f => f.source?.trim())
+    .filter((s): s is string => !!s)
+    .map(s => s.toLowerCase())
+  if (fromFeatures.length > 0) return [...new Set(fromFeatures)]
+
   const picked = data.classes && data.classes.length > 0
     ? data.classes.map(c => c.cls)
     : data.class ? data.class.split("/").map(s => s.trim()) : []
   const own = picked.map(c => c.trim().toLowerCase()).filter(Boolean)
   if (own.length > 0) return [...new Set(own)]
 
-  const fromFeatures = (data.classFeatures ?? []).map(f => matchClassKey(f.source)).filter((k): k is string => !!k)
-  if (fromFeatures.length > 0) return [...new Set(fromFeatures)]
-
   return CLASS_NAMES
 }
 
 /**
- * Finds which of the character's OWN typed class names (see
- * deriveCharacterClassNames — same list Settings' "Separate color per
- * class" swatches are keyed by) appears inside a (often free-text) source
- * string — e.g. a homebrew "Blood Hunter" class matches a feature sourced
- * "Blood Hunter (Order of the Lycan)" even though "Blood Hunter" isn't one
- * of the 13 built-in presets matchClassKey knows about. Case-insensitive;
- * returns the lowercase key (matching classFeatureColors' keying) or
- * undefined if none of the character's classes appear in the source.
+ * Finds which of Settings' derived categories (see deriveCharacterClassNames
+ * — same list "Separate by Class/Subclass" swatches are keyed by) a feature
+ * belongs to. Tries an exact match on the feature's own Source text first —
+ * this is what makes two differently-worded Sources (e.g. "Fighter" vs
+ * "Fighter (Eldritch Knight)") land in two different categories. Falls back
+ * to a forgiving substring/word-boundary search for plain class names (e.g.
+ * matching "fighter" inside "Fighter (Champion)") — used when ownClasses is
+ * still just the character's typed class list because no Class Features
+ * have been written yet. Case-insensitive; returns the lowercase key
+ * (matching classFeatureColors' keying) or undefined if nothing matches.
  */
 export function matchOwnClassKey(source: string | undefined, ownClasses: string[]): string | undefined {
-  const s = source?.toLowerCase() ?? ""
+  const s = source?.trim().toLowerCase() ?? ""
   if (!s) return undefined
-  return ownClasses
-    .map(c => c.trim().toLowerCase())
-    .find(cls => cls && new RegExp(`\\b${cls}\\b`).test(s))
+
+  const exact = ownClasses.find(cls => cls.trim().toLowerCase() === s)
+  if (exact) return exact
+
+  return ownClasses.find(cls => {
+    const trimmed = cls.trim().toLowerCase()
+    // Only plain alphanumeric/space class names are safe to drop into a
+    // RegExp unescaped — a literal Source string (which may contain "(",
+    // ")", etc.) that didn't already match exactly above never will here.
+    if (!trimmed || /[^a-z0-9 ]/i.test(trimmed)) return false
+    try { return new RegExp(`\\b${trimmed}\\b`).test(s) } catch { return false }
+  })
 }
