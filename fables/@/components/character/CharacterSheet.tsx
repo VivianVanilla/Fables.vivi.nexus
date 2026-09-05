@@ -606,6 +606,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       if (patch.usesUsed != null && patch.usesUsed > (target.usesUsed ?? 0)) {
         Object.assign(combinedPatch, featureUsePatch({ ...data, ...combinedPatch }, patchedFeature, multiFormEnabled))
       }
+
+      // An Infusion only ever shows in Gear's Equipped list while infused
+      // (see ItemsTab.tsx's equippedItems) — un-infusing it is a normal,
+      // frequent Artificer action, not a deletion, so the record itself is
+      // never removed. But a favorite pointing at one is now nothing but a
+      // "this used to be equipped" ghost, so it's cleared out the moment it
+      // stops being infused instead of sitting there looking like a broken/
+      // not-found reference.
+      if (key === "infusions" && patch.infused === false && target.infused && data.favorites?.some(f => f.refId === id)) {
+        combinedPatch.favorites = (data.favorites ?? []).filter(f => f.refId !== id)
+      }
       break
     }
 

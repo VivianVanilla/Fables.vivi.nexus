@@ -278,14 +278,14 @@ interface FeatureEntryProps {
   containerContentsOpen?: boolean       // Carried Items only, containers only — whether this container's held items are currently shown below it; omit to hide the toggle button entirely
   onToggleContainerContents?: () => void // Carried Items only, containers only — flips containerContentsOpen
   showMagicStar?:    boolean            // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
-  magicItemStyle?:   "none" | "outline" | "galaxy"  // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy" is labeled "Animated" in Settings
+  magicItemStyle?:   CardStyle          // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy"/"galaxy-light" are labeled "Animated (Dark)"/"Animated (Light)" in Settings
   magicItemColor?:   string             // Settings — accent color for magicItemStyle/magicItemSliderStyle, default DEFAULT_ACCENT_COLOR — also the fallback whenever magicItemColorsByRarity is on but this item's own rarity has no color set
-  magicItemSliderStyle?: "none" | "outline" | "galaxy"  // Settings choice (default "none") — separate look for magic items' own "Track uses" bars, independent of the card background above
+  magicItemSliderStyle?: CardStyle      // Settings choice (default "none") — separate look for magic items' own "Track uses" bars, independent of the card background above
   magicItemColorsByRarity?: boolean  // Settings — when true, a magic item's card/border color comes from its own `rarity` (magicItemRarityColors) instead of the one flat magicItemColor
   magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>  // Settings — card/border color per rarity tier, only used when magicItemColorsByRarity is on
   magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>  // Settings — this rarity tier's own "Track uses" bar color — falls back to magicItemRarityColors when unset, same fallback pattern as favoriteCategorySliderColors
   accentColor?:      string             // Settings — this feature's category color (Feature Stylings); resolved by the caller from its category (race/class/feat/invocation), applies everywhere it's rendered, not just Favorites
-  accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" for the category card background above
+  accentStyle?:      CardStyle          // Settings — "none" (default), "outline", "galaxy", or "galaxy-light" for the category card background above
   sliderStyle?:      CardStyle          // Settings — separate look for this category's own "Track uses" bars, independent of accentStyle (the card background)
   tagTextColor?:     "black" | "white"   // Settings — global (not per-category) override for the small source tag (class/race name) AND "Lv N" badge text color — omit/undefined keeps each badge's own existing background+text color as-is
   bodyTextColor?:    "black" | "white"   // Settings — global override for this card's own description text color — omit/undefined keeps the default
@@ -317,6 +317,17 @@ const STAR_TILE = [
   "radial-gradient(circle 1.5px at 80% 30%, #fff 35%, transparent 45%)",
   "radial-gradient(circle 1px at 30% 85%, #fff 35%, transparent 45%)",
   "radial-gradient(circle 1px at 90% 90%, #fff 35%, transparent 45%)",
+].join(", ")
+
+// Same tile as STAR_TILE, dark specks instead of white — the "Animated
+// (Light)" variant's wash/gradient run light-to-white, so white flecks would
+// vanish into it the way dark ones vanish into the regular dark variant.
+const STAR_TILE_LIGHT = [
+  "radial-gradient(circle 1px at 15% 20%, #1e1b2e 35%, transparent 45%)",
+  "radial-gradient(circle 1px at 55% 65%, #1e1b2e 35%, transparent 45%)",
+  "radial-gradient(circle 1.5px at 80% 30%, #1e1b2e 35%, transparent 45%)",
+  "radial-gradient(circle 1px at 30% 85%, #1e1b2e 35%, transparent 45%)",
+  "radial-gradient(circle 1px at 90% 90%, #1e1b2e 35%, transparent 45%)",
 ].join(", ")
 
 function clamp255(n: number): number {
@@ -353,17 +364,32 @@ function mixHex(color: string, bg: string, t: number): string {
 // color (bgHex) when
 // known so the effect reads as tinting the real background rather than
 // always fading to black.
-export function coloredNebulaBg(color: string, bgHex?: string): CSSProperties {
-  const darkest = bgHex ? mixHex(color, bgHex, 0.85) : shade(color, -0.85)
-  const dark    = bgHex ? mixHex(color, bgHex, 0.55) : shade(color, -0.55)
-  const mid     = bgHex ? mixHex(color, bgHex, 0.15) : shade(color, -0.15)
+//
+// `light` (the "Animated (Light)" variant — CardStyle "galaxy-light") always
+// blends toward white instead, ignoring bgHex entirely: the point of picking
+// it explicitly is a bright/pastel nebula regardless of the sheet's actual
+// (usually dark) card color, the same way the regular dark variant otherwise
+// crushes toward near-black for anyone who hasn't built a genuinely light
+// custom theme. The wash and star-fleck colors both flip too, since a dark
+// wash/white flecks (right for the dark variant) would just recreate the
+// same dark card here.
+export function coloredNebulaBg(color: string, bgHex?: string, light?: boolean): CSSProperties {
+  const s1 = light ? shade(color, 0.55) : (bgHex ? mixHex(color, bgHex, 0.85) : shade(color, -0.85))
+  const s2 = light ? shade(color, 0.3)  : (bgHex ? mixHex(color, bgHex, 0.55) : shade(color, -0.55))
+  const s3 = light ? shade(color, 0.05) : (bgHex ? mixHex(color, bgHex, 0.15) : shade(color, -0.15))
+  const wash = light ? "rgba(255,255,255,0.28)" : "rgba(10,6,22,0.7)"
+  const starTile = light ? STAR_TILE_LIGHT : STAR_TILE
   return {
-    backgroundImage: `linear-gradient(rgba(10,6,22,0.7), rgba(10,6,22,0.7)), ${STAR_TILE}, linear-gradient(135deg, ${darkest}, ${dark} 45%, ${mid} 75%, ${darkest})`,
+    backgroundImage: `linear-gradient(${wash}, ${wash}), ${starTile}, linear-gradient(135deg, ${s1}, ${s2} 45%, ${s3} 75%, ${s1})`,
     backgroundRepeat: "no-repeat, repeat, no-repeat",
     backgroundSize: "100% 100%, 90px 90px, 100% 100%",
     backgroundPosition: "0 0, 0 0, 0 0",
     animation: "fables-item-cosmos 20s linear infinite",
   }
+}
+
+function isAnimatedStyle(style?: CardStyle | null): boolean {
+  return style === "galaxy" || style === "galaxy-light"
 }
 
 // Shared with SpellEntry.tsx and FamiliarsTab.tsx's inline card — one
@@ -383,7 +409,7 @@ export function coloredNebulaBg(color: string, bgHex?: string): CSSProperties {
 export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: string): CSSProperties | undefined {
   if (!color || !style || style === "none") return undefined
   const base = { borderColor: color, "--tw-ring-color": color } as CSSProperties
-  return style === "galaxy" ? { ...base, ...coloredNebulaBg(color, bgHex) } : base
+  return isAnimatedStyle(style) ? { ...base, ...coloredNebulaBg(color, bgHex, style === "galaxy-light") } : base
 }
 
 // A "manual" tracker has no periodic Rest to regain it, so recovering more
@@ -1095,7 +1121,7 @@ export function FeatureEntry({
   const resolvedMagicSliderColor = magicItemColorsByRarity && feature.rarity
     ? (magicItemRaritySliderColors?.[feature.rarity] ?? magicItemRarityColors?.[feature.rarity] ?? DEFAULT_RARITY_HEX[feature.rarity])
     : magicItemColor
-  const cardStyle  = magicStyle === "galaxy" ? coloredNebulaBg(resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex) : undefined
+  const cardStyle  = isAnimatedStyle(magicStyle) ? coloredNebulaBg(resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex, magicStyle === "galaxy-light") : undefined
 
   // Uses-tracking bar look is its own Settings choice per category (Feature
   // Stylings — "Tracking Slider" row), so it CAN be set independently of the
@@ -1112,7 +1138,7 @@ export function FeatureEntry({
   const sliderSource = feature.isMagicItem
     ? { style: magicItemSliderStyle ?? magicItemStyle, color: resolvedMagicSliderColor ?? DEFAULT_ACCENT_COLOR }
     : { style: sliderStyle ?? accentStyle, color: sliderColor ?? accentColor }
-  const barAnimated = sliderSource.style === "galaxy" && !!sliderSource.color
+  const barAnimated = isAnimatedStyle(sliderSource.style) && !!sliderSource.color
   // Magic items always show their rarity color on the tracking bar, even
   // when the "Tracking Slider" style is set to None — None only turns off
   // the fancy border/background treatment, it shouldn't also mean "ignore
@@ -1142,7 +1168,7 @@ export function FeatureEntry({
   }
 
   return (
-    <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${magicStyle === "galaxy" ? "" : theme.box}`}
+    <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${isAnimatedStyle(magicStyle) ? "" : theme.box}`}
       style={{
         ...cardStyle,
         ...(magicStyle ? { borderColor: resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR } : {}),

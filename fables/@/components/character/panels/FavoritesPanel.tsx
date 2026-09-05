@@ -101,9 +101,9 @@ interface FavoritesPanelProps {
   card:              string
   readOnly:          boolean
   showMagicStar?:    boolean
-  magicItemStyle?:   "none" | "outline" | "galaxy"
+  magicItemStyle?:   CardStyle
   magicItemColor?:   string
-  magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  magicItemSliderStyle?: CardStyle
   magicItemColorsByRarity?: boolean
   magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
   magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>

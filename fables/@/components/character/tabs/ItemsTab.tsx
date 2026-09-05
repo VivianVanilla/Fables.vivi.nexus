@@ -102,8 +102,34 @@ export function ItemsTab({
   // wherever it's shown (see SpellsEquipPanel.tsx, which every item here
   // that's inMartial also renders through).
   const isMartialWeapon = (f: Feature) => !!(f.inMartial || f.martialOnly)
-  const martialAccentColor = (f: Feature) => isMartialWeapon(f) ? data.favoriteCategoryColors?.equipment : undefined
-  const martialAccentStyle = (f: Feature) => isMartialWeapon(f) ? data.favoriteCategoryStyle?.equipment : undefined
+  // Currently-infused Infusions (Feature.infused) are merged into the
+  // Equipped list below the same way — same record, not a copy — so an
+  // artificer's active infusions are "super integrated" into Gear exactly
+  // like Martial weapons are: editable from either tab, one shared Attuned
+  // count (see showAttunement on the Equipped FeatureList — its own
+  // attunedCount now naturally covers these too since they're part of
+  // `equippedItems`), and they keep their own Infusions category look
+  // instead of falling back to plain/magic-item styling.
+  const infusionIds = new Set((data.infusions ?? []).map(f => f.id))
+  const isInfusionFeature = (f: Feature) => infusionIds.has(f.id)
+  const martialAccentColor = (f: Feature) => isMartialWeapon(f) ? data.favoriteCategoryColors?.equipment
+    : isInfusionFeature(f) ? data.favoriteCategoryColors?.infusion : undefined
+  const martialAccentStyle = (f: Feature) => isMartialWeapon(f) ? data.favoriteCategoryStyle?.equipment
+    : isInfusionFeature(f) ? data.favoriteCategoryStyle?.infusion : undefined
+  const martialSliderColor = (f: Feature) => isInfusionFeature(f)
+    ? (data.favoriteCategorySliderColors?.infusion ?? data.favoriteCategoryColors?.infusion) : undefined
+
+  // An infusion only ever belongs here while it's actively infused (imbued
+  // into an item) — un-infusing it (from either this tab or the Infusions
+  // list itself, since it's the same record either way) drops it out of
+  // this filter and it disappears from Gear on its own, no explicit removal
+  // needed. It never leaves data.infusions itself, so nothing here is ever
+  // deleted — see patchFeature's own favorites cleanup for what happens to
+  // a favorite pointing at one when that happens.
+  const equippedItems = [
+    ...(data.items ?? []).filter(i => i.category === "armor" && i.equipped && !i.martialOnly),
+    ...(data.infusions ?? []).filter(f => f.infused),
+  ]
 
   // Settings' "Modules and Font Size" — sheet-wide text color switch
   // (tagTextColor is deliberately not wired here — Gear items never used
@@ -128,7 +154,7 @@ export function ItemsTab({
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
         <FeatureList
-          items={(data.items ?? []).filter(i => i.category === "armor" && i.equipped && !i.martialOnly)} allFeatures={allFeatures} label="Equipped"
+          items={equippedItems} allFeatures={allFeatures} label="Equipped"
           onAdd={() => addItem()} showAddButton={false}
           onChange={onChangeFeature}
           onRemove={onRemoveFeature}
@@ -139,10 +165,11 @@ export function ItemsTab({
           onAddPack={addPackToInventory}
           showAttunement maxAttuned={data.maxAttunedItems} onChangeMaxAttuned={n => update({ maxAttunedItems: n })}
           showItemExtras
+          perItemIsInfusion={isInfusionFeature}
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
-          perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}
+          perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle} perItemSliderColor={martialSliderColor}
           bodyTextColor={bodyTextColor}
-          onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => i.category === "armor" && !!i.equipped && !i.martialOnly, newOrder) })}
+          onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => i.category === "armor" && !!i.equipped && !i.martialOnly, newOrder.filter(f => !infusionIds.has(f.id))) })}
         />
         {/* Everything not equipped lands here — armor/weapons you own but
             aren't wearing, and every generic item (which has no Equip

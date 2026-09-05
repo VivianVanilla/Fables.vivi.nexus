@@ -81,14 +81,16 @@ interface FeatureListProps {
   showAttunement?: boolean
   maxAttuned?: number  // defaults to DEFAULT_MAX_ATTUNEMENTS (3) when unset
   onChangeMaxAttuned?: (n: number) => void
+  hideAttunedBadge?: boolean  // keeps the per-entry Attuned checkbox (showAttunement) but hides the "Attuned N/M" counter pill — set on the Infusions list once ItemsTab's Equipped list (which also merges in infused Infusions, see perItemIsInfusion) became the one authoritative attunement count, so the two lists don't show two different tallies against the same maxAttunedItems
   showInfusedToggle?: boolean  // Artificer's Infusions list only — "Infused" checkbox per entry (Feature.infused) + a counter badge, same shape as showAttunement/attuned
   maxInfused?: number
   onChangeMaxInfused?: (n: number) => void
+  perItemIsInfusion?: (f: Feature) => boolean  // forces infusion-style rendering for this entry — no item-extras (rarity/weight/weapon stats — infusions don't receive rarities), its own Infused checkbox, and not draggable — regardless of the list's own showItemExtras/showInfusedToggle. Used by ItemsTab's Equipped list, which merges in currently-infused Infusions (Feature.infused) alongside armor/weapons — same record shown in both places, same look wherever it's shown, exactly like Martial-linked weapons (perItemAccentColor above) already work.
   showItemExtras?: boolean
   showMagicStar?: boolean
-  magicItemStyle?: "none" | "outline" | "galaxy"
+  magicItemStyle?: CardStyle
   magicItemColor?: string
-  magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  magicItemSliderStyle?: CardStyle
   magicItemColorsByRarity?: boolean
   magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
   magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
@@ -263,7 +265,7 @@ function EditableCounterBadge({ label, count, max, onChangeMax, readOnly, positi
   )
 }
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, showInfusedToggle, maxInfused, onChangeMaxInfused, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, hideAttunedBadge, showInfusedToggle, maxInfused, onChangeMaxInfused, perItemIsInfusion, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const infusedCount = showInfusedToggle ? items.filter(f => f.infused).length : 0
   const sensors = useDragSensors()
@@ -285,6 +287,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
   // Shared by the normal list render below AND the DragOverlay clone, so the
   // floating "picked up" copy is pixel-identical to the row it came from.
   function renderCard(f: Feature) {
+    const isInfusion = perItemIsInfusion?.(f) ?? false
     return (
       <FeatureEntry
         feature={f}
@@ -299,8 +302,8 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
         onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
         onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
         showAttunement={showAttunement}
-        showInfusedToggle={showInfusedToggle}
-        showItemExtras={showItemExtras}
+        showInfusedToggle={isInfusion ? true : showInfusedToggle}
+        showItemExtras={isInfusion ? false : showItemExtras}
         showMagicStar={showMagicStar}
         magicItemStyle={magicItemStyle}
         magicItemColor={magicItemColor}
@@ -325,7 +328,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
     <div className={`${card} p-3 flex flex-col gap-2 flex-1 min-h-0`}>
       <div className="flex items-center justify-between shrink-0 gap-2">
         <span className="text-[10px] uppercase tracking-widest text-white/50 font-semibold">{label}</span>
-        {showAttunement && (
+        {showAttunement && !hideAttunedBadge && (
           <EditableCounterBadge label="Attuned" count={attunedCount} max={maxAttuned ?? DEFAULT_MAX_ATTUNEMENTS}
             onChangeMax={onChangeMaxAttuned ?? (() => {})} readOnly={readOnly || !onChangeMaxAttuned}
             positiveClass="bg-purple-500/15 text-purple-300" />
@@ -351,7 +354,7 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={e => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
           <SortableContext items={items.map(f => f.id)} strategy={verticalListSortingStrategy}>
             {items.map(f => (
-              <SortableItem key={f.id} id={f.id} disabled={readOnly || !onReorder}>
+              <SortableItem key={f.id} id={f.id} disabled={readOnly || !onReorder || (perItemIsInfusion?.(f) ?? false)}>
                 {renderCard(f)}
               </SortableItem>
             ))}
@@ -386,9 +389,9 @@ export interface ContainerItemsListProps {
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
   showMagicStar?: boolean
-  magicItemStyle?: "none" | "outline" | "galaxy"
+  magicItemStyle?: CardStyle
   magicItemColor?: string
-  magicItemSliderStyle?: "none" | "outline" | "galaxy"
+  magicItemSliderStyle?: CardStyle
   magicItemColorsByRarity?: boolean
   magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
   magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>
@@ -844,7 +847,7 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
 // (it's what players open most, so it earned a one-click tab); Familiars
 // moved in here to make room — see CharacterSheet.tsx's Tab bar.
 const SUB_TABS: [InfoSubTab, string][] = [
-  ["overview",   "Notes"],
+  ["overview",   "Overview"],
   ["raceFeats",  "Race & Feats"],
   ["features",   "Features"],
   ["familiars",  "Familiars"],
@@ -1119,7 +1122,13 @@ export function InfoTab({
               accentColor={favAccentColor("infusion")} accentStyle={favAccentStyle("infusion")} sliderStyle={favSliderStyle("infusion")}
               tagTextColor={tagTextColor} sliderColor={favSliderColor("infusion")}
               bodyTextColor={bodyTextColor}
-              showAttunement
+              // Attunement's real, editable count+max now lives on the Items
+              // tab's Equipped list (which merges in infused Infusions —
+              // see ItemsTab.tsx) — showAttunement here just keeps each
+              // infusion's own Attuned checkbox editable; hideAttunedBadge
+              // stops this list from also showing its own separate, only-
+              // ever-counting-infusions tally against the same limit.
+              showAttunement hideAttunedBadge
               showInfusedToggle maxInfused={data.maxInfusedItems} onChangeMaxInfused={n => update({ maxInfusedItems: n })}
             />
           )}

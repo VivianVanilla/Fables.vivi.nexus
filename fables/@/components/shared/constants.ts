@@ -84,7 +84,7 @@ export const EXHAUSTION_EFFECTS: Record<number, string> = {
   6: "Death.",
 }
 
-export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact", "Wondrous"] as const
+export const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact"] as const
 
 export const RARITY_COLORS: Record<string, string> = {
   "Common":    "bg-white/10 text-white/50",
@@ -93,7 +93,6 @@ export const RARITY_COLORS: Record<string, string> = {
   "Very Rare": "bg-purple-500/15 text-purple-300",
   "Legendary": "bg-orange-500/15 text-orange-300",
   "Artifact":  "bg-red-500/15 text-red-300",
-  "Wondrous":  "bg-teal-500/15 text-teal-300",
 }
 
 // Default per-rarity accent hex for Settings' "Separate color per rarity"
@@ -101,8 +100,8 @@ export const RARITY_COLORS: Record<string, string> = {
 // back to this SAME preset the moment the toggle is on, instead of falling
 // through to the old flat magicItemColor until someone explicitly repicks
 // every tier by hand.
-export const DEFAULT_RARITY_HEX: Record<"Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact" | "Wondrous", string> = {
-  Common: "#ffffff", Uncommon: "#1eff00", Rare: "#0070dd", "Very Rare": "#a335ee", Legendary: "#ff8000", Artifact: "#e6cc80", Wondrous: "#14b8a6",
+export const DEFAULT_RARITY_HEX: Record<"Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact", string> = {
+  Common: "#ffffff", Uncommon: "#1eff00", Rare: "#0070dd", "Very Rare": "#a335ee", Legendary: "#ff8000", Artifact: "#e6cc80",
 }
 
 // ── Feature Stylings (category accent colors) ────────────────────────────────
@@ -114,11 +113,15 @@ export const DEFAULT_RARITY_HEX: Record<"Common" | "Uncommon" | "Rare" | "Very R
 // (race/class/feat/item/invocation); the other refTypes (spell/equipment/
 // familiar) are each their own category.
 
-// Same 3-state shape as the Magic Item card style, reused here so a category
+// Same 4-state shape as the Magic Item card style, reused here so a category
 // accent renders with the exact same options: no treatment, just a colored
 // border, or the full animated nebula background (in the category's color
-// instead of the fixed magic-item purple).
-export type CardStyle = "none" | "outline" | "galaxy"
+// instead of the fixed magic-item purple) — "galaxy" biases dark (blends
+// toward the sheet's real card background, which is usually dark),
+// "galaxy-light" is a fixed light-toward-white nebula instead, for
+// light-themed sheets (or anyone who just wants a brighter animated look)
+// that "galaxy" alone doesn't serve well.
+export type CardStyle = "none" | "outline" | "galaxy" | "galaxy-light"
 
 export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "infusion" | "spell" | "equipment" | "familiar"
 

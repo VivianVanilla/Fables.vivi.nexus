@@ -114,19 +114,13 @@ export interface Feature {
   triggerFormId?: string          // Automation — activates this Form (see CharacterForm) whenever a use of this feature is spent (see utils.ts's featureUsePatch)
   triggerConditionalId?: string   // Automation — triggers this Conditional (see CharacterConditional) whenever a use of this feature is spent
   // Automation — set when a feature can trigger one of several alternate
-  // effects (e.g. Enhance Ability: Bear's Endurance vs. Cat's Grace vs. …).
-  // Spending a use with variants set shows a small picker (FeatureEntry.tsx)
-  // that copies the chosen variant's ids onto triggerFormId/
-  // triggerConditionalId above before the use is spent — featureUsePatch
-  // itself never needs to know variants exist, it just reads those two
-  // fields as always. Empty/absent falls back to the single triggerFormId/
-  // triggerConditionalId above with no picker, unchanged from before this existed.
+  // I HATE CONDITIONALS FUCK WHOEVER CAME UP WITH THIS SHIT AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
   triggerVariants?: { id: string; label: string; triggerFormId?: string; triggerConditionalId?: string }[]
   multiTracking?: boolean    // toggle — on splits use-tracking across `trackers` instead of just the single trackable/maxUses/usesUsed triplet
   trackers?: UseTracker[]    // additional tracked bars beyond the primary trackable/maxUses/usesUsed, only used when multiTracking is on
   requiresAttunement?: boolean // does this item require attunement at all?
   attuned?: boolean          // is the character currently attuned to this item?
-  infused?: boolean          // Artificer's Infusions list only — is this infusion currently "in use" (imbued into an item)? Counted against CharacterData.maxInfusedItems the same way attuned counts against maxAttunedItems
+  infused?: boolean          // Artificers Infusions list only — is this infusion currently "in use" (imbued into an item)? Counted against CharacterData.maxInfusedItems the same way attuned counts against maxAttunedItems
   equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
   isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight
@@ -141,7 +135,7 @@ export interface Feature {
   maxWeight?: number         // Items tab only — containers: weight capacity for items placed inside
   containerIgnoresWeight?: boolean  // Items tab, containers only — "Bag of Holding": items placed inside don't count toward the character's total carried weight (the container's own weight, and its own maxWeight capacity check, are unaffected)
   parentId?: string          // Items tab only — id of the containing item, when nested inside a container
-  rarity?: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact" | "Wondrous"  // Items tab only
+  rarity?: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary" | "Artifact"  // Items tab only
   itemMeta?: {                // set when created from an Items-tab documentation suggestion, or edited directly
     itemType?: string
     damage?: string
@@ -329,12 +323,12 @@ export interface CharacterData {
   // under the old one.
   shareToken?: string
   showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
-  magicItemStyle?: "none" | "outline" | "galaxy"  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy" is labeled "Animated" in the UI
+  magicItemStyle?: CardStyle  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy"/"galaxy-light" are labeled "Animated (Dark)"/"Animated (Light)" in the UI
   magicItemColor?: string  // accent color for both magicItemStyle and magicItemSliderStyle — default DEFAULT_ACCENT_COLOR
   magicItemColorsByRarity?: boolean // Yes or no to Specific Raririty Colors
   magicItemRarityColors?: Partial<Record<"Common"|"Uncommon"|"Rare"|"Very Rare"|"Legendary"|"Artifact", string>> // A way to record each individual color
   magicItemRaritySliderColors?: Partial<Record<"Common"|"Uncommon"|"Rare"|"Very Rare"|"Legendary"|"Artifact", string>>  // this rarity tier's own "Track uses" bar color, only used when magicItemColorsByRarity is on — falls back to magicItemRarityColors when unset
-  magicItemSliderStyle?: "none" | "outline" | "galaxy"  // default "none" — separate look for magic items' own "Track uses" bars, independent of magicItemStyle (the card background)
+  magicItemSliderStyle?: CardStyle  // default "none" — separate look for magic items' own "Track uses" bars, independent of magicItemStyle (the card background)
   notes?: string
   backgroundImage?: string
   theme?: string

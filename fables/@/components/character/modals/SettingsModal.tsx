@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Sun, Moon } from "lucide-react"
 import { Modal } from "@/components/shared/ui/Modal"
 import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import type { CharacterData } from "@/components/shared/types"
@@ -17,19 +18,25 @@ interface Props {
   card: string           // this character's own card styling (theme.box + ring) — this modal's shell inherits it instead of a fixed generic look
 }
 
-// One None/Outline(or Flat)/Animated toggle group, shared by every Feature
-// Styling row's Background and Tracking Slider sub-controls — "outline"
-// reads as "Flat" for the slider since there's no border to outline there.
+// One None/Outline(or Flat)/Animated(Dark)/Animated(Light) toggle group,
+// shared by every Feature Styling row's Background and Tracking Slider
+// sub-controls — "outline" reads as "Flat" for the slider since there's no
+// border to outline there. "Dark" ("galaxy") blends toward the sheet's real
+// card color, which is usually dark; "Light" ("galaxy-light") is a fixed
+// light-toward-white nebula instead, for light-built sheets (or anyone who
+// just wants a brighter animated look) the dark variant doesn't serve well.
 function StyleToggle({ label, value, onChange, slider, dark }: { label: string; value: CardStyle; onChange: (s: CardStyle) => void; slider?: boolean; dark?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-2 pl-2">
       <span className={`text-[10px] ${dark ? "text-black/50" : "text-white/40"} shrink-0`}>{label}</span>
       <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-        {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
-          <button key={s} type="button" title={s === "galaxy" ? "Animated" : undefined}
+        {(["none", "outline", "galaxy", "galaxy-light"] as CardStyle[]).map(s => (
+          <button key={s} type="button" title={s === "galaxy" ? "Animated (Dark)" : s === "galaxy-light" ? "Animated (Light)" : undefined}
             onClick={() => onChange(s)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${value === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
-            {s === "none" ? "None" : s === "outline" ? (slider ? "Flat" : "Outline") : "Animated"}
+            className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${value === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
+            {s === "galaxy" && <Moon size={10} className="shrink-0" />}
+            {s === "galaxy-light" && <Sun size={10} className="shrink-0" />}
+            {s === "none" ? "None" : s === "outline" ? (slider ? "Flat" : "Outline") : s === "galaxy" ? "Dark" : "Light"}
           </button>
         ))}
       </div>
