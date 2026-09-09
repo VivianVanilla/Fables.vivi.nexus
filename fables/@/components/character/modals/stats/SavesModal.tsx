@@ -15,13 +15,14 @@ interface Props {
   getSaveMod: (save: typeof SAVE_KEYS[number]) => number
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function SavesModal({ data, readOnly, getSaveMod, onUpdate, onClose }: Props) {
+export function SavesModal({ data, readOnly, getSaveMod, onUpdate, onClose, card }: Props) {
   const pb = profBonus(data.level ?? 1)
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-72 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <p className="text-base font-bold text-white">Saving Throws</p>
           <span className="text-sm text-white/40">Prof +{pb}</span>

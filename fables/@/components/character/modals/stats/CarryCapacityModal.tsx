@@ -8,16 +8,17 @@ interface Props {
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
   accentColor: string
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function CarryCapacityModal({ data, readOnly, onUpdate, onClose, accentColor }: Props) {
+export function CarryCapacityModal({ data, readOnly, onUpdate, onClose, accentColor, card }: Props) {
   const base  = (data.strength ?? 10) * 15
   const bonus = data.carryCapacityBonus ?? 0
   const total = base + bonus
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-64 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <p className="text-base font-bold text-white">Carrying Capacity</p>
           <span className="text-xl font-mono font-bold" style={{ color: accentColor }}>{total} lb</span>

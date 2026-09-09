@@ -16,9 +16,10 @@ interface Props {
   onConfirm: (race: string, subrace?: string) => void
   onImport?: (payload: { racialTraits?: Feature[] }) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function RacePickerModal({ current, currentSubrace, userId, existingFeatures = [], onConfirm, onImport, onClose }: Props) {
+export function RacePickerModal({ current, currentSubrace, userId, existingFeatures = [], onConfirm, onImport, onClose, card }: Props) {
   const [raceEntries, setRaceEntries] = useState<RaceEntry[]>([])
   const [search,      setSearch]      = useState("")
   const [selRace,     setSelRace]     = useState(current)
@@ -141,7 +142,7 @@ export function RacePickerModal({ current, currentSubrace, userId, existingFeatu
   if (subraceStep) {
     return (
       <Modal onClose={onClose}>
-        <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(340px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
+        <div className={`${card} shadow-2xl w-[min(340px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden`}>
           <div className="px-5 py-4 border-b border-white/10 flex items-center gap-3 shrink-0">
             <button onClick={() => setSubraceStep(null)}
               className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white shrink-0">

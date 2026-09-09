@@ -37,15 +37,15 @@ import { SortableItem, DragOverlayCard, useDragSensors } from "@/components/shar
 // ── Familiar favorite card — compact, resolves the linked Monster live ───────
 
 function FamiliarFavoriteEntry({
-  fam, monster, poppedOut, onPopOut, isFavorite, onToggleFavorite, accentColor, accentStyle, bgHex,
+  fam, monster, poppedOut, onPopOut, isFavorite, onToggleFavorite, accentColor, accentStyle,
 }: {
   fam: FamiliarRef; monster: userInfo.Objects; poppedOut: boolean; onPopOut: () => void
-  isFavorite?: boolean; onToggleFavorite?: () => void; accentColor?: string; accentStyle?: CardStyle; bgHex?: string
+  isFavorite?: boolean; onToggleFavorite?: () => void; accentColor?: string; accentStyle?: CardStyle
 }) {
   const mData = safeParseJson(monster.data) as MonsterData
   return (
     <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 flex items-center gap-2.5 min-h-11"
-      style={categoryAccentStyle(accentColor, accentStyle, bgHex)}>
+      style={categoryAccentStyle(accentColor, accentStyle)}>
       <div className="size-8 rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10 shrink-0 flex items-center justify-center">
         {mData.portrait
           ? <img src={mData.portrait} alt="" className="w-full h-full object-cover" />
@@ -228,7 +228,7 @@ export function FavoritesPanel({
             poppedOut={poppedOutIds.has(fam.id)}
             onPopOut={() => onPopOutFamiliar(fam.id)}
             isFavorite onToggleFavorite={onToggleFavorite}
-            accentColor={accentColor} accentStyle={accentStyle} bgHex={theme.boxHex} />
+            accentColor={accentColor} accentStyle={accentStyle} />
         : <NotFoundRow label="Familiar not found." onRemove={onToggleFavorite} />
     } else {
       const feat = resolveFeature(fav.refId)

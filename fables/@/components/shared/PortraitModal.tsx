@@ -13,12 +13,15 @@ interface Props {
   onChoose: (url: string) => void
   onUploadClick: () => void
   onClose: () => void
+  card?: string   // a character's own card styling, when opened from the character sheet — falls back to the old fixed look for every other caller (maps, NPC tracker, monster editor)
 }
 
-export function PortraitModal({ title = "Choose Portrait", currentPortrait, galleryImages, galleryLoading, onChoose, onUploadClick, onClose }: Props) {
+const DEFAULT_CARD = "bg-zinc-900 border border-white/20 rounded-2xl"
+
+export function PortraitModal({ title = "Choose Portrait", currentPortrait, galleryImages, galleryLoading, onChoose, onUploadClick, onClose, card = DEFAULT_CARD }: Props) {
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 max-h-[80vh] flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-72 max-h-[80vh] flex flex-col overflow-hidden`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
           <span className="text-base font-bold text-white">{title}</span>
           <button type="button" onClick={onClose}

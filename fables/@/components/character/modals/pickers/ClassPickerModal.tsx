@@ -6,7 +6,7 @@ import { getSpells } from "../../../../../src/spells/spellCache"
 import { SCHOOLS } from "../../../../../src/spells/constants"
 import type { Feature, SpellItem } from "@/components/shared/types"
 import { nanoid, maxSpellLevelForClass } from "@/components/shared/utils"
-import { parseSpellCombat } from "@/components/shared/spellUtils"
+import { spellItemFieldsFromSpell } from "@/components/shared/spellUtils"
 
 interface ClassEntry {
   cls: string
@@ -21,9 +21,10 @@ interface Props {
   onConfirm: (classes: ClassEntry[]) => void
   onImport?: (payload: { classFeatures?: Feature[]; spellItems?: SpellItem[] }) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function ClassPickerModal({ initial, userId, existingFeatures = [], existingSpells = [], onConfirm, onImport, onClose }: Props) {
+export function ClassPickerModal({ initial, userId, existingFeatures = [], existingSpells = [], onConfirm, onImport, onClose, card }: Props) {
   const [entries,          setEntries]          = useState<ClassEntry[]>(initial.length > 0 ? initial : [])
   const [search,           setSearch]           = useState("")
   const [allClasses,       setAllClasses]       = useState<string[]>([])
@@ -246,28 +247,11 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], exist
         // leveled spells. "Cantrips only" is an explicit choice, so it's exempt.
         return spellLevelChoice === "upto" ? (lvl > 0 && lvl <= capLevel) : lvl === capLevel
       })
-      const newSpells: SpellItem[] = matches.map(s => {
-        const parsed = parseSpellCombat(s.desc ?? "")
-        const dur = s.duration ?? ""
-        return {
-          id:                 nanoid(),
-          name:               s.name,
-          level:              s.level,
-          school:             s.school?.name ?? "",
-          castTime:           s.casting_time ?? "",
-          range:              s.range ?? "",
-          duration:           dur,
-          components:         s.components?.join(", ") ?? "",
-          materialComponents: s.materialComponents ? (s.materials ?? "") : "",
-          ritual:             s.ritual ?? false,
-          concentration:      dur.toLowerCase().includes("concentration"),
-          damage:             s.damage ?? parsed.damage ?? "",
-          damageType:         s.damageType !== "None" ? s.damageType : "",
-          saveAttr:           s.saveAttr ?? parsed.saveAttr ?? "",
-          notes:              Array.isArray(s.desc) ? s.desc.join("\n\n") : (s.desc ?? ""),
-          sourceClass:        entry.cls,
-        }
-      })
+      const newSpells: SpellItem[] = matches.map(s => ({
+        id: nanoid(),
+        ...spellItemFieldsFromSpell(s),
+        sourceClass: entry.cls,
+      }))
       if (newSpells.length) onImport({ spellItems: newSpells })
       setSpellsImportedMsg(newSpells.length ? `Imported ${newSpells.length} spell${newSpells.length === 1 ? "" : "s"}.` : "No new spells matched.")
     } finally {
@@ -279,7 +263,7 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], exist
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(380px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-[min(380px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden`}>
 
         {/* Header */}
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">

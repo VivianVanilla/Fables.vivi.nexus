@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { Sun, Moon } from "lucide-react"
 import { Modal } from "@/components/shared/ui/Modal"
 import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import type { CharacterData } from "@/components/shared/types"
@@ -18,25 +17,25 @@ interface Props {
   card: string           // this character's own card styling (theme.box + ring) — this modal's shell inherits it instead of a fixed generic look
 }
 
-// One None/Outline(or Flat)/Animated(Dark)/Animated(Light) toggle group,
-// shared by every Feature Styling row's Background and Tracking Slider
-// sub-controls — "outline" reads as "Flat" for the slider since there's no
-// border to outline there. "Dark" ("galaxy") blends toward the sheet's real
-// card color, which is usually dark; "Light" ("galaxy-light") is a fixed
-// light-toward-white nebula instead, for light-built sheets (or anyone who
-// just wants a brighter animated look) the dark variant doesn't serve well.
+// One None/Outline(or Flat)/Background(or Hue Shift) toggle group, shared by
+// every Feature Styling row's Background and Tracking Slider sub-controls —
+// "outline" reads as "Flat" for the slider since there's no border to
+// outline there. The 3rd option ("galaxy" — the picked color, no darken/
+// lighten blend toward the sheet's theme or toward black/white) reads as
+// "Background" for the card, since that's a flat fill there — but the same
+// value drives a hue-cycling shimmer on the Tracking Slider bar
+// (accentShimmerGradient in themes.ts), not a flat fill, so it reads as
+// "Hue Shift" there instead, since that's what it actually does.
 function StyleToggle({ label, value, onChange, slider, dark }: { label: string; value: CardStyle; onChange: (s: CardStyle) => void; slider?: boolean; dark?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-2 pl-2">
       <span className={`text-[10px] ${dark ? "text-black/50" : "text-white/40"} shrink-0`}>{label}</span>
       <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-        {(["none", "outline", "galaxy", "galaxy-light"] as CardStyle[]).map(s => (
-          <button key={s} type="button" title={s === "galaxy" ? "Animated (Dark)" : s === "galaxy-light" ? "Animated (Light)" : undefined}
+        {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
+          <button key={s} type="button"
             onClick={() => onChange(s)}
-            className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${value === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
-            {s === "galaxy" && <Moon size={10} className="shrink-0" />}
-            {s === "galaxy-light" && <Sun size={10} className="shrink-0" />}
-            {s === "none" ? "None" : s === "outline" ? (slider ? "Flat" : "Outline") : s === "galaxy" ? "Dark" : "Light"}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${value === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
+            {s === "none" ? "None" : s === "outline" ? (slider ? "Flat" : "Outline") : (slider ? "Hue Shift" : "Background")}
           </button>
         ))}
       </div>
@@ -283,20 +282,42 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 )
               })()}
             </div>
-            <div className="flex items-center justify-between px-1">
-              {activeSlotKey === CUSTOM_SLOT_THEME_KEY ? (
-                <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer`}>
-                  Custom color
-                  <ColorSwatchInput value={slotCustomColor} onChange={v => onUpdate({ slotCustomColor: v })} />
+            {/* Overrides how levels 1-9 differ from each other, regardless of
+                which preset/custom color is picked above — "Solid" is the
+                one way to make every level actually match; "Hue −"/"Hue +"
+                pick which direction the sweep runs (this also overrides a
+                grayscale preset like Skapari into a real hue sweep). Unset
+                (neither option highlighted until one's clicked) keeps
+                whichever preset's own built-in sweep as before. */}
+            <div className="flex items-center justify-between px-1 gap-2">
+              <span className={`text-[10px] ${c40} shrink-0`}>Slot Progression Style</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
+                  {([
+                    { key: "hue-pos", label: "Hue +" },
+                    { key: "hue-neg", label: "Hue −" },
+                    { key: "solid",   label: "Solid" },
+                  ] as const).map(opt => (
+                    <button key={opt.key} type="button" onClick={() => onUpdate({ slotLevelMode: opt.key })}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${data.slotLevelMode === opt.key ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <label className={`flex items-center gap-1.5 text-xs ${c50} cursor-pointer select-none shrink-0`}>
+                  <input type="checkbox" checked={data.slotAnimated ?? false}
+                    onChange={e => onUpdate({ slotAnimated: e.target.checked })}
+                    className="accent-primary size-4 rounded" />
+                  Animated
                 </label>
-              ) : <span />}
-              <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer select-none`}>
-                <input type="checkbox" checked={data.slotAnimated ?? false}
-                  onChange={e => onUpdate({ slotAnimated: e.target.checked })}
-                  className="accent-primary size-4 rounded" />
-                Animated
-              </label>
+              </div>
             </div>
+            {activeSlotKey === CUSTOM_SLOT_THEME_KEY && (
+              <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer px-1`}>
+                Custom color
+                <ColorSwatchInput value={slotCustomColor} onChange={v => onUpdate({ slotCustomColor: v })} />
+              </label>
+            )}
           </div>
 
           {/* Feature Styling — one row per category, Magical Items first
@@ -308,7 +329,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               Slider look for that category's "Track uses" bars — the two
               are independent */}
           <div className="flex flex-col gap-2">
-            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Feature Styling</p>
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Feature's Styling</p>
             
             <div className="flex flex-col gap-2">
               {/* Magical Items row — flat single accent color by default
@@ -327,7 +348,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                   )}
                 </div>
 
-                <StyleToggle label="Background" value={data.magicItemStyle ?? "galaxy"}
+                <StyleToggle label="Module" value={data.magicItemStyle ?? "galaxy"}
                   onChange={s => onUpdate({ magicItemStyle: s })} dark={dark} />
 
                 {/* Mirrors Background until explicitly set otherwise — see
@@ -399,7 +420,7 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                       )}
                     </div>
                 
-                    <StyleToggle label="Background" value={style}
+                    <StyleToggle label="Module" value={style}
                       onChange={s => onUpdate({ favoriteCategoryStyle: { ...data.favoriteCategoryStyle, [cat]: s } })} dark={dark} />
                     <StyleToggle label="Tracking Slider" value={sliderStyle}
                       onChange={s => onUpdate({ favoriteCategorySliderStyle: { ...data.favoriteCategorySliderStyle, [cat]: s } })} slider dark={dark} />

@@ -22,7 +22,7 @@ import { createPortal } from "react-dom"
 import { Modal } from "@/components/shared/ui/Modal"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
-import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot, Feature } from "@/components/shared/types"
+import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot, Feature, FamiliarRef } from "@/components/shared/types"
 import { ALL_CONDITIONS } from "@/components/shared/constants"
 import { DAMAGE_TYPES } from "@/components/shared/damageTypes"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
@@ -146,8 +146,8 @@ const ABILITY_FIELDS: { key: keyof FormStatOverrides; label: string }[] = [
   { key: "intelligence", label: "INT" }, { key: "wisdom", label: "WIS" }, { key: "charisma", label: "CHA" },
 ]
 
-function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
-  form: CharacterForm; userId: string | null; onSave: (f: CharacterForm) => void; onCancel: () => void; onDelete?: () => void
+function FormEditor({ form, userId, familiars, onSave, onCancel, onDelete }: {
+  form: CharacterForm; userId: string | null; familiars: FamiliarRef[]; onSave: (f: CharacterForm) => void; onCancel: () => void; onDelete?: () => void
 }) {
   const [draft, setDraft] = useState<CharacterForm>(form)
   const [showPortraitPicker, setShowPortraitPicker] = useState(false)
@@ -287,7 +287,28 @@ function FormEditor({ form, userId, onSave, onCancel, onDelete }: {
           Same as a Conditional's temp HP — activating this form sets your temp HP to this amount if it's
           higher than what you already have (not additive). Blank = grants none.
         </p>
+        {!!draft.tempHp && (
+          <label className="flex items-center gap-2 cursor-pointer text-white/60 text-sm">
+            <input type="checkbox" checked={draft.removeTempHpOnRevert ?? false}
+              onChange={e => setDraft(d => ({ ...d, removeTempHpOnRevert: e.target.checked }))}
+              className="accent-purple-500" />
+            Remove temp HP when this form ends
+          </label>
+        )}
       </div>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider">Favorite Familiar</span>
+        <select value={draft.favoriteFamiliarId ?? ""} onChange={e => setDraft(d => ({ ...d, favoriteFamiliarId: e.target.value || undefined }))}
+          className="bg-zinc-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-white/30">
+          <option value="" className="bg-zinc-800 text-white">— None —</option>
+          {familiars.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.nickname || "Familiar"}</option>)}
+        </select>
+        <p className="text-[10px] text-white/30">
+          Activating this form favorites the picked familiar (e.g. Summon Fiend — pick the fiend, and
+          casting it puts its card at the top of Favorites); reverting un-favorites it. Blank = no change.
+        </p>
+      </label>
 
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Conditions</span>
@@ -342,7 +363,7 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
 
   if (newDraft || editing) {
     return (
-      <FormEditor form={newDraft ?? editing!} userId={userId} onSave={save}
+      <FormEditor form={newDraft ?? editing!} userId={userId} familiars={data.familiars ?? []} onSave={save}
         onCancel={() => { setNewDraft(null); setEditingId(null) }}
         onDelete={newDraft ? undefined : () => del(editing!.id)} />
     )
@@ -500,7 +521,21 @@ function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCan
   spell: SpellItem; forms: CharacterForm[]; conditionals: CharacterConditional[]; spellSlots: SpellSlot[]
   onSave: (s: SpellItem) => void; onCancel: () => void
 }) {
-  const [draft, setDraft] = useState<SpellItem>(spell)
+  // Guesses the obvious defaults so setting up a big spell list doesn't mean
+  // re-picking the same slot/condition by hand every time — only fills in
+  // fields the spell doesn't already have a value for, so re-opening an
+  // already-configured spell never clobbers a deliberate choice (including
+  // "no slot" — there's no way to tell that apart from "never touched" once
+  // it's undefined, but that's an acceptable trade for the time this saves
+  // across a whole spell list).
+  const [draft, setDraft] = useState<SpellItem>(() => {
+    const guessedSlotId = spell.castSlotId ?? (spell.level
+      ? (spellSlots.find(s => s.level === spell.level && !s.pact) ?? spellSlots.find(s => s.level === spell.level))?.id
+      : undefined)
+    const guessedConditions = spell.castGrantConditions
+      ?? (spell.concentration ? ["Concentrating"] : undefined)
+    return { ...spell, castSlotId: guessedSlotId, castGrantConditions: guessedConditions }
+  })
   function set(patch: Partial<SpellItem>) { setDraft(d => ({ ...d, ...patch })) }
   function toggleCondition(name: string) {
     const current = draft.castGrantConditions ?? []

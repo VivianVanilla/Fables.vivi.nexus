@@ -8,6 +8,7 @@ interface Props {
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
   accentColor: string
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
 // Martial's counterpart to InitiativeModal/ArmorClassModal — a small, single-
@@ -15,10 +16,10 @@ interface Props {
 // Just the DC for now (most martial abilities don't call for one, unlike
 // spellcasting), but its own modal — not a popover tucked behind the gear
 // button — leaves room to grow the same way Spellcasting's did.
-export function MartialModal({ data, readOnly, onUpdate, onClose, accentColor }: Props) {
+export function MartialModal({ data, readOnly, onUpdate, onClose, accentColor, card }: Props) {
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-72 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <p className="text-base font-bold text-white">Martial</p>
           {!!data.martialSaveDC && (

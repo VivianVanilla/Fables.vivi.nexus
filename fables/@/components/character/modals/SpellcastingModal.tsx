@@ -19,11 +19,12 @@ interface Props {
   onAddSlot: (level: number, total: number, resetsOn: "short" | "long") => void
   onRemoveSlot: (id: string) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
 export function SpellcastingModal({
   data, spellSlots, readOnly, slotTheme, slotAnimated,
-  onUpdate, onChangeSlot, onAddSlot, onRemoveSlot, onClose,
+  onUpdate, onChangeSlot, onAddSlot, onRemoveSlot, onClose, card,
 }: Props) {
   const [newSlotLevel, setNewSlotLevel] = useState(1)
   const [newSlotTotal, setNewSlotTotal] = useState(2)
@@ -37,7 +38,7 @@ export function SpellcastingModal({
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-[min(500px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-[min(500px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
           <p className="text-base font-bold text-white">Spellcasting</p>
           <button type="button" onClick={onClose}

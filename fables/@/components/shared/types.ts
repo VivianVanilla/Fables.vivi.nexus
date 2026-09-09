@@ -223,7 +223,17 @@ export interface CharacterForm {
                                 // default) means the form shares the character's normal HP pool as before.
   tempHp?: number              // grants this much temp HP on activation — same semantics as CharacterConditional's
                                 // tempHp (take the higher of current and this, not additive)
+  removeTempHpOnRevert?: boolean // strips current temp HP the instant this form ends (any way it ends — manual
+                                  // switch, multi-form toggle-off, or the 0-HP auto-revert). There's no per-source
+                                  // tracking for tempHp (unlike grantedConditions' `source: "form:<id>"` tags), so
+                                  // this can't distinguish "temp HP this form granted" from "temp HP gained from
+                                  // something else meanwhile" — it just clears whatever temp HP is currently active.
   portraitUrl?: string         // replaces the header portrait while this form is active; blank = keep the character's own portrait
+  favoriteFamiliarId?: string  // id of a CharacterData.familiars entry to auto-favorite on activation and
+                                // auto-un-favorite on revert (any way it ends — manual switch, multi-form
+                                // toggle-off, or the 0-HP auto-revert) — e.g. Summon Fiend: activating the form
+                                // puts the summoned familiar's card at the top of Favorites immediately, and
+                                // ending it clears that favorite back out automatically.
 }
 
 // The lightweight sibling of a Form — a one-shot "apply this now" (temp HP,
@@ -286,7 +296,7 @@ export interface CharacterData {
   formHp?: number  // current HP within the active form's own pool — only meaningful while
                     // activeFormId points at a form with formMaxHp set (see CharacterForm)
   speed?: number   // walk speed, ft/round
-  speeds?: { fly?: number; swim?: number; climb?: number }  // extra movement types, ft/round
+  speeds?: { fly?: number; swim?: number; climb?: number; glide?: number }  // extra movement types, ft/round
   initiative?: number
   strength?: number
   dexterity?: number
@@ -323,7 +333,7 @@ export interface CharacterData {
   // under the old one.
   shareToken?: string
   showMagicItemStar?: boolean    // default true — the "✨" badge on items flagged Magic Item
-  magicItemStyle?: CardStyle  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy"/"galaxy-light" are labeled "Animated (Dark)"/"Animated (Light)" in the UI
+  magicItemStyle?: CardStyle  // default "galaxy" — sheet-wide card background applied to every item flagged Magic Item; "none" = no card decoration beyond the star badge; "galaxy" is labeled "Background" in the UI (the item's own raw color, animated)
   magicItemColor?: string  // accent color for both magicItemStyle and magicItemSliderStyle — default DEFAULT_ACCENT_COLOR
   magicItemColorsByRarity?: boolean // Yes or no to Specific Raririty Colors
   magicItemRarityColors?: Partial<Record<"Common"|"Uncommon"|"Rare"|"Very Rare"|"Legendary"|"Artifact", string>> // A way to record each individual color
@@ -336,6 +346,13 @@ export interface CharacterData {
   slotTheme?: string
   slotCustomColor?: string  // accent color for slotTheme "custom" — see character-themes.ts SLOT_THEMES
   slotAnimated?: boolean    // Settings — shimmering iridescent slot bars instead of a flat color
+  slotLevelMode?: "solid" | "hue-neg" | "hue-pos"  // Settings — overrides how levels 1-9 differ from each
+                            // other, regardless of which slotTheme/slotCustomColor is picked above: "solid"
+                            // is the exact same color at every level (there was no way to do this before —
+                            // every preset always swept hue or lightness across levels); "hue-neg"/"hue-pos"
+                            // force a hue sweep in that direction using a fixed wide range, overriding even a
+                            // grayscale preset's own built-in sweep. Unset keeps the preset's own natural
+                            // mode/range exactly as before (themes.ts's SLOT_THEMES, positive sweep).
   equipmentItems?: EquipmentItem[]  // DEPRECATED — see EquipmentItem's comment. Read once by migrateEquipmentItems() then cleared to []; nothing else should read or write this.
   spellItems?: SpellItem[]
   hitDicePools?: HitDicePool[]

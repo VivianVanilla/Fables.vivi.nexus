@@ -6,12 +6,13 @@ interface Props {
   conditions: ActiveCondition[]
   onAdd: (name: string) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function ConditionPickerModal({ conditions, onAdd, onClose }: Props) {
+export function ConditionPickerModal({ conditions, onAdd, onClose, card }: Props) {
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-64 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10">
           <p className="text-base font-bold text-white">Add Condition</p>
         </div>

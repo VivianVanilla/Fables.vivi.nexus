@@ -410,7 +410,7 @@ export function SpellsEquipPanel({
 
       {showMartialModal && (
         <MartialModal data={data} readOnly={readOnly} onUpdate={onUpdate}
-          onClose={() => setShowMartialModal(false)} accentColor={theme.accent} />
+          onClose={() => setShowMartialModal(false)} accentColor={theme.accent} card={card} />
       )}
 
       {/* Spell slots — standalone block in Classic mode; Integrated mode merges them into the level headers below */}

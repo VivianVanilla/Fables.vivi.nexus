@@ -18,9 +18,10 @@ interface Props {
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
   accentColor: string
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function InitiativeModal({ data, readOnly, onUpdate, onClose, accentColor }: Props) {
+export function InitiativeModal({ data, readOnly, onUpdate, onClose, accentColor, card }: Props) {
   const initStat = data.initiativeStat ?? "dex"
   const bonus    = data.initiativeBonus ?? 0
   const fullKey  = SAVE_TO_ABILITY[initStat] ?? "dexterity"
@@ -31,7 +32,7 @@ export function InitiativeModal({ data, readOnly, onUpdate, onClose, accentColor
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-64 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <p className="text-base font-bold text-white">Initiative</p>
           <span className="text-xl font-mono font-bold" style={{ color: accentColor }}>{totalStr}</span>

@@ -8,15 +8,17 @@ interface Props {
   overrideReason?: string   // e.g. "Grappled" — set when a condition forces speed to 0
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
 const EXTRA_SPEED_FIELDS = [
   { key: "fly",   label: "Fly" },
   { key: "swim",  label: "Swim" },
   { key: "climb", label: "Climb" },
+  { key: "glide", label: "Glide" },
 ] as const
 
-export function SpeedModal({ data, readOnly, overrideReason, onUpdate, onClose }: Props) {
+export function SpeedModal({ data, readOnly, overrideReason, onUpdate, onClose, card }: Props) {
   const speeds = data.speeds ?? {}
 
   function setExtra(key: typeof EXTRA_SPEED_FIELDS[number]["key"], value: number) {
@@ -25,7 +27,7 @@ export function SpeedModal({ data, readOnly, overrideReason, onUpdate, onClose }
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-72 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <p className="text-base font-bold text-white">Speed</p>
           <span className="text-xl font-mono font-bold text-white">{data.speed ?? 0}</span>
@@ -43,7 +45,7 @@ export function SpeedModal({ data, readOnly, overrideReason, onUpdate, onClose }
           )}
 
           {!readOnly && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {EXTRA_SPEED_FIELDS.map(f => (
                 <label key={f.key} className="flex flex-col items-center gap-1">
                   <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">{f.label}</span>
@@ -57,11 +59,12 @@ export function SpeedModal({ data, readOnly, overrideReason, onUpdate, onClose }
             </div>
           )}
 
-          {readOnly && (speeds.fly || speeds.swim || speeds.climb) && (
+          {readOnly && (speeds.fly || speeds.swim || speeds.climb || speeds.glide) && (
             <div className="flex flex-wrap gap-3 text-xs text-white/60">
               {speeds.fly   ? <span>Fly {speeds.fly} ft.</span> : null}
               {speeds.swim  ? <span>Swim {speeds.swim} ft.</span> : null}
               {speeds.climb ? <span>Climb {speeds.climb} ft.</span> : null}
+              {speeds.glide ? <span>Glide {speeds.glide} ft.</span> : null}
             </div>
           )}
 

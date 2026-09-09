@@ -1,6 +1,6 @@
 // Small helper functions used throughout the character sheet
 
-import type { CharacterData, Feature, SpellItem, CharacterConditional, CharacterForm, FormStatOverrides } from "./types"
+import type { CharacterData, Feature, SpellItem, CharacterConditional, CharacterForm, FormStatOverrides, FavoriteRef } from "./types"
 
 /** Returns the ability modifier as a signed string, e.g. "+2" or "-1" */
 export function abilityMod(score: number): string {
@@ -207,6 +207,30 @@ export function revokeFormResistances(
   }
 }
 
+/**
+ * Adds/removes a Favorites entry for a form's favoriteFamiliarId, if either
+ * the form(s) losing activation or the one gaining it name one — shared by
+ * every activate/revert path (formActivationPatch, toggleFormPatch below,
+ * and CharacterSheet.tsx's 0-HP auto-revert) so "auto-favorite a familiar"
+ * behaves identically no matter how a form starts or ends. Returns
+ * undefined (touch nothing) when neither side names a familiar, so callers
+ * can spread the result into their patch only when it's actually needed.
+ */
+export function favoriteFamiliarSwap(
+  data: CharacterData, leaving: CharacterForm | CharacterForm[] | null, entering: CharacterForm | null,
+): FavoriteRef[] | undefined {
+  const leavingForms = Array.isArray(leaving) ? leaving : leaving ? [leaving] : []
+  const leavingIds = leavingForms.map(f => f.favoriteFamiliarId).filter((id): id is string => !!id)
+  if (leavingIds.length === 0 && !entering?.favoriteFamiliarId) return undefined
+  let favorites = data.favorites ?? []
+  if (leavingIds.length) favorites = favorites.filter(f => !leavingIds.includes(f.refId))
+  if (entering?.favoriteFamiliarId && !favorites.some(f => f.refId === entering.favoriteFamiliarId)) {
+    const fam = (data.familiars ?? []).find(f => f.id === entering.favoriteFamiliarId)
+    if (fam) favorites = [...favorites, { refId: fam.id, refType: "familiar", label: fam.nickname || "Familiar" }]
+  }
+  return favorites
+}
+
 export function formActivationPatch(data: CharacterData, id: string | null): Partial<CharacterData> {
   const forms = data.forms ?? []
   const conditions = data.conditions ?? []
@@ -227,8 +251,17 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
   // Activating a form with its own HP pool starts it fresh at full — the
   // character's own hp/maxHp are left completely untouched underneath.
   if (next?.formMaxHp != null) patch.formHp = next.formMaxHp
-  // Same "take the higher, not additive" semantics as CharacterConditional's tempHp.
-  if (next?.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, next.tempHp)
+  // The form being left behind can opt to strip current temp HP outright
+  // (removeTempHpOnRevert) — the incoming form's own grant, if any, still
+  // applies on top of that clean slate rather than being skipped.
+  if (activeForm?.removeTempHpOnRevert) {
+    patch.tempHp = next?.tempHp ? Math.max(0, next.tempHp) : 0
+  } else if (next?.tempHp) {
+    // Same "take the higher, not additive" semantics as CharacterConditional's tempHp.
+    patch.tempHp = Math.max(data.tempHp ?? 0, next.tempHp)
+  }
+  const swappedFavorites = favoriteFamiliarSwap(data, activeForm, next)
+  if (swappedFavorites) patch.favorites = swappedFavorites
   return patch
 }
 
@@ -285,11 +318,15 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
     const remainingIds = activeIds.filter(id => id !== formId)
     const remainingForms = remainingIds.map(fid => forms.find(f => f.id === fid)).filter((f): f is CharacterForm => !!f)
     const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], [form], remainingForms)
-    return {
+    const patch: Partial<CharacterData> = {
       activeFormIds: remainingIds,
       conditions: conditions.filter(c => c.source !== `form:${formId}`),
       resistances: revoked.resistances, vulnerabilities: revoked.vulnerabilities,
     }
+    if (form.removeTempHpOnRevert) patch.tempHp = 0
+    const swappedFavorites = favoriteFamiliarSwap(data, form, null)
+    if (swappedFavorites) patch.favorites = swappedFavorites
+    return patch
   }
 
   let nextConditions = conditions
@@ -305,6 +342,8 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
   }
   if (form.formMaxHp != null) patch.formHp = form.formMaxHp
   if (form.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, form.tempHp)
+  const swappedFavorites = favoriteFamiliarSwap(data, null, form)
+  if (swappedFavorites) patch.favorites = swappedFavorites
   return patch
 }
 

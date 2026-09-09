@@ -113,15 +113,13 @@ export const DEFAULT_RARITY_HEX: Record<"Common" | "Uncommon" | "Rare" | "Very R
 // (race/class/feat/item/invocation); the other refTypes (spell/equipment/
 // familiar) are each their own category.
 
-// Same 4-state shape as the Magic Item card style, reused here so a category
+// Same 3-state shape as the Magic Item card style, reused here so a category
 // accent renders with the exact same options: no treatment, just a colored
-// border, or the full animated nebula background (in the category's color
-// instead of the fixed magic-item purple) — "galaxy" biases dark (blends
-// toward the sheet's real card background, which is usually dark),
-// "galaxy-light" is a fixed light-toward-white nebula instead, for
-// light-themed sheets (or anyone who just wants a brighter animated look)
-// that "galaxy" alone doesn't serve well.
-export type CardStyle = "none" | "outline" | "galaxy" | "galaxy-light"
+// border, or the full animated starfield background in the category's own
+// raw color (instead of the fixed magic-item purple) — "galaxy" no longer
+// darkens/lightens that color toward the theme or toward black/white, it's
+// just whatever color was picked, animated.
+export type CardStyle = "none" | "outline" | "galaxy"
 
 export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "infusion" | "spell" | "equipment" | "familiar"
 

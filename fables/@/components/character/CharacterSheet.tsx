@@ -14,7 +14,7 @@ import type {
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances, favoriteFamiliarSwap } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
@@ -324,9 +324,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         const baseConditions = conditions.filter(c => c.source !== `form:${poolForm.id}`)
         const remaining = multiFormEnabled ? activeForms.filter(f => f.id !== poolForm.id) : []
         const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], [poolForm], remaining)
+        const tempHpPatch = poolForm.removeTempHpOnRevert ? { tempHp: 0 } : {}
+        const swappedFavorites = favoriteFamiliarSwap(data, poolForm, null)
+        const favoritesPatch = swappedFavorites ? { favorites: swappedFavorites } : {}
         update(multiFormEnabled
-          ? { activeFormIds: (data.activeFormIds ?? []).filter(id => id !== poolForm.id), conditions: baseConditions, hp: 1, ...revoked }
-          : { activeFormId: null, conditions: baseConditions, hp: 1, ...revoked })
+          ? { activeFormIds: (data.activeFormIds ?? []).filter(id => id !== poolForm.id), conditions: baseConditions, hp: 1, ...revoked, ...tempHpPatch, ...favoritesPatch }
+          : { activeFormId: null, conditions: baseConditions, hp: 1, ...revoked, ...tempHpPatch, ...favoritesPatch })
       } else {
         const deathward = conditions.find(c => c.name === "Deathward")
         let patch: Partial<CharacterData> = {}
@@ -347,9 +350,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           const baseConditions = (patch.conditions ?? conditions).filter(c => !c.source || !revertSources.has(c.source))
           const remaining = multiFormEnabled ? activeForms.filter(f => !revertIds.has(f.id)) : []
           const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], revertForms, remaining)
+          const tempHpPatch = revertForms.some(f => f.removeTempHpOnRevert) ? { tempHp: 0 } : {}
+          const swappedFavorites = favoriteFamiliarSwap(data, revertForms, null)
+          const favoritesPatch = swappedFavorites ? { favorites: swappedFavorites } : {}
           patch = multiFormEnabled
-            ? { ...patch, activeFormIds: (data.activeFormIds ?? []).filter(id => !revertIds.has(id)), conditions: baseConditions, ...revoked }
-            : { ...patch, activeFormId: null, conditions: baseConditions, ...revoked }
+            ? { ...patch, activeFormIds: (data.activeFormIds ?? []).filter(id => !revertIds.has(id)), conditions: baseConditions, ...revoked, ...tempHpPatch, ...favoritesPatch }
+            : { ...patch, activeFormId: null, conditions: baseConditions, ...revoked, ...tempHpPatch, ...favoritesPatch }
         }
         if (Object.keys(patch).length) update(patch)
       }
@@ -735,9 +741,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const effectiveBody = BG_OPTIONS[bgKey]?.body || theme.body
   const card       = `rounded-xl ${theme.box} ring-1 ${theme.ring}`
   const activeSlotKey = data.slotTheme ?? DEFAULT_SLOT_THEME
-  const slotTheme: SlotTheme = activeSlotKey === CUSTOM_SLOT_THEME_KEY
+  const baseSlotTheme: SlotTheme = activeSlotKey === CUSTOM_SLOT_THEME_KEY
     ? { label: "Custom", accent: data.slotCustomColor ?? DEFAULT_ACCENT_COLOR }
     : (SLOT_THEMES[activeSlotKey] ?? SLOT_THEMES[DEFAULT_SLOT_THEME])
+  // slotLevelMode overrides how levels 1-9 differ from each other, on top of
+  // whichever preset/custom color is picked above — unset keeps that
+  // preset's own built-in mode/range exactly as before.
+  const slotTheme: SlotTheme = data.slotLevelMode === "solid" ? { ...baseSlotTheme, mode: "solid" }
+    : data.slotLevelMode === "hue-neg" ? { ...baseSlotTheme, mode: "hue", range: -260 }
+    : data.slotLevelMode === "hue-pos" ? { ...baseSlotTheme, mode: "hue", range: 260 }
+    : baseSlotTheme
   const slotAnimated = data.slotAnimated ?? false
 
   // ── PROFICIENCY BONUS ─────────────────────────────────────────────────────
@@ -970,7 +983,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           <button type="button" onClick={() => setShowSpeedModal(true)}
             className={`${card} p-3 flex flex-col items-center gap-1 hover:brightness-110 transition-all`}>
             <SpeedDisplay
-              speeds={{ walk: effectiveSpeed, fly: data.speeds?.fly, swim: data.speeds?.swim, climb: data.speeds?.climb }}
+              speeds={{ walk: effectiveSpeed, fly: data.speeds?.fly, swim: data.speeds?.swim, climb: data.speeds?.climb, glide: data.speeds?.glide }}
               zeroed={!!speedOverrideReason}
               overridden={!speedOverrideReason && ov?.speedOverride != null}
             />
@@ -1178,19 +1191,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {showMaxMenu && (
         <MaxStatsModal
           data={data} effectiveMax={effectiveMax} extraMaxHpBonus={ov?.maxHpBonus ?? 0}
-          onUpdate={update} onClose={() => setShowMaxMenu(false)}
+          onUpdate={update} onClose={() => setShowMaxMenu(false)} card={card}
         />
       )}
       {showSavesModal && (
         <SavesModal
           data={data} readOnly={readOnly}
-          getSaveMod={getSaveMod} onUpdate={update} onClose={() => setShowSavesModal(false)}
+          getSaveMod={getSaveMod} onUpdate={update} onClose={() => setShowSavesModal(false)} card={card}
         />
       )}
       {showAbilityModal && (
         <AbilityModal
           data={data} readOnly={readOnly}
-          onUpdate={update} onClose={() => setShowAbilityModal(false)}
+          onUpdate={update} onClose={() => setShowAbilityModal(false)} card={card}
         />
       )}
       {showSpellcastingModal && (
@@ -1198,45 +1211,45 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           data={data} spellSlots={spellSlots} readOnly={readOnly} slotTheme={slotTheme} slotAnimated={slotAnimated}
           onUpdate={update} onChangeSlot={changeSlot}
           onAddSlot={addSlot} onRemoveSlot={removeSlot}
-          onClose={() => setShowSpellcastingModal(false)}
+          onClose={() => setShowSpellcastingModal(false)} card={card}
         />
       )}
       {showSkillModal && (
         <SkillModal
           skillName={showSkillModal} data={data} readOnly={readOnly}
-          getSkillMod={getSkillMod} onUpdate={update} onClose={() => setShowSkillModal(null)}
+          getSkillMod={getSkillMod} onUpdate={update} onClose={() => setShowSkillModal(null)} card={card}
         />
       )}
       {showInitiativeModal && (
         <InitiativeModal
           data={data} readOnly={readOnly}
           onUpdate={update} onClose={() => setShowInitiativeModal(false)}
-          accentColor={theme.accent}
+          accentColor={theme.accent} card={card}
         />
       )}
       {showAcModal && (
         <ArmorClassModal
           data={data} readOnly={readOnly}
           onUpdate={update} onClose={() => setShowAcModal(false)}
-          accentColor={theme.accent}
+          accentColor={theme.accent} card={card}
         />
       )}
       {showSpeedModal && (
         <SpeedModal
           data={data} readOnly={readOnly} overrideReason={speedOverrideReason}
-          onUpdate={update} onClose={() => setShowSpeedModal(false)}
+          onUpdate={update} onClose={() => setShowSpeedModal(false)} card={card}
         />
       )}
       {showCarryModal && (
         <CarryCapacityModal
           data={data} readOnly={readOnly}
           onUpdate={update} onClose={() => setShowCarryModal(false)}
-          accentColor={theme.accent}
+          accentColor={theme.accent} card={card}
         />
       )}
       {showConditionPicker && (
         <ConditionPickerModal
-          conditions={conditions} onAdd={addCondition} onClose={() => setShowConditionPicker(false)}
+          conditions={conditions} onAdd={addCondition} onClose={() => setShowConditionPicker(false)} card={card}
         />
       )}
       {showSettingsModal && (
@@ -1288,6 +1301,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onChoose={url => { update({ portrait: url }); setShowPortraitPicker(false) }}
           onUploadClick={() => portraitRef.current?.click()}
           onClose={() => setShowPortraitPicker(false)}
+          card={card}
         />
       )}
 
@@ -1312,7 +1326,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             if (cf?.length) update({ classFeatures: [...(data.classFeatures ?? []), ...cf] })
             if (si?.length) update({ spellItems: [...(data.spellItems ?? []), ...si] })
           }}
-          onClose={() => setShowClassPicker(false)}
+          onClose={() => setShowClassPicker(false)} card={card}
         />
       )}
       {showRacePicker && (
@@ -1325,7 +1339,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           onImport={({ racialTraits: rt }) => {
             if (rt?.length) update({ racialTraits: [...(data.racialTraits ?? []), ...rt] })
           }}
-          onClose={() => setShowRacePicker(false)}
+          onClose={() => setShowRacePicker(false)} card={card}
         />
       )}
 

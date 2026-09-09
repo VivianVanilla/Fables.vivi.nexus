@@ -10,14 +10,15 @@ interface Props {
   readOnly?: boolean
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function AbilityModal({ data, readOnly, onUpdate, onClose }: Props) {
+export function AbilityModal({ data, readOnly, onUpdate, onClose, card }: Props) {
   const [inputs, setInputs] = useState<Record<string, string>>({})
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10">
           <p className="text-base font-bold text-white">Ability Scores</p>
         </div>

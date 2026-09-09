@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react"
 import type { Feature, UseTracker } from "@/components/shared/types"
 import type { PackItem } from "@/components/documentation/doc-types"
 import type { Theme } from "@/components/shared/themes"
-import { accentShimmerGradient } from "@/components/shared/themes"
+import { accentShimmerGradient, darkenHex } from "@/components/shared/themes"
 import { nanoid } from "@/components/shared/utils"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
@@ -278,14 +278,14 @@ interface FeatureEntryProps {
   containerContentsOpen?: boolean       // Carried Items only, containers only — whether this container's held items are currently shown below it; omit to hide the toggle button entirely
   onToggleContainerContents?: () => void // Carried Items only, containers only — flips containerContentsOpen
   showMagicStar?:    boolean            // Settings toggle (default true) — the "✨" badge on items flagged Magic Item
-  magicItemStyle?:   CardStyle          // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy"/"galaxy-light" are labeled "Animated (Dark)"/"Animated (Light)" in Settings
+  magicItemStyle?:   CardStyle          // Settings choice (default "galaxy") — sheet-wide card background for items flagged Magic Item; "galaxy" is labeled "Background" in Settings — the item's own raw color, animated
   magicItemColor?:   string             // Settings — accent color for magicItemStyle/magicItemSliderStyle, default DEFAULT_ACCENT_COLOR — also the fallback whenever magicItemColorsByRarity is on but this item's own rarity has no color set
   magicItemSliderStyle?: CardStyle      // Settings choice (default "none") — separate look for magic items' own "Track uses" bars, independent of the card background above
   magicItemColorsByRarity?: boolean  // Settings — when true, a magic item's card/border color comes from its own `rarity` (magicItemRarityColors) instead of the one flat magicItemColor
   magicItemRarityColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>  // Settings — card/border color per rarity tier, only used when magicItemColorsByRarity is on
   magicItemRaritySliderColors?: Partial<Record<NonNullable<Feature["rarity"]>, string>>  // Settings — this rarity tier's own "Track uses" bar color — falls back to magicItemRarityColors when unset, same fallback pattern as favoriteCategorySliderColors
   accentColor?:      string             // Settings — this feature's category color (Feature Stylings); resolved by the caller from its category (race/class/feat/invocation), applies everywhere it's rendered, not just Favorites
-  accentStyle?:      CardStyle          // Settings — "none" (default), "outline", "galaxy", or "galaxy-light" for the category card background above
+  accentStyle?:      CardStyle          // Settings — "none" (default), "outline", or "galaxy" ("Background" — the category's own raw color, animated) for the category card background above
   sliderStyle?:      CardStyle          // Settings — separate look for this category's own "Track uses" bars, independent of accentStyle (the card background)
   tagTextColor?:     "black" | "white"   // Settings — global (not per-category) override for the small source tag (class/race name) AND "Lv N" badge text color — omit/undefined keeps each badge's own existing background+text color as-is
   bodyTextColor?:    "black" | "white"   // Settings — global override for this card's own description text color — omit/undefined keeps the default
@@ -296,100 +296,16 @@ interface FeatureEntryProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Purely cosmetic — a slow-drifting starfield/nebula card background for
-// items flagged "Magic Item" (see index.css for the @keyframes). Plain
-// inline style rather than a Tailwind class since it's a multi-layer
-// gradient, not a single utility value.
-//
-// Three stacked layers (first = frontmost):
-//  1. A flat translucent wash — heavier than it looks, so the pattern reads
-//     as a faint backdrop behind the name/badges instead of competing with them.
-//  2. A small repeating star tile, dim, animated by exactly its own tile size
-//     (see @keyframes fables-item-cosmos) — repeating tiles always wrap
-//     seamlessly at a multiple of their own size, same trick the "gold"
-//     theme's coin rain uses (index.css), unlike a one-shot 200%-canvas
-//     scroll which visibly seams once discrete dots (not a continuous
-//     gradient) reach the edge.
-//  3. A static, muted nebula gradient base — no animation, so nothing about it can seam.
-const STAR_TILE = [
-  "radial-gradient(circle 1px at 15% 20%, #fff 35%, transparent 45%)",
-  "radial-gradient(circle 1px at 55% 65%, #fff 35%, transparent 45%)",
-  "radial-gradient(circle 1.5px at 80% 30%, #fff 35%, transparent 45%)",
-  "radial-gradient(circle 1px at 30% 85%, #fff 35%, transparent 45%)",
-  "radial-gradient(circle 1px at 90% 90%, #fff 35%, transparent 45%)",
-].join(", ")
-
-// Same tile as STAR_TILE, dark specks instead of white — the "Animated
-// (Light)" variant's wash/gradient run light-to-white, so white flecks would
-// vanish into it the way dark ones vanish into the regular dark variant.
-const STAR_TILE_LIGHT = [
-  "radial-gradient(circle 1px at 15% 20%, #1e1b2e 35%, transparent 45%)",
-  "radial-gradient(circle 1px at 55% 65%, #1e1b2e 35%, transparent 45%)",
-  "radial-gradient(circle 1.5px at 80% 30%, #1e1b2e 35%, transparent 45%)",
-  "radial-gradient(circle 1px at 30% 85%, #1e1b2e 35%, transparent 45%)",
-  "radial-gradient(circle 1px at 90% 90%, #1e1b2e 35%, transparent 45%)",
-].join(", ")
-
-function clamp255(n: number): number {
-  return Math.max(0, Math.min(255, Math.round(n)))
-}
-
-// amt < 0 darkens toward black, amt > 0 lightens toward white — fallback for
-// when no real card background color is known (see mixHex below, which is
-// preferred whenever it is).
-function shade(hex: string, amt: number): string {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  const [r, g, b] = m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [139, 92, 246]
-  const mix = (c: number) => clamp255(amt < 0 ? c * (1 + amt) : c + (255 - c) * amt)
-  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`
-}
-
-// Blends the chosen accent color toward the sheet's actual current card
-// color (theme.boxHex/lightBoxHex) instead of always crushing toward black —
-// t=1 is pure bg, t=0 is pure accent. Used so "Animated Background" cards
-// visually sit on whichever theme/mode is active rather than always fading
-// to a fixed near-black corner regardless of it.
-function mixHex(color: string, bg: string, t: number): string {
-  const cm = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color)
-  const bm = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(bg)
-  const [cr, cg, cb] = cm ? [parseInt(cm[1], 16), parseInt(cm[2], 16), parseInt(cm[3], 16)] : [139, 92, 246]
-  const [br, bgc, bb] = bm ? [parseInt(bm[1], 16), parseInt(bm[2], 16), parseInt(bm[3], 16)] : [10, 6, 22]
-  return `rgb(${clamp255(cr + (br - cr) * t)}, ${clamp255(cg + (bgc - cg) * t)}, ${clamp255(cb + (bb - cb) * t)})`
-}
-
-// The "Animated Background" category style — same 3-layer starfield/nebula
-// treatment as the Magic Items "Animated" style below, but with the gradient
-// stops derived from whichever color the category was given in Settings
-// instead of a fixed purple, blended toward the sheet's actual current card
-// color (bgHex) when
-// known so the effect reads as tinting the real background rather than
-// always fading to black.
-//
-// `light` (the "Animated (Light)" variant — CardStyle "galaxy-light") always
-// blends toward white instead, ignoring bgHex entirely: the point of picking
-// it explicitly is a bright/pastel nebula regardless of the sheet's actual
-// (usually dark) card color, the same way the regular dark variant otherwise
-// crushes toward near-black for anyone who hasn't built a genuinely light
-// custom theme. The wash and star-fleck colors both flip too, since a dark
-// wash/white flecks (right for the dark variant) would just recreate the
-// same dark card here.
-export function coloredNebulaBg(color: string, bgHex?: string, light?: boolean): CSSProperties {
-  const s1 = light ? shade(color, 0.55) : (bgHex ? mixHex(color, bgHex, 0.85) : shade(color, -0.85))
-  const s2 = light ? shade(color, 0.3)  : (bgHex ? mixHex(color, bgHex, 0.55) : shade(color, -0.55))
-  const s3 = light ? shade(color, 0.05) : (bgHex ? mixHex(color, bgHex, 0.15) : shade(color, -0.15))
-  const wash = light ? "rgba(255,255,255,0.28)" : "rgba(10,6,22,0.7)"
-  const starTile = light ? STAR_TILE_LIGHT : STAR_TILE
-  return {
-    backgroundImage: `linear-gradient(${wash}, ${wash}), ${starTile}, linear-gradient(135deg, ${s1}, ${s2} 45%, ${s3} 75%, ${s1})`,
-    backgroundRepeat: "no-repeat, repeat, no-repeat",
-    backgroundSize: "100% 100%, 90px 90px, 100% 100%",
-    backgroundPosition: "0 0, 0 0, 0 0",
-    animation: "fables-item-cosmos 20s linear infinite",
-  }
+// Renders a card's chosen accent color as its own solid background fill —
+// the raw picked color, exactly as picked. Tried an animated shine sweep,
+// then a static diagonal sheen; both got cut — this is just the flat color,
+// nothing layered over it.
+export function coloredNebulaBg(color: string): CSSProperties {
+  return { backgroundColor: color }
 }
 
 function isAnimatedStyle(style?: CardStyle | null): boolean {
-  return style === "galaxy" || style === "galaxy-light"
+  return style === "galaxy"
 }
 
 // Shared with SpellEntry.tsx and FamiliarsTab.tsx's inline card — one
@@ -406,10 +322,15 @@ function isAnimatedStyle(style?: CardStyle | null): boolean {
 // neighboring cards' edges melt into each other, whereas a solid border/ring
 // color never blurs, so the seam between cards stays visible no matter how
 // tightly packed the list is.
-export function categoryAccentStyle(color?: string, style?: CardStyle, bgHex?: string): CSSProperties | undefined {
+export function categoryAccentStyle(color?: string, style?: CardStyle): CSSProperties | undefined {
   if (!color || !style || style === "none") return undefined
-  const base = { borderColor: color, "--tw-ring-color": color } as CSSProperties
-  return isAnimatedStyle(style) ? { ...base, ...coloredNebulaBg(color, bgHex, style === "galaxy-light") } : base
+  // "Background" fills the whole card in the raw color — a border in that
+  // SAME color would sit right on top of its own fill with no edge at all,
+  // so it's darkened 20% instead, for an actual outline. "Outline" has no
+  // fill to blend into, so it keeps the exact picked color.
+  const borderColor = isAnimatedStyle(style) ? darkenHex(color, 0.2) : color
+  const base = { borderColor, "--tw-ring-color": borderColor } as CSSProperties
+  return isAnimatedStyle(style) ? { ...base, ...coloredNebulaBg(color) } : base
 }
 
 // A "manual" tracker has no periodic Rest to regain it, so recovering more
@@ -1121,7 +1042,14 @@ export function FeatureEntry({
   const resolvedMagicSliderColor = magicItemColorsByRarity && feature.rarity
     ? (magicItemRaritySliderColors?.[feature.rarity] ?? magicItemRarityColors?.[feature.rarity] ?? DEFAULT_RARITY_HEX[feature.rarity])
     : magicItemColor
-  const cardStyle  = isAnimatedStyle(magicStyle) ? coloredNebulaBg(resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR, theme.boxHex, magicStyle === "galaxy-light") : undefined
+  const cardStyle  = isAnimatedStyle(magicStyle) ? coloredNebulaBg(resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR) : undefined
+  // Same reasoning as categoryAccentStyle below: "Background" fills the card
+  // in the raw color, so its border needs to be darker than that fill to
+  // read as an edge at all — "Outline" has no fill to blend into, so it
+  // keeps the exact picked color.
+  const resolvedMagicBorderColor = isAnimatedStyle(magicStyle)
+    ? darkenHex(resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR, 0.2)
+    : (resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR)
 
   // Uses-tracking bar look is its own Settings choice per category (Feature
   // Stylings — "Tracking Slider" row), so it CAN be set independently of the
@@ -1168,11 +1096,11 @@ export function FeatureEntry({
   }
 
   return (
-    <div className={`rounded-xl border overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${isAnimatedStyle(magicStyle) ? "" : theme.box}`}
+    <div className={`rounded-xl border-2 overflow-hidden shrink-0 ${magicStyle ? "" : "border-white/10"} ${isAnimatedStyle(magicStyle) ? "" : theme.box}`}
       style={{
         ...cardStyle,
-        ...(magicStyle ? { borderColor: resolvedMagicCardColor ?? DEFAULT_ACCENT_COLOR } : {}),
-        ...categoryAccentStyle(accentColor, accentStyle, theme.boxHex),
+        ...(magicStyle ? { borderColor: resolvedMagicBorderColor } : {}),
+        ...categoryAccentStyle(accentColor, accentStyle),
       }}>
 
       {/* Header row */}
@@ -1230,12 +1158,12 @@ export function FeatureEntry({
           )}
 
           {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagBadgeClass}`}>
               AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
             </span>
           )}
           {showItemExtras && (feature.equipKind ?? "armor") === "armor" && (feature.itemMeta?.armorMode ?? "bonus") === "bonus" && !!feature.itemMeta?.acBonus && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 shrink-0">+{feature.itemMeta.acBonus} AC</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagBadgeClass}`}>+{feature.itemMeta.acBonus} AC</span>
           )}
 
           {/* Passive readout only — expand the card to actually change it

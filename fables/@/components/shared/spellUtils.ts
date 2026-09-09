@@ -47,6 +47,12 @@ export function spellItemFieldsFromSpell(s: Spell): Omit<SpellItem, "id"> {
     duration: dur,
     components: s.components?.join(", ") ?? "",
     materialComponents: s.materialComponents ? (s.materials ?? "") : "",
+    // Without this, an imported spell's material text sits in the field
+    // above but the edit form's input for it stays hidden (gated on
+    // requiresMaterial in SpellEntry.tsx) — visible in the read-only
+    // display, but with no way to actually edit it. This is the "preloaded
+    // spells have the description but you can't edit it" bug.
+    requiresMaterial: s.materialComponents ?? false,
     ritual: s.ritual ?? false,
     concentration: dur.toLowerCase().includes("concentration"),
     damage: s.damage ?? parsed.damage ?? "",

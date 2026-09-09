@@ -20,9 +20,10 @@ interface Props {
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
   accentColor: string
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function ArmorClassModal({ data, readOnly, onUpdate, onClose, accentColor }: Props) {
+export function ArmorClassModal({ data, readOnly, onUpdate, onClose, accentColor, card }: Props) {
   const primary = data.acAbility ?? "dex"
   const dual    = data.acAbility2 != null
   const misc    = data.acMiscBonus ?? 0
@@ -30,7 +31,7 @@ export function ArmorClassModal({ data, readOnly, onUpdate, onClose, accentColor
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-72 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
           <p className="text-base font-bold text-white">Armor Class</p>
           <span className="text-xl font-mono font-bold" style={{ color: accentColor }}>{result.total}</span>

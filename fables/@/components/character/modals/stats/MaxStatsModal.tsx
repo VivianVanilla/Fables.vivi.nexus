@@ -8,9 +8,10 @@ interface Props {
   extraMaxHpBonus?: number  // any other override already folded into effectiveMax (e.g. an active Form's maxHpBonus) — needed to recompute it locally after an edit made here
   onUpdate: (patch: Partial<CharacterData>) => void
   onClose: () => void
+  card: string   // this character's own card styling — this modal's shell inherits it instead of a fixed generic look
 }
 
-export function MaxStatsModal({ data, effectiveMax, extraMaxHpBonus = 0, onUpdate, onClose }: Props) {
+export function MaxStatsModal({ data, effectiveMax, extraMaxHpBonus = 0, onUpdate, onClose, card }: Props) {
   const maxHpMod   = data.maxHpMod ?? 0
   const hp         = data.hp ?? 0
   // Split into a sign toggle + always-positive magnitude — some mobile numeric
@@ -20,17 +21,20 @@ export function MaxStatsModal({ data, effectiveMax, extraMaxHpBonus = 0, onUpdat
   const isNegative = maxHpMod < 0
   const magnitude  = Math.abs(maxHpMod)
 
-  // 5e rule for anything that lowers your hit point maximum: if current HP
-  // is now above the new maximum, it drops to match instead of just sitting
-  // there above an emptier bar. Without this, dropping Max HP below current
-  // HP left `hp` untouched while `effectiveMax` fell out from under it —
-  // e.g. 11/11 with a −10 Max HP Modifier read as "11 HP" on a bar whose max
-  // was now 1, instead of correctly reading 1/1.
+  // 5e rule for anything that changes your hit point maximum: raising it
+  // raises current HP by that same amount too (same as Aid, or a feat like
+  // Tough — not just "you can now heal higher"), and lowering it below
+  // current HP drops current HP to match instead of just sitting there
+  // above an emptier bar. Without the lower-clamp, dropping Max HP below
+  // current HP left `hp` untouched while `effectiveMax` fell out from under
+  // it — e.g. 11/11 with a −10 Max HP Modifier read as "11 HP" on a bar
+  // whose max was now 1, instead of correctly reading 1/1.
   function applyMaxChange(patch: Partial<CharacterData>) {
     const nextMaxHp    = patch.maxHp    ?? data.maxHp ?? 0
     const nextMaxHpMod = patch.maxHpMod ?? maxHpMod
     const nextEffectiveMax = Math.max(0, nextMaxHp + nextMaxHpMod + extraMaxHpBonus)
     if (nextEffectiveMax < hp) patch.hp = nextEffectiveMax
+    else if (nextEffectiveMax > effectiveMax) patch.hp = Math.min(nextEffectiveMax, hp + (nextEffectiveMax - effectiveMax))
     onUpdate(patch)
   }
 
@@ -38,7 +42,7 @@ export function MaxStatsModal({ data, effectiveMax, extraMaxHpBonus = 0, onUpdat
   function setMagnitude(mag: number)  { applyMaxChange({ maxHpMod: (isNegative ? -1 : 1) * Math.max(0, mag) }) }
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/20 rounded-2xl shadow-2xl w-64 flex flex-col overflow-hidden">
+      <div className={`${card} shadow-2xl w-64 flex flex-col overflow-hidden`}>
         <div className="px-5 py-4 border-b border-white/10">
           <p className="text-base font-bold text-white">Edit Stats</p>
         </div>

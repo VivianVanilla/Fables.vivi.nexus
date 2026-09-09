@@ -69,11 +69,15 @@ export const BG_OPTIONS: Record<string, { label: string; body: string }> = {
 // ── Slot bar color palette (independent of background theme) ──────────────────
 
 // "grayscale" desaturates across levels instead of sweeping hue (keeps
-// Skapari genuinely black & white); "range" is how far (in degrees) the hue
-// sweeps from level 1 to level 9 — narrow for the named presets so Mercury
-// stays warm and Stygia stays cool, wide (the ~260° legacy default) for a
-// hand-picked Custom color so all 9 levels still read as visually distinct.
-export type SlotMode = "hue" | "grayscale"
+// Skapari genuinely black & white); "solid" is the exact same color at
+// every level, full stop — the Settings override that turns any preset (or
+// Custom) into one flat color instead of always sweeping something across
+// levels; "range" is how far (in degrees) the hue sweeps from level 1 to
+// level 9 — narrow for the named presets so Mercury stays warm and Stygia
+// stays cool, wide (the ~260° legacy default) for a hand-picked Custom
+// color so all 9 levels still read as visually distinct. A negative range
+// sweeps the other way around the wheel (Settings' "Hue −" override).
+export type SlotMode = "hue" | "grayscale" | "solid"
 export interface SlotTheme { label: string; accent: string; mode?: SlotMode; range?: number }
 
 export const SLOT_THEMES: Record<string, SlotTheme> = {
@@ -136,6 +140,14 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   return [h * 360, s * 100, l * 100]
 }
 
+// Wraps a hue angle into [0, 360) — needed once `range` can be negative
+// (Settings' "Hue −" override): JS's `%` keeps the sign of its left operand,
+// so a negative sweep can otherwise hand hslToHex a negative hue, which its
+// piecewise formula doesn't handle correctly.
+function normHue(h: number): number {
+  return ((h % 360) + 360) % 360
+}
+
 function hslToHex(h: number, s: number, l: number): string {
   s /= 100; l /= 100
   const a = s * Math.min(l, 1 - l)
@@ -170,12 +182,13 @@ function normalizeSlotInput(input: SlotAccentInput): { accent: string; mode?: Sl
 export function slotLevelColor(input: SlotAccentInput, level: number): string {
   const { accent, mode, range = 260 } = normalizeSlotInput(input)
   if (!accent || !accent.startsWith("#")) return accent ?? "#6B7280"
+  if (mode === "solid") return accent
   const [r, g, b] = hexToRgb(accent)
   const [hue, sat, lightness] = rgbToHsl(r, g, b)
   const t = (level - 1) / 8
   const baseL = Math.max(15, Math.min(88, lightness))
   if (mode === "grayscale") return hslToHex(hue, 0, baseL - t * 45)
-  return hslToHex((hue + t * range) % 360, sat, Math.max(10, baseL - t * 12))
+  return hslToHex(normHue(hue + t * range), sat, Math.max(10, baseL - t * 12))
 }
 
 /**
@@ -206,13 +219,20 @@ export function slotLevelGradient(input: SlotAccentInput, level: number): string
   const [hue, sat, lightness] = rgbToHsl(r, g, b)
   const t = (level - 1) / 8
   const baseL = Math.max(15, Math.min(88, lightness))
+  if (mode === "solid") {
+    // Same hue/saturation at every level (that's the point of "solid") — the
+    // shimmer instead cycles lightness only, the same metallic-sheen trick
+    // accentShimmerGradient uses for a single flat color.
+    const stops = [-14, -7, 0, 7, 14].map(o => hslToHex(hue, sat, Math.max(8, Math.min(92, baseL + o))))
+    return `linear-gradient(90deg, ${stops.join(", ")})`
+  }
   if (mode === "grayscale") {
     const base = baseL - t * 45
     const stops = [-30, -15, 0, 15, 30].map(o => hslToHex(hue, 0, Math.max(8, Math.min(92, base + o))))
     return `linear-gradient(90deg, ${stops.join(", ")})`
   }
   const l = Math.max(10, baseL - t * 12)
-  const baseHue = hue + t * range
-  const stops = [-40, -20, 0, 20, 40].map(o => hslToHex((baseHue + o + 360) % 360, sat, Math.max(8, Math.min(92, l + o))))
+  const baseHue = normHue(hue + t * range)
+  const stops = [-40, -20, 0, 20, 40].map(o => hslToHex(normHue(baseHue + o), sat, Math.max(8, Math.min(92, l + o))))
   return `linear-gradient(90deg, ${stops.join(", ")})`
 }

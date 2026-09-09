@@ -245,7 +245,16 @@ export function ChatPane({
         )}
         {messages.map((msg, i) => {
           const prev = messages[i - 1]
-          const showHeader = !prev || prev.sender_id !== msg.sender_id ||
+          // sender_id is the logged-in user's UUID, not the character — one
+          // person can post as two different characters back to back (swap
+          // characters, send again) without it ever changing. Grouping by
+          // sender_id alone collapsed that second message into the first
+          // one's header, so it silently displayed under the PREVIOUS
+          // character's name/avatar — sender_name (captured fresh per
+          // message at send time, see usePartyServer.ts's sendMessage) is
+          // what actually needs to match for two rows to be "the same
+          // sender" here.
+          const showHeader = !prev || prev.sender_id !== msg.sender_id || prev.sender_name !== msg.sender_name ||
             (new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime()) > 5 * 60 * 1000
           return (
             <Row

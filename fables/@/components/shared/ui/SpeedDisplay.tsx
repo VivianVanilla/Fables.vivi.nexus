@@ -12,6 +12,7 @@ export interface SpeedValues {
   fly?: number
   swim?: number
   climb?: number
+  glide?: number
   burrow?: number
   hover?: number
 }
@@ -21,6 +22,7 @@ const SPEED_TYPES = [
   { key: "fly",    abbr: "Fly",    color: "text-sky-300"    },
   { key: "swim",   abbr: "Swim",   color: "text-cyan-300"   },
   { key: "climb",  abbr: "Climb",  color: "text-amber-300"  },
+  { key: "glide",  abbr: "Glide",  color: "text-lime-300"   },
   { key: "burrow", abbr: "Burrow", color: "text-orange-300" },
   { key: "hover",  abbr: "Hover",  color: "text-violet-300" },
 ] as const

@@ -614,7 +614,7 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
         <DndContext sensors={sensors} collisionDetection={containerAwareCollision} onDragStart={e => setActiveDragId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragId(null)}>
           {/* Dropping on any blank space here (not onto a container) moves
               the dragged item back to the top level. */}
-          <DropZone id="container:root" disabled={readOnly} className="flex-1 min-h-0">
+          <DropZone id="container:root" disabled={readOnly} className="flex-1 min-h-0 flex flex-col gap-1">
             <SortableContext items={roots.map(f => f.id)} strategy={verticalListSortingStrategy}>
               {roots.map(f => renderItem(f, 0))}
             </SortableContext>

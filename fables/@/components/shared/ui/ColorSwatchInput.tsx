@@ -1,11 +1,14 @@
 // ════════════════════════════════════════════════════════════════════════════
 // ColorSwatchInput.tsx — every custom-color picker in the app renders through
-// this one component instead of a bare <input type="color">, so it's visually
-// obvious at a glance that a swatch is a real, tap-to-customize color picker
-// (an eyedropper icon) rather than just a colored dot/decoration — the icon
-// itself is tinted to the current value, and a real <input type="color">
-// sits invisibly on top so it still opens the native OS picker on click/tap;
-// this is purely a visual re-skin, the interaction is unchanged.
+// this one component instead of a bare <input type="color">: a solid filled
+// circle in the picked color, with a fixed two-tone border (light ring, then
+// a dark hairline outside it) so the edge stays visible no matter how dark
+// or light the color inside it is — a border DERIVED from the color itself
+// (tried first: a same-hue ring, darkened) still vanishes for colors that
+// are already dark, which is most custom picks in this app's own dark
+// theme. A real <input type="color"> sits invisibly on top so it still
+// opens the native OS picker on click/tap; this is purely a visual re-skin,
+// the interaction is unchanged.
 //
 // Right-click copies this swatch's hex to the clipboard; shift-click pastes
 // a hex from the clipboard into it — lets a color be carried from one swatch
@@ -16,7 +19,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react"
-import { Pipette } from "lucide-react"
 
 interface ColorSwatchInputProps {
   value: string
@@ -49,10 +51,11 @@ export function ColorSwatchInput({ value, onChange, title, size = "size-5", clas
   const hint = `${title ? title + " — " : ""}right-click to copy, shift-click to paste`
 
   return (
-    <span className={`relative inline-flex items-center justify-center ${size} shrink-0 cursor-pointer ${className}`} title={hint}
+    <span className={`relative inline-flex items-center justify-center rounded-full ${size} shrink-0 cursor-pointer ${className}`} title={hint}
       onContextMenu={e => { e.preventDefault(); copyHex() }}>
-      <Pipette size={14} color={value} strokeWidth={2.25} className="pointer-events-none" />
-      {copied && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-green-400 pointer-events-none" />}
+      <span className="absolute inset-0 rounded-full border-2 border-white/40 shadow-[0_0_0_1px_rgba(0,0,0,0.45)] pointer-events-none"
+        style={{ backgroundColor: value }} />
+      {copied && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-green-400 ring-1 ring-black/40 pointer-events-none z-10" />}
       <input
         type="color"
         value={value}
