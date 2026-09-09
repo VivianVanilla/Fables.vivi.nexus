@@ -66,6 +66,92 @@ export const BG_OPTIONS: Record<string, { label: string; body: string }> = {
   [CUSTOM_THEME_KEY]: { label: "Custom", body: "bg-[var(--bg-custom-color)]" },
 }
 
+// ── Background image (a separate layer on top of the Background color above,
+//    behind ALL sheet content — see CharacterSheet.tsx's root render and
+//    Settings' "Background Image" row) ──────────────────────────────────────
+
+export interface BgImageTheme {
+  label: string
+  backgroundImage: string
+  backgroundSize: string
+  backgroundRepeat: string
+}
+
+// Built-in presets are computed CSS patterns, not photos — no real image
+// asset to host/ship. "custom" (CharacterData.bgImageCustomUrl) is where an
+// actual uploaded photo comes in instead; these live side by side in
+// Settings' preset grid. Every entry here is deliberately just ONE size/
+// repeat VALUE (not one per background-image layer) — it cycles across
+// however many layers the image has, so any of these can gain/lose layers
+// later without re-counting entries to match, the mistake that broke this
+// feature twice before (Window mode also forces a uniform cover/no-repeat/
+// fixed over whatever's defined here anyway — see CharacterSheet.tsx).
+export const BG_IMAGE_THEMES: Record<string, BgImageTheme> = {
+  voidCorruption: {
+    label: "Void Corruption",
+    // Second pass added color but the wrong kind — toxic green reads as
+    // poison/plague, not void. "Void" is emptiness/a black hole pulling
+    // everything into it, so this drops green (and red) entirely for a
+    // monochrome black-to-violet palette: a "singularity" glow near the
+    // top (a dark event-horizon center that only gets to be violet at its
+    // very edge, black at its core — an absence with a rim of light around
+    // it, not a glowing ball), a couple of wispy indigo blooms lower down,
+    // and the same two fracture lines recolored to match.
+    backgroundImage: [
+      // Film-grain texture on top of the color, via an inline SVG
+      // feTurbulence/feColorMatrix filter (the classic grain-noise
+      // technique) encoded as a data URI — this is what actually makes it
+      // feel like something rather than a few smooth gradient blobs.
+      // feColorMatrix zeroes the RGB channels and keeps only alpha driven
+      // by the noise, so it's pure grain, no color of its own — it just
+      // roughens whatever's layered underneath.
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+      "radial-gradient(circle at 50% 38%, transparent 0%, transparent 18%, rgba(88,28,135,0.4) 30%, transparent 42%)",
+      "radial-gradient(ellipse at 15% 82%, rgba(49,10,101,0.32), transparent 50%)",
+      "radial-gradient(ellipse at 88% 75%, rgba(30,8,60,0.28), transparent 45%)",
+      "linear-gradient(105deg, transparent 48.5%, rgba(88,28,135,0.4) 49.5%, transparent 50.5%)",
+      "linear-gradient(35deg, transparent 68%, rgba(49,10,101,0.32) 69%, transparent 70%)",
+      "radial-gradient(circle, #000000, #000000)",
+    ].join(", "),
+    backgroundSize: "cover",
+    backgroundRepeat: "no-repeat",
+  },
+  galaxy: {
+    label: "Galaxy",
+    // The colorful wash that used to be Nebula Wash, now paired with a
+    // hand-placed scatter of stars (fixed positions, not a repeating
+    // tile — Window mode's forced "cover" sizing would just blow up a
+    // small repeating tile into one giant soft blob instead of a field of
+    // points, so this needed placing individually rather than tiled).
+    // Solid core fading out over just the last 10% of a 1.5-2px radius
+    // (tried first) reads as a hard, glaring little dot rather than a
+    // twinkle — especially the one or two that happen to land somewhere
+    // more central/visible than the rest. A much longer soft falloff (and
+    // toned-down peak opacity) gives an actual soft glow instead.
+    backgroundImage: [
+      "radial-gradient(circle 1.8px at 12% 18%, rgba(255,255,255,0.75) 14%, transparent 85%)",
+      "radial-gradient(circle 1.5px at 28% 42%, rgba(255,255,255,0.65) 14%, transparent 85%)",
+      "radial-gradient(circle 1.8px at 55% 12%, rgba(255,255,255,0.75) 14%, transparent 85%)",
+      "radial-gradient(circle 1.5px at 72% 30%, rgba(255,255,255,0.65) 14%, transparent 85%)",
+      "radial-gradient(circle 1.8px at 88% 55%, rgba(255,255,255,0.75) 14%, transparent 85%)",
+      "radial-gradient(circle 1.5px at 15% 68%, rgba(255,255,255,0.65) 14%, transparent 85%)",
+      "radial-gradient(circle 1.8px at 42% 80%, rgba(255,255,255,0.75) 14%, transparent 85%)",
+      "radial-gradient(circle 1.5px at 65% 90%, rgba(255,255,255,0.65) 14%, transparent 85%)",
+      "radial-gradient(circle 1.5px at 92% 82%, rgba(255,255,255,0.65) 14%, transparent 85%)",
+      "radial-gradient(circle 1.5px at 8% 92%, rgba(255,255,255,0.65) 14%, transparent 85%)",
+      "radial-gradient(ellipse at 20% 20%, rgba(139,92,246,0.6), transparent 52%)",
+      "radial-gradient(ellipse at 80% 70%, rgba(59,130,246,0.55), transparent 58%)",
+      "radial-gradient(ellipse at 50% 100%, rgba(236,72,153,0.5), transparent 62%)",
+      "radial-gradient(circle, #14121f, #14121f)",
+    ].join(", "),
+    backgroundSize: "cover",
+    backgroundRepeat: "no-repeat",
+  },
+}
+
+export const CUSTOM_BG_IMAGE_KEY = "custom"
+export const DEFAULT_BG_IMAGE_OPACITY = 40
+
 // ── Slot bar color palette (independent of background theme) ──────────────────
 
 // "grayscale" desaturates across levels instead of sweeping hue (keeps
@@ -91,7 +177,7 @@ export const CUSTOM_SLOT_THEME_KEY = "custom"
 
 // ── Color utilities ────────────────────────────────────────────────────────────
 
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "")
   return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
 }

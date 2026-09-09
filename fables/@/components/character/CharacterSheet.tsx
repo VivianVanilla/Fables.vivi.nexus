@@ -15,8 +15,9 @@ import type {
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
 import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances, favoriteFamiliarSwap } from "@/components/shared/utils"
-import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, darkenHex } from "@/components/shared/themes"
+import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY, darkenHex, hexToRgb } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
+import { VoidParticles } from "@/components/shared/ui/VoidParticles"
 import { loadUserImages, uploadUserImage } from "@/components/shared/imageGallery"
 import { deriveCharacterClassNames } from "@/components/shared/classColors"
 import { migrateEquipmentItems } from "./migrateMartialItems"
@@ -735,7 +736,79 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // FeatureEntry's nebula gradient parse this as a literal hex); box/body
   // stay the CSS-var-backed classes from THEMES, resolved via the root
   // element's inline style below.
-  const theme      = isCustomTheme ? { ...baseTheme, boxHex: customBoxHex, accent: customBoxHex } : baseTheme
+  const themeWithCustomColor = isCustomTheme ? { ...baseTheme, boxHex: customBoxHex, accent: customBoxHex } : baseTheme
+
+  // Settings' "Background Image" — a layer on top of the Background color
+  // above, behind ALL sheet content (see the -z-10 div below). Built-in
+  // presets are computed CSS patterns from BG_IMAGE_THEMES; "custom" is an
+  // actual uploaded/picked photo (bgImageCustomUrl). Unset/"none"/a custom
+  // pick with no image chosen yet all mean "nothing to render."
+  const bgImageKey = data.bgImageStyle ?? "none"
+  // background-attachment: fixed positions the image relative to the
+  // VIEWPORT instead of each element, so every card (wherever it happens to
+  // sit on screen) samples an aligned slice of what reads as one continuous
+  // image behind everything — genuine "cards as windows/cutouts," with no
+  // actual shared image layer anywhere and the plain page background (the
+  // gaps between cards) completely untouched either way, unlike the very
+  // first attempt at this feature (a real shared layer at the root, cut —
+  // it only ever covered about one viewport-height of the scrollable
+  // sheet). There used to be a "tile" mode alongside this (a small
+  // fixed-size repeating tile instead) — cut for simplicity.
+  const bgImageLayerStyle: React.CSSProperties | undefined =
+    bgImageKey === CUSTOM_BG_IMAGE_KEY
+      ? (data.bgImageCustomUrl
+          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+          : undefined)
+      : BG_IMAGE_THEMES[bgImageKey]
+        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: "cover", backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+        : undefined
+  // Each card gets its own copy of that same image, tinted with the card's
+  // own color underneath it — a shared "one continuous canvas behind
+  // everything" layer (tried first) only ever shows through the ~one
+  // viewport-height near the top of the sheet, since a position:absolute
+  // layer sized to the root's own box doesn't extend across content taller
+  // than that; sizing each card's own copy to itself (background-size:
+  // cover) has no such limit, and keeps the card's own chosen color as the
+  // dominant tone with the image just showing through faintly underneath,
+  // rather than replacing the card's color outright.
+  //
+  // This has to flow through CSS variables (set on the root below, see
+  // rootStyle), not a Tailwind class built from these values directly —
+  // `${theme.box}/80` and a plain "bg-transparent" swap were both tried for
+  // this same feature already; a class name assembled at runtime from a
+  // runtime value never appears as literal text anywhere in source, so
+  // Tailwind's JIT scanner never generates anything for it. The class name
+  // itself (.fables-image-card, in index.css) never changes — only the
+  // variables it reads do.
+  const cardBgVars: Record<string, string> | undefined = bgImageLayerStyle ? (() => {
+    const [tr, tg, tb] = hexToRgb(themeWithCustomColor.boxHex)
+    // Settings' Opacity slider now controls how much of the image shows
+    // through the tint, capped at 40% even at the slider's max — "should
+    // still apply the color of the cards" is the one thing this can't ever
+    // trade away entirely, so the tint never drops below 60%.
+    const imageAlpha = ((data.bgImageOpacity ?? DEFAULT_BG_IMAGE_OPACITY) / 100) * 0.4
+    const tint = `rgba(${tr}, ${tg}, ${tb}, ${1 - imageAlpha})`
+    // "scroll" for the flat tint layer (its own attachment doesn't matter —
+    // a flat color has no spatial position for "fixed" to change anyway),
+    // "fixed" for the actual image behind it.
+    return {
+      "--fables-card-bg-image": `linear-gradient(${tint}, ${tint}), ${bgImageLayerStyle.backgroundImage}`,
+      "--fables-card-bg-size": `100% 100%, ${bgImageLayerStyle.backgroundSize}`,
+      "--fables-card-bg-repeat": `no-repeat, ${bgImageLayerStyle.backgroundRepeat}`,
+      "--fables-card-bg-attachment": "scroll, fixed",
+      // Untinted — CSS custom properties inherit down the whole tree, so
+      // any accent-colored card (a magic item, a category card — anything
+      // going through FeatureEntry.tsx's coloredNebulaBg with its OWN
+      // color, not this theme's) can reference these directly with its own
+      // tint on top, with no prop threading needed through every list
+      // component in between to reach it.
+      "--fables-shared-bg-image": `${bgImageLayerStyle.backgroundImage ?? "none"}`,
+      "--fables-shared-bg-size": `${bgImageLayerStyle.backgroundSize ?? "cover"}`,
+      "--fables-shared-bg-repeat": `${bgImageLayerStyle.backgroundRepeat ?? "no-repeat"}`,
+      "--fables-shared-bg-attachment": "fixed",
+    }
+  })() : undefined
+  const theme = bgImageLayerStyle ? { ...themeWithCustomColor, box: "fables-image-card" } : themeWithCustomColor
   const bgKey       = data.themeBg ?? DEFAULT_BG_THEME
   const isCustomBg  = bgKey === CUSTOM_THEME_KEY
   const effectiveBody = BG_OPTIONS[bgKey]?.body || theme.body
@@ -1181,11 +1254,21 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     ...(isCustomBg ? {
       "--bg-custom-color": data.themeBgCustomColor ?? DEFAULT_ACCENT_COLOR,
     } as React.CSSProperties : {}),
+    ...(cardBgVars as React.CSSProperties | undefined ?? {}),
   }
 
+
   return (
-    <div className={`flex flex-col h-full min-h-0 text-white overflow-auto ${effectiveBody}`}
+    <div className={`relative flex flex-col h-full min-h-0 text-white overflow-auto ${effectiveBody}`}
       style={rootStyle} data-sheet-text={sheetTextDark ? "dark" : undefined}>
+
+      {/* Animated Particles — its own opt-in layer, stacks on top of the plain
+          Background/Background Image but behind every card and header (negative
+          z-index still paints above the root's own background-color, see
+          VoidParticles.tsx). `relative` on the root above is required so its
+          `position:absolute` resolves against the sheet itself, not some
+          ancestor further up the app shell. */}
+      {data.bgParticles && <VoidParticles />}
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
@@ -1254,7 +1337,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       )}
       {showSettingsModal && (
         <SettingsModal data={data} onUpdate={update} onClose={() => setShowSettingsModal(false)}
-          isWarlock={isWarlock} isArtificer={isArtificer} characterId={character.id} card={card} />
+          isWarlock={isWarlock} isArtificer={isArtificer} characterId={character.id} card={card} userId={user?.id ?? null} />
       )} 
 
 
@@ -1349,7 +1432,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       {/* Two rows on narrow screens (portrait+info, then the Rest/Settings/
           Automation cluster below it) instead of cramming everything into
           one unbreakable row — collapses back to a single row at sm:. */}
-      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 py-2 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 py-2 border-b border-white/10 shrink-0">
 
         <div className="flex items-center gap-3 min-w-0">
         <button type="button"
@@ -1485,7 +1568,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-1 flex-wrap px-3 py-1.5 border-b border-white/10 shrink-0 ${effectiveBody}`}>
+      <div className="flex items-center gap-1 flex-wrap px-3 py-1.5 border-b border-white/10 shrink-0">
         {(["main", "details", "items", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`relative px-3 py-1 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
@@ -1501,7 +1584,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       </div>{/* ── end sticky wrapper ── */}
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div className={`flex flex-col ${activeTab === "chat" ? "flex-1 min-h-0 overflow-hidden" : "shrink-0 p-3"} ${effectiveBody}`}>
+      <div className={`flex flex-col ${activeTab === "chat" ? "flex-1 min-h-0 overflow-hidden" : "shrink-0 p-3"}`}>
         {activeTab === "main"    && renderCombatTab()}
         {activeTab === "details" && (
           <InfoTab data={data} update={update} theme={theme} card={card} readOnly={readOnly}

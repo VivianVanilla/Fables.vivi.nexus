@@ -1,11 +1,13 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Modal } from "@/components/shared/ui/Modal"
 import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
+import { PortraitModal } from "@/components/shared/PortraitModal"
 import type { CharacterData } from "@/components/shared/types"
-import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME } from "@/components/shared/themes"
+import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY } from "@/components/shared/themes"
 import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, DEFAULT_RARITY_HEX, UI_SCALES, TEXT_COLOR_OPTIONS, type CardStyle } from "@/components/shared/constants"
 import { deriveCharacterClassNames, classLabel } from "@/components/shared/classColors"
 import { nanoid } from "@/components/shared/utils"
+import { loadUserImages, uploadUserImage, type GalleryImage } from "@/components/shared/imageGallery"
 
 interface Props {
   data: CharacterData
@@ -15,6 +17,7 @@ interface Props {
   isArtificer: boolean  // gates the Infusions Feature Styling row below
   characterId: string   // for building the /share/<id>/<token> link below
   card: string           // this character's own card styling (theme.box + ring) — this modal's shell inherits it instead of a fixed generic look
+  userId: string | null  // for uploading/picking a custom Background Image below
 }
 
 // One None/Outline(or Flat)/Background(or Hue Shift) toggle group, shared by
@@ -43,15 +46,33 @@ function StyleToggle({ label, value, onChange, slider, dark }: { label: string; 
   )
 }
 
-export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer, characterId, card }: Props) {
+export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer, characterId, card, userId }: Props) {
   const activeThemeKey = data.theme     ?? DEFAULT_THEME
   const activeSlotKey  = data.slotTheme ?? DEFAULT_SLOT_THEME
   const activeBgKey    = data.themeBg   ?? DEFAULT_BG_THEME
+  const activeBgImageKey = data.bgImageStyle ?? "none"
   const themeCustomColor = data.themeCustomColor ?? DEFAULT_ACCENT_COLOR
   const themeBgCustomColor = data.themeBgCustomColor ?? DEFAULT_ACCENT_COLOR
   const slotCustomColor = data.slotCustomColor ?? DEFAULT_ACCENT_COLOR
   const classNames      = deriveCharacterClassNames(data)
   const uiScale         = data.uiScale ?? 100
+  const [showBgImagePicker, setShowBgImagePicker] = useState(false)
+  const [bgImageGallery, setBgImageGallery] = useState<GalleryImage[]>([])
+  const [bgImageGalleryLoading, setBgImageGalleryLoading] = useState(false)
+  const bgImageInputRef = useRef<HTMLInputElement>(null)
+
+  async function openBgImagePicker() {
+    setShowBgImagePicker(true)
+    if (!userId) return
+    setBgImageGalleryLoading(true)
+    setBgImageGallery(await loadUserImages(userId))
+    setBgImageGalleryLoading(false)
+  }
+  async function uploadBgImage(file: File) {
+    if (!userId) return
+    const url = await uploadUserImage(userId, file)
+    if (url) onUpdate({ bgImageStyle: CUSTOM_BG_IMAGE_KEY, bgImageCustomUrl: url })
+  }
   // Same convention already used elsewhere for the sheet-wide Text Color
   // setting (tagTextColor/bodyTextColor in InfoTab.tsx etc.) — this modal's
   // own shell already inherits the character's Card Style background (see
@@ -219,11 +240,76 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                         </>
                       )}
                     </div>
+                    
                     <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{t.label}</span>
                   </button>
                 )
               })}
             </div>
+               {/* Background Image — a separate layer on top of the Background
+              color above, sitting behind every card/panel on the sheet (see
+              CharacterSheet.tsx's -z-10 render). Built-in presets are
+              computed patterns (no real photo to ship); "Custom" opens the
+              same upload/gallery picker Portrait uses. */}
+          <div className="flex flex-col gap-2">
+            <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Card Overlay</p>
+            <div className="grid grid-cols-5 gap-1.5">
+              <button type="button" onClick={() => onUpdate({ bgImageStyle: "none" })}
+                className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${activeBgImageKey === "none" ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                <div className="size-6 rounded-full border border-white/20 shrink-0 bg-white/5" />
+                <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${activeBgImageKey === "none" ? "text-white" : "text-white/50"}`}>None</span>
+              </button>
+              {Object.entries(BG_IMAGE_THEMES).map(([key, bg]) => {
+                const isActive = key === activeBgImageKey
+                return (
+                  <button key={key} type="button" onClick={() => onUpdate({ bgImageStyle: key })}
+                    className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${isActive ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                    <div className="size-6 rounded-full border border-white/20 shrink-0"
+                      style={{ backgroundImage: bg.backgroundImage, backgroundSize: bg.backgroundSize, backgroundRepeat: bg.backgroundRepeat }} />
+                    <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${isActive ? "text-white" : "text-white/50"}`}>{bg.label}</span>
+                  </button>
+                )
+              })}
+              <button type="button" onClick={openBgImagePicker}
+                className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${activeBgImageKey === CUSTOM_BG_IMAGE_KEY ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
+                <div className="size-6 rounded-full border border-white/20 shrink-0 overflow-hidden bg-white/5">
+                  {data.bgImageCustomUrl && <img src={data.bgImageCustomUrl} alt="" className="w-full h-full object-cover" />}
+                </div>
+                <span className={`text-[10px] font-semibold leading-tight truncate w-full text-center ${activeBgImageKey === CUSTOM_BG_IMAGE_KEY ? "text-white" : "text-white/50"}`}>Custom</span>
+              </button>
+            </div>
+            {activeBgImageKey !== "none" && (
+              <>
+              
+                <label className={`flex items-center gap-2 text-xs ${c50} px-1`}>
+                  Opacity
+                  <input type="range" min={5} max={100} step={5}
+                    value={data.bgImageOpacity ?? DEFAULT_BG_IMAGE_OPACITY}
+                    onChange={e => onUpdate({ bgImageOpacity: parseInt(e.target.value) })}
+                    className="flex-1 accent-primary" />
+                  <span className="tabular-nums w-9 text-right">{data.bgImageOpacity ?? DEFAULT_BG_IMAGE_OPACITY}%</span>
+                </label>
+              </>
+            )}
+            {showBgImagePicker && (
+              <PortraitModal
+                title="Choose Image"
+                currentPortrait={data.bgImageCustomUrl}
+                galleryImages={bgImageGallery}
+                galleryLoading={bgImageGalleryLoading}
+                onChoose={url => { onUpdate({ bgImageStyle: CUSTOM_BG_IMAGE_KEY, bgImageCustomUrl: url }); setShowBgImagePicker(false) }}
+                onUploadClick={() => bgImageInputRef.current?.click()}
+                onClose={() => setShowBgImagePicker(false)}
+                card={card}
+              />
+            )}
+            <input ref={bgImageInputRef} type="file" accept="image/*" className="hidden"
+              onChange={async e => {
+                const file = e.target.files?.[0]
+                e.target.value = ""
+                if (file) { await uploadBgImage(file); setShowBgImagePicker(false) }
+              }} />
+          </div>
             {activeThemeKey === CUSTOM_THEME_KEY && (
               <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer px-1`}>
                 Custom color
@@ -255,6 +341,17 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 <ColorSwatchInput value={themeBgCustomColor} onChange={v => onUpdate({ themeBgCustomColor: v })} />
               </label>
             )}
+            {/* Animated Particles — a real drifting <canvas> layer (tsParticles),
+                separate from Card Overlay above and stacking on top of it (or on
+                top of the plain Background if no Card Overlay is set). Not one
+                more preset in that grid because it can't be "windowed" per card
+                the way the CSS presets are — see VoidParticles.tsx. */}
+            <label className={`flex items-center gap-2 text-xs ${c50} cursor-pointer select-none px-1`}>
+              <input type="checkbox" checked={data.bgParticles ?? false}
+                onChange={e => onUpdate({ bgParticles: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              Animated Particles
+            </label>
           </div>
 
           {/* Spell slot color */}

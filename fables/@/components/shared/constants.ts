@@ -115,10 +115,12 @@ export const DEFAULT_RARITY_HEX: Record<"Common" | "Uncommon" | "Rare" | "Very R
 
 // Same 3-state shape as the Magic Item card style, reused here so a category
 // accent renders with the exact same options: no treatment, just a colored
-// border, or the full animated starfield background in the category's own
-// raw color (instead of the fixed magic-item purple) — "galaxy" no longer
-// darkens/lightens that color toward the theme or toward black/white, it's
-// just whatever color was picked, animated.
+// border, or "galaxy" — a flat fill in the category's own raw color
+// (instead of the fixed magic-item purple), labeled "Background" in
+// Settings. When Settings' own Background Image is active, this also
+// shows that image tinted with the category's own color underneath it
+// (FeatureEntry.tsx's coloredNebulaBg) — otherwise it's just the flat
+// color, nothing layered over it.
 export type CardStyle = "none" | "outline" | "galaxy"
 
 export type FavoriteCategory = "race" | "class" | "feat" | "item" | "invocation" | "infusion" | "spell" | "equipment" | "familiar"

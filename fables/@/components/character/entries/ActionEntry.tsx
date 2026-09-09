@@ -90,7 +90,7 @@ export function ActionEntry({ action, category, onChange, readOnly = false, coll
 
       {hasUses && (
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-          {action.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{action.trackerLabel}</span>}
+          {action.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 w-20 truncate">{action.trackerLabel}</span>}
           <TracingSlider
             value={usesRemaining} max={effectiveMax}
             disabled={readOnly}

@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react"
 import type { Feature, UseTracker } from "@/components/shared/types"
 import type { PackItem } from "@/components/documentation/doc-types"
 import type { Theme } from "@/components/shared/themes"
-import { accentShimmerGradient, darkenHex } from "@/components/shared/themes"
+import { accentShimmerGradient, darkenHex, hexToRgb } from "@/components/shared/themes"
 import { nanoid } from "@/components/shared/utils"
 import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
@@ -298,10 +298,28 @@ interface FeatureEntryProps {
 
 // Renders a card's chosen accent color as its own solid background fill —
 // the raw picked color, exactly as picked. Tried an animated shine sweep,
-// then a static diagonal sheen; both got cut — this is just the flat color,
-// nothing layered over it.
+// then a static diagonal sheen; both got cut.
+//
+// When Settings' Background Image is active, this also shows through —
+// tinted with THIS card's own color (not the sheet theme's), so a red magic
+// item stays visibly red instead of picking up whatever the plain-themed
+// cards are tinted. --fables-shared-bg-image/-size/-repeat are set once on
+// CharacterSheet.tsx's root and inherit down to every descendant via plain
+// CSS custom-property inheritance — no prop needs threading through every
+// list component between there and here to reach this. When no image is
+// active those variables are simply unset, var()'s fallback resolves to
+// "none" for the image layer, and the result is pixel-identical to the
+// plain flat color this always used to be.
 export function coloredNebulaBg(color: string): CSSProperties {
-  return { backgroundColor: color }
+  const [r, g, b] = hexToRgb(color)
+  const tint = `rgba(${r}, ${g}, ${b}, 0.75)`
+  return {
+    backgroundColor: color,
+    backgroundImage: `linear-gradient(${tint}, ${tint}), var(--fables-shared-bg-image, none)`,
+    backgroundSize: `100% 100%, var(--fables-shared-bg-size, cover)`,
+    backgroundRepeat: `no-repeat, var(--fables-shared-bg-repeat, no-repeat)`,
+    backgroundAttachment: `scroll, var(--fables-shared-bg-attachment, scroll)`,
+  }
 }
 
 function isAnimatedStyle(style?: CardStyle | null): boolean {
@@ -342,7 +360,7 @@ function BulkRegainRow({ label, onRegain }: { label?: string; onRegain: (amount:
   const [step, setStep] = useState(1)
   return (
     <div className="flex items-center gap-2 pl-5" onClick={e => e.stopPropagation()}>
-      {label && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{label}</span>}
+      {label && <span className="text-[10px] text-white/40 shrink-0 w-20 truncate">{label}</span>}
       <NumInput value={step} onFocus={e => e.target.select()}
         onChange={e => setStep(Math.max(1, parseInt(e.target.value) || 1))} min={1}
         className="w-12 text-center text-xs bg-white/10 rounded px-2 py-1 text-white outline-none" />
@@ -1243,7 +1261,7 @@ export function FeatureEntry({
             breakpoint would still apply the wide desktop layout). */}
         {hasUses && (
           <div className="flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
-            {feature.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{feature.trackerLabel}</span>}
+            {feature.trackerLabel && <span className="text-[10px] text-white/40 shrink-0 w-20 truncate">{feature.trackerLabel}</span>}
             <TracingSlider
               value={usesRemaining} max={effectiveMax}
               disabled={readOnly}
@@ -1275,7 +1293,7 @@ export function FeatureEntry({
           const trRemaining = Math.max(0, trMax - (t.usesUsed ?? 0))
           return (
             <div key={t.id} className="flex items-center gap-2 mt-1.5 pl-5" onClick={e => e.stopPropagation()}>
-              {t.label && <span className="text-[10px] text-white/40 shrink-0 max-w-20 truncate">{t.label}</span>}
+              {t.label && <span className="text-[10px] text-white/40 shrink-0 w-20 truncate">{t.label}</span>}
               <TracingSlider
                 value={trRemaining} max={trMax}
                 disabled={readOnly}

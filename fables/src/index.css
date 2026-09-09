@@ -5,6 +5,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Settings' "Background Image" — each card's own copy of the shared image,
+   tinted with the card's own color underneath it (CharacterSheet.tsx
+   computes all three CSS variables together, tint baked directly into the
+   first background-image layer, so they always describe the exact same
+   picture). A plain hand-written class, not a Tailwind utility built from a
+   dynamic value — a class name assembled at runtime from a runtime value
+   (tried twice already for this same feature) never appears as literal
+   text anywhere in source, so Tailwind's JIT scanner never generates
+   anything for it. Reading these through CSS variables sidesteps that
+   entirely: the class name itself never changes, only the variables do. */
+.fables-image-card {
+  background-image: var(--fables-card-bg-image, none);
+  background-size: var(--fables-card-bg-size, cover);
+  background-repeat: var(--fables-card-bg-repeat, no-repeat);
+  background-attachment: var(--fables-card-bg-attachment, scroll);
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Inter Variable', sans-serif;

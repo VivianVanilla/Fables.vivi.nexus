@@ -416,6 +416,28 @@ export interface CharacterData {
   initiativeBonus?: number // flat bonus added to the mod
   themeBg?: string             // background override key from BG_OPTIONS
   themeBgCustomColor?: string  // background color for themeBg "custom" — see character-themes.ts BG_OPTIONS
+  bgImageStyle?: string        // Settings — an image layer behind ALL content, sitting on top of the Background
+                                // color above (not replacing it — see bgImageOpacity) — a built-in preset key
+                                // from themes.ts's BG_IMAGE_THEMES, "custom" (bgImageCustomUrl), or unset/"none"
+                                // for no image at all
+  bgImageOpacity?: number      // 0-100, default 40 — how strongly the image shows over the Background color
+                                // beneath it; low so a busy image doesn't drown out card content sitting on top
+  bgImageCustomUrl?: string    // uploaded/picked image, used when bgImageStyle is "custom"
+  // Every card independently uses background-attachment: fixed — positioned
+  // relative to the VIEWPORT instead of each card, so every card (wherever
+  // it sits on screen) shows an aligned slice of what reads as one
+  // continuous image behind everything, as if the cards were cutouts into
+  // it, without an actual shared image layer anywhere; the plain page
+  // background (the gaps between cards) is untouched either way, only
+  // cards ever show the image. (There used to be a "tile" mode alongside
+  // this — a small fixed-size repeating tile instead — cut for simplicity;
+  // this is just how it works now, no mode to choose.)
+  bgParticles?: boolean    // Settings — "Animated Particles": drifting, twinkling star points behind the
+                            // whole sheet, layered on top of the plain Background color / Background Image
+                            // preset (not a replacement for either). A real animated <canvas> (tsParticles,
+                            // see shared/ui/VoidParticles.tsx), not CSS like everything else here — it can't
+                            // be "windowed" per card the way the CSS presets are, so it's its own toggle,
+                            // not one more option in the Background Image preset grid.
   plainSkills?: boolean    // when true, disable ability-color-coding on skills
   // Proficiencies — entry lists per category (DEPRECATED characters may still have
   // these as a single free-text string; components normalize on read).
