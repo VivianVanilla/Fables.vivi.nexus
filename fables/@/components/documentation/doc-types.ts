@@ -16,6 +16,7 @@ export const ADMIN_EMAILS = [
   "spaghettiloverjake@gmail.com",
   "vivian.bonilla@outlook.com",
   "loganadsit@gmail.com",
+  "emeraldspiders@gmail.com"
 ]
 
 export interface DocEntry {
