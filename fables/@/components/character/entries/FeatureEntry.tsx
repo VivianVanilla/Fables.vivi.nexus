@@ -1199,7 +1199,9 @@ export function FeatureEntry({
   const sliderSource = feature.isMagicItem
     ? { style: magicItemSliderStyle ?? magicItemStyle, color: resolvedMagicSliderColor ?? DEFAULT_ACCENT_COLOR }
     : { style: sliderStyle ?? accentStyle, color: sliderColor ?? accentColor }
-  const barAnimated = isAnimatedStyle(sliderSource.style) && !!sliderSource.color
+  // "Hue Shift" (the animated Tracking Slider style) — an iridescent hue cycle
+  // on the bar, distinct from spell slots' brightness sweep.
+  const barHueShift = isAnimatedStyle(sliderSource.style) && !!sliderSource.color
   // A picked Slider/Card color always colors the tracking bar — for magic
   // items AND category-styled ones alike. Setting the "Tracking Slider"
   // module to None turns off the fancy border/background treatment; it was
@@ -1416,8 +1418,8 @@ export function FeatureEntry({
             <TracingSlider
               value={usesRemaining} max={effectiveMax}
               disabled={readOnly}
-              color={barAnimated ? accentShimmerGradient(barColor) : barColor}
-              animated={barAnimated}
+              color={barHueShift ? accentShimmerGradient(barColor) : barColor}
+              animated={barHueShift} shimmer="hue"
               showButtons buttonSize="sm" className="flex-1 min-w-0"
               onChange={val => {
                 const nextUsed = effectiveMax - val
@@ -1448,8 +1450,8 @@ export function FeatureEntry({
               <TracingSlider
                 value={trRemaining} max={trMax}
                 disabled={readOnly}
-                color={barAnimated ? accentShimmerGradient(barColor) : barColor}
-                animated={barAnimated}
+                color={barHueShift ? accentShimmerGradient(barColor) : barColor}
+                animated={barHueShift} shimmer="hue"
                 showButtons buttonSize="sm" className="flex-1 min-w-0"
                 onChange={val => onChange({ trackers: (feature.trackers ?? []).map(x => x.id === t.id ? { ...x, usesUsed: trMax - val } : x) })}
               />

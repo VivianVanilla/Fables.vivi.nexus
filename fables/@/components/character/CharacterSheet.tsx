@@ -910,17 +910,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // fixed-size repeating tile instead) — cut for simplicity.
   const bgImageFit      = data.bgImageFit ?? "cover"
   const bgImagePosition = data.bgImagePosition ?? "center"
-  // backgroundAttachment stays "scroll" (the default) — a "fixed" image layer
-  // re-anchors to any transformed ancestor, and dnd-kit transforms every row
-  // of a list mid-drag, which made the image jump across every draggable card.
-  // See the --fables-*-bg-attachment notes in cardBgVars below.
+  // background-attachment: fixed anchors the image to the VIEWPORT, so every
+  // card samples an aligned slice of it — the cards read as cut-outs onto one
+  // continuous backdrop rather than each showing its own crop.
   const bgImageLayerStyle: React.CSSProperties | undefined =
     bgImageKey === CUSTOM_BG_IMAGE_KEY
       ? (data.bgImageCustomUrl
-          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "scroll" }
+          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
           : undefined)
       : BG_IMAGE_THEMES[bgImageKey]
-        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "scroll" }
+        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
         : undefined
   // Each card gets its own copy of that same image, tinted with the card's
   // own color underneath it — a shared "one continuous canvas behind
@@ -948,19 +947,15 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     // trade away entirely, so the tint never drops below 60%.
     const imageAlpha = ((data.bgImageOpacity ?? DEFAULT_BG_IMAGE_OPACITY) / 100) * 0.4
     const tint = `rgba(${tr}, ${tg}, ${tb}, ${1 - imageAlpha})`
-    // Every layer is "scroll" (each card paints its own copy of the image,
-    // sized to cover its own box at the chosen focal point). NOT "fixed":
-    // a `background-attachment: fixed` layer re-anchors from the viewport to
-    // the nearest transformed ancestor the instant one exists, and dnd-kit
-    // puts a `transform` on EVERY row in a list while any one of them is
-    // being dragged — so a "fixed" image visibly jumped/re-cropped on every
-    // draggable card the moment a reorder drag started. "scroll" also just
-    // matches what iOS Safari already does (it ignores "fixed" outright).
+    // "scroll" for the flat tint layer (a flat colour has no spatial position
+    // for "fixed" to change), "fixed" for the image — that's what anchors
+    // every card's copy to the same viewport frame so they line up into one
+    // continuous backdrop.
     return {
       "--fables-card-bg-image": `linear-gradient(${tint}, ${tint}), ${bgImageLayerStyle.backgroundImage}`,
       "--fables-card-bg-size": `100% 100%, ${bgImageLayerStyle.backgroundSize}`,
       "--fables-card-bg-repeat": `no-repeat, ${bgImageLayerStyle.backgroundRepeat}`,
-      "--fables-card-bg-attachment": "scroll, scroll",
+      "--fables-card-bg-attachment": "scroll, fixed",
       // The flat tint layer has no spatial position to speak of — "center"
       // for it is just a placeholder so this list stays two entries long,
       // matching -image/-size/-repeat above (CSS cycles a shorter
@@ -976,10 +971,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       "--fables-shared-bg-image": `${bgImageLayerStyle.backgroundImage ?? "none"}`,
       "--fables-shared-bg-size": `${bgImageLayerStyle.backgroundSize ?? "cover"}`,
       "--fables-shared-bg-repeat": `${bgImageLayerStyle.backgroundRepeat ?? "no-repeat"}`,
-      // "scroll", not "fixed" — see the --fables-card-bg-attachment note above
-      // (dnd-kit transforms every row during a drag, which re-anchors a
-      // "fixed" layer and made the image jump on every movable card).
-      "--fables-shared-bg-attachment": "scroll",
+      "--fables-shared-bg-attachment": "fixed",
       "--fables-shared-bg-position": `${bgImageLayerStyle.backgroundPosition ?? "center"}`,
     }
   })() : undefined

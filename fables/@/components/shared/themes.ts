@@ -208,25 +208,33 @@ export function slotLevelColor(input: SlotAccentInput, level: number): string {
   return hslToHex(normHue(hue + t * range), sat, Math.max(10, baseL - t * 12))
 }
 
+// The "Hue Shift" wobble: how far it reaches from the picked colour (± degrees
+// around the wheel — small, so it drifts through neighbouring hues rather than
+// a full rainbow) and how many distinct hues it steps through on the way.
+const HUE_SHIFT_RANGE = 50
+const HUE_SHIFT_STEPS = 25
+
 /**
- * Shimmering variant of a single flat accent color — used for "Track uses"
- * bars (FeatureEntry.tsx) once their category's Feature Styling is set to
- * Animated. Unlike slotLevelGradient there's no level to sweep across, so
- * this just cycles lightness around the picked color for a subtle metallic-
- * sheen effect rather than a full rainbow.
- *
- * Keeps the picked color's ACTUAL hue, saturation and lightness (via
- * rgbToHsl) instead of forcing a vibrant sat 75 / lightness 53 — the old
- * hue-only version reinterpreted every pick as a bright mid-tone, so black
- * came out a medium red and any dark or desaturated pick was ignored. Same
- * approach slotLevelGradient's "solid" branch already uses.
+ * The "Hue Shift" fill for "Track uses" bars (Settings → Feature Styling →
+ * Tracking Slider). A palindrome gradient stepping through HUE_SHIFT_STEPS
+ * hues from -RANGE to +RANGE and back, at the picked colour's own
+ * saturation/lightness. First stop === last stop, so the CSS animation
+ * (.fables-hue-shift, a continuous linear pan) loops it seamlessly: the colour
+ * cycles through those few near hues and circles back, rather than sweeping
+ * the whole wheel or pulsing brightness (that's .fables-slot-shimmer's job,
+ * kept for spell slots). Saturation is floored so even a muted or near-grey
+ * pick still visibly shifts.
  */
 export function accentShimmerGradient(hex: string): string {
   if (!hex || !hex.startsWith("#")) return `linear-gradient(90deg, ${hex}, ${hex})`
   const [r, g, b] = hexToRgb(hex)
   const [hue, sat, lightness] = rgbToHsl(r, g, b)
-  const baseL = Math.max(12, Math.min(90, lightness))
-  const stops = [-12, -6, 0, 6, 12].map(o => hslToHex(hue, sat, Math.max(6, Math.min(94, baseL + o))))
+  const s = Math.max(45, sat)
+  const l = Math.max(22, Math.min(78, lightness))
+  const d = HUE_SHIFT_RANGE
+  const forward = Array.from({ length: HUE_SHIFT_STEPS }, (_, i) => -d + (2 * d * i) / (HUE_SHIFT_STEPS - 1))
+  const offsets = [...forward, ...forward.slice(0, -1).reverse()]  // palindrome: first === last
+  const stops = offsets.map(o => hslToHex(normHue(hue + o), s, l))
   return `linear-gradient(90deg, ${stops.join(", ")})`
 }
 

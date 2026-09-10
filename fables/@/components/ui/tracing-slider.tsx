@@ -9,7 +9,8 @@ interface TracingSliderProps {
   max: number
   disabled?: boolean
   color?: string
-  animated?: boolean  // shimmering iridescent fill instead of a flat color — pair with a gradient `color`
+  animated?: boolean  // animated gradient fill instead of a flat color — pair with a gradient `color`
+  shimmer?: "slot" | "hue"  // which animation when `animated`: "slot" = the back-and-forth brightness sweep (spell slots), "hue" = a continuous iridescent hue cycle (Tracking Slider's "Hue Shift"). Default "slot".
   showButtons?: boolean
   showLabel?: boolean
   label?: React.ReactNode
@@ -25,6 +26,7 @@ function TracingSlider({
   disabled = false,
   color,
   animated = false,
+  shimmer = "slot",
   showButtons = false,
   showLabel = false,
   label,
@@ -88,20 +90,22 @@ function TracingSlider({
         >
           {/* Track background */}
           <div className="absolute inset-x-0 h-1.5 rounded-full bg-white/10">
-            {/* Fill — "animated" adds a shimmering hue shift on top of the width transition */}
+            {/* Fill — "animated" pans a gradient `color` on top of the width transition */}
             <div
-              className={cn("absolute inset-y-0 left-0 rounded-full", animated && "fables-slot-shimmer")}
+              className={cn(
+                "absolute inset-y-0 left-0 rounded-full",
+                animated && (shimmer === "hue" ? "fables-hue-shift" : "fables-slot-shimmer"),
+              )}
               style={{
                 width: `${pct}%`,
                 // `backgroundImage` (a longhand), NOT the `background`
                 // shorthand, when animated: the shorthand resets every
                 // background-* longhand it doesn't mention, so it was wiping
-                // out the `background-size: 300%` that .fables-slot-shimmer
-                // sets — leaving the shimmer keyframes panning a gradient
-                // that exactly filled its box, i.e. no visible movement at
-                // all. A flat (non-animated) `fill` is a plain color, which
-                // isn't a valid background-image, so that path keeps the
-                // shorthand.
+                // out the `background-size` the animation class sets — leaving
+                // the keyframes panning a gradient that exactly filled its
+                // box, i.e. no visible movement at all. A flat (non-animated)
+                // `fill` is a plain color, not a valid background-image, so
+                // that path keeps the shorthand.
                 ...(animated ? { backgroundImage: fill } : { background: fill }),
                 transition: "width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
               }}

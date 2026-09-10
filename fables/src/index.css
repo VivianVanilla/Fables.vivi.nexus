@@ -6,15 +6,14 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Settings' "Background Image" — each card's own copy of the shared image,
-   tinted with the card's own color underneath it (CharacterSheet.tsx
-   computes all three CSS variables together, tint baked directly into the
-   first background-image layer, so they always describe the exact same
-   picture). A plain hand-written class, not a Tailwind utility built from a
-   dynamic value — a class name assembled at runtime from a runtime value
-   (tried twice already for this same feature) never appears as literal
-   text anywhere in source, so Tailwind's JIT scanner never generates
-   anything for it. Reading these through CSS variables sidesteps that
-   entirely: the class name itself never changes, only the variables do. */
+   tinted with the card's own color underneath it, and background-attachment:
+   fixed so every copy lines up to the same viewport frame (CharacterSheet.tsx
+   computes the CSS variables). A plain hand-written class, not a Tailwind
+   utility built from a dynamic value — a class name assembled at runtime from
+   a runtime value never appears as literal text anywhere in source, so
+   Tailwind's JIT scanner never generates anything for it. Reading these
+   through CSS variables sidesteps that: the class name never changes, only
+   the variables it reads do. */
 .fables-image-card {
   background-image: var(--fables-card-bg-image, none);
   background-size: var(--fables-card-bg-size, cover);
@@ -547,7 +546,7 @@
 /* Shimmering "Animated" slot-color fill (see ui/tracing-slider.tsx and
    character-themes.ts's slotLevelGradient) — the fill itself is a multi-stop
    gradient built per-level; this just sweeps it back and forth so the colors
-   visibly shift instead of sitting static. */
+   visibly shift instead of sitting static. Spell slots use this one. */
 @keyframes fables-slot-shimmer {
   0%, 100% { background-position: 0% 50%; }
   50%      { background-position: 100% 50%; }
@@ -555,6 +554,22 @@
 .fables-slot-shimmer {
   background-size: 300% 100%;
   animation: fables-slot-shimmer 3s ease-in-out infinite;
+}
+
+/* "Hue Shift" fill for the Tracking Slider bar (see accentShimmerGradient in
+   themes.ts) — a continuous LINEAR pan by exactly one gradient width, so a
+   wrap-around hue gradient (first stop === last stop) flows seamlessly as an
+   iridescent colour cycle, not a back-and-forth pulse. */
+@keyframes fables-hue-shift {
+  from { background-position: 0% 50%; }
+  to   { background-position: -100% 50%; }
+}
+.fables-hue-shift {
+  background-size: 200% 100%;
+  animation: fables-hue-shift 15s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fables-slot-shimmer, .fables-hue-shift { animation: none; }
 }
 
 /* "more text below — scroll" chevron (see shared/ui/ScrollHint.tsx) — a
