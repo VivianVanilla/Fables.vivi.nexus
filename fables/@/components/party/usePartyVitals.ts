@@ -79,12 +79,19 @@ export function usePartyVitals(partyCode: string) {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "objects", filter: "type=eq.character" },
         payload => {
           const row = payload.new as CharRow
-          const d = safeParseJson(row.data) as CharacterData
+          const pc = (safeParseJson(row.data) as CharacterData).partyCode
           setVitals(prev => {
             const has = prev.some(v => v.characterId === row.id)
-            if (d.partyCode !== partyCode) return has ? prev.filter(v => v.characterId !== row.id) : prev
-            const next = vitalOf(row)
-            return has ? prev.map(v => v.characterId === row.id ? next : v) : [...prev, next]
+            if (pc === partyCode) {
+              const next = vitalOf(row)
+              return has ? prev.map(v => v.characterId === row.id ? next : v) : [...prev, next]
+            }
+            // Left the party — drop them. A position/parent-only update
+            // (sidebar reorder) can arrive without `data`; only act on a
+            // partyCode that's actually present, so a reorder doesn't
+            // briefly boot the character from the roster.
+            if (typeof pc === "string" && has) return prev.filter(v => v.characterId !== row.id)
+            return prev
           })
         })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "objects", filter: "type=eq.character" },

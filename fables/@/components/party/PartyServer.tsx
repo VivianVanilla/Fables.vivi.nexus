@@ -110,6 +110,17 @@ export function PartyServer({
         ...dmEntry,
       ]
 
+  // A Discreet player is hidden from the other players entirely — not just
+  // their HP and their name in the roster, but their messages too, so the
+  // party can't tell they're around. The DM sees everything; the discreet
+  // player still sees their own messages.
+  const discreetUserIds = new Set(
+    members.filter(m => m.characterId && discreetIds.includes(m.characterId)).map(m => m.userId),
+  )
+  const hideDiscreet = !isDM && discreetUserIds.size > 0
+  const isHiddenSender = (senderId: string) =>
+    hideDiscreet && senderId !== currentUserId && discreetUserIds.has(senderId)
+
   function selectChannel(id: string) {
     setActiveView({ type: "channel", id })
     setRailOpen(false)
@@ -130,10 +141,11 @@ export function PartyServer({
   }, [activeView, messages, currentUserId, partyCode])
 
   function channelMessages(id: string) {
-    return messages.filter(m => m.recipient_id === null && (m.channel ?? DEFAULT_CHANNEL.id) === id)
+    return messages.filter(m => m.recipient_id === null && (m.channel ?? DEFAULT_CHANNEL.id) === id
+      && !isHiddenSender(m.sender_id))
   }
   function dmMessages(otherId: string) {
-    return messages.filter(m => m.recipient_id !== null && (
+    return messages.filter(m => m.recipient_id !== null && !isHiddenSender(m.sender_id) && (
       (m.sender_id === currentUserId && m.recipient_id === otherId) ||
       (m.sender_id === otherId && m.recipient_id === currentUserId)
     ))

@@ -291,7 +291,18 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         payload => {
           const row = payload.new as SidebarObject
           if (row.rev != null && revRef.current != null && row.rev <= revRef.current) return
-          reconcileFromServer(safeParseJson(row.data) as CharacterData, row.rev)
+          const serverData = safeParseJson(row.data) as CharacterData
+          // A realtime payload can arrive without a usable `data` blob — an
+          // oversized record the realtime server truncated, or a
+          // position/parent-only update (a sidebar reorder). `data` never
+          // legitimately parses to {} for a real character, so treat that as
+          // "no content" — the sheet's data is unchanged, just adopt the new
+          // rev so the next guarded save still matches.
+          if (Object.keys(serverData).length === 0) {
+            if (row.rev != null) revRef.current = row.rev
+            return
+          }
+          reconcileFromServer(serverData, row.rev)
         })
       .subscribe()
     return () => { supabase.removeChannel(channel) }

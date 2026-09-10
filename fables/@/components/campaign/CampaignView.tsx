@@ -370,11 +370,17 @@ function useCampaignRoster(campaign: SidebarObject) {
         event: "UPDATE", schema: "public", table: "objects", filter: "type=eq.character",
       }, payload => {
         const row = payload.new as SidebarObject
-        const rowData = safeParseJson(row.data) as CharData
+        const pc = (safeParseJson(row.data) as CharData).partyCode
         setPartyMembers(prev => {
           const wasMember = prev.some(c => c.id === row.id)
-          if (rowData.partyCode !== partyCode) return wasMember ? prev.filter(c => c.id !== row.id) : prev
-          return wasMember ? prev.map(c => c.id === row.id ? row : c) : [...prev, row]
+          if (pc === partyCode) return wasMember ? prev.map(c => c.id === row.id ? row : c) : [...prev, row]
+          // Left this party (partyCode cleared/switched) — drop them. But a
+          // position/parent-only update (a sidebar reorder) can arrive with
+          // `data` absent from the payload; treating that as "left" is what
+          // briefly booted a character from the roster mid-reorder, so only
+          // act when partyCode is actually present.
+          if (typeof pc === "string" && wasMember) return prev.filter(c => c.id !== row.id)
+          return prev
         })
       })
       .on("postgres_changes", {
