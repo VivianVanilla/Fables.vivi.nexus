@@ -10,7 +10,7 @@ import { SAVE_TO_ABILITY, type FavoriteCategory } from "@/components/shared/cons
 import { Modal } from "@/components/shared/ui/Modal"
 import { MartialModal } from "../modals/stats/MartialModal"
 import { DndContext, DragOverlay, closestCenter, type DragEndEvent } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
+import { SortableContext, verticalListSortingStrategy, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable"
 import { SortableItem, DragOverlayCard, useDragSensors } from "@/components/shared/SortableItem"
 
 // Master-toggle "Cast" button (Automation → Cast tab → "Show Cast button")
@@ -147,8 +147,6 @@ export function SpellsEquipPanel({
 }: Props) {
   const [showMartialModal, setShowMartialModal] = useState(false)
   // Settings — a martial-only or caster-only character can hide the side
-  // they never use so this panel stops reading as "half empty" whichever way
-  // they look. If someone somehow enables both at once, neither takes effect
   // (falls back to showing the normal switcher) rather than hiding everything.
   const spellsHidden  = !!data.hideSpellsSection  && !data.hideMartialSection
   const martialHidden = !!data.hideMartialSection && !data.hideSpellsSection
@@ -162,10 +160,9 @@ export function SpellsEquipPanel({
   const [hideUnprepared, setHideUnprepared] = useState(() => {
     try { return localStorage.getItem(`fables-prep-filter-${characterId}`) === "1" } catch { return false }
   })
-  // Rituals are castable whether or not they're prepared, so "Prepared
-  // only" alone hides exactly the spells this filter exists to surface —
-  // an unprepared ritual you'd forgotten you had. Independent of (and ANDed
-  // with) hideUnprepared, not a replacement for it.
+
+  // Rituals 
+
   const [ritualOnly, setRitualOnly] = useState(() => {
     try { return localStorage.getItem(`fables-ritual-filter-${characterId}`) === "1" } catch { return false }
   })
@@ -191,7 +188,6 @@ export function SpellsEquipPanel({
     .slice()
     .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
 
-  // Hoisted out of the render below so handleSpellDragEnd can determine
   // which group (Pinned, or a given level) a dragged spell belongs to —
   // same grouping the render uses to actually draw the Pinned section and
   // level headers.
@@ -408,12 +404,7 @@ export function SpellsEquipPanel({
           </div>
         )}
 
-        {/* Martial's own stat row — mirrors Spells' Save DC/Atk tiles above so
-            a martial character doesn't read as the "lesser" half of this
-            panel. Fully optional (unlike spellcasting, most martial
-            abilities don't call for a DC), set from its own modal (the ⚙
-            above) rather than a popover — same as Spellcasting's — and
-            entirely absent, not just blank, whenever nothing's set. */}
+        {/* Martial's DC area*/}
         {!showSpells && !!data.martialSaveDC && (
           <div className="flex items-center gap-4 flex-wrap min-w-0">
             <button type="button" onClick={() => !readOnly && setShowMartialModal(true)}
@@ -504,9 +495,9 @@ export function SpellsEquipPanel({
                   <span className="text-xs text-white/40">({pinnedSpells.length})</span>
                 </div>
 
-                <SortableContext items={pinnedSpells.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={pinnedSpells.map(s => s.id)} strategy={spellsDisplay === "bubbles" ? rectSortingStrategy : verticalListSortingStrategy}>
                   {pinnedSpells.map(spell => (
-                    <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spellsDisplay === "bubbles"}>
+                    <SortableItem key={spell.id} id={spell.id} disabled={readOnly}>
                       {renderSpellCard(spell)}
                     </SortableItem>
                   ))}
@@ -566,9 +557,17 @@ export function SpellsEquipPanel({
                 ]
                 if (isOpen) {
                   nodes.push(
-                    <SortableContext key={`group-${lvl}`} items={spells.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                    <SortableContext key={`group-${lvl}`} items={spells.map(s => s.id)} strategy={spellsDisplay === "bubbles" ? rectSortingStrategy : verticalListSortingStrategy}>
                       {spells.map(spell => (
-                        <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spellsDisplay === "bubbles"}>
+                        // A pinned spell's OWN drag handle lives in the Pinned
+                        // section above (same id, rendered there too — "shows
+                        // twice, doesn't move"). Disabled here so this second
+                        // copy doesn't register as a second live sortable node
+                        // sharing that id under the same DndContext — dnd-kit
+                        // flags isDragging by id match, so without this BOTH
+                        // copies would dim/animate together while dragging
+                        // either one.
+                        <SortableItem key={spell.id} id={spell.id} disabled={readOnly || spell.pinned}>
                           {renderSpellCard(spell)}
                         </SortableItem>
                       ))}

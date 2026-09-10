@@ -88,6 +88,14 @@ export const BG_IMAGE_THEMES: Record<string, BgImageTheme> = {}
 
 export const CUSTOM_BG_IMAGE_KEY = "custom"
 export const DEFAULT_BG_IMAGE_OPACITY = 40
+// The 9-point focal-point grid SettingsModal's "Focal Point" picker renders,
+// row-major (top row, middle row, bottom row) — plain CSS background-position
+// keyword pairs, so they drop straight into CharacterData.bgImagePosition.
+export const BG_IMAGE_POSITIONS = [
+  "left top",    "center top",    "right top",
+  "left center", "center",        "right center",
+  "left bottom", "center bottom", "right bottom",
+] as const
 
 // ── Slot bar color palette (independent of background theme) ──────────────────
 

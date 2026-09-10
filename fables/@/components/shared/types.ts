@@ -47,10 +47,17 @@ export interface SpellItem {
   // combine (e.g. cast Haste: expend a slot AND activate the Hasted form),
   // applied together via utils.ts's castSpellPatch.
   castEnabled?: boolean
+  castSlotMode?: "specific" | "atOrAbove" // default "specific" (castSlotId below). "atOrAbove" ignores castSlotId
+                                  // and instead spends the lowest-level slot at or above this spell's own level
+                                  // that still has a use free at cast time — e.g. a 4th-level spell spends a 4th
+                                  // if you have one, otherwise auto-upcasts into a 5th, 6th, etc. Pact slots are
+                                  // only used as a last resort even then (see castSpellPatch), same Warlock-safety
+                                  // reasoning as castSlotId's own comment below.
   castSlotId?: string            // id of the specific SpellSlot row to expend one use of when cast — a specific
                                   // row rather than "any slot at this spell's level" so Pact Magic (and any
                                   // multiclass caster with more than one pool at the same level) burns the
-                                  // right pool instead of a same-level regular slot
+                                  // right pool instead of a same-level regular slot. Ignored when castSlotMode
+                                  // is "atOrAbove".
   castFormId?: string            // activates this Form (see CharacterForm) when cast
   castConditionalId?: string     // triggers this Conditional (see CharacterConditional) when cast
   castGrantConditions?: string[] // condition names (from ALL_CONDITIONS) applied when cast
@@ -206,6 +213,17 @@ export interface FormStatOverrides {
   carryCapacityBonus?: number // stacks on top of computed carry capacity, same semantics as
                                // CharacterData.carryCapacityBonus (and note a Strength override
                                // above already scales capacity too — the two stack)
+  skillBonuses?: Record<string, number> // stacks on top of CharacterData.skillBonuses while this
+                                         // form is active — keyed by skill name same as that field
+                                         // (built-in SKILLS or a customSkills name), e.g. a Cunning
+                                         // Action-style buff that's +2 Stealth only, not every skill
+  grantedVision?: Record<string, number> // key from VISION_TYPES, value = range in feet — while this
+                                          // form is active, CharacterData.visionTypes' own range for
+                                          // that type is replaced with whichever is HIGHER (not summed
+                                          // — two sources of Darkvision don't add together), e.g. Wild
+                                          // Shape into an owl grants Darkvision 120ft even if the
+                                          // character's own is only 60. Never lowers a type below the
+                                          // character's own base.
 }
 
 export interface CharacterForm {
@@ -235,6 +253,11 @@ export interface CharacterForm {
                                 // toggle-off, or the 0-HP auto-revert) — e.g. Summon Fiend: activating the form
                                 // puts the summoned familiar's card at the top of Favorites immediately, and
                                 // ending it clears that favorite back out automatically.
+  favoriteFeatureId?: string   // same idea as favoriteFamiliarId, but for any id out of the six Feature lists
+                                // (Racial Traits/Feats/Class Features/Items — weapons included/Invocations/
+                                // Infusions) — e.g. a Sharpshooter-style Form that favorites your bow while
+                                // active. Independent of favoriteFamiliarId — a form can auto-favorite one of
+                                // each at once.
 }
 
 // The lightweight sibling of a Form — a one-shot "apply this now" (temp HP,
@@ -323,6 +346,11 @@ export interface CharacterData {
   showResistanceTracker?: boolean // opt-in (default off) — shows the Resistances/Vulnerabilities panel on the Combat tab
   resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
   vulnerabilities?: string[]     // damage type names this character has vulnerability to
+  showVisionTracker?: boolean    // opt-in (default off) — shows the Vision panel on the Combat tab
+  visionTypes?: Record<string, number> // this character's own (non-Form) special senses — key from VISION_TYPES
+                                        // (Darkvision/Blindsight/Tremorsense/Truesight), value = range in feet.
+                                        // A Form active at the same time can push a type higher (never lower —
+                                        // see FormStatOverrides.grantedVision) without touching this base value.
   hideSpellsSection?: boolean    // Settings — hides the Spells side of the Spells/Martial panel for a martial-only character; ignored if hideMartialSection is also on
   hideMartialSection?: boolean   // Settings — hides the Martial side for a caster-only character; ignored if hideSpellsSection is also on
   martialSaveDC?: number         // manually-set flat DC for martial abilities/maneuvers that call for one (e.g. Battle Master) — shown on the Martial panel only when set
@@ -424,6 +452,11 @@ export interface CharacterData {
   bgImageOpacity?: number      // 0-100, default 40 — how strongly the image shows over the Background color
                                 // beneath it; low so a busy image doesn't drown out card content sitting on top
   bgImageCustomUrl?: string    // uploaded/picked image, used when bgImageStyle is "custom"
+  bgImagePosition?: string     // CSS background-position keywords (e.g. "center", "left top") — which part of
+                                // the image is the focal point once it's cropped to fit; default "center"
+  bgImageFit?: "cover" | "contain" // "cover" (default) crops to fill every card with no letterboxing; "contain"
+                                     // shows the whole image, letterboxed, for a photo whose subject doesn't
+                                     // survive an off-center crop on a narrow (mobile) viewport
   // Every card independently uses background-attachment: fixed — positioned
   // relative to the VIEWPORT instead of each card, so every card (wherever
   // it sits on screen) shows an aligned slice of what reads as one

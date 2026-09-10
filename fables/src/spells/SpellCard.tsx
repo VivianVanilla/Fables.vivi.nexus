@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import type { Spell } from './types'
 import { CLASS_COLORS } from './constants'
 
@@ -6,24 +7,35 @@ interface Props {
   adminMode: boolean
   onOpen: (spell: Spell) => void
   onEdit: (spell: Spell) => void
+  onAddRequest: (e: React.MouseEvent, spell: Spell) => void  // opens AddToCharacterMenu at the click/right-click point
 }
 
-export function SpellCard({ spell, adminMode, onOpen, onEdit }: Props) {
+export function SpellCard({ spell, adminMode, onOpen, onEdit, onAddRequest }: Props) {
   return (
     <div
       onClick={() => onOpen(spell)}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onAddRequest(e, spell) }}
       className="group relative bg-card/60 border border-border hover:border-border p-4 rounded-xl cursor-pointer transition-all hover:bg-card hover:shadow-lg hover:shadow-black/20"
     >
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <h3 className="font-semibold text-sm leading-snug text-foreground">{spell.name}</h3>
-        {adminMode && (
+        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
           <button
-            onClick={(e) => { e.stopPropagation(); onEdit(spell) }}
-            className="shrink-0 text-[10px] font-medium text-amber-500 hover:text-amber-300 border border-amber-800/60 hover:border-amber-500 rounded-lg px-2 py-0.5 transition-colors"
+            title="Add to character"
+            onClick={(e) => { e.stopPropagation(); onAddRequest(e, spell) }}
+            className="size-6 flex items-center justify-center text-emerald-500 hover:text-emerald-300 border border-emerald-800/60 hover:border-emerald-500 rounded-lg transition-colors"
           >
-            Edit
+            <Plus className="size-3.5" />
           </button>
-        )}
+          {adminMode && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(spell) }}
+              className="text-[10px] font-medium text-amber-500 hover:text-amber-300 border border-amber-800/60 hover:border-amber-500 rounded-lg px-2 py-0.5 transition-colors"
+            >
+              Edit
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="text-xs text-muted-foreground space-y-0.5 mb-3">

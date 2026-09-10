@@ -46,6 +46,13 @@ export const ALL_CONDITIONS = [
   "Petrified", "Poisoned", "Prone", "Rage", "Restrained", "Stunned", "Unconscious",
 ]
 
+// The 4 standard D&D special-senses types — used by the optional Vision
+// panel (CharacterData.visionTypes, range in feet per type) and Automation's
+// per-Form "Granted Vision" (FormStatOverrides.grantedVision) so a form
+// (Wild Shape, a Devil's Sight-granting pact, a helm of darkvision-style
+// item) can boost a specific sense while active without hand-typing it.
+export const VISION_TYPES = ["Darkvision", "Blindsight", "Tremorsense", "Truesight"] as const
+
 export const CONDITION_EFFECTS: Record<string, string> = {
   Blinded:       "Disadvantage on attack rolls; attacks against you have advantage.",
   Deathward:     "The next time you'd drop to 0 HP, you drop to 1 instead — then this condition is removed.",

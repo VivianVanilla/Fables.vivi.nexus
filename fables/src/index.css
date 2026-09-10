@@ -20,6 +20,7 @@
   background-size: var(--fables-card-bg-size, cover);
   background-repeat: var(--fables-card-bg-repeat, no-repeat);
   background-attachment: var(--fables-card-bg-attachment, scroll);
+  background-position: var(--fables-card-bg-position, center);
 }
 
 @theme inline {

@@ -3,7 +3,7 @@ import { Modal } from "@/components/shared/ui/Modal"
 import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import type { CharacterData } from "@/components/shared/types"
-import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY } from "@/components/shared/themes"
+import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY, BG_IMAGE_POSITIONS } from "@/components/shared/themes"
 import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, DEFAULT_RARITY_HEX, UI_SCALES, TEXT_COLOR_OPTIONS, type CardStyle } from "@/components/shared/constants"
 import { deriveCharacterClassNames, classLabel } from "@/components/shared/classColors"
 import { nanoid } from "@/components/shared/utils"
@@ -171,6 +171,12 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
               <span className={`text-sm ${c70}`}>Add resistance/vulnerability tracker</span>
             </label>
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.showVisionTracker ?? false}
+                onChange={e => onUpdate({ showVisionTracker: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className={`text-sm ${c70}`}>Add vision tracker (Darkvision, etc.)</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.hideSpellsSection ?? false}
                 onChange={e => onUpdate({ hideSpellsSection: e.target.checked })}
                 className="accent-primary size-4 rounded" />
@@ -289,6 +295,31 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                     className="flex-1 accent-primary" />
                   <span className="tabular-nums w-9 text-right">{data.bgImageOpacity ?? DEFAULT_BG_IMAGE_OPACITY}%</span>
                 </label>
+                <div className="flex items-center gap-4 px-1">
+                  <div className="flex flex-col gap-1">
+                    <span className={`text-[10px] uppercase tracking-wider ${c50}`}>Focal Point</span>
+                    <div className="grid grid-cols-3 gap-1 p-1 rounded-lg border border-white/10 bg-white/5 w-fit">
+                      {BG_IMAGE_POSITIONS.map(pos => {
+                        const active = (data.bgImagePosition ?? "center") === pos
+                        return (
+                          <button key={pos} type="button" title={pos} onClick={() => onUpdate({ bgImagePosition: pos })}
+                            className={`size-5 rounded-sm border transition-colors ${active ? "bg-primary border-primary" : "bg-white/10 border-white/15 hover:bg-white/20"}`} />
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className={`text-[10px] uppercase tracking-wider ${c50}`}>Fit</span>
+                    <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
+                      {(["cover", "contain"] as const).map(fit => (
+                        <button key={fit} type="button" onClick={() => onUpdate({ bgImageFit: fit })}
+                          className={`text-[10px] px-2.5 py-1 rounded-full font-semibold capitalize transition-colors ${(data.bgImageFit ?? "cover") === fit ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                          {fit}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </>
             )}
             {showBgImagePicker && (

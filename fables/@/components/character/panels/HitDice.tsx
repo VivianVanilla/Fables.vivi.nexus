@@ -34,7 +34,7 @@ export function HitDice({ card, pools, readOnly, onUpdate, onRemove, onAdd }: Pr
             onClick={() => { setEditing(v => !v); setShowAdd(false); setNewDie("d8"); setNewCount(1) }}
             className={`text-xs px-2.5 py-1 rounded-full transition-colors ${editing ? "bg-yellow-500/20 text-yellow-300" : "bg-white/10 hover:bg-white/20 text-white/50 hover:text-white"}`}
           >
-            {editing ? "Done" : "✎ Edit"}
+            {editing ? "Done" : "✎"}
           </button>
         )}
       </div>

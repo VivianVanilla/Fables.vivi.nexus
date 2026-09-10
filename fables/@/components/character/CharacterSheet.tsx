@@ -17,7 +17,7 @@ import type {
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances, favoriteFamiliarSwap } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances, favoriteFormSwap } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY, darkenHex, hexToRgb } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { VoidParticles } from "@/components/shared/ui/VoidParticles"
@@ -30,6 +30,7 @@ import { NumInput }              from "@/components/shared/ui/NumInput"
 
 // Panels
 import { ResistanceTracker }     from "./panels/ResistanceTracker"
+import { VisionCard }            from "./panels/VisionCard"
 import { CurrencyTracker }       from "./panels/CurrencyTracker"
 import { HitDice }               from "./panels/HitDice"
 import { DeathSavingThrows }     from "./panels/DeathSavingThrows"
@@ -156,7 +157,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const [spellsSubTab, setSpellsSubTab] = useState<"spells" | "martial">("spells")
   const [infoSubTab,   setInfoSubTab]   = useState<InfoSubTab>("overview")
 
-  // Newly-added spell — opens its edit modal automatically, once
+
   const [pendingSpellId, setPendingSpellId] = useState<string | null>(null)
 
   const portraitRef = useRef<HTMLInputElement>(null)
@@ -164,34 +165,21 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const suffix = useChannelSuffix()
 
   const [data, setData] = useState<CharacterData>(() => safeParseJson(character.data) as CharacterData)
-  // Latest data, readable synchronously by async save / realtime handlers
-  // (a render-snapshot `data` would be stale inside a 700ms-later timeout).
+
   const dataRef = useRef(data)
-  // The `rev` the local `data` is built on — the guard value for the next
-  // save. null when the objects.rev column + bump trigger aren't there yet
-  // (pre-migration), which makes every save fall back to a plain
-  // last-write-wins updateObject exactly like before.
+
   const revRef = useRef<number | null>(character.rev ?? null)
   // Every field changed locally since the last *successful* save. On a save
-  // conflict (another device/tab saved first) this is replayed on top of
-  // their version, so edits to different fields from two places both
-  // survive; a same-field clash is last-save-wins for that one field.
-  // Shallow by design — two devices concurrently rewriting the same array
-  // (both adding an item within ~1s) can still drop one side's addition.
-  // The realtime sync below keeps that window small; a full CRDT merge is
-  // out of scope.
+ 
   const pendingPatchRef = useRef<Partial<CharacterData>>({})
   const savingRef = useRef(false)
   const bcRef = useRef<BroadcastChannel | null>(null)
-  // Set only when a guarded save *and its one retry* both lost the race —
-  // rare; shows a non-destructive banner rather than silently clobbering.
+
   const [resyncConflict, setResyncConflict] = useState(false)
 
-  // No chat access at all in read-only mode (DM peeking at a party member's
-  // sheet) — skip the subscription entirely rather than just hiding the badge.
+
   const partyLatestMessageAt = usePartyLatestMessageAt(readOnly ? "" : (data.partyCode ?? ""), user?.id ?? "")
-  // Guarded on activeTab !== "chat" so the dot never lingers after you've
-  // actually opened Chat — see the matching comment in campaign-view.tsx.
+
   const partyChatUnread = !readOnly && !!data.partyCode && !!user?.id && activeTab !== "chat" && isPartyUnread(user.id, data.partyCode, partyLatestMessageAt)
 
   // ── SAVE / RESYNC ─────────────────────────────────────────────────────────
@@ -215,15 +203,14 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     try {
       const rev = revRef.current
       if (rev == null) {
-        // Pre-migration DB (no rev column) — plain last-write-wins, as before.
+        
         const updated = await updateObject(character.id, { data: dataRef.current as unknown as JSON })
         revRef.current = updated.rev ?? null
         pendingPatchRef.current = {}
       } else {
         let res = await updateObjectGuarded(character.id, { data: dataRef.current as unknown as JSON }, rev)
         if (!res.ok) {
-          // Another device/tab saved first — merge our pending changes onto
-          // theirs and try once more against the rev they left behind.
+       
           reconcileFromServer(safeParseJson(res.row.data) as CharacterData, res.row.rev)
           const nextRev = revRef.current
           if (nextRev != null) {
@@ -392,18 +379,13 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   const poolForm = activeForms.find(f => f.formMaxHp != null) ?? null
   const portraitForm = activeForms.find(f => f.portraitUrl) ?? null
 
-  // Which ability keys a Form is currently overriding — drives the blue
-  // "this number is temporary" highlight in AbilitiesCard. AbilityModal (the
-  // ✎ editor) still opens against raw `data`, never effectiveData below —
-  // editing must always change the true base score, not the temporary one.
+
   const overriddenAbilityKeys = new Set(
     ov ? (["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"] as const)
       .filter(k => ov[k] != null) : []
   )
 
-  // Surgical merged view for the specific read/calc sites below (AC ring,
-  // save/skill mods, statMods, and AbilitiesCard's display) — never passed
-  // to update()/scheduleSave, and never used as the value an edit form binds to.
+
   const effectiveData: CharacterData = ov ? {
     ...data,
     strength: ov.strength ?? data.strength, dexterity: ov.dexterity ?? data.dexterity,
@@ -412,6 +394,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     acMiscBonus: (data.acMiscBonus ?? 0) + (ov.acBonus ?? 0),
     ac: ov.acOverride ?? data.ac,
   } : data
+
+  // Per-type MAX of the character's own vision and whatever an active Form
+  // is currently granting — never summed (see FormStatOverrides.grantedVision).
+  const effectiveVision: Record<string, number> = ov?.grantedVision ? (() => {
+    const merged = { ...(data.visionTypes ?? {}) }
+    for (const [type, range] of Object.entries(ov.grantedVision!)) {
+      merged[type] = Math.max(merged[type] ?? 0, range)
+    }
+    return merged
+  })() : (data.visionTypes ?? {})
 
   // ── HP COMPUTED ───────────────────────────────────────────────────────────
   // A form with its own formMaxHp (Wild Shape-style) tracks HP completely
@@ -479,7 +471,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         const remaining = multiFormEnabled ? activeForms.filter(f => f.id !== poolForm.id) : []
         const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], [poolForm], remaining)
         const tempHpPatch = poolForm.removeTempHpOnRevert ? { tempHp: 0 } : {}
-        const swappedFavorites = favoriteFamiliarSwap(data, poolForm, null)
+        const swappedFavorites = favoriteFormSwap(data, poolForm, null, remaining)
         const favoritesPatch = swappedFavorites ? { favorites: swappedFavorites } : {}
         update(multiFormEnabled
           ? { activeFormIds: (data.activeFormIds ?? []).filter(id => id !== poolForm.id), conditions: baseConditions, hp: 1, ...revoked, ...tempHpPatch, ...favoritesPatch }
@@ -505,7 +497,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           const remaining = multiFormEnabled ? activeForms.filter(f => !revertIds.has(f.id)) : []
           const revoked = revokeFormResistances(data.resistances ?? [], data.vulnerabilities ?? [], revertForms, remaining)
           const tempHpPatch = revertForms.some(f => f.removeTempHpOnRevert) ? { tempHp: 0 } : {}
-          const swappedFavorites = favoriteFamiliarSwap(data, revertForms, null)
+          const swappedFavorites = favoriteFormSwap(data, revertForms, null, remaining)
           const favoritesPatch = swappedFavorites ? { favorites: swappedFavorites } : {}
           patch = multiFormEnabled
             ? { ...patch, activeFormIds: (data.activeFormIds ?? []).filter(id => !revertIds.has(id)), conditions: baseConditions, ...revoked, ...tempHpPatch, ...favoritesPatch }
@@ -767,13 +759,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         Object.assign(combinedPatch, featureUsePatch({ ...data, ...combinedPatch }, patchedFeature, multiFormEnabled))
       }
 
-      // An Infusion only ever shows in Gear's Equipped list while infused
-      // (see ItemsTab.tsx's equippedItems) — un-infusing it is a normal,
-      // frequent Artificer action, not a deletion, so the record itself is
-      // never removed. But a favorite pointing at one is now nothing but a
-      // "this used to be equipped" ghost, so it's cleared out the moment it
-      // stops being infused instead of sitting there looking like a broken/
-      // not-found reference.
+     
       if (key === "infusions" && patch.infused === false && target.infused && data.favorites?.some(f => f.refId === id)) {
         combinedPatch.favorites = (data.favorites ?? []).filter(f => f.refId !== id)
       }
@@ -907,13 +893,15 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // it only ever covered about one viewport-height of the scrollable
   // sheet). There used to be a "tile" mode alongside this (a small
   // fixed-size repeating tile instead) — cut for simplicity.
+  const bgImageFit      = data.bgImageFit ?? "cover"
+  const bgImagePosition = data.bgImagePosition ?? "center"
   const bgImageLayerStyle: React.CSSProperties | undefined =
     bgImageKey === CUSTOM_BG_IMAGE_KEY
       ? (data.bgImageCustomUrl
-          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
           : undefined)
       : BG_IMAGE_THEMES[bgImageKey]
-        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: "cover", backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
         : undefined
   // Each card gets its own copy of that same image, tinted with the card's
   // own color underneath it — a shared "one continuous canvas behind
@@ -949,6 +937,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       "--fables-card-bg-size": `100% 100%, ${bgImageLayerStyle.backgroundSize}`,
       "--fables-card-bg-repeat": `no-repeat, ${bgImageLayerStyle.backgroundRepeat}`,
       "--fables-card-bg-attachment": "scroll, fixed",
+      // The flat tint layer has no spatial position to speak of — "center"
+      // for it is just a placeholder so this list stays two entries long,
+      // matching -image/-size/-repeat above (CSS cycles a shorter
+      // position list across layers instead of erroring, but an explicit
+      // pair keeps this from silently drifting if a layer's ever reordered).
+      "--fables-card-bg-position": `center, ${bgImageLayerStyle.backgroundPosition}`,
       // Untinted — CSS custom properties inherit down the whole tree, so
       // any accent-colored card (a magic item, a category card — anything
       // going through FeatureEntry.tsx's coloredNebulaBg with its OWN
@@ -959,6 +953,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       "--fables-shared-bg-size": `${bgImageLayerStyle.backgroundSize ?? "cover"}`,
       "--fables-shared-bg-repeat": `${bgImageLayerStyle.backgroundRepeat ?? "no-repeat"}`,
       "--fables-shared-bg-attachment": "fixed",
+      "--fables-shared-bg-position": `${bgImageLayerStyle.backgroundPosition ?? "center"}`,
     }
   })() : undefined
   const theme = bgImageLayerStyle ? { ...themeWithCustomColor, box: "fables-image-card" } : themeWithCustomColor
@@ -997,7 +992,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     const score = (effectiveData[SAVE_TO_ABILITY[abilityKey] as keyof CharacterData] as number | undefined) ?? 10
     const base  = Math.floor((score - 10) / 2)
     const prof  = data.skillProfs?.[skillName]
-    const bonus = data.skillBonuses?.[skillName] ?? 0
+    const bonus = (data.skillBonuses?.[skillName] ?? 0) + (ov?.skillBonuses?.[skillName] ?? 0)
     const profMod = prof === "exp" ? pb * 2 : prof === "prof" ? pb : prof === "half" ? Math.floor(pb / 2) : 0
     return base + profMod + bonus
   }
@@ -1332,6 +1327,11 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             {data.showResistanceTracker && (
               <ResistanceTracker card={card} readOnly={readOnly}
                 resistances={data.resistances ?? []} vulnerabilities={data.vulnerabilities ?? []}
+                onUpdate={update} />
+            )}
+            {data.showVisionTracker && (
+              <VisionCard card={card} readOnly={readOnly}
+                visionTypes={data.visionTypes ?? {}} effectiveVision={effectiveVision}
                 onUpdate={update} />
             )}
             <CurrencyTracker card={card} data={data} readOnly={readOnly} update={update} />

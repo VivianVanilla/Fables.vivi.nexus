@@ -208,25 +208,54 @@ export function revokeFormResistances(
 }
 
 /**
- * Adds/removes a Favorites entry for a form's favoriteFamiliarId, if either
- * the form(s) losing activation or the one gaining it name one — shared by
- * every activate/revert path (formActivationPatch, toggleFormPatch below,
- * and CharacterSheet.tsx's 0-HP auto-revert) so "auto-favorite a familiar"
- * behaves identically no matter how a form starts or ends. Returns
- * undefined (touch nothing) when neither side names a familiar, so callers
- * can spread the result into their patch only when it's actually needed.
+ * Adds/removes a Favorites entry for a form's favoriteFamiliarId AND/OR
+ * favoriteFeatureId, if either the form(s) losing activation or the one
+ * gaining it name one — shared by every activate/revert path
+ * (formActivationPatch, toggleFormPatch below, and CharacterSheet.tsx's
+ * 0-HP auto-revert) so "auto-favorite on activate" behaves identically no
+ * matter how a form starts or ends, and for either kind of target. A form
+ * can name both at once (e.g. auto-favorite a familiar AND a weapon).
+ *
+ * `remainingForms` — forms staying active through this transition
+ * (multi-form mode only; omit/[] in single-form mode where nothing ever
+ * "remains") — guards against unfavoriting something a still-active form
+ * also names, just because a *different* form naming the same id happens
+ * to be the one leaving.
+ *
+ * Returns undefined (touch nothing) when nothing named on either side
+ * actually changes, so callers can spread the result into their patch only
+ * when it's actually needed.
  */
-export function favoriteFamiliarSwap(
+export function favoriteFormSwap(
   data: CharacterData, leaving: CharacterForm | CharacterForm[] | null, entering: CharacterForm | null,
+  remainingForms: CharacterForm[] = [],
 ): FavoriteRef[] | undefined {
   const leavingForms = Array.isArray(leaving) ? leaving : leaving ? [leaving] : []
-  const leavingIds = leavingForms.map(f => f.favoriteFamiliarId).filter((id): id is string => !!id)
-  if (leavingIds.length === 0 && !entering?.favoriteFamiliarId) return undefined
+  const stillWanted = new Set(
+    remainingForms.flatMap(f => [f.favoriteFamiliarId, f.favoriteFeatureId]).filter((id): id is string => !!id)
+  )
+  const leavingIds = leavingForms
+    .flatMap(f => [f.favoriteFamiliarId, f.favoriteFeatureId])
+    .filter((id): id is string => !!id && !stillWanted.has(id))
+  const enteringFamiliarId = entering?.favoriteFamiliarId
+  const enteringFeatureId  = entering?.favoriteFeatureId
+  if (leavingIds.length === 0 && !enteringFamiliarId && !enteringFeatureId) return undefined
   let favorites = data.favorites ?? []
   if (leavingIds.length) favorites = favorites.filter(f => !leavingIds.includes(f.refId))
-  if (entering?.favoriteFamiliarId && !favorites.some(f => f.refId === entering.favoriteFamiliarId)) {
-    const fam = (data.familiars ?? []).find(f => f.id === entering.favoriteFamiliarId)
+  if (enteringFamiliarId && !favorites.some(f => f.refId === enteringFamiliarId)) {
+    const fam = (data.familiars ?? []).find(f => f.id === enteringFamiliarId)
     if (fam) favorites = [...favorites, { refId: fam.id, refType: "familiar", label: fam.nickname || "Familiar" }]
+  }
+  if (enteringFeatureId && !favorites.some(f => f.refId === enteringFeatureId)) {
+    // Same six lists CharacterSheet.tsx concatenates into its own
+    // allFeatures — plain data, no migration/dedup step, so re-deriving it
+    // here needs no extra plumbing through every activate/revert call site.
+    const allFeatures: Feature[] = [
+      ...(data.racialTraits ?? []), ...(data.feats ?? []), ...(data.classFeatures ?? []),
+      ...(data.items ?? []), ...(data.invocations ?? []), ...(data.infusions ?? []),
+    ]
+    const feat = allFeatures.find(f => f.id === enteringFeatureId)
+    if (feat) favorites = [...favorites, { refId: feat.id, refType: "feature", label: feat.name }]
   }
   return favorites
 }
@@ -260,7 +289,7 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
     // Same "take the higher, not additive" semantics as CharacterConditional's tempHp.
     patch.tempHp = Math.max(data.tempHp ?? 0, next.tempHp)
   }
-  const swappedFavorites = favoriteFamiliarSwap(data, activeForm, next)
+  const swappedFavorites = favoriteFormSwap(data, activeForm, next)
   if (swappedFavorites) patch.favorites = swappedFavorites
   return patch
 }
@@ -279,6 +308,8 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
 export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
   const merged: FormStatOverrides = {}
   let acBonusSum = 0, maxHpBonusSum = 0, carryCapacityBonusSum = 0, speedBonusSum = 0
+  const skillBonusSums: Record<string, number> = {}
+  const visionMax: Record<string, number> = {}
   for (const f of forms) {
     const ov = f.overrides
     if (!ov) continue
@@ -294,11 +325,21 @@ export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
     maxHpBonusSum += ov.maxHpBonus ?? 0
     carryCapacityBonusSum += ov.carryCapacityBonus ?? 0
     speedBonusSum += ov.speedBonus ?? 0
+    for (const [skill, amount] of Object.entries(ov.skillBonuses ?? {})) {
+      skillBonusSums[skill] = (skillBonusSums[skill] ?? 0) + amount
+    }
+    // Take the higher range per type across every active form (not summed —
+    // see FormStatOverrides.grantedVision's own comment).
+    for (const [type, range] of Object.entries(ov.grantedVision ?? {})) {
+      visionMax[type] = Math.max(visionMax[type] ?? 0, range)
+    }
   }
   if (acBonusSum) merged.acBonus = acBonusSum
   if (maxHpBonusSum) merged.maxHpBonus = maxHpBonusSum
   if (carryCapacityBonusSum) merged.carryCapacityBonus = carryCapacityBonusSum
   if (speedBonusSum) merged.speedBonus = speedBonusSum
+  if (Object.keys(skillBonusSums).length > 0) merged.skillBonuses = skillBonusSums
+  if (Object.keys(visionMax).length > 0) merged.grantedVision = visionMax
   return merged
 }
 
@@ -326,7 +367,7 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
       resistances: revoked.resistances, vulnerabilities: revoked.vulnerabilities,
     }
     if (form.removeTempHpOnRevert) patch.tempHp = 0
-    const swappedFavorites = favoriteFamiliarSwap(data, form, null)
+    const swappedFavorites = favoriteFormSwap(data, form, null, remainingForms)
     if (swappedFavorites) patch.favorites = swappedFavorites
     return patch
   }
@@ -344,7 +385,7 @@ export function toggleFormPatch(data: CharacterData, formId: string): Partial<Ch
   }
   if (form.formMaxHp != null) patch.formHp = form.formMaxHp
   if (form.tempHp) patch.tempHp = Math.max(data.tempHp ?? 0, form.tempHp)
-  const swappedFavorites = favoriteFamiliarSwap(data, null, form)
+  const swappedFavorites = favoriteFormSwap(data, null, form)
   if (swappedFavorites) patch.favorites = swappedFavorites
   return patch
 }
@@ -370,15 +411,28 @@ export function activateFormPatch(data: CharacterData, formId: string, multiForm
 }
 
 /**
- * A spell's Cast configuration (castSlotId/castFormId/castConditionalId/
- * castGrantConditions) — all independent, all composed into one patch here
- * so a single Cast click applies them together atomically.
+ * A spell's Cast configuration (castSlotId/castSlotMode/castFormId/
+ * castConditionalId/castGrantConditions) — all independent, all composed
+ * into one patch here so a single Cast click applies them together
+ * atomically.
  */
 export function castSpellPatch(data: CharacterData, spell: SpellItem, multiForm?: boolean): Partial<CharacterData> {
   const spellSlots = data.spellSlots ?? []
   const conditions = data.conditions ?? []
   const patch: Partial<CharacterData> = spell.castFormId ? activateFormPatch(data, spell.castFormId, multiForm) : {}
-  if (spell.castSlotId) {
+  if (spell.castSlotMode === "atOrAbove" && spell.level != null) {
+    // Lowest-level slot at or above the spell's own level that still has a
+    // use free — a 4th-level spell spends a 4th if one's open, otherwise
+    // auto-upcasts into the next level up with room. Pact slots are only
+    // reached once every non-Pact candidate is exhausted, same
+    // Warlock-safety reasoning as the specific-slot picker's own default
+    // guess (SpellCastEditor) — this just extends it across levels instead
+    // of stopping at an exact-level match.
+    const candidates = spellSlots.filter(s => s.level >= spell.level! && s.used < s.total)
+    const slot = candidates.filter(s => !s.pact).sort((a, b) => a.level - b.level)[0]
+      ?? candidates.filter(s => s.pact).sort((a, b) => a.level - b.level)[0]
+    if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
+  } else if (spell.castSlotId) {
     const slot = spellSlots.find(s => s.id === spell.castSlotId && s.used < s.total)
     if (slot) patch.spellSlots = spellSlots.map(s => s.id === slot.id ? { ...s, used: s.used + 1 } : s)
   }

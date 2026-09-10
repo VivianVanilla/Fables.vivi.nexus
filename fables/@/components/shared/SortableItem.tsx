@@ -31,11 +31,40 @@
 // rather than leaving unmentioned.
 
 import { useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core"
+import type { PointerEvent as ReactPointerEvent } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
+// dnd-kit's stock PointerSensor activator only checks isPrimary/button — it
+// has no notion of "this pointerdown landed on a text field," so a
+// press-and-hold to select text inside a row's MarkdownTextarea (or any
+// input) arms the exact same activation timer as picking the row up to drag
+// it. A deliberate text-selection hold routinely outlasts the 250ms delay
+// below, so the drag wins the race and drags the whole card instead of
+// selecting text — worse on mobile, where selecting text IS a press-and-hold
+// gesture. Refusing activation whenever the down event started on an
+// editable element keeps that gesture free for text selection everywhere,
+// while every non-editable part of the row still arms the drag as before.
+function isTextEditTarget(target: EventTarget | null): boolean {
+  let el = target as HTMLElement | null
+  while (el) {
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable) return true
+    el = el.parentElement
+  }
+  return false
+}
+
+class RowPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: "onPointerDown" as const,
+      handler: ({ nativeEvent }: ReactPointerEvent) => !isTextEditTarget(nativeEvent.target),
+    },
+  ]
+}
+
 export function useDragSensors() {
-  return useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }))
+  return useSensors(useSensor(RowPointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }))
 }
 
 // The row stays in its list slot while dragging (as a faint placeholder) —
@@ -55,7 +84,18 @@ export function SortableItem({ id, disabled, children }: { id: string; disabled?
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.35 : 1,
+        // Without this, a touch's initial press-and-hold is still eligible
+        // for the browser's own scroll gesture recognizer, which routinely
+        // wins the race against PointerSensor's 250ms activationConstraint
+        // delay above (and can steal the gesture mid-drag even when it
+        // doesn't win the race) — this is what actually starting a drag on
+        // mobile depends on, not just the sensor config.
+        touchAction: "none",
+      }}
       className="cursor-grab active:cursor-grabbing"
     >
       {children}

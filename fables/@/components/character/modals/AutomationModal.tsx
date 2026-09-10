@@ -23,7 +23,7 @@ import { Modal } from "@/components/shared/ui/Modal"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
 import type { CharacterData, CharacterForm, CharacterConditional, FormStatOverrides, SpellItem, SpellSlot, Feature, FamiliarRef } from "@/components/shared/types"
-import { ALL_CONDITIONS } from "@/components/shared/constants"
+import { ALL_CONDITIONS, SKILLS, VISION_TYPES } from "@/components/shared/constants"
 import { DAMAGE_TYPES } from "@/components/shared/damageTypes"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { nanoid, castSpellPatch, conditionalTriggerPatch } from "@/components/shared/utils"
@@ -104,6 +104,57 @@ function ConditionChips({ options, selected, onToggle }: { options: readonly str
   )
 }
 
+// Per-skill bonuses for a Form/Automation — unlike the fixed AC/Speed/HP
+// fields above, this is a variable-length Record<skillName, amount>, so each
+// entry is its own row (skill label + number + remove) with an "add a skill"
+// dropdown beneath that only offers skills not already in the record —
+// keeps the same skill from getting two conflicting rows.
+function SkillBonusEditor({ value, allSkillNames, onChange }: {
+  value: Record<string, number> | undefined
+  allSkillNames: string[]
+  onChange: (next: Record<string, number> | undefined) => void
+}) {
+  const [pending, setPending] = useState("")
+  const entries = Object.entries(value ?? {})
+  const available = allSkillNames.filter(s => !(value && s in value))
+
+  function addSkill(skill: string) {
+    if (!skill) return
+    onChange({ ...(value ?? {}), [skill]: 0 })
+    setPending("")
+  }
+  function setAmount(skill: string, amount: number) {
+    onChange({ ...(value ?? {}), [skill]: amount })
+  }
+  function remove(skill: string) {
+    const next = { ...(value ?? {}) }
+    delete next[skill]
+    onChange(Object.keys(next).length ? next : undefined)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {entries.map(([skill, amount]) => (
+        <div key={skill} className="flex items-center gap-2">
+          <span className="text-xs text-white/70 flex-1 truncate">{skill}</span>
+          <input type="number" value={amount} placeholder="+0"
+            onChange={e => setAmount(skill, e.target.value === "" ? 0 : parseInt(e.target.value) || 0)}
+            className="w-16 bg-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 text-right" />
+          <button type="button" onClick={() => remove(skill)} title="Remove"
+            className="text-white/30 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+        </div>
+      ))}
+      {available.length > 0 && (
+        <select value={pending} onChange={e => addSkill(e.target.value)}
+          className="bg-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white/60 outline-none focus:ring-1 focus:ring-white/30">
+          <option value="" className="bg-zinc-800 text-white/60">+ Add skill bonus…</option>
+          {available.map(s => <option key={s} value={s} className="bg-zinc-800 text-white">{s}</option>)}
+        </select>
+      )}
+    </div>
+  )
+}
+
 function DeleteFooter({ onCancel, onSave, onDelete, saveDisabled, confirmName }: {
   onCancel: () => void; onSave: () => void; onDelete?: () => void; saveDisabled?: boolean; confirmName: string
 }) {
@@ -141,14 +192,19 @@ function DeleteFooter({ onCancel, onSave, onDelete, saveDisabled, confirmName }:
 
 // ── Forms tab ─────────────────────────────────────────────────────────────
 
-const ABILITY_FIELDS: { key: keyof FormStatOverrides; label: string }[] = [
+const ABILITY_FIELDS: { key: "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma"; label: string }[] = [
   { key: "strength", label: "STR" }, { key: "dexterity", label: "DEX" }, { key: "constitution", label: "CON" },
   { key: "intelligence", label: "INT" }, { key: "wisdom", label: "WIS" }, { key: "charisma", label: "CHA" },
 ]
 
-function FormEditor({ form, userId, familiars, onSave, onCancel, onDelete }: {
-  form: CharacterForm; userId: string | null; familiars: FamiliarRef[]; onSave: (f: CharacterForm) => void; onCancel: () => void; onDelete?: () => void
+function FormEditor({ form, userId, familiars, customSkills, allFeatures, onSave, onCancel, onDelete }: {
+  form: CharacterForm; userId: string | null; familiars: FamiliarRef[]
+  customSkills: { id: string; name: string; ability: string }[]
+  allFeatures: Feature[]
+  onSave: (f: CharacterForm) => void; onCancel: () => void; onDelete?: () => void
 }) {
+  const allSkillNames = [...SKILLS.map(s => s.name), ...customSkills.map(s => s.name)]
+  const favoritableFeatures = [...allFeatures].sort((a, b) => a.name.localeCompare(b.name))
   const [draft, setDraft] = useState<CharacterForm>(form)
   const [showPortraitPicker, setShowPortraitPicker] = useState(false)
   const [galleryImages, setGalleryImages] = useState<{ name: string; publicUrl: string }[]>([])
@@ -258,6 +314,27 @@ function FormEditor({ form, userId, familiars, onSave, onCancel, onDelete }: {
         </p>
       </div>
 
+      <div className="flex flex-col gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Skill Bonuses</span>
+        <p className="text-[10px] text-white/30 -mt-1">Stacks on top of the character's own per-skill bonus while this form is active — pick a skill to add a bonus just to it, e.g. +2 Stealth.</p>
+        <SkillBonusEditor value={ov.skillBonuses} allSkillNames={allSkillNames} onChange={v => setOv({ skillBonuses: v })} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Vision</span>
+        <p className="text-[10px] text-white/30 -mt-1">Range in feet while this form is active — replaces the character's own range for that type only if higher (never lower). Blank = no change.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {VISION_TYPES.map(type => (
+            <NumField key={type} label={type} value={ov.grantedVision?.[type]}
+              onChange={v => {
+                const next = { ...ov.grantedVision }
+                if (v) next[type] = v; else delete next[type]
+                setOv({ grantedVision: next })
+              }} placeholder="0" />
+          ))}
+        </div>
+      </div>
+
       <label className="flex flex-col gap-1">
         <span className="text-[10px] text-white/40 uppercase tracking-wider">Notification</span>
         <input value={draft.notification ?? ""} onChange={e => setDraft(d => ({ ...d, notification: e.target.value || undefined }))}
@@ -311,6 +388,20 @@ function FormEditor({ form, userId, familiars, onSave, onCancel, onDelete }: {
         </p>
       </label>
 
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider">Favorite Feature/Weapon</span>
+        <select value={draft.favoriteFeatureId ?? ""} onChange={e => setDraft(d => ({ ...d, favoriteFeatureId: e.target.value || undefined }))}
+          className="bg-zinc-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-white/30">
+          <option value="" className="bg-zinc-800 text-white">— None —</option>
+          {favoritableFeatures.map(f => <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>)}
+        </select>
+        <p className="text-[10px] text-white/30">
+          Same idea as Favorite Familiar, for any racial trait/feat/class feature/item (weapons included)/
+          invocation/infusion — e.g. a Sharpshooter-style form that favorites your bow while active. Works
+          alongside Favorite Familiar, not instead of it. Blank = no change.
+        </p>
+      </label>
+
       <div className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Granted Conditions</span>
         <p className="text-[10px] text-white/30 -mt-0.5">Applied when this form activates, removed when it reverts.</p>
@@ -335,7 +426,7 @@ function FormEditor({ form, userId, familiars, onSave, onCancel, onDelete }: {
   )
 }
 
-function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (patch: Partial<CharacterData>) => void; userId: string | null }) {
+function FormsTab({ data, onUpdate, userId, allFeatures }: { data: CharacterData; onUpdate: (patch: Partial<CharacterData>) => void; userId: string | null; allFeatures: Feature[] }) {
   const forms = data.forms ?? []
   const [editingId, setEditingId] = useState<string | null>(null)
   const [newDraft, setNewDraft] = useState<CharacterForm | null>(null)
@@ -364,7 +455,7 @@ function FormsTab({ data, onUpdate, userId }: { data: CharacterData; onUpdate: (
 
   if (newDraft || editing) {
     return (
-      <FormEditor form={newDraft ?? editing!} userId={userId} familiars={data.familiars ?? []} onSave={save}
+      <FormEditor form={newDraft ?? editing!} userId={userId} familiars={data.familiars ?? []} customSkills={data.customSkills ?? []} allFeatures={allFeatures} onSave={save}
         onCancel={() => { setNewDraft(null); setEditingId(null) }}
         onDelete={newDraft ? undefined : () => del(editing!.id)} />
     )
@@ -568,23 +659,38 @@ function SpellCastEditor({ spell, forms, conditionals, spellSlots, onSave, onCan
 
       <PopTransition show={!!draft.castEnabled} className="flex flex-col gap-3 pl-2">
         {!!draft.level && (
-          <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <span className="text-[10px] text-white/40 uppercase tracking-wider">Expend Slot</span>
-            <select value={draft.castSlotId ?? ""} onChange={e => set({ castSlotId: e.target.value || undefined })}
-              className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
-              <option value="" className="bg-zinc-800 text-white">— None —</option>
-              {spellSlots.map(s => (
-                <option key={s.id} value={s.id} className="bg-zinc-800 text-white">
-                  {s.pact ? "Pact — " : ""}Level {s.level} ({Math.max(0, s.total - s.used)}/{s.total} left)
-                </option>
-              ))}
-            </select>
-            {/* Picking a specific slot row (not just "a level N slot") is what
-                makes this Warlock-safe — Pact Magic is its own separate pool
-                that needs to be the one that burns, not a same-level regular
-                slot from a multiclass. */}
-            <p className="text-[10px] text-white/30">Warlocks: pick your Pact slot here, not a same-level regular slot.</p>
-          </label>
+            <label className="flex items-center gap-2 cursor-pointer text-white/60 text-xs">
+              <input type="checkbox" checked={(draft.castSlotMode ?? "specific") === "atOrAbove"}
+                onChange={e => set({ castSlotMode: e.target.checked ? "atOrAbove" : "specific" })}
+                className="accent-purple-500" />
+              Use lowest available slot (auto-upcast)
+            </label>
+            {draft.castSlotMode === "atOrAbove" ? (
+              <p className="text-[10px] text-white/30">
+                Spends a Level {draft.level} slot if you have one free; otherwise automatically upcasts into
+                the next higher level with room. Pact slots are only used once every regular slot is gone.
+              </p>
+            ) : (
+              <>
+                <select value={draft.castSlotId ?? ""} onChange={e => set({ castSlotId: e.target.value || undefined })}
+                  className="bg-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-white/30 w-48">
+                  <option value="" className="bg-zinc-800 text-white">— None —</option>
+                  {spellSlots.map(s => (
+                    <option key={s.id} value={s.id} className="bg-zinc-800 text-white">
+                      {s.pact ? "Pact — " : ""}Level {s.level} ({Math.max(0, s.total - s.used)}/{s.total} left)
+                    </option>
+                  ))}
+                </select>
+                {/* Picking a specific slot row (not just "a level N slot") is
+                    what makes this Warlock-safe — Pact Magic is its own
+                    separate pool that needs to be the one that burns, not a
+                    same-level regular slot from a multiclass. */}
+                <p className="text-[10px] text-white/30">Warlocks: pick your Pact slot here, not a same-level regular slot.</p>
+              </>
+            )}
+          </div>
         )}
         <label className="flex items-center gap-2 cursor-pointer text-white/60 text-sm">
           <input type="checkbox" checked={hasVariants}
@@ -991,7 +1097,7 @@ export function AutomationModal({ data, onUpdate, onClose, userId, allFeatures, 
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4">
-          {tab === "forms" && <FormsTab data={data} onUpdate={onUpdate} userId={userId} />}
+          {tab === "forms" && <FormsTab data={data} onUpdate={onUpdate} userId={userId} allFeatures={allFeatures} />}
           {tab === "conditionals" && <ConditionalsTab data={data} onUpdate={onUpdate} onTrigger={showToast} multiFormEnabled={multiFormEnabled} />}
           {tab === "cast" && <CastTab data={data} onUpdate={onUpdate} onCast={showToast} multiFormEnabled={multiFormEnabled} />}
           {tab === "features" && <FeaturesTab data={data} allFeatures={allFeatures} onChangeFeature={onChangeFeature} />}

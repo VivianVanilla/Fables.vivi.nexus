@@ -14,6 +14,7 @@ import { LevelMultiSelect } from './LevelMultiSelect'
 import { AddSpellForm, DEFAULT_DRAFT, spellDraftToPayload } from './AddSpellForm'
 import type { SpellDraft } from './AddSpellForm'
 import { useHomebrewFilter } from '../hooks/useHomebrewFilter'
+import { AddToCharacterMenu } from './AddToCharacterMenu'
 
 const ADMIN_PASSWORD = 'archmage'
 
@@ -34,6 +35,7 @@ export function SpellBrowser({
   const [selectedLevels, setSelectedLevels] = useState<number[]>([])
   const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [addMenu, setAddMenu] = useState<{ x: number; y: number; spell: Spell } | null>(null)
 
   const hideHomebrew = useHomebrewFilter()
   const [adminMode, setAdminMode] = useState(adminEnabled)
@@ -327,6 +329,7 @@ export function SpellBrowser({
                       adminMode={adminMode}
                       onOpen={setSelectedSpell}
                       onEdit={handleEditSpell}
+                      onAddRequest={(e, s) => setAddMenu({ x: e.clientX, y: e.clientY, spell: s })}
                     />
                   ))}
                 </div>
@@ -336,6 +339,10 @@ export function SpellBrowser({
       )}
 
       <SpellModal spell={selectedSpell} onClose={() => setSelectedSpell(null)} />
+
+      {addMenu && (
+        <AddToCharacterMenu spell={addMenu.spell} x={addMenu.x} y={addMenu.y} onClose={() => setAddMenu(null)} />
+      )}
     </div>
   )
 }

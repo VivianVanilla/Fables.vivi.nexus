@@ -319,6 +319,7 @@ export function coloredNebulaBg(color: string): CSSProperties {
     backgroundSize: `100% 100%, var(--fables-shared-bg-size, cover)`,
     backgroundRepeat: `no-repeat, var(--fables-shared-bg-repeat, no-repeat)`,
     backgroundAttachment: `scroll, var(--fables-shared-bg-attachment, scroll)`,
+    backgroundPosition: `center, var(--fables-shared-bg-position, center)`,
   }
 }
 
