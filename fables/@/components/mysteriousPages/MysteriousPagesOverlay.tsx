@@ -17,13 +17,6 @@ const NOTE_COLORS = ["#fcd34d", "#fb7185", "#38bdf8", "#a3e635", "#c084fc", "#fb
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 
-function hexToRgba(hex: string, a: number) {
-  const h = hex.replace("#", "")
-  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h
-  const n = parseInt(full, 16)
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-}
-
 // Live position during a drag — overrides the row's stored coords for the
 // one note being moved, so the line and card track the pointer smoothly.
 type DragState = { id: string; mode: "note" | "anchor"; x: number; y: number }
@@ -456,7 +449,7 @@ function PageNote({
   return (
     <div
       className="absolute w-44 -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl border text-zinc-800"
-      style={{ left: `${x * 100}%`, top: `${y * 100}%`, backgroundColor: hexToRgba(note.color, 0.18), borderColor: note.color }}
+      style={{ left: `${x * 100}%`, top: `${y * 100}%`, backgroundColor: "#ffffff", borderColor: note.color }}
     >
       <div
         onPointerDown={editing ? undefined : onStartDrag}
@@ -508,7 +501,10 @@ function PageNote({
           </div>
         ) : note.content.trim() ? (
           <div className="max-h-32 overflow-auto">
-            <Markdown text={note.content} tone="paper" size="xs" />
+            {/* Force near-black body text: the note card is only an 18%
+                wash of its color, and `paper`'s default zinc-700 body text
+                reads as barely-there gray on top of it. */}
+            <Markdown text={note.content} tone="paper" size="xs" textColorOverride="black" />
           </div>
         ) : (
           <p className="text-[10px] italic text-zinc-500">Empty note — ✎ to write.</p>

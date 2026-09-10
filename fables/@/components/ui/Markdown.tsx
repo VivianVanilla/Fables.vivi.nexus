@@ -80,9 +80,10 @@ interface MarkdownProps {
   size?: "sm" | "xs"
   className?: string
   // Opt-in override of just the base body-text color (not headings/code/
-  // links, which stay tone-driven) — used only by the character sheet's own
-  // Settings' "Body Text" choice (FeatureEntry.tsx/SpellEntry.tsx), never by
-  // other Markdown callers (NPC tracker, map notes, docs, chat).
+  // links, which stay tone-driven) — used by the character sheet's own
+  // Settings' "Body Text" choice (FeatureEntry.tsx/SpellEntry.tsx) and by
+  // Mysterious Pages sticky notes (forcing black on the pale note wash);
+  // other Markdown callers (NPC tracker, map notes, docs, chat) leave it unset.
   textColorOverride?: "black" | "white"
   // Called instead of navigating for links whose href starts with
   // "internal:" (e.g. NPC Tracker's `[[Name]]` mentions, rewritten to
