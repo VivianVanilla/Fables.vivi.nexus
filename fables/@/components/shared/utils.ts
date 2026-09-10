@@ -36,12 +36,10 @@ export interface AcResult {
 export function computeAc(data: CharacterData): AcResult {
   const equippedArmor = [
     ...(data.items ?? []).filter(i => i.equipped),
-    // A standalone armor infusion (Armor of Magical Strength, a homebrew
-    // armour infusion…) counts while it's infused and on this character —
-    // "infused" is its version of "equipped". Non-standalone ones (Enhanced
-    // Defense: +1 to armour you already wear) are a modifier, not their own
-    // piece, so they don't come through here.
-    ...(data.infusions ?? []).filter(f => (f.infusionStandalone ?? true) && infusionIsActive(f)),
+    // An armour infusion (Armour of Magical Strength, a homebrew armour
+    // infusion) counts toward AC while it's active AND equipped — same as any
+    // other piece of armour.
+    ...(data.infusions ?? []).filter(f => infusionIsActive(f) && (f.equipped ?? true)),
   ].filter(i => (i.equipKind ?? "armor") === "armor")
 
   const baseArmor = equippedArmor

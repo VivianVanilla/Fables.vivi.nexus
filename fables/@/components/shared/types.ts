@@ -130,7 +130,6 @@ export interface Feature {
   attuned?: boolean          // is the character currently attuned to this item?
   infused?: boolean          // Artificers Infusions list only — is this infusion currently "in use" (imbued into an item)? Counted against CharacterData.maxInfusedItems the same way attuned counts against maxAttunedItems
   // ── Infusions only (entries in CharacterData.infusions) ───────────────────
-  infusionStandalone?: boolean   // this infusion is a discrete piece of gear (Goggles of Night, Bag of Holding…) rather than a modifier to gear you already own (Enhanced Defense/Weapon, Repeating Shot…). Only a standalone one is merged into the Equipped list while infused. Unset = true, so every infusion predating this keeps showing in Gear.
   infusionTrackLocation?: boolean // opt-in — the infused item might not be on this character (given to a party member), so track its whereabouts. Off (default) = assume it's on you, no "On me" control shown anywhere.
   infusionOnSelf?: boolean       // only meaningful when infusionTrackLocation is on — the infused item is currently carried/worn by THIS character, not handed to someone else. Gates this infusion's automation (triggerFormId/triggerConditionalId). Unset = true (assume on you).
   infusionHeldBy?: string        // only meaningful when infusionTrackLocation is on and infusionOnSelf is false — free-text note of who has the infused item ("Liam")
@@ -355,6 +354,7 @@ export interface CharacterData {
   resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
   vulnerabilities?: string[]     // damage type names this character has vulnerability to
   showVisionTracker?: boolean    // opt-in (default off) — shows the Vision panel on the Combat tab
+  infusionsInInventory?: boolean // opt-in (default off) — Artificer: while infused, an infusion also appears in the Gear tab (Equipped or Carried, via its own Equip toggle) so its weapon/armour stats and weight count for real
   visionTypes?: Record<string, number> // this character's own (non-Form) special senses — key from VISION_TYPES
                                         // (Darkvision/Blindsight/Tremorsense/Truesight), value = range in feet.
                                         // A Form active at the same time can push a type higher (never lower —

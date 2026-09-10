@@ -176,6 +176,14 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 className="accent-primary size-4 rounded" />
               <span className={`text-sm ${c70}`}>Add vision tracker (Darkvision, etc.)</span>
             </label>
+            {isArtificer && (
+              <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+                <input type="checkbox" checked={data.infusionsInInventory ?? false}
+                  onChange={e => onUpdate({ infusionsInInventory: e.target.checked })}
+                  className="accent-primary size-4 rounded" />
+                <span className={`text-sm ${c70}`}>Show infused infusions in Gear (equip them like any item)</span>
+              </label>
+            )}
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.hideSpellsSection ?? false}
                 onChange={e => onUpdate({ hideSpellsSection: e.target.checked })}

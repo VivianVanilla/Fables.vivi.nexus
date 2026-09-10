@@ -120,19 +120,22 @@ export function ItemsTab({
   const martialSliderColor = (f: Feature) => isInfusionFeature(f)
     ? (data.favoriteCategorySliderColors?.infusion ?? data.favoriteCategoryColors?.infusion) : undefined
 
-  // An infusion only ever belongs here while it's actively infused (imbued
-  // into an item) — un-infusing it (from either this tab or the Infusions
-  // list itself, since it's the same record either way) drops it out of
-  // this filter and it disappears from Gear on its own, no explicit removal
-  // needed. It never leaves data.infusions itself, so nothing here is ever
-  // deleted — see patchFeature's own favorites cleanup for what happens to
-  // a favorite pointing at one when that happens.
+  // With Settings → "Infusions in inventory" on, an infused infusion is shown
+  // in the Gear tab while it's infused — same record, not a copy — and its
+  // own Equip toggle (default on: you infuse something to wear it) decides
+  // which list it sits in, exactly like a real armour piece. Un-infusing it
+  // (from here or the Infusions list) drops it out on its own; it never leaves
+  // data.infusions, so nothing here is ever deleted.
+  const showsInInventory = (f: Feature) => !!f.infused && !!data.infusionsInInventory
+  const infEquipped = (data.infusions ?? []).filter(f => showsInInventory(f) && (f.equipped ?? true))
+  const infCarried  = (data.infusions ?? []).filter(f => showsInInventory(f) && !(f.equipped ?? true))
   const equippedItems = [
     ...(data.items ?? []).filter(i => i.category === "armor" && i.equipped && !i.martialOnly),
-    // Only infusions flagged as a discrete piece of gear (Feature.infusionStandalone,
-    // unset = true for back-compat) — a "+1 to armor I already wear" infusion
-    // stays out of the Equipped list so it doesn't read as its own item.
-    ...(data.infusions ?? []).filter(f => f.infused && (f.infusionStandalone ?? true)),
+    ...infEquipped,
+  ]
+  const carriedItems = [
+    ...(data.items ?? []).filter(i => !(i.category === "armor" && i.equipped) && !i.martialOnly),
+    ...infCarried,
   ]
 
   // Settings' "Modules and Font Size" — sheet-wide text color switch
@@ -170,6 +173,7 @@ export function ItemsTab({
           showAttunement maxAttuned={data.maxAttunedItems} onChangeMaxAttuned={n => update({ maxAttunedItems: n })}
           showItemExtras
           perItemIsInfusion={isInfusionFeature}
+          infusionInventoryEnabled={!!data.infusionsInInventory}
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle} perItemSliderColor={martialSliderColor}
           bodyTextColor={bodyTextColor}
@@ -179,12 +183,11 @@ export function ItemsTab({
           onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => i.category === "armor" && !!i.equipped && !i.martialOnly, newOrder.filter(f => !infusionIds.has(f.id))) })}
         />
         {/* Everything not equipped lands here — armor/weapons you own but
-            aren't wearing, and every generic item (which has no Equip
-            checkbox at all, so it can never leave this list on its own).
-            martialOnly entries (made directly from the Martial tab, e.g.
-            fists) are excluded — they live only there, see SpellsEquipPanel.tsx. */}
+            aren't wearing, generic items, and infused infusions whose Equip
+            toggle is off. martialOnly entries (made directly from the Martial
+            tab, e.g. fists) are excluded — they live only there. */}
         <ContainerItemsList
-          items={(data.items ?? []).filter(i => !(i.category === "armor" && i.equipped) && !i.martialOnly)} allFeatures={allFeatures}
+          items={carriedItems} allFeatures={allFeatures}
           onAdd={addItem} showAddButton={false}
           onChange={onChangeFeature}
           onRemove={onRemoveFeature}
@@ -195,10 +198,12 @@ export function ItemsTab({
           onAddPack={addPackToInventory}
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}
+          perItemIsInfusion={isInfusionFeature}
+          infusionInventoryEnabled={!!data.infusionsInInventory}
           bodyTextColor={bodyTextColor}
           weaponFormBonus={weaponFormBonus}
           pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
-          onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => !(i.category === "armor" && !!i.equipped) && !i.martialOnly, newOrder) })}
+          onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => !(i.category === "armor" && !!i.equipped) && !i.martialOnly, newOrder.filter(f => !infusionIds.has(f.id))) })}
         />
       </div>
     </div>

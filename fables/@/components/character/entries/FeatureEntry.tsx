@@ -272,9 +272,9 @@ interface FeatureEntryProps {
   onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showInfusedToggle?: boolean           // only true for the Infusions list — shows an "Infused" checkbox, no gating field needed (every infusion is eligible, unlike Attuned which needs requiresAttunement first). Also unlocks the infusion config block in edit mode (standalone / on-me / Form + Conditional links).
+  infusionInventoryEnabled?: boolean    // Settings → "Infusions in inventory" — only then does an infused infusion get an "Equip" toggle (Equipped vs Carried); off = infusions never enter Gear so the toggle would be meaningless
   formOptions?:      { id: string; name: string }[]  // Infusions list only — Forms an infusion can activate while active-on-self (feature.triggerFormId)
   conditionalOptions?: { id: string; name: string }[]  // Infusions list only — Conditionals an infusion can trigger when it becomes active (feature.triggerConditionalId)
-  onCopyToGear?:    () => void          // standalone infusions only — creates a plain Gear item from this infusion's stats (name/description/weapon+armor fields/weight/value/rarity), so a "Replicate Magic Item" infusion can live in the inventory for real
   weaponFormBonus?: { toHit: number; damage: number }  // weapon rows only — flat to-hit/damage from any active Form (FormStatOverrides.weaponToHitBonus/weaponDamageBonus); folded into the displayed/computed to-hit & damage, not persisted
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
   showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
@@ -382,8 +382,8 @@ function BulkRegainRow({ label, onRegain }: { label?: string; onRegain: (amount:
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, statMods = {}, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, showItemExtras, showWeightColumn,
-  formOptions, conditionalOptions, weaponFormBonus, onCopyToGear,
+  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, infusionInventoryEnabled, showItemExtras, showWeightColumn,
+  formOptions, conditionalOptions, weaponFormBonus,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
   magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors,
@@ -402,9 +402,6 @@ export function FeatureEntry({
   // holds the usesUsed value the slider was about to commit, until a
   // variant is actually chosen below.
   const [pendingVariantUses, setPendingVariantUses] = useState<number | null>(null)
-  // Latches once you've made a Gear copy of this infusion, so the button
-  // reads back "✓ Added" instead of inviting an accidental second copy.
-  const [copiedToGear, setCopiedToGear] = useState(false)
 
   const namePlaceholder = showItemExtras ? "Item name" : "Feature name"
   const unnamedLabel    = showItemExtras ? "Unnamed Item" : "Unnamed"
@@ -574,15 +571,6 @@ export function FeatureEntry({
             infused + on them. */}
         {showInfusedToggle && (
           <div className="flex flex-col gap-2.5 text-xs border-t border-white/10 pt-2">
-            <label className="flex items-start gap-2 text-white/60 cursor-pointer select-none">
-              <input type="checkbox" className="mt-0.5" checked={feature.infusionStandalone ?? true}
-                onChange={e => onChange({ infusionStandalone: e.target.checked })} />
-              <span>
-                Standalone item — shows in <span className="text-white/80">Equipped</span> while infused
-                <span className="block text-[10px] text-white/30">Keep Off for infusions that just modify gear you already own.</span>
-              </span>
-            </label>
-
             <div className="flex flex-col gap-2">
               <label className="flex items-start gap-2 text-white/60 cursor-pointer select-none">
                 <input type="checkbox" className="mt-0.5" checked={feature.infusionTrackLocation ?? false}
@@ -1343,12 +1331,15 @@ export function FeatureEntry({
           )}
 
           {/* At the trailing edge, alongside Weight, rather than crowding the
-              name — this is the one toggle that also determines Equipped vs
-              Carried Items, so it reads better as its own aside than buried mid-row.
-              Not on infusions: "Infused" (above) is their equivalent on/off. */}
-          {showItemExtras && !showInfusedToggle && feature.category === "armor" && (
-            <label className={`flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer ${theme.color}`} onClick={e => e.stopPropagation()} title="Equipped">
-              <input type="checkbox" checked={feature.equipped ?? false} disabled={readOnly}
+              name — this toggle also determines which list the item sits in
+              (Equipped vs Carried), so it reads better as its own aside. For
+              an armour item it defaults off; for an infused infusion shown in
+              the inventory (Settings → "Infusions in inventory") it defaults ON
+              — you infuse something to wear it — and moves it between the two
+              lists. */}
+          {showItemExtras && ((showInfusedToggle && feature.infused && infusionInventoryEnabled) || (!showInfusedToggle && feature.category === "armor")) && (
+            <label className={`flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer ${theme.color}`} onClick={e => e.stopPropagation()} title={showInfusedToggle ? "Equipped — uncheck to move it to Carried Items" : "Equipped"}>
+              <input type="checkbox" checked={feature.equipped ?? !!showInfusedToggle} disabled={readOnly}
                 onChange={e => onChange({ equipped: e.target.checked })}
                 className="size-3.5 accent-white cursor-pointer" />
               Equip
@@ -1500,14 +1491,6 @@ export function FeatureEntry({
                     feature.inMartial ? "bg-primary/30 text-primary hover:bg-primary/20" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
                   }`}>
                   {feature.inMartial ? "◯ In Martial" : "+ Martial Tab"}
-                </button>
-              )}
-              {onCopyToGear && !readOnly && (
-                <button type="button" disabled={copiedToGear}
-                  onClick={e => { e.stopPropagation(); onCopyToGear(); setCopiedToGear(true) }}
-                  title="Create a matching item in your Gear from this infusion's stats"
-                  className="text-[10px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors shrink-0 disabled:opacity-60">
-                  {copiedToGear ? "✓ Added to Gear" : "+ Gear item"}
                 </button>
               )}
               {onToggleFavorite && (

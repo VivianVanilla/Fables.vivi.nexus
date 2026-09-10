@@ -83,6 +83,7 @@ interface FeatureListProps {
   onChangeMaxAttuned?: (n: number) => void
   hideAttunedBadge?: boolean  // keeps the per-entry Attuned checkbox (showAttunement) but hides the "Attuned N/M" counter pill — set on the Infusions list once ItemsTab's Equipped list (which also merges in infused Infusions, see perItemIsInfusion) became the one authoritative attunement count, so the two lists don't show two different tallies against the same maxAttunedItems
   showInfusedToggle?: boolean  // Artificer's Infusions list only — "Infused" checkbox per entry (Feature.infused) + a counter badge, same shape as showAttunement/attuned
+  infusionInventoryEnabled?: boolean  // Settings → "Infusions in inventory" — passed to each row so an infused infusion only gets an "Equip" (Equipped vs Carried) toggle when infusions actually enter Gear
   maxInfused?: number
   onChangeMaxInfused?: (n: number) => void
   showInvocationCount?: boolean  // Eldritch Invocations list only — a "Known N/M" badge (N = entries not flagged freeInvocation, M = invocationMax), same editable-max shape as the Infused/Attuned badges
@@ -111,7 +112,6 @@ interface FeatureListProps {
   formOptions?: { id: string; name: string }[]            // Infusions list only — Forms an infusion can activate
   conditionalOptions?: { id: string; name: string }[]     // Infusions list only — Conditionals an infusion can trigger
   weaponFormBonus?: { toHit: number; damage: number }  // weapon-rendering lists only — flat to-hit/damage from any active Form
-  onCopyInfusionToGear?: (f: Feature) => void  // Infusions list only — spins off a plain Gear item from a standalone infusion's stats
 }
 
 // Searchable grid over the same core+homebrew suggestion pool the inline
@@ -272,7 +272,7 @@ function EditableCounterBadge({ label, count, max, onChangeMax, readOnly, positi
   )
 }
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, hideAttunedBadge, showInfusedToggle, maxInfused, onChangeMaxInfused, perItemIsInfusion, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true, formOptions, conditionalOptions, weaponFormBonus, onCopyInfusionToGear, showInvocationCount, invocationMax, onChangeInvocationMax }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, hideAttunedBadge, showInfusedToggle, infusionInventoryEnabled, maxInfused, onChangeMaxInfused, perItemIsInfusion, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true, formOptions, conditionalOptions, weaponFormBonus, showInvocationCount, invocationMax, onChangeInvocationMax }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const infusedCount = showInfusedToggle ? items.filter(f => f.infused).length : 0
   const invocationCount = showInvocationCount ? items.filter(f => !f.freeInvocation).length : 0
@@ -314,15 +314,13 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
         onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
         showAttunement={showAttunement}
         showInfusedToggle={isInfusion ? true : showInfusedToggle}
+        infusionInventoryEnabled={infusionInventoryEnabled}
         formOptions={formOptions}
         conditionalOptions={conditionalOptions}
         weaponFormBonus={weaponFormBonus}
-        onCopyToGear={isInfusion && (f.infusionStandalone ?? true) && onCopyInfusionToGear ? () => onCopyInfusionToGear(f) : undefined}
-        // A standalone infusion IS a discrete piece of gear (a weapon, armor,
-        // a wondrous item) — give it the full weapon/armor/item editor, same
-        // as anything in Gear. A non-standalone one only modifies gear you
-        // already have, so it keeps the trimmed infusion-only card.
-        showItemExtras={isInfusion ? (f.infusionStandalone ?? true) : showItemExtras}
+        // Infusions get the full weapon/armor/item editor too — a "Radiant
+        // Weapon" or "Repeating Shot" infusion needs real weapon stats.
+        showItemExtras={isInfusion ? true : showItemExtras}
         showMagicStar={showMagicStar}
         magicItemStyle={magicItemStyle}
         magicItemColor={magicItemColor}
@@ -430,9 +428,11 @@ export interface ContainerItemsListProps {
   perItemAccentStyle?: (f: Feature) => CardStyle | undefined  // overrides accentStyle per feature, same fallback rule as perItemAccentColor
   bodyTextColor?: "black" | "white"  // Settings — global override for each card's own description text color
   weaponFormBonus?: { toHit: number; damage: number }  // flat to-hit/damage from any active Form, applied to every weapon here
+  perItemIsInfusion?: (f: Feature) => boolean  // ItemsTab's Carried list merges in infused non-equipped Infusions — flag those rows so they render as infusions (Infused/On me toggles, not draggable, no container controls) rather than plain items
+  infusionInventoryEnabled?: boolean  // Settings → "Infusions in inventory" — forwarded to infusion rows for their "Equip" toggle gate (see FeatureListProps)
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle, bodyTextColor, weaponFormBonus }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle, bodyTextColor, weaponFormBonus, perItemIsInfusion, infusionInventoryEnabled }: ContainerItemsListProps) {
   const sensors = useDragSensors()
   // Which item is currently being dragged — drives the floating
   // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
@@ -533,11 +533,13 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
   // Shared by the normal render below AND the DragOverlay clone, so the
   // floating "picked up" copy is pixel-identical to the row it came from.
   function renderCard(f: Feature) {
+    const isInfusion = perItemIsInfusion?.(f) ?? false
     const contentsOpen = openContainers.has(f.id)
     // Same button-based fallback as the drop targets below (handleDrop) —
     // every other container is a valid destination except this item's own
-    // subtree, which would create a cycle.
-    const containerOptions = readOnly ? undefined : items
+    // subtree, which would create a cycle. Infusions can't be filed into a
+    // container (they're not really in the inventory, just shown there).
+    const containerOptions = readOnly || isInfusion ? undefined : items
       .filter(i => i.isContainer && i.id !== f.id && !isSelfOrDescendant(i.id, f.id))
       .map(i => ({ id: i.id, name: i.name }))
     return (
@@ -548,12 +550,14 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
         readOnly={readOnly}
         pb={pb}
         statMods={statMods}
-        suggestionSource="item"
+        suggestionSource={isInfusion ? "infusion" : "item"}
         userId={userId}
         isFavorite={favorites.some(fav => fav.refId === f.id)}
         onToggleFavorite={() => onToggleFavorite(f.id, f.name)}
+        showInfusedToggle={isInfusion}
+        infusionInventoryEnabled={infusionInventoryEnabled}
         showItemExtras
-        showWeightColumn
+        showWeightColumn={!isInfusion}
         showMagicStar={showMagicStar}
         magicItemStyle={magicItemStyle}
         magicItemColor={magicItemColor}
@@ -585,7 +589,7 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
     const overCapacity = f.maxWeight != null && childWeight > f.maxWeight
     const contentsOpen = openContainers.has(f.id)
     const row = (
-      <SortableItem id={f.id} disabled={readOnly || !onReorder}>
+      <SortableItem id={f.id} disabled={readOnly || !onReorder || (perItemIsInfusion?.(f) ?? false)}>
         {renderCard(f)}
       </SortableItem>
     )
@@ -1171,21 +1175,6 @@ export function InfoTab({
               // block). The Form is where +to-hit / +damage / AC / etc. live.
               formOptions={(data.forms ?? []).map(fm => ({ id: fm.id, name: fm.name || "Unnamed Form" }))}
               conditionalOptions={(data.conditionals ?? []).map(c => ({ id: c.id, name: c.name || "Unnamed Conditional" }))}
-              // "+ Gear item" on a standalone infusion — spins its stats off
-              // into a real inventory item (a one-time copy, not linked).
-              onCopyInfusionToGear={f => update({ items: [...(data.items ?? []), {
-                id: nanoid(),
-                name: f.name || "Infused Item",
-                description: f.description,
-                category: f.equipKind ? "armor" : (f.category ?? "item"),
-                equipKind: f.equipKind,
-                itemMeta: f.itemMeta ? { ...f.itemMeta } : undefined,
-                weight: f.weight,
-                value: f.value,
-                rarity: f.rarity,
-                isMagicItem: f.isMagicItem ?? true,
-                requiresAttunement: f.requiresAttunement,
-              }] })}
               // Attunement's real, editable count+max now lives on the Items
               // tab's Equipped list (which merges in infused Infusions —
               // see ItemsTab.tsx) — showAttunement here just keeps each
@@ -1193,7 +1182,8 @@ export function InfoTab({
               // stops this list from also showing its own separate, only-
               // ever-counting-infusions tally against the same limit.
               showAttunement hideAttunedBadge
-              showInfusedToggle maxInfused={data.maxInfusedItems} onChangeMaxInfused={n => update({ maxInfusedItems: n })}
+              showInfusedToggle infusionInventoryEnabled={data.infusionsInInventory ?? false}
+              maxInfused={data.maxInfusedItems} onChangeMaxInfused={n => update({ maxInfusedItems: n })}
             />
           )}
         </div>
