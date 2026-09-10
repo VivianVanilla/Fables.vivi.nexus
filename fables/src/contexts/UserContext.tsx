@@ -25,6 +25,11 @@ interface UserContextType {
   refreshObjects: () => Promise<void>
   createObject: (payload: { name: string; type: string; parent_id?: string | null; data?: Record<string, unknown> }) => Promise<userInfo.Objects>
   updateObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
+  updateObjectGuarded: (
+    id: string,
+    updates: userInfo.ObjectsUpdate,
+    guardRev: number,
+  ) => Promise<{ ok: true; row: userInfo.Objects } | { ok: false; row: userInfo.Objects }>
   updateSharedObject: (id: string, updates: userInfo.ObjectsUpdate) => Promise<userInfo.Objects>
   patchLocalObject: (id: string, data: JSON) => void
   deleteObject: (id: string) => Promise<void>
@@ -169,6 +174,43 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     return updated
   }
 
+  // Like updateObject, but only writes if the row is still at `guardRev`
+  // (its `rev` as the caller last saw it). Success → { ok: true } with the
+  // fresh row; a lost-update race (someone else wrote in between) →
+  // { ok: false } with the *current* server row so the caller can merge its
+  // own pending changes on top and retry. Drives the character sheet's
+  // guarded save — see CharacterSheet.tsx. Only meaningful once the `rev`
+  // column + bump trigger exist; callers gate on `row.rev != null` first.
+  async function updateObjectGuarded(id: string, updates: userInfo.ObjectsUpdate, guardRev: number) {
+    if (!user?.id) throw new Error("No authenticated user")
+
+    const { data, error } = await supabase
+      .from("objects")
+      .update(updates)
+      .eq("id", id)
+      .eq("owner_id", user.id)
+      .eq("rev", guardRev)
+      .select()
+      .maybeSingle()
+
+    if (error) throw error
+
+    if (data) {
+      const updated = data as userInfo.Objects
+      setObjects((prev) => prev.map((item) => (item.id === id ? updated : item)))
+      return { ok: true as const, row: updated }
+    }
+
+    // Guard didn't match — fetch what's actually there now and hand it back.
+    const { data: fresh, error: fetchErr } = await supabase
+      .from("objects").select("*").eq("id", id).maybeSingle()
+    if (fetchErr) throw fetchErr
+    if (!fresh) throw new Error("No matching object found (deleted?)")
+    const freshRow = fresh as userInfo.Objects
+    setObjects((prev) => prev.map((item) => (item.id === id ? freshRow : item)))
+    return { ok: false as const, row: freshRow }
+  }
+
   // Like updateObject, but without the owner_id filter — needed so a note
   // collaborator (not the owner) can save their edits. Only ever call this
   // for fields gated behind an explicit collaborator check (see NoteView),
@@ -254,6 +296,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         refreshObjects,
         createObject,
         updateObject,
+        updateObjectGuarded,
         updateSharedObject,
         patchLocalObject,
         deleteObject,

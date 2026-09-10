@@ -107,7 +107,7 @@ export function MapTrackerViewer({
                 </div>
               )}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Goal? How can they help?</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40 mb-0.5">Goal?</p>
                 <p className="text-xs text-white/80">{npc.goal || "—"}</p>
               </div>
             </div>

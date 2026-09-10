@@ -278,7 +278,7 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
  */
 export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
   const merged: FormStatOverrides = {}
-  let acBonusSum = 0, maxHpBonusSum = 0, carryCapacityBonusSum = 0
+  let acBonusSum = 0, maxHpBonusSum = 0, carryCapacityBonusSum = 0, speedBonusSum = 0
   for (const f of forms) {
     const ov = f.overrides
     if (!ov) continue
@@ -293,10 +293,12 @@ export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
     acBonusSum += ov.acBonus ?? 0
     maxHpBonusSum += ov.maxHpBonus ?? 0
     carryCapacityBonusSum += ov.carryCapacityBonus ?? 0
+    speedBonusSum += ov.speedBonus ?? 0
   }
   if (acBonusSum) merged.acBonus = acBonusSum
   if (maxHpBonusSum) merged.maxHpBonus = maxHpBonusSum
   if (carryCapacityBonusSum) merged.carryCapacityBonus = carryCapacityBonusSum
+  if (speedBonusSum) merged.speedBonus = speedBonusSum
   return merged
 }
 

@@ -246,14 +246,14 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 )
               })}
             </div>
-               {/* Background Image — a separate layer on top of the Background
-              color above, sitting behind every card/panel on the sheet (see
-              CharacterSheet.tsx's -z-10 render). Built-in presets are
-              computed patterns (no real photo to ship); "Custom" opens the
-              same upload/gallery picker Portrait uses. */}
+               {/* Card Overlay — an uploaded image tinted with the card color,
+              sampled by every card (see CharacterSheet.tsx / themes.ts's
+              BG_IMAGE_THEMES). The two built-in CSS presets were removed for
+              being laggy on mobile; "Custom" (an uploaded photo) is all
+              that's left, plus None. */}
           <div className="flex flex-col gap-2">
             <p className={`text-xs uppercase tracking-widest ${cHead} font-semibold`}>Card Overlay</p>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               <button type="button" onClick={() => onUpdate({ bgImageStyle: "none" })}
                 className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${activeBgImageKey === "none" ? "border-white/50 bg-white/10" : "border-white/10 hover:border-white/25 hover:bg-white/5"}`}>
                 <div className="size-6 rounded-full border border-white/20 shrink-0 bg-white/5" />

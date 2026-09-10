@@ -7,6 +7,9 @@ import { Shield } from "lucide-react"
 
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { useUserContext } from "../../../src/contexts/UserContext"
+import { supabase } from "../../../src/supabase"
+import { useOnResume } from "@/components/shared/useOnResume"
+import { useChannelSuffix } from "@/components/party/partyTypes"
 
 import type {
   CharacterData, HitDicePool, SpellItem,
@@ -100,7 +103,7 @@ function restFires(type: "long" | "short" | "dawn", resetsOn: "short" | "long" |
 // ════════════════════════════════════════════════════════════════════════════
 
 export function CharacterSheet({ character, readOnly = false }: Props) {
-  const { user, updateObject, objects } = useUserContext()
+  const { user, updateObject, updateObjectGuarded, objects } = useUserContext()
 
   // ── STATE ─────────────────────────────────────────────────────────────────
 
@@ -158,8 +161,31 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const portraitRef = useRef<HTMLInputElement>(null)
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suffix = useChannelSuffix()
 
   const [data, setData] = useState<CharacterData>(() => safeParseJson(character.data) as CharacterData)
+  // Latest data, readable synchronously by async save / realtime handlers
+  // (a render-snapshot `data` would be stale inside a 700ms-later timeout).
+  const dataRef = useRef(data)
+  // The `rev` the local `data` is built on — the guard value for the next
+  // save. null when the objects.rev column + bump trigger aren't there yet
+  // (pre-migration), which makes every save fall back to a plain
+  // last-write-wins updateObject exactly like before.
+  const revRef = useRef<number | null>(character.rev ?? null)
+  // Every field changed locally since the last *successful* save. On a save
+  // conflict (another device/tab saved first) this is replayed on top of
+  // their version, so edits to different fields from two places both
+  // survive; a same-field clash is last-save-wins for that one field.
+  // Shallow by design — two devices concurrently rewriting the same array
+  // (both adding an item within ~1s) can still drop one side's addition.
+  // The realtime sync below keeps that window small; a full CRDT merge is
+  // out of scope.
+  const pendingPatchRef = useRef<Partial<CharacterData>>({})
+  const savingRef = useRef(false)
+  const bcRef = useRef<BroadcastChannel | null>(null)
+  // Set only when a guarded save *and its one retry* both lost the race —
+  // rare; shows a non-destructive banner rather than silently clobbering.
+  const [resyncConflict, setResyncConflict] = useState(false)
 
   // No chat access at all in read-only mode (DM peeking at a party member's
   // sheet) — skip the subscription entirely rather than just hiding the badge.
@@ -168,25 +194,136 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // actually opened Chat — see the matching comment in campaign-view.tsx.
   const partyChatUnread = !readOnly && !!data.partyCode && !!user?.id && activeTab !== "chat" && isPartyUnread(user.id, data.partyCode, partyLatestMessageAt)
 
-  // ── SAVE ──────────────────────────────────────────────────────────────────
+  // ── SAVE / RESYNC ─────────────────────────────────────────────────────────
 
-  function scheduleSave(next: CharacterData) {
+  // Adopt a server version that's newer than ours: swap local data for
+  // theirs, but keep our own still-unsaved field-changes layered on top so
+  // an in-progress edit isn't wiped by a sync landing mid-typing.
+  function reconcileFromServer(serverData: CharacterData, rev: number | null | undefined) {
+    const hasPending = saveTimer.current != null || savingRef.current || Object.keys(pendingPatchRef.current).length > 0
+    const merged = hasPending ? { ...serverData, ...pendingPatchRef.current } : serverData
+    dataRef.current = merged
+    setData(merged)
+    if (rev != null) revRef.current = rev
+  }
+
+  async function flushSave() {
+    saveTimer.current = null
+    if (readOnly) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      const rev = revRef.current
+      if (rev == null) {
+        // Pre-migration DB (no rev column) — plain last-write-wins, as before.
+        const updated = await updateObject(character.id, { data: dataRef.current as unknown as JSON })
+        revRef.current = updated.rev ?? null
+        pendingPatchRef.current = {}
+      } else {
+        let res = await updateObjectGuarded(character.id, { data: dataRef.current as unknown as JSON }, rev)
+        if (!res.ok) {
+          // Another device/tab saved first — merge our pending changes onto
+          // theirs and try once more against the rev they left behind.
+          reconcileFromServer(safeParseJson(res.row.data) as CharacterData, res.row.rev)
+          const nextRev = revRef.current
+          if (nextRev != null) {
+            res = await updateObjectGuarded(character.id, { data: dataRef.current as unknown as JSON }, nextRev)
+          }
+        }
+        if (res.ok) {
+          revRef.current = res.row.rev ?? null
+          pendingPatchRef.current = {}
+          setResyncConflict(false)
+        } else {
+          setResyncConflict(true)
+        }
+      }
+      if (revRef.current != null) bcRef.current?.postMessage({ rev: revRef.current, data: dataRef.current })
+    } catch (e) {
+      console.error(e)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  function scheduleSave() {
     if (readOnly) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      setSaving(true)
-      try { await updateObject(character.id, { data: next as unknown as JSON }) }
-      catch (e) { console.error(e) }
-      setSaving(false)
-    }, 700)
+    saveTimer.current = setTimeout(() => { void flushSave() }, 700)
   }
 
   function update(patch: Partial<CharacterData>) {
     if (readOnly) return
-    const next = { ...data, ...patch }
+    pendingPatchRef.current = { ...pendingPatchRef.current, ...patch }
+    const next = { ...dataRef.current, ...patch }
+    dataRef.current = next
     setData(next)
-    scheduleSave(next)
+    scheduleSave()
   }
+
+  // Banner actions (only reachable once resyncConflict is set).
+  function resyncKeepMine() {
+    updateObject(character.id, { data: dataRef.current as unknown as JSON })
+      .then(r => { revRef.current = r.rev ?? null; pendingPatchRef.current = {}; setResyncConflict(false) })
+      .catch(e => console.error(e))
+  }
+  function resyncTakeTheirs() {
+    supabase.from("objects").select("*").eq("id", character.id).maybeSingle().then(({ data: row }) => {
+      if (!row) return
+      const r = row as SidebarObject
+      pendingPatchRef.current = {}
+      reconcileFromServer(safeParseJson(r.data) as CharacterData, r.rev)
+      setResyncConflict(false)
+    })
+  }
+
+  // Live-resync this sheet's own row across the user's other tabs/devices.
+  // RLS owner-scopes `objects`, so this only ever fires for the user's own
+  // sessions — plus a DM's write-through HP/condition edits, which we want
+  // to pick up here too.
+  useEffect(() => {
+    if (readOnly) return
+    const channel = supabase
+      .channel(`object-sync:${character.id}:${suffix}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "objects", filter: `id=eq.${character.id}` },
+        payload => {
+          const row = payload.new as SidebarObject
+          if (row.rev != null && revRef.current != null && row.rev <= revRef.current) return
+          reconcileFromServer(safeParseJson(row.data) as CharacterData, row.rev)
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character.id, readOnly, suffix])
+
+  // Realtime can miss events while the socket was actually down (routine on
+  // mobile) — re-pull the row on tab/app resume. See useOnResume.
+  useOnResume(() => {
+    if (readOnly) return
+    supabase.from("objects").select("*").eq("id", character.id).maybeSingle().then(({ data: row }) => {
+      if (!row) return
+      const r = row as SidebarObject
+      if (r.rev != null && revRef.current != null && r.rev <= revRef.current) return
+      reconcileFromServer(safeParseJson(r.data) as CharacterData, r.rev)
+    })
+  })
+
+  // Instant echo to sibling tabs in the same browser, ahead of the realtime
+  // round-trip. Same reconcile path as everything else.
+  useEffect(() => {
+    if (readOnly || typeof BroadcastChannel === "undefined") return
+    const bc = new BroadcastChannel(`fables:object:${character.id}`)
+    bcRef.current = bc
+    bc.onmessage = e => {
+      const { rev, data: d } = (e.data ?? {}) as { rev?: number; data?: CharacterData }
+      if (rev == null || d == null) return
+      if (revRef.current != null && rev <= revRef.current) return
+      reconcileFromServer(d, rev)
+    }
+    return () => { bc.close(); bcRef.current = null }
+  }, [character.id, readOnly])
 
   // Gear↔Martial merge (see migrateMartialItems.ts) — converts any leftover
   // legacy equipmentItems into plain Features the first time this character
@@ -296,7 +433,12 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
 
   const activeConditionNames = new Set(conditions.map(c => c.name))
   const speedOverrideReason  = SPEED_ZERO_CONDITIONS.find(name => activeConditionNames.has(name))
-  const effectiveSpeed       = speedOverrideReason ? 0 : (ov?.speedOverride ?? data.speed ?? 0)
+  // A form's speedOverride replaces the base walking speed; its speedBonus
+  // (when there's no override) adds to it. Conditions forcing speed to 0 win
+  // over both.
+  const effectiveSpeed       = speedOverrideReason
+    ? 0
+    : (ov?.speedOverride ?? ((data.speed ?? 0) + (ov?.speedBonus ?? 0)))
 
   // Derived from equipment rather than the manually-toggled `conditions` list,
   // so it can't drift out of sync with the armor that causes it — shown as a
@@ -1058,7 +1200,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             <SpeedDisplay
               speeds={{ walk: effectiveSpeed, fly: data.speeds?.fly, swim: data.speeds?.swim, climb: data.speeds?.climb, glide: data.speeds?.glide }}
               zeroed={!!speedOverrideReason}
-              overridden={!speedOverrideReason && ov?.speedOverride != null}
+              overridden={!speedOverrideReason && (ov?.speedOverride != null || !!ov?.speedBonus)}
             />
             <span className="text-xs uppercase tracking-widest text-white/50">Speed{speedOverrideReason ? ` (${speedOverrideReason})` : ""}</span>
           </button>
@@ -1269,6 +1411,16 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
           `position:absolute` resolves against the sheet itself, not some
           ancestor further up the app shell. */}
       {data.bgParticles && <VoidParticles />}
+
+      {resyncConflict && (
+        <div className="shrink-0 z-30 flex flex-wrap items-center gap-2 px-3 py-2 bg-amber-500/15 border-b border-amber-500/40 text-amber-100 text-xs">
+          <span className="flex-1 min-w-40">This sheet is open on another device — your most recent change might not have saved.</span>
+          <button type="button" onClick={resyncKeepMine}
+            className="px-2 py-1 rounded bg-amber-500/25 hover:bg-amber-500/40 font-semibold transition-colors">Keep mine</button>
+          <button type="button" onClick={resyncTakeTheirs}
+            className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 font-semibold transition-colors">Load theirs</button>
+        </div>
+      )}
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showMaxMenu && (
@@ -1612,6 +1764,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             currentUserId={user?.id ?? ""}
             currentUserName={character.name || "Adventurer"}
             isDM={false}
+            accentColor={theme.accent}
           />
         )}
       </div>

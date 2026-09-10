@@ -201,6 +201,7 @@ export interface FormStatOverrides {
   acBonus?: number       // stacks on top of computed AC, same semantics as acMiscBonus
   acOverride?: number    // replaces the total AC outright when set
   speedOverride?: number // replaces walking speed when set (conditions forcing speed to 0 still win)
+  speedBonus?: number    // adds to walking speed (stacks with everything; ignored when speedOverride is set, and conditions forcing speed to 0 still win)
   maxHpBonus?: number    // stacks on top of maxHp + maxHpMod while this form is active
   carryCapacityBonus?: number // stacks on top of computed carry capacity, same semantics as
                                // CharacterData.carryCapacityBonus (and note a Strength override

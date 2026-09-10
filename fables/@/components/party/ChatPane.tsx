@@ -162,6 +162,7 @@ function Row({ msg, showHeader, isEditing, onSaveEdit, onCancelEdit, onOpenMenu 
 export function ChatPane({
   messages, currentUserId, partyCode,
   canDelete, onDelete, onEdit, onSend, placeholder, emptyText, headerLabel, leftAccessory,
+  disabledNotice,
 }: {
   messages: Message[]
   currentUserId: string
@@ -174,6 +175,9 @@ export function ChatPane({
   emptyText: string
   headerLabel: string
   leftAccessory?: React.ReactNode
+  // When set, the composer is replaced by this line — used to lock a
+  // Discreet player out of posting in party channels (see PartyServer).
+  disabledNotice?: string
 }) {
   const [text, setText] = useState("")
   const [showPicker, setShowPicker] = useState(false)
@@ -272,6 +276,10 @@ export function ChatPane({
       </div>
 
       <div className="relative px-3 py-2.5 border-t border-border shrink-0">
+        {disabledNotice ? (
+          <p className="text-[11px] text-muted-foreground/70 italic text-center py-2">{disabledNotice}</p>
+        ) : (
+        <>
         {showComposer && (
           <ShareComposer partyCode={partyCode} onAttach={attachShare} onClose={() => setShowComposer(false)} />
         )}
@@ -299,6 +307,8 @@ export function ChatPane({
           </button>
         </div>
         <p className="text-[9px] text-muted-foreground/30 px-1 pt-1">Markdown supported · Shift+Enter for a new line</p>
+        </>
+        )}
       </div>
 
       {showPicker && (

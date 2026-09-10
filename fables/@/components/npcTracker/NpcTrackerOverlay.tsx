@@ -203,11 +203,18 @@ export function NpcTrackerOverlay({
                     ) : (
                       <p className="text-sm text-muted-foreground/40 italic">No details yet.</p>
                     )}
-                    <button type="button" onClick={() => setDetailNotesId(npc.id)}
-                      className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 mt-3 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors">
-                      <StickyNote className="size-3.5" />
-                      Detail Notes {notesForNpc(npc.id).length > 0 && `(${notesForNpc(npc.id).length})`}
-                    </button>
+                    {/* Detail Notes (the full sticky-note corkboard) is one of
+                        the map-campaign-only NPC Tracker extras, alongside "Last
+                        Seen At" and "Goal" below — see MAP_PARTY_CODE in
+                        shared/constants.ts. Every other party gets just the
+                        inline Details blurb above. */}
+                    {showLocation && (
+                      <button type="button" onClick={() => setDetailNotesId(npc.id)}
+                        className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 mt-3 rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors">
+                        <StickyNote className="size-3.5" />
+                        Detail Notes {notesForNpc(npc.id).length > 0 && `(${notesForNpc(npc.id).length})`}
+                      </button>
+                    )}
                   </div>
 
                   <div className="w-40 shrink-0 flex flex-col gap-3">
@@ -242,15 +249,17 @@ export function NpcTrackerOverlay({
                         )}
                       </div>
                     )}
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50 mb-0.5">Goal? How can they help?</p>
-                      {isEditing ? (
-                        <textarea value={draft.goal ?? ""} onChange={e => setDraft(d => ({ ...d, goal: e.target.value }))} rows={2}
-                          className="w-full resize-none text-xs bg-foreground/8 rounded-md px-2 py-1 outline-none text-foreground" />
-                      ) : (
-                        <p className="text-xs text-foreground/80">{npc.goal || "—"}</p>
-                      )}
-                    </div>
+                    {showLocation && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50 mb-0.5">Goal? </p>
+                        {isEditing ? (
+                          <textarea value={draft.goal ?? ""} onChange={e => setDraft(d => ({ ...d, goal: e.target.value }))} rows={2}
+                            className="w-full resize-none text-xs bg-foreground/8 rounded-md px-2 py-1 outline-none text-foreground" />
+                        ) : (
+                          <p className="text-xs text-foreground/80">{npc.goal || "—"}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

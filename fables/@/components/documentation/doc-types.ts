@@ -11,13 +11,10 @@ export const TYPE_LABEL: Record<DocType, string> = {
   classes: "Class", feats: "Feat", items: "Item", races: "Race", backgrounds: "Background",
 }
 
-export const ADMIN_EMAILS = [
-  "liamlillico06@gmail.com",
-  "spaghettiloverjake@gmail.com",
-  "vivian.bonilla@outlook.com",
-  "loganadsit@gmail.com",
-  "emeraldspiders@gmail.com"
-]
+// Moved to a shared module so non-docs code (useHomebrewFilter, Profile
+// Settings' admin badge) can key off the same list. Re-exported here because
+// plenty of files already import ADMIN_EMAILS from this path.
+export { ADMIN_EMAILS, isAdminEmail } from "@/components/shared/adminAccess"
 
 export interface DocEntry {
   id: string

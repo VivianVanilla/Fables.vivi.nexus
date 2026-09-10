@@ -24,6 +24,10 @@ function CastButton({ theme, spells, onCast }: { theme: Theme; spells: SpellItem
   // AutomationModal.tsx's CastTab variant prompt, needed here too since
   // this button is the other (more commonly used) way to actually cast.
   const [variantSpell, setVariantSpell] = useState<SpellItem | null>(null)
+  const [query, setQuery] = useState("")
+
+  const q = query.trim().toLowerCase()
+  const shownSpells = q ? spells.filter(s => (s.name || "").toLowerCase().includes(q)) : spells
 
   function pick(s: SpellItem) {
     if (s.castVariants?.length) { setVariantSpell(s); return }
@@ -45,23 +49,33 @@ function CastButton({ theme, spells, onCast }: { theme: Theme; spells: SpellItem
       </button>
 
       {open && (
-        <Modal onClose={() => { setOpen(false); setVariantSpell(null) }}>
+        <Modal onClose={() => { setOpen(false); setVariantSpell(null); setQuery("") }}>
           <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,92vw)] max-h-[80vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
               <p className={`text-sm font-bold ${theme.color}`}>
                 {variantSpell ? `Which effect? — ${variantSpell.name || "Unnamed Spell"}` : "Cast a Spell"}
               </p>
-              <button type="button" onClick={() => { setOpen(false); setVariantSpell(null) }}
+              <button type="button" onClick={() => { setOpen(false); setVariantSpell(null); setQuery("") }}
                 className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
             </div>
+            {!variantSpell && spells.length > 6 && (
+              <div className="px-4 pt-3 shrink-0">
+                <input value={query} onChange={e => setQuery(e.target.value)} autoFocus placeholder="Search…"
+                  className="w-full bg-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none placeholder:text-white/30 focus:ring-1 focus:ring-white/30" />
+              </div>
+            )}
+            {/* shrink-0 on every row: the buttons carry `truncate`
+                (overflow:hidden), which lets flexbox shrink them vertically to
+                nothing when the list is taller than the modal — that's what
+                made the list look squished/overlapping. */}
             <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-1.5">
               {variantSpell ? (
                 <>
                   <button type="button" onClick={() => setVariantSpell(null)}
-                    className="text-xs text-white/40 hover:text-white self-start transition-colors mb-1">← Back</button>
+                    className="text-xs text-white/40 hover:text-white self-start transition-colors mb-1 shrink-0">← Back</button>
                   {(variantSpell.castVariants ?? []).map(v => (
                     <button key={v.id} type="button" onClick={() => pickVariant(variantSpell, v)}
-                      className={`text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
+                      className={`shrink-0 text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
                       {v.label || "Unnamed variant"}
                     </button>
                   ))}
@@ -71,9 +85,12 @@ function CastButton({ theme, spells, onCast }: { theme: Theme; spells: SpellItem
                   {spells.length === 0 && (
                     <p className="text-sm text-white/30 italic text-center py-6">No spells enabled for Cast — set that up in Automation.</p>
                   )}
-                  {spells.map(s => (
+                  {spells.length > 0 && shownSpells.length === 0 && (
+                    <p className="text-sm text-white/30 italic text-center py-6">No spells match “{query}”.</p>
+                  )}
+                  {shownSpells.map(s => (
                     <button key={s.id} type="button" onClick={() => pick(s)}
-                      className={`text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
+                      className={`shrink-0 text-left px-3 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/80 hover:text-white transition-colors truncate border border-transparent hover:ring-1 ${theme.ring}`}>
                       {s.name || "Unnamed Spell"}
                     </button>
                   ))}

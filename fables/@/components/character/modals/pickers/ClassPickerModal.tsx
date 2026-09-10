@@ -3,7 +3,8 @@ import { Modal } from "@/components/shared/ui/Modal"
 import { Minus, Plus, X, ChevronDown } from "lucide-react"
 import { supabase } from "../../../../../src/supabase"
 import { getSpells } from "../../../../../src/spells/spellCache"
-import { SCHOOLS } from "../../../../../src/spells/constants"
+import { SCHOOLS, HOMEBREW_TAGS } from "../../../../../src/spells/constants"
+import { useHomebrewFilter } from "../../../../../src/hooks/useHomebrewFilter"
 import type { Feature, SpellItem } from "@/components/shared/types"
 import { nanoid, maxSpellLevelForClass } from "@/components/shared/utils"
 import { spellItemFieldsFromSpell } from "@/components/shared/spellUtils"
@@ -35,6 +36,9 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], exist
   const [spellLevelChoice, setSpellLevelChoice] = useState("upto")       // "upto" | "0".."9"
   const [spellSchoolChoice, setSpellSchoolChoice] = useState("")         // "" = any school
   const [spellsImportedMsg, setSpellsImportedMsg] = useState<string | null>(null)
+  // Non-admins don't pull homebrew / campaign spells into a sheet (see
+  // useHomebrewFilter) — same rule as the docs Spell Browser and SpellPicker.
+  const hideHomebrew = useHomebrewFilter()
 
   // Load core + homebrew + library classes from the DB
   useEffect(() => {
@@ -238,6 +242,7 @@ export function ClassPickerModal({ initial, userId, existingFeatures = [], exist
       const existingNames = new Set(existingSpells.map(s => s.name.trim().toLowerCase()))
       const capLevel = spellLevelChoice === "upto" ? maxSpellLevelForClass(entry.cls, entry.level) : parseInt(spellLevelChoice, 10)
       const matches = all.filter(s => {
+        if (hideHomebrew && HOMEBREW_TAGS.includes(s.ctag)) return false
         if (!s.classes?.some(c => c.name.toLowerCase() === entry.cls.toLowerCase())) return false
         if (existingNames.has(s.name.trim().toLowerCase())) return false
         if (spellSchoolChoice && (s.school?.name ?? "").toLowerCase() !== spellSchoolChoice.toLowerCase()) return false

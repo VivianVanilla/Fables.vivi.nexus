@@ -10,25 +10,30 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react"
-import { Hash, Plus, X, Menu, Mountain, BookOpen } from "lucide-react"
+import { Hash, Plus, X, Menu, Mountain, BookOpen, NotebookPen, Eye, EyeOff } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
+import { supabase } from "../../../src/supabase"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
 import { MAP_PARTY_CODE } from "@/components/shared/constants"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
+import { usePartyVitals } from "./usePartyVitals"
 import { ChatPane } from "./ChatPane"
 import { MapOverlay } from "../map/MapOverlay"
 import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
+import { MysteriousPagesOverlay } from "../mysteriousPages/MysteriousPagesOverlay"
 import { markThreadSeen, isThreadUnread } from "./unread"
-import { channelThreadKey, dmThreadKey, DEFAULT_CHANNEL, type Channel, type PartyMember } from "./partyTypes"
+import { channelThreadKey, dmThreadKey, DEFAULT_CHANNEL, useChannelSuffix, type Channel, type PartyMember } from "./partyTypes"
 
 type ActiveView =
   | { type: "channel"; id: string }
   | { type: "dm"; userId: string; name: string }
 
+const hpColor = (pct: number) => (pct > 50 ? "#22c55e" : pct > 25 ? "#eab308" : "#ef4444")
+
 export function PartyServer({
   partyCode, currentUserId, currentUserName, isDM,
-  campaign = null, partyMembers,
+  campaign = null, partyMembers, accentColor,
 }: {
   partyCode: string
   currentUserId: string
@@ -36,10 +41,49 @@ export function PartyServer({
   isDM: boolean
   campaign?: SidebarObject | null
   partyMembers?: PartyMember[]
+  // The hosting character sheet's theme accent (hex) — tints the rail
+  // header when Party Chat is opened from a player's sheet. Unset when the
+  // DM opens it from the campaign view (no single character's theme to use).
+  accentColor?: string
 }) {
   const { updateObject } = useUserContext()
   const { channels, members, dmUserId } = usePartyRoster(partyCode, { presetCampaign: campaign, presetMembers: partyMembers })
   const { messages, sendMessage, deleteMessage, editMessage } = usePartyMessages(partyCode, currentUserId)
+  const vitals = usePartyVitals(partyCode)
+  const suffix = useChannelSuffix()
+
+  // "Discreet" characters (map campaign, DM-controlled — see PartyRosterPanel).
+  // Stored on the campaign object; the DM's copy of `campaign` updates
+  // through context immediately, other players get it via this realtime sub
+  // since nothing else subscribes to the campaign row.
+  const campaignDiscreet = ((safeParseJson(campaign?.data) as { discreetCharacterIds?: string[] })?.discreetCharacterIds) ?? []
+  const [liveDiscreet, setLiveDiscreet] = useState<string[] | null>(null)
+  const discreetIds = isDM ? campaignDiscreet : (liveDiscreet ?? campaignDiscreet)
+
+  useEffect(() => {
+    if (!campaign?.id) return
+    const ch = supabase
+      .channel(`party-campaign:${campaign.id}:${suffix}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "objects", filter: `id=eq.${campaign.id}` },
+        payload => {
+          const d = safeParseJson((payload.new as { data: unknown }).data) as { discreetCharacterIds?: string[] }
+          setLiveDiscreet(d.discreetCharacterIds ?? [])
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [campaign?.id, suffix])
+
+  const myCharacterId = members.find(m => m.userId === currentUserId)?.characterId
+  const iAmDiscreet = !!myCharacterId && discreetIds.includes(myCharacterId)
+  const showDiscreetToggle = isDM && partyCode === MAP_PARTY_CODE
+
+  function toggleDiscreet(characterId: string) {
+    if (!campaign) return
+    const cd = safeParseJson(campaign.data) as Record<string, unknown>
+    const cur = (cd.discreetCharacterIds as string[] | undefined) ?? []
+    const next = cur.includes(characterId) ? cur.filter(id => id !== characterId) : [...cur, characterId]
+    updateObject(campaign.id, { data: { ...cd, discreetCharacterIds: next } as unknown as JSON }).catch(e => console.error(e))
+  }
 
   const [activeView, setActiveView] = useState<ActiveView>({ type: "channel", id: DEFAULT_CHANNEL.id })
   const [addingChannel, setAddingChannel] = useState(false)
@@ -49,17 +93,22 @@ export function PartyServer({
   const [railOpen, setRailOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
   const [npcTrackerOpen, setNpcTrackerOpen] = useState(false)
+  const [pagesOpen, setPagesOpen] = useState(false)
 
   // Everyone in the party can DM everyone else — the rest of the player
   // roster (from `members`, minus yourself) plus the DM, unless you *are*
   // the DM (in which case `dmUserId === currentUserId` and it's skipped) or
-  // the DM is already one of the party's own characters.
-  const dmTargets: PartyMember[] = [
-    ...members.filter(m => m.userId !== currentUserId),
-    ...(dmUserId && dmUserId !== currentUserId && !members.some(m => m.userId === dmUserId)
-      ? [{ userId: dmUserId, name: "Dungeon Master" }]
-      : []),
-  ]
+  // the DM is already one of the party's own characters. A Discreet player
+  // can only reach the DM, and is hidden from everyone else's DM list.
+  const dmEntry = dmUserId && dmUserId !== currentUserId && !members.some(m => m.userId === dmUserId)
+    ? [{ userId: dmUserId, name: "Dungeon Master" }]
+    : []
+  const dmTargets: PartyMember[] = iAmDiscreet
+    ? (dmUserId && dmUserId !== currentUserId ? [{ userId: dmUserId, name: "Dungeon Master" }] : [])
+    : [
+        ...members.filter(m => m.userId !== currentUserId && (isDM || !discreetIds.includes(m.characterId ?? ""))),
+        ...dmEntry,
+      ]
 
   function selectChannel(id: string) {
     setActiveView({ type: "channel", id })
@@ -136,7 +185,7 @@ export function PartyServer({
         ${railOpen ? "shadow-2xl md:shadow-none" : ""}
         ${railOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}>
-        <div className="px-3 pt-3 pb-1.5 flex items-center justify-between shrink-0">
+        <div className="px-3 pt-3 pb-1.5 flex items-center justify-between shrink-0 " style={accentColor ? { color: accentColor } : undefined}>
           <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/50">Party Chat</span>
           {isDM && (
             <button type="button" onClick={() => setAddingChannel(v => !v)} title="Add channel"
@@ -156,6 +205,7 @@ export function PartyServer({
             <button type="button" onClick={submitNewChannel} className="text-muted-foreground hover:text-foreground text-xs">✓</button>
           </div>
         )}
+
         {/* Channel list — self-scrolling so a long list doesn't push Party Notes / DMs out of view */}
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5 px-2 pb-2">
           {channels.map(ch => {
@@ -195,13 +245,20 @@ export function PartyServer({
               <Mountain className="size-3.5 shrink-0 opacity-70" />
               Mountain Range Map
             </button>
+            <button type="button" onClick={() => setPagesOpen(true)}
+              className="w-full flex items-center gap-1.5 text-[12px] px-2 py-1.5 rounded-md transition-colors text-foreground/60 hover:bg-foreground/8 hover:text-foreground">
+              <NotebookPen className="size-3.5 shrink-0 opacity-70" />
+              Mysterious Pages
+            </button>
           </div>
         )}
 
+        {/* Private Messages doubles as the party roster — each member row
+            carries their live HP bar (see usePartyVitals) so we're not
+            listing the same names twice. */}
         <div className="px-3 pt-2 pb-1.5 border-t border-border shrink-0">
-          <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/50">Private Messages</span>
+          <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/50">Party · Private Messages</span>
         </div>
-        {/* DM list — also self-scrolling, independent of the channel list above */}
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5 px-2 pb-3">
           {dmTargets.length === 0 && (
             <p className="text-[10px] text-muted-foreground/40 italic px-2 py-1">No one to message yet.</p>
@@ -209,12 +266,42 @@ export function PartyServer({
           {dmTargets.map(m => {
             const unread = isThreadUnread(currentUserId, partyCode, dmThreadKey(m.userId), latestOf(dmMessages(m.userId)))
             const active = activeView.type === "dm" && activeView.userId === m.userId
+            const v = m.characterId ? vitals.find(x => x.characterId === m.characterId) : undefined
+            const discreet = !!m.characterId && discreetIds.includes(m.characterId)
+            const pct = v && v.maxHp > 0 ? Math.min(100, (v.hp / v.maxHp) * 100) : 0
+            const tempPct = v && v.maxHp > 0 ? Math.min(100, (v.tempHp / v.maxHp) * 100) : 0
             return (
-              <button key={m.userId} type="button" onClick={() => selectDm(m)}
-                className={`flex items-center gap-1.5 text-[12px] px-2 py-1 rounded-md transition-colors shrink-0 ${active ? "bg-foreground/15 text-foreground font-semibold" : "text-foreground/60 hover:bg-foreground/8 hover:text-foreground"}`}>
-                <span className="truncate flex-1 min-w-0 text-left">{m.name}</span>
-                {unread && !active && <span className="size-1.5 rounded-full bg-red-500 shrink-0" />}
-              </button>
+              <div key={m.userId}
+                className={`flex items-center gap-1 rounded-md shrink-0 transition-colors ${discreet ? "opacity-50" : ""} ${active ? "bg-foreground/15" : "hover:bg-foreground/8"}`}>
+                <button type="button" onClick={() => selectDm(m)}
+                  className="flex-1 min-w-0 flex flex-col gap-0.5 px-2 py-1 text-left">
+                  <span className="flex items-center gap-1.5">
+                    <span className={`truncate flex-1 min-w-0 text-[12px] ${active ? "text-foreground font-semibold" : "text-foreground/60"}`}>{m.name}</span>
+                    {discreet && <span className="text-[8px] uppercase tracking-wide text-amber-400/80 shrink-0">discreet</span>}
+                    {v && (
+                      <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+                        {v.hp}/{v.maxHp}{v.tempHp > 0 && <span className="text-cyan-400"> +{v.tempHp}</span>}
+                      </span>
+                    )}
+                    {unread && !active && <span className="size-1.5 rounded-full bg-red-500 shrink-0" />}
+                  </span>
+                  {v && (
+                    <span className="h-1 rounded-full bg-foreground/10 overflow-hidden relative block">
+                      <span className="absolute inset-y-0 left-0 rounded-full block" style={{ width: `${pct}%`, backgroundColor: hpColor(pct) }} />
+                      {tempPct > 0 && (
+                        <span className="absolute inset-y-0 rounded-full bg-cyan-400/70 block" style={{ left: `${pct}%`, width: `${tempPct}%` }} />
+                      )}
+                    </span>
+                  )}
+                </button>
+                {showDiscreetToggle && m.characterId && (
+                  <button type="button" onClick={() => toggleDiscreet(m.characterId!)}
+                    title={discreet ? "Set Active — visible to the party" : "Set Discreet — hidden from the party"}
+                    className="size-6 mr-1 flex items-center justify-center rounded text-muted-foreground/40 hover:text-foreground shrink-0 transition-colors">
+                    {discreet ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
@@ -234,6 +321,7 @@ export function PartyServer({
           emptyText="No messages yet — say hello to your party!"
           headerLabel={`# ${channels.find(c => c.id === activeView.id)?.name ?? activeView.id}`}
           leftAccessory={hamburger}
+          disabledNotice={iAmDiscreet ? "The DM has set you to Discreet — you can't post in party channels right now." : undefined}
         />
       )}
       {activeView.type === "dm" && (
@@ -267,6 +355,15 @@ export function PartyServer({
           currentUserId={currentUserId}
           currentUserName={currentUserName}
           onClose={() => setNpcTrackerOpen(false)}
+        />
+      )}
+
+      {pagesOpen && (
+        <MysteriousPagesOverlay
+          partyCode={partyCode}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
+          onClose={() => setPagesOpen(false)}
         />
       )}
     </div>

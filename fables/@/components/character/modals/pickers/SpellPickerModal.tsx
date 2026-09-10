@@ -12,6 +12,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { Modal } from "@/components/shared/ui/Modal"
 import { getSpells } from "../../../../../src/spells/spellCache"
+import { HOMEBREW_TAGS } from "../../../../../src/spells/constants"
+import { useHomebrewFilter } from "../../../../../src/hooks/useHomebrewFilter"
 import type { Spell } from "../../../../../src/spells/types"
 
 interface Props {
@@ -29,6 +31,9 @@ export function SpellPickerModal({ onClose, onPick, onImportAll, onCustom }: Pro
   const [query, setQuery] = useState("")
   const [levelFilter, setLevelFilter] = useState("all")
   const [schoolFilter, setSchoolFilter] = useState("all")
+  // Non-admins don't get homebrew / campaign spells in the picker (see
+  // useHomebrewFilter) — same rule as the docs Spell Browser.
+  const hideHomebrew = useHomebrewFilter()
 
   useEffect(() => {
     let cancelled = false
@@ -44,6 +49,7 @@ export function SpellPickerModal({ onClose, onPick, onImportAll, onCustom }: Pro
 
   const q = query.trim().toLowerCase()
   const matches = allSpells
+    .filter(s => !hideHomebrew || !HOMEBREW_TAGS.includes(s.ctag))
     .filter(s => !q || s.name.toLowerCase().includes(q))
     .filter(s => levelFilter === "all" || s.level === parseInt(levelFilter))
     .filter(s => schoolFilter === "all" || s.school?.name === schoolFilter)

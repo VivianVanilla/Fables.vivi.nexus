@@ -248,6 +248,7 @@ function FormEditor({ form, userId, familiars, onSave, onCancel, onDelete }: {
           <NumField label="AC Bonus" value={ov.acBonus} onChange={v => setOv({ acBonus: v })} placeholder="+0" />
           <NumField label="AC Override" value={ov.acOverride} onChange={v => setOv({ acOverride: v })} placeholder="computed" />
           <NumField label="Speed Override (ft)" value={ov.speedOverride} onChange={v => setOv({ speedOverride: v })} placeholder="base" />
+          <NumField label="Speed Bonus (ft)" value={ov.speedBonus} onChange={v => setOv({ speedBonus: v })} placeholder="+0" />
           <NumField label="Max HP Bonus" value={ov.maxHpBonus} onChange={v => setOv({ maxHpBonus: v })} placeholder="+0" />
           <NumField label="Carry Capacity Bonus (lb)" value={ov.carryCapacityBonus} onChange={v => setOv({ carryCapacityBonus: v })} placeholder="+0" />
         </div>

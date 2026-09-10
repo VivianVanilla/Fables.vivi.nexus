@@ -12,7 +12,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { SpellBrowser } from "./spells/SpellBrowser";
 import { DocBrowser } from "@/components/documentation/DocBrowser";
 import type { DocType } from "@/components/documentation/doc-types";
-import { ADMIN_EMAILS } from "@/components/documentation/doc-types";
+import { isAdminEmail } from "@/components/shared/adminAccess";
 import { BookOpen, Sparkles, LayoutGrid, Swords, Gem, Users, Eye, ShieldCheck, ScrollText } from "lucide-react";
 import "./index.css";
 
@@ -39,7 +39,7 @@ export default function Documentation() {
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setUser(data.user)); }, []);
 
   const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "there";
-  const isAdmin  = !!user?.email && ADMIN_EMAILS.includes(user.email);
+  const isAdmin  = isAdminEmail(user?.email);
   const [spellClassFilter, setSpellClassFilter] = useState<string[]>([]);
 
   function handleGoToSpells(className: string) {

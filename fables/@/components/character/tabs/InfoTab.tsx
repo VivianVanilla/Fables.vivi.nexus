@@ -427,11 +427,19 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
   // specific (non-root) container hit when a drop is over a nested
   // container that's itself inside another's DropZone.
   const containerAwareCollision: CollisionDetection = args => {
-    const hits = pointerWithin(args).filter(c => typeof c.id === "string" && c.id.startsWith("container:"))
-    const specific = hits.find(c => c.id !== "container:root")
+    const within = pointerWithin(args)
+    // A real (non-root) container directly under the pointer → drop reparents into it.
+    const specific = within.find(c => typeof c.id === "string" && c.id.startsWith("container:") && c.id !== "container:root")
     if (specific) return [specific]
-    if (hits.length > 0) return [hits[0]]
-    return closestCenter(args)
+    // Otherwise the nearest sortable row — a sibling reorder. (The root
+    // DropZone spans the whole list, so preferring it here, as this used to,
+    // meant `over` was ALWAYS "container:root" and root items never
+    // reordered.)
+    const closest = closestCenter(args)
+    if (closest.length > 0) return closest
+    // Genuinely blank space / empty list → the root zone moves the item to top level.
+    const root = within.find(c => c.id === "container:root")
+    return root ? [root] : []
   }
 
   // Two things can happen on drop: reorder within a sibling group (same

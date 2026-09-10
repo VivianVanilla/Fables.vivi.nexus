@@ -1,25 +1,23 @@
-import { useState, useEffect } from 'react'
+// ════════════════════════════════════════════════════════════════════════════
+// useHomebrewFilter — whether homebrew / campaign spell content (Squain,
+// Twilight; see HOMEBREW_TAGS) should be hidden for the current user.
+//
+// It's hidden for everyone by default and auto-unlocked only for
+// administrators (isAdminEmail). There's no manual toggle anymore — Profile
+// Settings shows an "Administrator" badge instead. Consumed by SpellBrowser,
+// SpellSearch, and the character-sheet spell/class pickers.
+// ════════════════════════════════════════════════════════════════════════════
 
-const STORAGE_KEY = 'fables_hide_homebrew'
+import { useUser } from "../contexts/UserContext"
+import { isAdminEmail } from "@/components/shared/adminAccess"
 
-export function getHomebrewFilterValue(): boolean {
-  if (typeof window === 'undefined') return false
-  return localStorage.getItem(STORAGE_KEY) === 'true'
+/** True for administrators — they see homebrew / campaign content everywhere. */
+export function useIsAdmin(): boolean {
+  const user = useUser()
+  return isAdminEmail(user?.email)
 }
 
-export function setHomebrewFilterValue(enabled: boolean) {
-  localStorage.setItem(STORAGE_KEY, String(enabled))
-  window.dispatchEvent(new Event('fables:homebrew-filter'))
-}
-
+/** True when homebrew / campaign spells should be filtered out for this user. */
 export function useHomebrewFilter(): boolean {
-  const [hideHomebrew, setHideHomebrew] = useState<boolean>(getHomebrewFilterValue)
-
-  useEffect(() => {
-    const handler = () => setHideHomebrew(getHomebrewFilterValue())
-    window.addEventListener('fables:homebrew-filter', handler)
-    return () => window.removeEventListener('fables:homebrew-filter', handler)
-  }, [])
-
-  return hideHomebrew
+  return !useIsAdmin()
 }

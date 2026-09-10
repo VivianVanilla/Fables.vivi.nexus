@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { TrashIcon, UploadIcon } from "lucide-react"
+import { TrashIcon, UploadIcon, ShieldCheckIcon } from "lucide-react"
 import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import {
   Dialog,
@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { supabase } from "../../../src/supabase"
-import { useHomebrewFilter, setHomebrewFilterValue } from "../../../src/hooks/useHomebrewFilter"
+import { isAdminEmail } from "@/components/shared/adminAccess"
 import { useAppTheme, APP_THEMES } from "../../../src/contexts/ThemeContext"
 import { loadUserImages, type GalleryImage } from "@/components/shared/imageGallery"
 
@@ -26,7 +26,7 @@ export function ProfileSettingsModal({ open, onOpenChange, user }: Props) {
   const [images, setImages] = React.useState<GalleryImage[]>([])
   const [uploading, setUploading] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const hideHomebrew = useHomebrewFilter()
+  const isAdmin = isAdminEmail(user?.email)
   const { theme: appTheme, setTheme: setAppTheme, customColor: customThemeColor, setCustomColor: setCustomThemeColor } = useAppTheme()
 
   const userId = user?.id
@@ -188,32 +188,24 @@ async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
 
         <div className="border-t border-border" />
 
-        {/* Homebrew filter */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">Hide Homebrew Spells</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Excludes Custom campaign content  from my personal dnd group. Turn off if you want to see all content.
+        {/* Homebrew / campaign content is now hidden for everyone by default
+            and auto-unlocked for admins (isAdminEmail) — no manual toggle, just
+            this badge. Non-admins see nothing here. */}
+        {isAdmin && (
+          <>
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+              <ShieldCheckIcon className="size-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <div className="text-sm font-medium text-amber-400">Administrator</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  You can see homebrew &amp; campaign content everywhere, and add custom spells in the docs.
+                </div>
+              </div>
             </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={hideHomebrew}
-            onClick={() => setHomebrewFilterValue(!hideHomebrew)}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none ${
-              hideHomebrew ? "bg-purple-600" : "bg-slate-700"
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block size-4 rounded-full bg-white shadow-lg ring-0 transition-transform ${
-                hideHomebrew ? "translate-x-4" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
 
-        <div className="border-t border-border" />
+            <div className="border-t border-border" />
+          </>
+        )}
 
         {/* Fun section */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
