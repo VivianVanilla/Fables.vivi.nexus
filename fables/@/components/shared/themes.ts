@@ -136,25 +136,11 @@ export function darkenHex(hex: string, amt: number): string {
   return `#${mix(r)}${mix(g)}${mix(b)}`
 }
 
-function rgbToHue(r: number, g: number, b: number): number {
-  r /= 255; g /= 255; b /= 255
-  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min
-  if (d === 0) return 0
-  let h = 0
-  switch (max) {
-    case r: h = ((g-b)/d + (g < b ? 6 : 0)) / 6; break
-    case g: h = ((b-r)/d + 2) / 6; break
-    case b: h = ((r-g)/d + 4) / 6; break
-  }
-  return h * 360
-}
-
-// Full hue/saturation/lightness — unlike rgbToHue above (which slotLevelColor/
-// slotLevelGradient used to rely on alone), this keeps the picked color's
-// actual saturation and lightness instead of discarding them, so a
-// deliberately dark or muted custom pick reads as dark/muted through the
-// whole level sweep instead of always snapping to a fixed vibrant, medium-
-// bright palette regardless of what was actually chosen.
+// Full hue/saturation/lightness — every slot/shimmer helper below builds on
+// this so the picked color's actual saturation and lightness carry through,
+// instead of a hue-only reinterpretation that snaps every pick (black
+// included) to a fixed vibrant medium-bright tone regardless of what was
+// actually chosen.
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   r /= 255; g /= 255; b /= 255
   const max = Math.max(r,g,b), min = Math.min(r,g,b)
@@ -226,14 +212,21 @@ export function slotLevelColor(input: SlotAccentInput, level: number): string {
  * Shimmering variant of a single flat accent color — used for "Track uses"
  * bars (FeatureEntry.tsx) once their category's Feature Styling is set to
  * Animated. Unlike slotLevelGradient there's no level to sweep across, so
- * this just cycles lightness around the same hue for a subtle metallic-sheen
- * effect rather than a full rainbow.
+ * this just cycles lightness around the picked color for a subtle metallic-
+ * sheen effect rather than a full rainbow.
+ *
+ * Keeps the picked color's ACTUAL hue, saturation and lightness (via
+ * rgbToHsl) instead of forcing a vibrant sat 75 / lightness 53 — the old
+ * hue-only version reinterpreted every pick as a bright mid-tone, so black
+ * came out a medium red and any dark or desaturated pick was ignored. Same
+ * approach slotLevelGradient's "solid" branch already uses.
  */
 export function accentShimmerGradient(hex: string): string {
   if (!hex || !hex.startsWith("#")) return `linear-gradient(90deg, ${hex}, ${hex})`
   const [r, g, b] = hexToRgb(hex)
-  const hue = rgbToHue(r, g, b)
-  const stops = [38, 52, 68, 52, 38].map(l => hslToHex(hue, 75, l))
+  const [hue, sat, lightness] = rgbToHsl(r, g, b)
+  const baseL = Math.max(12, Math.min(90, lightness))
+  const stops = [-12, -6, 0, 6, 12].map(o => hslToHex(hue, sat, Math.max(6, Math.min(94, baseL + o))))
   return `linear-gradient(90deg, ${stops.join(", ")})`
 }
 

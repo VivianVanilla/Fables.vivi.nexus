@@ -88,13 +88,18 @@ export function SortableItem({ id, disabled, children }: { id: string; disabled?
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.35 : 1,
-        // Without this, a touch's initial press-and-hold is still eligible
-        // for the browser's own scroll gesture recognizer, which routinely
-        // wins the race against PointerSensor's 250ms activationConstraint
-        // delay above (and can steal the gesture mid-drag even when it
-        // doesn't win the race) — this is what actually starting a drag on
-        // mobile depends on, not just the sensor config.
-        touchAction: "none",
+        // `pan-y`, NOT `none`: the row still has to be scrollable past with a
+        // vertical swipe — these lists fill the screen, so `none` here meant
+        // the page could only be scrolled by dragging on the gaps between
+        // rows. `pan-y` hands a vertical swipe straight to the browser's
+        // scroller while still leaving every other gesture (the press-and-
+        // hold that arms RowPointerSensor's 250ms delay) for dnd-kit. The
+        // `tolerance: 8` on the activation constraint cancels a pending drag
+        // the moment a swipe moves the pointer, so a scroll never turns into
+        // a pickup; once a real drag HAS activated, dnd-kit calls
+        // preventDefault on the move events itself, so the page won't scroll
+        // out from under an in-progress drag either.
+        touchAction: "pan-y",
       }}
       className="cursor-grab active:cursor-grabbing"
     >

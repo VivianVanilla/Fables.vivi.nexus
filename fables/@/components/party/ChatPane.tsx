@@ -4,8 +4,8 @@
 // supplies the send/delete callbacks.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import { ImageIcon, Paperclip, Trash2, Copy, Pencil } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { ImageIcon, Paperclip, Trash2, Copy, Pencil, Search, X } from "lucide-react"
 import { loadUserImages } from "@/components/shared/imageGallery"
 import { tapHaptic } from "@/components/shared/haptics"
 import { Markdown } from "../ui/Markdown"
@@ -186,8 +186,26 @@ export function ChatPane({
   const [showComposer, setShowComposer] = useState(false)
   const [menu, setMenu] = useState<MessageMenuState | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // null = search bar closed; a string (incl. "") = open. Filters the list to
+  // messages whose text or sender matches, so you can find an old moment
+  // without scrolling the whole history.
+  const [search, setSearch] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const query = (search ?? "").trim().toLowerCase()
+  const visibleMessages = useMemo(() => {
+    if (!query) return messages
+    return messages.filter(m =>
+      (m.body ?? "").toLowerCase().includes(query) ||
+      (m.sender_name ?? "").toLowerCase().includes(query),
+    )
+  }, [messages, query])
+
+  useEffect(() => {
+    if (search !== null) searchInputRef.current?.focus()
+  }, [search])
 
   function openMessageMenu(x: number, y: number, msg: Message, selectedText?: string) {
     // Keeps the menu on-screen in a panel that's often under 400px wide
@@ -198,8 +216,11 @@ export function ChatPane({
   }
 
   useEffect(() => {
+    // Don't yank the view to the bottom while searching — you're reading
+    // results further up.
+    if (query) return
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [messages, query])
 
   // Grows with the message up to a cap, then scrolls internally — lets you
   // paste a whole paragraph (a long in-character moment, say) and actually
@@ -238,17 +259,52 @@ export function ChatPane({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 min-w-0 relative overflow-hidden">
-      <div className="px-3.5 py-2.5 border-b border-border shrink-0 flex items-center gap-2">
-        {leftAccessory}
-        <span className="text-sm font-bold text-foreground">{headerLabel}</span>
+      <div className="px-3.5 py-2.5 border-b border-border shrink-0 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          {leftAccessory}
+          <span className="text-sm font-bold text-foreground">{headerLabel}</span>
+          <button type="button" onClick={() => setSearch(s => (s === null ? "" : null))}
+            title={search === null ? "Search messages" : "Close search"}
+            className={`ml-auto size-7 flex items-center justify-center rounded-lg transition-colors shrink-0 ${
+              search !== null ? "bg-foreground/15 text-foreground" : "hover:bg-foreground/10 text-muted-foreground hover:text-foreground"
+            }`}>
+            {search === null ? <Search className="size-3.5" /> : <X className="size-3.5" />}
+          </button>
+        </div>
+        {search !== null && (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-1.5 rounded-lg bg-foreground/8 px-2.5 py-1.5">
+              <Search className="size-3.5 text-muted-foreground/50 shrink-0" />
+              <input
+                ref={searchInputRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === "Escape") setSearch(null) }}
+                placeholder="Search this channel…"
+                className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none"
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} title="Clear"
+                  className="text-muted-foreground/50 hover:text-foreground shrink-0"><X className="size-3.5" /></button>
+              )}
+            </div>
+            {query && (
+              <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
+                {visibleMessages.length} {visibleMessages.length === 1 ? "match" : "matches"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto py-2 flex flex-col">
-        {messages.length === 0 && (
-          <p className="text-xs text-muted-foreground/40 italic text-center mt-10">{emptyText}</p>
+        {visibleMessages.length === 0 && (
+          <p className="text-xs text-muted-foreground/40 italic text-center mt-10">
+            {query ? `No messages matching “${search?.trim()}”.` : emptyText}
+          </p>
         )}
-        {messages.map((msg, i) => {
-          const prev = messages[i - 1]
+        {visibleMessages.map((msg, i) => {
+          const prev = visibleMessages[i - 1]
           // sender_id is the logged-in user's UUID, not the character — one
           // person can post as two different characters back to back (swap
           // characters, send again) without it ever changing. Grouping by

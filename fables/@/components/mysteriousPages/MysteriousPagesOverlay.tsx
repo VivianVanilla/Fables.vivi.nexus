@@ -1,12 +1,4 @@
-// ════════════════════════════════════════════════════════════════════════════
-// MysteriousPagesOverlay.tsx — full-screen notebook for the party: a flat
-// ordered deck of pages (an uploaded image, or a block of markdown text),
-// one shown at a time, flipped through with ‹ › / arrow keys / the
-// thumbnail strip. Anyone in the party can add pages and pin sticky notes
-// onto them — each note tethered to a point on the page by a thin colored
-// line whose end you can drag. Shared party resource, same as the map / NPC
-// Tracker; opened from the party rail (party/PartyServer.tsx), KOQK21 only.
-// ════════════════════════════════════════════════════════════════════════════
+
 
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -242,7 +234,7 @@ export function MysteriousPagesOverlay({
       </div>
 
       {/* Stage */}
-      <div className="flex-1 min-h-0 flex items-center justify-center overflow-auto p-4">
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden p-4">
         {!loaded ? (
           <p className="text-sm text-muted-foreground/60 italic">Loading…</p>
         ) : pages.length === 0 ? (
@@ -252,33 +244,37 @@ export function MysteriousPagesOverlay({
             <div className="flex gap-2">{addButtons}</div>
           </div>
         ) : page ? (
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3 w-full h-full min-h-0">
             <input
               key={page.id}
               defaultValue={page.title ?? ""}
               onBlur={e => commitTitle(e.currentTarget.value)}
               onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur() }}
               placeholder="Untitled page"
-              className="text-center text-sm font-semibold bg-transparent text-foreground/80 outline-none border-b border-transparent focus:border-border px-2 py-0.5 w-64 placeholder:text-muted-foreground/40"
+              className="shrink-0 text-center text-sm font-semibold bg-transparent text-foreground/80 outline-none border-b border-transparent focus:border-border px-2 py-0.5 w-64 placeholder:text-muted-foreground/40"
             />
 
-            {/* w-fit so this box hugs the page content exactly (the image at
-                its rendered size, or the fixed-width text card) — the notes
-                layer below is absolute inset-0 against it. */}
-            <div ref={stageRef} className="relative w-fit">
-              {page.kind === "image" && page.image_url ? (
-                <img src={page.image_url} alt={page.title ?? ""} draggable={false}
-                  className="block max-h-[calc(100vh-13rem)] max-w-[calc(100vw-2rem)] w-auto h-auto rounded-lg select-none" />
-              ) : (
-                <div className="rounded-lg bg-[#f5f3ec] text-zinc-800 shadow-lg p-6 w-[min(640px,calc(100vw-2rem))] max-h-[calc(100vh-13rem)] overflow-auto">
-                  {page.text_content?.trim()
-                    ? <Markdown text={page.text_content} tone="paper" />
-                    : <p className="text-sm italic text-zinc-500">Empty page — use “Edit Text” below.</p>}
-                </div>
-              )}
+            {/* The board is the whole area a note can be dragged into — not
+                just the page. The page sits centered inside it; notes, anchors
+                and connector lines are all positioned in normalized 0..1 space
+                across this box, so a note tucked into the margin AROUND the
+                page keeps its spot instead of being clamped to the page edge. */}
+            <div ref={stageRef} className="relative flex-1 w-full min-h-0 flex items-center justify-center">
+              <div className="relative shrink-0">
+                {page.kind === "image" && page.image_url ? (
+                  <img src={page.image_url} alt={page.title ?? ""} draggable={false}
+                    className="block max-h-[calc(100vh-13rem)] max-w-[calc(100vw-2rem)] w-auto h-auto rounded-lg select-none" />
+                ) : (
+                  <div className="rounded-lg bg-[#f5f3ec] text-zinc-800 shadow-lg p-6 w-[min(640px,calc(100vw-2rem))] max-h-[calc(100vh-13rem)] overflow-auto">
+                    {page.text_content?.trim()
+                      ? <Markdown text={page.text_content} tone="paper" />
+                      : <p className="text-sm italic text-zinc-500">Empty page — use “Edit Text” below.</p>}
+                  </div>
+                )}
+              </div>
 
               {/* connector lines — one SVG in normalized 0..1 space stretched
-                  over the whole page box; non-scaling stroke keeps them thin */}
+                  over the whole board; non-scaling stroke keeps them thin */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
                 viewBox="0 0 1 1" preserveAspectRatio="none">
                 {pageNotes.map(n => {

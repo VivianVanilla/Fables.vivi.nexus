@@ -93,7 +93,16 @@ function TracingSlider({
               className={cn("absolute inset-y-0 left-0 rounded-full", animated && "fables-slot-shimmer")}
               style={{
                 width: `${pct}%`,
-                background: fill,
+                // `backgroundImage` (a longhand), NOT the `background`
+                // shorthand, when animated: the shorthand resets every
+                // background-* longhand it doesn't mention, so it was wiping
+                // out the `background-size: 300%` that .fables-slot-shimmer
+                // sets — leaving the shimmer keyframes panning a gradient
+                // that exactly filled its box, i.e. no visible movement at
+                // all. A flat (non-animated) `fill` is a plain color, which
+                // isn't a valid background-image, so that path keeps the
+                // shorthand.
+                ...(animated ? { backgroundImage: fill } : { background: fill }),
                 transition: "width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
               }}
             />

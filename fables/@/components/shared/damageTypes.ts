@@ -103,22 +103,34 @@ function parseMagicBonus(s?: string): number {
   return parseInt(s.replace(/\+/, ""), 10) || 0
 }
 
-/** Live to-hit total ("+6") from ability mod + magic bonus + extra + proficiency, or the manual override when there's no attackStat. */
-export function computeToHit(fields: WeaponAttackFields, statMods: Record<string, number>, pb: number): string | null {
-  if (!fields.attackStat) return fields.toHit ?? null
+/**
+ * Live to-hit total ("+6") from ability mod + magic bonus + extra + proficiency,
+ * or the manual override when there's no attackStat. `formToHit` is a flat
+ * bonus from any active Form (FormStatOverrides.weaponToHitBonus) — it's added
+ * even to a manual-override to-hit, since a Form buff applies whether or not
+ * the weapon has an attack stat configured.
+ */
+export function computeToHit(fields: WeaponAttackFields, statMods: Record<string, number>, pb: number, formToHit = 0): string | null {
+  if (!fields.attackStat) {
+    if (fields.toHit == null) return formToHit ? (formToHit >= 0 ? `+${formToHit}` : `${formToHit}`) : null
+    const parsed = parseInt(fields.toHit.replace(/\+/, ""), 10)
+    if (!formToHit || Number.isNaN(parsed)) return fields.toHit
+    const t = parsed + formToHit
+    return t >= 0 ? `+${t}` : `${t}`
+  }
   const mod   = statMods[fields.attackStat] ?? 0
   const magic = parseMagicBonus(fields.magicBonus)
   const extra = fields.extraToHit ?? 0
   const prof  = fields.proficient ? pb : 0
-  const total = mod + magic + extra + prof
+  const total = mod + magic + extra + prof + formToHit
   return total >= 0 ? `+${total}` : `${total}`
 }
 
-/** Damage segments with the ability mod + magic bonus + extra folded into the first segment, matching computeToHit's inputs. */
-export function computeWeaponDamageSegments(fields: WeaponAttackFields, statMods: Record<string, number>): DamageSegment[] {
-  if (!fields.attackStat) return computeDamageSegments(fields)
+/** Damage segments with the ability mod + magic bonus + extra + any active Form's flat weapon-damage bonus folded into the first segment, matching computeToHit's inputs. */
+export function computeWeaponDamageSegments(fields: WeaponAttackFields, statMods: Record<string, number>, formDamage = 0): DamageSegment[] {
+  if (!fields.attackStat) return computeDamageSegments(fields, formDamage)
   const mod   = statMods[fields.attackStat] ?? 0
   const magic = parseMagicBonus(fields.magicBonus)
   const extra = fields.extraDamage ?? 0
-  return computeDamageSegments(fields, mod + magic + extra)
+  return computeDamageSegments(fields, mod + magic + extra + formDamage)
 }

@@ -557,6 +557,19 @@
   animation: fables-slot-shimmer 3s ease-in-out infinite;
 }
 
+/* "more text below — scroll" chevron (see shared/ui/ScrollHint.tsx) — a
+   gentle 2px bob so it reads as an affordance, not just decoration. */
+@keyframes fables-scrollhint-nudge {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(2px); }
+}
+.fables-scrollhint-nudge {
+  animation: fables-scrollhint-nudge 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fables-scrollhint-nudge { animation: none; }
+}
+
 /* Scrollbar chrome hidden everywhere — content stays scrollable (wheel,
    touch, drag), just without a visible track/thumb. Matters most for the
    split-pane workspace: however a pane is divided, its own scroll region

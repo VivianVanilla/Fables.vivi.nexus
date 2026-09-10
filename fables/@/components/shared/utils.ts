@@ -34,7 +34,15 @@ export interface AcResult {
  * the AC picker (no acAbility set) keep their old manually-typed `ac` value as-is.
  */
 export function computeAc(data: CharacterData): AcResult {
-  const equippedArmor = (data.items ?? []).filter(i => i.equipped && (i.equipKind ?? "armor") === "armor")
+  const equippedArmor = [
+    ...(data.items ?? []).filter(i => i.equipped),
+    // A standalone armor infusion (Armor of Magical Strength, a homebrew
+    // armour infusion…) counts while it's infused and on this character —
+    // "infused" is its version of "equipped". Non-standalone ones (Enhanced
+    // Defense: +1 to armour you already wear) are a modifier, not their own
+    // piece, so they don't come through here.
+    ...(data.infusions ?? []).filter(f => (f.infusionStandalone ?? true) && infusionIsActive(f)),
+  ].filter(i => (i.equipKind ?? "armor") === "armor")
 
   const baseArmor = equippedArmor
     .filter(i => i.itemMeta?.armorMode === "base" && i.itemMeta?.armorBaseAc != null)
@@ -308,6 +316,7 @@ export function formActivationPatch(data: CharacterData, id: string | null): Par
 export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
   const merged: FormStatOverrides = {}
   let acBonusSum = 0, maxHpBonusSum = 0, carryCapacityBonusSum = 0, speedBonusSum = 0
+  let weaponToHitSum = 0, weaponDamageSum = 0
   const skillBonusSums: Record<string, number> = {}
   const visionMax: Record<string, number> = {}
   for (const f of forms) {
@@ -325,6 +334,8 @@ export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
     maxHpBonusSum += ov.maxHpBonus ?? 0
     carryCapacityBonusSum += ov.carryCapacityBonus ?? 0
     speedBonusSum += ov.speedBonus ?? 0
+    weaponToHitSum += ov.weaponToHitBonus ?? 0
+    weaponDamageSum += ov.weaponDamageBonus ?? 0
     for (const [skill, amount] of Object.entries(ov.skillBonuses ?? {})) {
       skillBonusSums[skill] = (skillBonusSums[skill] ?? 0) + amount
     }
@@ -338,6 +349,8 @@ export function mergeFormOverrides(forms: CharacterForm[]): FormStatOverrides {
   if (maxHpBonusSum) merged.maxHpBonus = maxHpBonusSum
   if (carryCapacityBonusSum) merged.carryCapacityBonus = carryCapacityBonusSum
   if (speedBonusSum) merged.speedBonus = speedBonusSum
+  if (weaponToHitSum) merged.weaponToHitBonus = weaponToHitSum
+  if (weaponDamageSum) merged.weaponDamageBonus = weaponDamageSum
   if (Object.keys(skillBonusSums).length > 0) merged.skillBonuses = skillBonusSums
   if (Object.keys(visionMax).length > 0) merged.grantedVision = visionMax
   return merged
@@ -460,7 +473,7 @@ export function conditionalTriggerPatch(data: CharacterData, c: CharacterConditi
   // instead of `data` so a heal/temp HP/condition grant reflects the form
   // it just switched into (its own max HP bonus, granted conditions, etc.)
   // rather than the character's plain pre-activation state.
-  let patch: Partial<CharacterData> = c.triggerFormId ? activateFormPatch(data, c.triggerFormId, multiForm) : {}
+  const patch: Partial<CharacterData> = c.triggerFormId ? activateFormPatch(data, c.triggerFormId, multiForm) : {}
   const merged = { ...data, ...patch }
   if (c.tempHp) patch.tempHp = Math.max(merged.tempHp ?? 0, c.tempHp)
   if (c.healHp) {
@@ -489,4 +502,43 @@ export function featureUsePatch(data: CharacterData, feature: Feature, multiForm
     if (conditional) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, conditional, multiForm))
   }
   return patch
+}
+
+/** Whether an infusion is currently doing anything for THIS character — it's
+ *  infused, and (only if location tracking is turned on for it) the infused
+ *  item is on this character rather than a party member. Drives its automation
+ *  (triggerFormId/triggerConditionalId) and whether it counts as worn armour. */
+export function infusionIsActive(infusion: Feature): boolean {
+  if (!infusion.infused) return false
+  if (!infusion.infusionTrackLocation) return true  // not tracking whereabouts = assume it's on you
+  return infusion.infusionOnSelf ?? true
+}
+
+/**
+ * An infusion's linked Form/Conditional (triggerFormId/triggerConditionalId),
+ * fired when the infusion becomes active for this character (infused AND
+ * infusionOnSelf) and — for the Form — reverted when it stops. Conditionals
+ * are one-shot, so there's nothing to pull back there. Called from
+ * CharacterSheet's patchFeature whenever an infusion's infused/onSelf flags
+ * flip, mirroring how featureUsePatch fires on a use-spend.
+ */
+export function infusionAutoPatch(
+  data: CharacterData, infusion: Feature, active: boolean, multiForm?: boolean,
+): Partial<CharacterData> {
+  if (active) {
+    const patch: Partial<CharacterData> = infusion.triggerFormId
+      ? activateFormPatch(data, infusion.triggerFormId, multiForm) : {}
+    if (infusion.triggerConditionalId) {
+      const c = (data.conditionals ?? []).find(x => x.id === infusion.triggerConditionalId)
+      if (c) Object.assign(patch, conditionalTriggerPatch({ ...data, ...patch }, c, multiForm))
+    }
+    return patch
+  }
+  // Turning off — only pull down the Form this infusion put up, and only while
+  // it's still the active one, so a Form the player switched into by hand is
+  // never yanked out from under them.
+  const fid = infusion.triggerFormId
+  if (!fid) return {}
+  if (multiForm) return (data.activeFormIds ?? []).includes(fid) ? toggleFormPatch(data, fid) : {}
+  return data.activeFormId === fid ? formActivationPatch(data, null) : {}
 }

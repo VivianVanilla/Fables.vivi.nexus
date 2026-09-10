@@ -118,6 +118,7 @@ export interface Feature {
   resetsOn?: "short" | "long" | "dawn" | "manual"
   manualBulkRegain?: boolean  // resetsOn "manual" only — see UseTracker.manualBulkRegain, same semantics
   linkedTo?: string[]        // IDs of features that share this use counter (bidirectional)
+  freeInvocation?: boolean        // Eldritch Invocations list only — this one was granted "for free" (a feat, a magic item, a pact boon) and shouldn't count toward Invocations Known, same idea as SpellItem.freeSpell
   triggerFormId?: string          // Automation — activates this Form (see CharacterForm) whenever a use of this feature is spent (see utils.ts's featureUsePatch)
   triggerConditionalId?: string   // Automation — triggers this Conditional (see CharacterConditional) whenever a use of this feature is spent
   // Automation — set when a feature can trigger one of several alternate
@@ -128,6 +129,11 @@ export interface Feature {
   requiresAttunement?: boolean // does this item require attunement at all?
   attuned?: boolean          // is the character currently attuned to this item?
   infused?: boolean          // Artificers Infusions list only — is this infusion currently "in use" (imbued into an item)? Counted against CharacterData.maxInfusedItems the same way attuned counts against maxAttunedItems
+  // ── Infusions only (entries in CharacterData.infusions) ───────────────────
+  infusionStandalone?: boolean   // this infusion is a discrete piece of gear (Goggles of Night, Bag of Holding…) rather than a modifier to gear you already own (Enhanced Defense/Weapon, Repeating Shot…). Only a standalone one is merged into the Equipped list while infused. Unset = true, so every infusion predating this keeps showing in Gear.
+  infusionTrackLocation?: boolean // opt-in — the infused item might not be on this character (given to a party member), so track its whereabouts. Off (default) = assume it's on you, no "On me" control shown anywhere.
+  infusionOnSelf?: boolean       // only meaningful when infusionTrackLocation is on — the infused item is currently carried/worn by THIS character, not handed to someone else. Gates this infusion's automation (triggerFormId/triggerConditionalId). Unset = true (assume on you).
+  infusionHeldBy?: string        // only meaningful when infusionTrackLocation is on and infusionOnSelf is false — free-text note of who has the infused item ("Liam")
   equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
   isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight
@@ -207,6 +213,8 @@ export interface FormStatOverrides {
   charisma?: number
   acBonus?: number       // stacks on top of computed AC, same semantics as acMiscBonus
   acOverride?: number    // replaces the total AC outright when set
+  weaponToHitBonus?: number  // added to the computed to-hit of every weapon on the sheet while this form is active (Enhanced Weapon infusion, Bless-style buff, Rage…). Stacks across active forms.
+  weaponDamageBonus?: number // added to the first damage segment of every weapon while active — same "one flat bonus to all your weapon attacks" idea as weaponToHitBonus
   speedOverride?: number // replaces walking speed when set (conditions forcing speed to 0 still win)
   speedBonus?: number    // adds to walking speed (stacks with everything; ignored when speedOverride is set, and conditions forcing speed to 0 still win)
   maxHpBonus?: number    // stacks on top of maxHp + maxHpMod while this form is active

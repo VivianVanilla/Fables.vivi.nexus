@@ -17,6 +17,7 @@ import { TracingSlider } from "../../ui/tracing-slider"
 import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
+import { ScrollHint, useScrollHint } from "@/components/shared/ui/ScrollHint"
 import { Modal } from "@/components/shared/ui/Modal"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { NumInput } from "@/components/shared/ui/NumInput"
@@ -270,7 +271,11 @@ interface FeatureEntryProps {
   onToggleFavorite?: () => void        // omit to hide the star
   onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
-  showInfusedToggle?: boolean           // only true for the Infusions list — shows an "Infused" checkbox, no gating field needed (every infusion is eligible, unlike Attuned which needs requiresAttunement first)
+  showInfusedToggle?: boolean           // only true for the Infusions list — shows an "Infused" checkbox, no gating field needed (every infusion is eligible, unlike Attuned which needs requiresAttunement first). Also unlocks the infusion config block in edit mode (standalone / on-me / Form + Conditional links).
+  formOptions?:      { id: string; name: string }[]  // Infusions list only — Forms an infusion can activate while active-on-self (feature.triggerFormId)
+  conditionalOptions?: { id: string; name: string }[]  // Infusions list only — Conditionals an infusion can trigger when it becomes active (feature.triggerConditionalId)
+  onCopyToGear?:    () => void          // standalone infusions only — creates a plain Gear item from this infusion's stats (name/description/weapon+armor fields/weight/value/rarity), so a "Replicate Magic Item" infusion can live in the inventory for real
+  weaponFormBonus?: { toHit: number; damage: number }  // weapon rows only — flat to-hit/damage from any active Form (FormStatOverrides.weaponToHitBonus/weaponDamageBonus); folded into the displayed/computed to-hit & damage, not persisted
   showItemExtras?:   boolean            // only true for the Items tab — shows Equipped / AC Bonus / Weight
   showWeightColumn?: boolean            // only true for the Carried Items list — shows the item's own weight right in the collapsed header, not just when expanded
   containerOptions?: { id: string; name: string }[]  // Carried Items only — other containers this item could be moved into; omit/empty hides the control
@@ -378,6 +383,7 @@ function BulkRegainRow({ label, onRegain }: { label?: string; onRegain: (amount:
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, statMods = {}, suggestionSource, userId,
   isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, showItemExtras, showWeightColumn,
+  formOptions, conditionalOptions, weaponFormBonus, onCopyToGear,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
   magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors,
@@ -388,11 +394,17 @@ export function FeatureEntry({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [showSuggest, setShowSuggest] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  // A very long description scrolls inside a height cap instead of ballooning
+  // the card off-screen; the cue shows when there's more below the fold.
+  const { ref: descRef, hasMore: descHasMore } = useScrollHint<HTMLDivElement>()
   // Set while a use is being spent on a feature with triggerVariants (see
   // Automation's "multiple possible effects" — Enhance Ability, etc.) —
   // holds the usesUsed value the slider was about to commit, until a
   // variant is actually chosen below.
   const [pendingVariantUses, setPendingVariantUses] = useState<number | null>(null)
+  // Latches once you've made a Gear copy of this infusion, so the button
+  // reads back "✓ Added" instead of inviting an accidental second copy.
+  const [copiedToGear, setCopiedToGear] = useState(false)
 
   const namePlaceholder = showItemExtras ? "Item name" : "Feature name"
   const unnamedLabel    = showItemExtras ? "Unnamed Item" : "Unnamed"
@@ -548,6 +560,108 @@ export function FeatureEntry({
           </div>
         )}
 
+        {suggestionSource === "invocation" && (
+          <label className="flex items-center gap-2 text-xs text-emerald-300/90 cursor-pointer select-none border-t border-white/10 pt-2" title="Doesn't count toward Invocations Known">
+            <input type="checkbox" checked={feature.freeInvocation ?? false}
+              onChange={e => onChange({ freeInvocation: e.target.checked })}
+              className="accent-emerald-500" />
+            Not counted toward Invocations Known
+          </label>
+        )}
+
+        {/* Infusion config (Artificer's Infusions list) — what kind of thing
+            this infusion is, and what it does for the character while it's
+            infused + on them. */}
+        {showInfusedToggle && (
+          <div className="flex flex-col gap-2.5 text-xs border-t border-white/10 pt-2">
+            <label className="flex items-start gap-2 text-white/60 cursor-pointer select-none">
+              <input type="checkbox" className="mt-0.5" checked={feature.infusionStandalone ?? true}
+                onChange={e => onChange({ infusionStandalone: e.target.checked })} />
+              <span>
+                Standalone item — shows in <span className="text-white/80">Equipped</span> while infused
+                <span className="block text-[10px] text-white/30">Keep Off for infusions that just modify gear you already own.</span>
+              </span>
+            </label>
+
+            <div className="flex flex-col gap-2">
+              <label className="flex items-start gap-2 text-white/60 cursor-pointer select-none">
+                <input type="checkbox" className="mt-0.5" checked={feature.infusionTrackLocation ?? false}
+                  onChange={e => onChange({ infusionTrackLocation: e.target.checked })} />
+                <span>
+                  Track where this is
+                  <span className="block text-[10px] text-white/30">Turn on if the infused item might not be on you. Off = assumed to be on you.</span>
+                </span>
+              </label>
+              {feature.infusionTrackLocation && (
+                <div className="pl-6 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit text-[11px]">
+                    <button type="button" onClick={() => onChange({ infusionOnSelf: true, infusionHeldBy: undefined })}
+                      className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${(feature.infusionOnSelf ?? true) ? "bg-sky-500/30 text-sky-200" : "text-white/40 hover:text-white/70"}`}>
+                      On me
+                    </button>
+                    <button type="button" onClick={() => onChange({ infusionOnSelf: false })}
+                      className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${!(feature.infusionOnSelf ?? true) ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}>
+                      Given away
+                    </button>
+                  </div>
+                  {!(feature.infusionOnSelf ?? true) && (
+                    <label className="flex items-center gap-1.5 text-white/50">
+                      Held by
+                      <input value={feature.infusionHeldBy ?? ""} placeholder="e.g. Liam"
+                        onChange={e => onChange({ infusionHeldBy: e.target.value || undefined })}
+                        className="flex-1 min-w-0 bg-white/10 rounded px-2 py-1 text-white outline-none placeholder:text-white/20" />
+                    </label>
+                  )}
+                  <span className="text-[10px] text-white/30">The weapon bonus and Form/Conditional below only apply while it's on you.</span>
+                </div>
+              )}
+            </div>
+
+            {/* ── What this infusion does while it's active ────────────────
+                "Active" = Infused, and (if location tracking is on) on you.
+                Point it at a Form (or Conditional) built in Automation — that's
+                where the actual bonuses live: +to-hit / +damage for your
+                weapons, AC, resistances, ability scores, skill bonuses,
+                granted conditions. It activates and reverts with the infusion. */}
+            {((formOptions?.length ?? 0) > 0 || (conditionalOptions?.length ?? 0) > 0) && (
+              <div className="flex flex-col gap-1.5 border-t border-white/10 pt-2">
+                <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">While active</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  {(formOptions?.length ?? 0) > 0 && (
+                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                      Activate Form
+                      <select value={feature.triggerFormId ?? ""}
+                        onChange={e => onChange({ triggerFormId: e.target.value || undefined })}
+                        className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs max-w-40">
+                        <option value="" className="bg-zinc-800 text-white">— None —</option>
+                        {(formOptions ?? []).map(f => (
+                          <option key={f.id} value={f.id} className="bg-zinc-800 text-white">{f.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {(conditionalOptions?.length ?? 0) > 0 && (
+                    <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                      Trigger Conditional
+                      <select value={feature.triggerConditionalId ?? ""}
+                        onChange={e => onChange({ triggerConditionalId: e.target.value || undefined })}
+                        className="bg-zinc-800 rounded px-2 py-1 text-white outline-none text-xs max-w-40">
+                        <option value="" className="bg-zinc-800 text-white">— None —</option>
+                        {(conditionalOptions ?? []).map(c => (
+                          <option key={c.id} value={c.id} className="bg-zinc-800 text-white">{c.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                <p className="text-[10px] text-white/30">
+                  The Form carries the numbers — +to-hit / +damage for your weapons, AC, resistances, skills — and turns on and off with the infusion. Build it in Automation → Forms first.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {showItemExtras && (
           <div className="flex flex-col gap-2 text-xs border-t border-white/10 pt-2">
             <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5 w-fit">
@@ -565,7 +679,7 @@ export function FeatureEntry({
                 category above only changes which stat fields show below, it no
                 longer moves the item between the Equipped and Carried Items lists. */}
             <div className="flex flex-wrap items-center gap-3">
-              {feature.category === "armor" && (
+              {feature.category === "armor" && !showInfusedToggle && (
                 <label className={`flex items-center gap-2 font-bold cursor-pointer select-none whitespace-nowrap ${theme.color}`}>
                   <input type="checkbox" checked={feature.equipped ?? false}
                     onChange={e => onChange({ equipped: e.target.checked })}
@@ -1086,21 +1200,28 @@ export function FeatureEntry({
     ? { style: magicItemSliderStyle ?? magicItemStyle, color: resolvedMagicSliderColor ?? DEFAULT_ACCENT_COLOR }
     : { style: sliderStyle ?? accentStyle, color: sliderColor ?? accentColor }
   const barAnimated = isAnimatedStyle(sliderSource.style) && !!sliderSource.color
-  // Magic items always show their rarity color on the tracking bar, even
-  // when the "Tracking Slider" style is set to None — None only turns off
-  // the fancy border/background treatment, it shouldn't also mean "ignore
-  // the color and show generic indigo" for something that's rarity-colored
-  // on purpose. Non-magic (category-styled) items keep the old behavior.
-  const barColor = feature.isMagicItem
-    ? (sliderSource.color ?? "#6366f1")
-    : (sliderSource.style && sliderSource.style !== "none" && sliderSource.color ? sliderSource.color : "#6366f1")
+  // A picked Slider/Card color always colors the tracking bar — for magic
+  // items AND category-styled ones alike. Setting the "Tracking Slider"
+  // module to None turns off the fancy border/background treatment; it was
+  // ALSO throwing away the chosen color and snapping the bar back to generic
+  // indigo, so a category where you'd picked a red slider swatch but left
+  // the module style None just showed indigo bars with no hint why. Both
+  // `sliderColor` and `accentColor` are undefined until a swatch is actually
+  // touched in Settings, so an un-customized category still falls through to
+  // the indigo default exactly as before.
+  const barColor = sliderSource.color ?? "#6366f1"
 
   // Live to-hit/damage — same math as the old Martial-only EquipmentEntry,
   // now computed here too since a weapon is one record shown in both places.
   const isWeapon    = showItemExtras && feature.equipKind === "weapon"
   const weaponMeta  = feature.itemMeta ?? {}
-  const toHit       = isWeapon ? computeToHit(weaponMeta, statMods, pb) : null
-  const dmgSegments = isWeapon ? computeWeaponDamageSegments(weaponMeta, statMods) : []
+  // A flat to-hit/damage buff from any active Form (Enhanced Weapon infusion
+  // links to one; also Rage/Bless-style buffs). Applied to every weapon on the
+  // sheet while the form is up — display/calc only, never persisted.
+  const formToHit   = weaponFormBonus?.toHit ?? 0
+  const formDamage  = weaponFormBonus?.damage ?? 0
+  const toHit       = isWeapon ? computeToHit(weaponMeta, statMods, pb, formToHit) : null
+  const dmgSegments = isWeapon ? computeWeaponDamageSegments(weaponMeta, statMods, formDamage) : []
 
   function toHitBreakdown(): string {
     if (!weaponMeta.attackStat) return toHit ?? ""
@@ -1111,6 +1232,7 @@ export function FeatureEntry({
     const magic = weaponMeta.magicBonus ? parseInt(weaponMeta.magicBonus.replace(/\+/, ""), 10) || 0 : 0
     if (magic) parts.push(`Magic +${magic}`)
     if (weaponMeta.extraToHit) parts.push(`(Extra) ${weaponMeta.extraToHit}`)
+    if (formToHit) parts.push(`(Form) ${formToHit}`)
     return parts.join(" + ").replace(/\+ -/g, "− ")
   }
 
@@ -1143,6 +1265,15 @@ export function FeatureEntry({
             </span>
           )}
 
+          {/* Quick confirm the infusion's linked automation is live. Dimmed
+              when it's infused but off-you. */}
+          {showInfusedToggle && feature.infused && (feature.triggerFormId || feature.triggerConditionalId) && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${feature.infusionTrackLocation && !(feature.infusionOnSelf ?? true) ? "bg-white/5 text-white/30" : "bg-violet-500/20 text-violet-200"}`}
+              title="This infusion's linked Form/Conditional is active">
+              ⚙ auto
+            </span>
+          )}
+
           {!showItemExtras && feature.source && (
             <span
               className={`text-[10px] px-1.5 py-0.5 rounded-full truncate max-w-24 shrink-0 ${tagBadgeClass}`}
@@ -1155,6 +1286,12 @@ export function FeatureEntry({
           {!showItemExtras && feature.level != null && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagBadgeClass}`}>
               Lv {feature.level}
+            </span>
+          )}
+
+          {suggestionSource === "invocation" && feature.freeInvocation && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-emerald-500/15 text-emerald-300" title="Granted for free — not counted toward Invocations Known">
+              Free
             </span>
           )}
 
@@ -1176,6 +1313,18 @@ export function FeatureEntry({
             </label>
           )}
 
+          {/* Only when you've opted into location tracking AND handed it off —
+              an at-a-glance "who has this", click to take it back. An infusion
+              that's on you (the normal case) shows nothing extra here. */}
+          {showInfusedToggle && feature.infused && feature.infusionTrackLocation && !(feature.infusionOnSelf ?? true) && (
+            <button type="button" disabled={readOnly}
+              onClick={e => { e.stopPropagation(); onChange({ infusionOnSelf: true }) }}
+              title="Given to someone else — its bonus/automation are off. Click to take it back."
+              className="flex items-center gap-1 shrink-0 text-[10px] font-bold rounded-full px-1.5 py-0.5 bg-white/10 text-white/50 hover:text-white/80 transition-colors">
+              → {feature.infusionHeldBy?.trim() || "given away"}
+            </button>
+          )}
+
           {showItemExtras && (feature.equipKind ?? "armor") === "armor" && feature.itemMeta?.armorMode === "base" && feature.itemMeta?.armorBaseAc != null && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${tagBadgeClass}`}>
               AC {feature.itemMeta.armorBaseAc} ({feature.itemMeta.armorDexMode === "none" ? "no dex" : feature.itemMeta.armorDexMode === "half" ? "½ dex" : "full dex"})
@@ -1193,8 +1342,9 @@ export function FeatureEntry({
 
           {/* At the trailing edge, alongside Weight, rather than crowding the
               name — this is the one toggle that also determines Equipped vs
-              Carried Items, so it reads better as its own aside than buried mid-row. */}
-          {showItemExtras && feature.category === "armor" && (
+              Carried Items, so it reads better as its own aside than buried mid-row.
+              Not on infusions: "Infused" (above) is their equivalent on/off. */}
+          {showItemExtras && !showInfusedToggle && feature.category === "armor" && (
             <label className={`flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer ${theme.color}`} onClick={e => e.stopPropagation()} title="Equipped">
               <input type="checkbox" checked={feature.equipped ?? false} disabled={readOnly}
                 onChange={e => onChange({ equipped: e.target.checked })}
@@ -1231,11 +1381,11 @@ export function FeatureEntry({
         {isWeapon && (
           <div className="flex items-center gap-1.5 mt-1 pl-5 flex-wrap">
             <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/60 capitalize shrink-0">{feature.itemMeta?.weaponKind ?? "melee"}</span>
-            {feature.itemMeta?.magicBonus && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold shrink-0">{feature.itemMeta.magicBonus}</span>
+            {weaponMeta.magicBonus && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold shrink-0">{weaponMeta.magicBonus}</span>
             )}
             {toHit && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 shrink-0">{toHit} to hit</span>
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 shrink-0" title={(formToHit || formDamage) ? "Includes an active Form's weapon bonus" : undefined}>{toHit} to hit</span>
             )}
             <DamagePills segments={dmgSegments} size="sm" />
             {feature.itemMeta?.weaponKind === "ranged"
@@ -1341,13 +1491,21 @@ export function FeatureEntry({
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${RARITY_COLORS[feature.rarity] ?? "bg-white/10 text-white/40"}`}>{feature.rarity}</span>
             )}
             <div className="flex items-center gap-1 ml-auto">
-              {showItemExtras && !readOnly && feature.equipKind === "weapon" && !feature.martialOnly && (
+              {showItemExtras && !showInfusedToggle && !readOnly && feature.equipKind === "weapon" && !feature.martialOnly && (
                 <button type="button" onClick={e => { e.stopPropagation(); onChange({ inMartial: !feature.inMartial }) }}
                   title={feature.inMartial ? "Remove from the Martial tab" : "Show in the Martial tab"}
                   className={`text-[10px] px-2 py-1 rounded-full transition-colors shrink-0 ${
                     feature.inMartial ? "bg-primary/30 text-primary hover:bg-primary/20" : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
                   }`}>
                   {feature.inMartial ? "◯ In Martial" : "+ Martial Tab"}
+                </button>
+              )}
+              {onCopyToGear && !readOnly && (
+                <button type="button" disabled={copiedToGear}
+                  onClick={e => { e.stopPropagation(); onCopyToGear(); setCopiedToGear(true) }}
+                  title="Create a matching item in your Gear from this infusion's stats"
+                  className="text-[10px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors shrink-0 disabled:opacity-60">
+                  {copiedToGear ? "✓ Added to Gear" : "+ Gear item"}
                 </button>
               )}
               {onToggleFavorite && (
@@ -1379,7 +1537,12 @@ export function FeatureEntry({
             <p className="text-xs text-white/40">{toHitBreakdown()} = <span className="text-white/70 font-semibold">{toHit}</span></p>
           )}
           {feature.description ? (
-            <Markdown text={feature.description} tone="dark" textColorOverride={bodyTextColor} />
+            <div className="relative">
+              <div ref={descRef} className="max-h-[60vh] overflow-y-auto overscroll-contain">
+                <Markdown text={feature.description} tone="dark" textColorOverride={bodyTextColor} />
+              </div>
+              <ScrollHint show={descHasMore} />
+            </div>
           ) : !readOnly ? (
             <p className="text-xs text-white/20 italic">No description — click ✎ to add one.</p>
           ) : null}

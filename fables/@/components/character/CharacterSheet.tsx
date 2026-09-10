@@ -17,7 +17,7 @@ import type {
 } from "@/components/shared/types"
 import { SAVE_KEYS, SAVE_TO_ABILITY, CONDITION_EFFECTS, EXHAUSTION_EFFECTS, SPEED_ZERO_CONDITIONS, DEFAULT_ACCENT_COLOR } from "@/components/shared/constants"
 import type { FavoriteCategory } from "@/components/shared/constants"
-import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, revokeFormResistances, favoriteFormSwap } from "@/components/shared/utils"
+import { profBonus, nanoid, safeParseJson, computeAc, weightExemptItemIds, formActivationPatch, castSpellPatch, mergeFormOverrides, toggleFormPatch, featureUsePatch, infusionAutoPatch, infusionIsActive, revokeFormResistances, favoriteFormSwap } from "@/components/shared/utils"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY, darkenHex, hexToRgb } from "@/components/shared/themes"
 import type { SlotTheme } from "@/components/shared/themes"
 import { VoidParticles } from "@/components/shared/ui/VoidParticles"
@@ -759,9 +759,24 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         Object.assign(combinedPatch, featureUsePatch({ ...data, ...combinedPatch }, patchedFeature, multiFormEnabled))
       }
 
-     
-      if (key === "infusions" && patch.infused === false && target.infused && data.favorites?.some(f => f.refId === id)) {
-        combinedPatch.favorites = (data.favorites ?? []).filter(f => f.refId !== id)
+      // An infusion becoming active for this character (infused AND on-self,
+      // see Feature.infusionOnSelf) — or stopping — fires/reverts its own
+      // linked Form/Conditional, the infusion equivalent of the use-spend
+      // trigger above.
+      if (key === "infusions" && ("infused" in patch || "infusionOnSelf" in patch || "infusionTrackLocation" in patch)) {
+        const wasActive = infusionIsActive(target)
+        const nowActive = infusionIsActive(patchedFeature)
+        if (wasActive !== nowActive) {
+          Object.assign(combinedPatch, infusionAutoPatch({ ...data, ...combinedPatch }, patchedFeature, nowActive, multiFormEnabled))
+        }
+      }
+
+      if (key === "infusions" && patch.infused === false && target.infused) {
+        // Filter on top of whatever infusionAutoPatch above may already have
+        // rewritten favorites to (a reverted Form un-favoriting its own
+        // target), not the pre-patch list.
+        const favs = (combinedPatch.favorites as typeof data.favorites | undefined) ?? data.favorites ?? []
+        if (favs.some(f => f.refId === id)) combinedPatch.favorites = favs.filter(f => f.refId !== id)
       }
       break
     }
@@ -895,13 +910,17 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
   // fixed-size repeating tile instead) — cut for simplicity.
   const bgImageFit      = data.bgImageFit ?? "cover"
   const bgImagePosition = data.bgImagePosition ?? "center"
+  // backgroundAttachment stays "scroll" (the default) — a "fixed" image layer
+  // re-anchors to any transformed ancestor, and dnd-kit transforms every row
+  // of a list mid-drag, which made the image jump across every draggable card.
+  // See the --fables-*-bg-attachment notes in cardBgVars below.
   const bgImageLayerStyle: React.CSSProperties | undefined =
     bgImageKey === CUSTOM_BG_IMAGE_KEY
       ? (data.bgImageCustomUrl
-          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+          ? { backgroundImage: `url(${data.bgImageCustomUrl})`, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "scroll" }
           : undefined)
       : BG_IMAGE_THEMES[bgImageKey]
-        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+        ? { backgroundImage: BG_IMAGE_THEMES[bgImageKey].backgroundImage, backgroundSize: bgImageFit, backgroundPosition: bgImagePosition, backgroundRepeat: "no-repeat", backgroundAttachment: "scroll" }
         : undefined
   // Each card gets its own copy of that same image, tinted with the card's
   // own color underneath it — a shared "one continuous canvas behind
@@ -929,14 +948,19 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     // trade away entirely, so the tint never drops below 60%.
     const imageAlpha = ((data.bgImageOpacity ?? DEFAULT_BG_IMAGE_OPACITY) / 100) * 0.4
     const tint = `rgba(${tr}, ${tg}, ${tb}, ${1 - imageAlpha})`
-    // "scroll" for the flat tint layer (its own attachment doesn't matter —
-    // a flat color has no spatial position for "fixed" to change anyway),
-    // "fixed" for the actual image behind it.
+    // Every layer is "scroll" (each card paints its own copy of the image,
+    // sized to cover its own box at the chosen focal point). NOT "fixed":
+    // a `background-attachment: fixed` layer re-anchors from the viewport to
+    // the nearest transformed ancestor the instant one exists, and dnd-kit
+    // puts a `transform` on EVERY row in a list while any one of them is
+    // being dragged — so a "fixed" image visibly jumped/re-cropped on every
+    // draggable card the moment a reorder drag started. "scroll" also just
+    // matches what iOS Safari already does (it ignores "fixed" outright).
     return {
       "--fables-card-bg-image": `linear-gradient(${tint}, ${tint}), ${bgImageLayerStyle.backgroundImage}`,
       "--fables-card-bg-size": `100% 100%, ${bgImageLayerStyle.backgroundSize}`,
       "--fables-card-bg-repeat": `no-repeat, ${bgImageLayerStyle.backgroundRepeat}`,
-      "--fables-card-bg-attachment": "scroll, fixed",
+      "--fables-card-bg-attachment": "scroll, scroll",
       // The flat tint layer has no spatial position to speak of — "center"
       // for it is just a placeholder so this list stays two entries long,
       // matching -image/-size/-repeat above (CSS cycles a shorter
@@ -952,7 +976,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
       "--fables-shared-bg-image": `${bgImageLayerStyle.backgroundImage ?? "none"}`,
       "--fables-shared-bg-size": `${bgImageLayerStyle.backgroundSize ?? "cover"}`,
       "--fables-shared-bg-repeat": `${bgImageLayerStyle.backgroundRepeat ?? "no-repeat"}`,
-      "--fables-shared-bg-attachment": "fixed",
+      // "scroll", not "fixed" — see the --fables-card-bg-attachment note above
+      // (dnd-kit transforms every row during a drag, which re-anchors a
+      // "fixed" layer and made the image jump on every movable card).
+      "--fables-shared-bg-attachment": "scroll",
       "--fables-shared-bg-position": `${bgImageLayerStyle.backgroundPosition ?? "center"}`,
     }
   })() : undefined
@@ -1007,6 +1034,10 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     wis: Math.floor(((effectiveData.wisdom       ?? 10) - 10) / 2),
     cha: Math.floor(((effectiveData.charisma     ?? 10) - 10) / 2),
   }
+  // Flat weapon to-hit/damage from every active Form combined (Enhanced Weapon
+  // infusion → a Form, Bless, Rage…). Threaded to every list that renders a
+  // weapon card so its live to-hit/damage reflects the buff.
+  const weaponFormBonus = { toHit: ov?.weaponToHitBonus ?? 0, damage: ov?.weaponDamageBonus ?? 0 }
 
   // Settings' "Modules and Font Size" — one sheet-wide text color switch
   // (see types.ts's textColorOverride comment). Bulk of the app's white
@@ -1038,7 +1069,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
     // it here made matchOwnClassKey resolve a different, usually-unmatching
     // key for favorited Class Features, so their per-class/subclass color
     // silently fell back to the default instead of matching the real one.
-    pb, statMods, classes: deriveCharacterClassNames(data),
+    pb, statMods, weaponFormBonus, classes: deriveCharacterClassNames(data),
     onRemove: removeFavorite,
     onReorder: reorderFavorites,
     onChangeSpell: changeSpell,
@@ -1366,6 +1397,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {/* Full-width spells / martial panel */}
         <SpellsEquipPanel
           card={card} theme={theme} data={effectiveData} readOnly={readOnly} userId={user?.id ?? null}
+          weaponFormBonus={weaponFormBonus}
           spellItems={spellItems} allFeatures={allFeatures} spellSlots={spellSlots}
           slotTheme={slotTheme} slotAnimated={slotAnimated} characterId={character.id}
           activeSubTab={spellsSubTab} onChangeSubTab={setSpellsSubTab}
@@ -1763,7 +1795,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {activeTab === "items" && (
           <ItemsTab
             data={data} update={update} theme={theme} card={card} readOnly={readOnly} pb={profBonus(data.level ?? 1)}
-            statMods={statMods}
+            statMods={statMods} weaponFormBonus={weaponFormBonus}
             userId={user?.id ?? null}
             onChangeFeature={patchFeature} onRemoveFeature={removeFeatureGlobal} onLinkToggle={toggleFeatureLink}
             favorites={favorites} onToggleFavorite={toggleFeatureFavorite}

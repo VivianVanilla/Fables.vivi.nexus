@@ -315,6 +315,17 @@ function FormEditor({ form, userId, familiars, customSkills, allFeatures, onSave
       </div>
 
       <div className="flex flex-col gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Weapon Attacks</span>
+        <div className="grid grid-cols-2 gap-2">
+          <NumField label="To-Hit Bonus" value={ov.weaponToHitBonus} onChange={v => setOv({ weaponToHitBonus: v })} placeholder="+0" />
+          <NumField label="Damage Bonus" value={ov.weaponDamageBonus} onChange={v => setOv({ weaponDamageBonus: v })} placeholder="+0" />
+        </div>
+        <p className="text-[10px] text-white/30 -mt-0.5">
+          Flat, applied to every weapon on the sheet while this form is active (Enhanced Weapon infusion, Bless, Rage…). Link the form to an infusion or spell in the other tabs to fire it automatically.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
         <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Skill Bonuses</span>
         <p className="text-[10px] text-white/30 -mt-1">Stacks on top of the character's own per-skill bonus while this form is active — pick a skill to add a bonus just to it, e.g. +2 Stealth.</p>
         <SkillBonusEditor value={ov.skillBonuses} allSkillNames={allSkillNames} onChange={v => setOv({ skillBonuses: v })} />

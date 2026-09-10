@@ -10,6 +10,7 @@ import { MarkdownTextarea } from "../../ui/MarkdownTextarea"
 import { Markdown } from "../../ui/Markdown"
 import { damageTypeClasses, DAMAGE_TYPES } from "@/components/shared/damageTypes"
 import { PopTransition } from "@/components/shared/ui/PopTransition"
+import { ScrollHint, useScrollHint } from "@/components/shared/ui/ScrollHint"
 import { FavoriteStar } from "../ui/FavoriteStar"
 import { PinButton } from "../ui/PinButton"
 import { getSpells } from "../../../../src/spells/spellCache"
@@ -133,9 +134,10 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
   isPinned?: boolean; onTogglePin?: () => void
   bodyTextColor?: "black" | "white"
 }) {
+  const { ref: descRef, hasMore } = useScrollHint<HTMLDivElement>()
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(760px,calc(100vw-2rem))] max-h-[88vh] flex flex-col overflow-hidden">
+      <div className="relative bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(760px,calc(100vw-2rem))] max-h-[88vh] flex flex-col overflow-hidden">
 
         {/* Header */}
         <div className="px-6 sm:px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-white/10 shrink-0">
@@ -194,13 +196,16 @@ function SpellDetailModal({ spell, onClose, onEdit, readOnly, isFavorite, onTogg
           )}
         </div>
 
-        {/* Description */}
-        <div className="px-6 sm:px-8 py-4 sm:py-6 overflow-y-auto flex-1 sm:text-base sm:leading-relaxed">
+        {/* Description — the scroller itself (flex-1 in the modal column, same
+            as before the scroll cue existed); ScrollHint is a sibling pinned
+            to the modal box's own bottom edge so it doesn't scroll away. */}
+        <div ref={descRef} className="px-6 sm:px-8 py-4 sm:py-6 overflow-y-auto flex-1 min-h-0 sm:text-base sm:leading-relaxed">
           {spell.notes
             ? <Markdown text={spell.notes} tone="dark" textColorOverride={bodyTextColor} />
             : <p className="text-sm text-white/25 italic">No description saved.</p>
           }
         </div>
+        <ScrollHint show={hasMore} />
       </div>
     </Modal>
   )

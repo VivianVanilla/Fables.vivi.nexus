@@ -77,6 +77,7 @@ interface FavoritesPanelProps {
   poppedOutIds:      Set<string>
   pb:                number
   statMods:          Record<string, number>
+  weaponFormBonus?:  { toHit: number; damage: number }  // flat to-hit/damage from any active Form, applied to favorited weapons too
   classes:           string[]
   onRemove:          (refId: string) => void
   onReorder:         (fromIdx: number, toIdx: number) => void
@@ -116,7 +117,7 @@ interface FavoritesPanelProps {
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function FavoritesPanel({
-  favorites, spellItems, features, familiars, monsters, poppedOutIds, pb, statMods, classes,
+  favorites, spellItems, features, familiars, monsters, poppedOutIds, pb, statMods, weaponFormBonus, classes,
   onRemove, onReorder,
   featureCategoryById, favoriteCategoryColors, tagTextColor, bodyTextColor, showKnownBadge, favoriteCategoryStyle, favoriteCategorySliderStyle, favoriteCategorySliderColors,
   classFeatureColorsByClass, classFeatureColors, classFeatureSliderColors,
@@ -238,7 +239,7 @@ export function FavoritesPanel({
             allFeatures={features.filter(f => f.id !== feat.id && f.trackable)}
             theme={theme}
             readOnly={readOnly}
-            pb={pb} statMods={statMods}
+            pb={pb} statMods={statMods} weaponFormBonus={weaponFormBonus}
             isFavorite onToggleFavorite={onToggleFavorite}
             showItemExtras={isItemFavorite}
             showMagicStar={showMagicStar}

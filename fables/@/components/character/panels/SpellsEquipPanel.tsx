@@ -133,6 +133,7 @@ interface Props {
   favorites?: FavoriteRef[]
   onToggleFeatureFavorite?: (id: string, label: string) => void
   onUpdate: (patch: Partial<CharacterData>) => void
+  weaponFormBonus?: { toHit: number; damage: number }  // flat to-hit/damage from any active Form, applied to every weapon here
 }
 
 export function SpellsEquipPanel({
@@ -143,7 +144,7 @@ export function SpellsEquipPanel({
   onAddSpell, onChangeSpell, onRemoveSpell,
   onAddMartialWeapon, onChangeFeature, onRemoveFeature, onLinkToggle,
   pendingSpellId, onAutoEditConsumed,
-  onCastSpell, favorites, onToggleFeatureFavorite, onUpdate,
+  onCastSpell, favorites, onToggleFeatureFavorite, onUpdate, weaponFormBonus,
 }: Props) {
   const [showMartialModal, setShowMartialModal] = useState(false)
   // Settings — a martial-only or caster-only character can hide the side
@@ -286,6 +287,7 @@ export function SpellsEquipPanel({
         isFavorite={favorites?.some(f => f.refId === feature.id)}
         onToggleFavorite={onToggleFeatureFavorite ? () => onToggleFeatureFavorite(feature.id, feature.name || "Item") : undefined}
         showItemExtras
+        weaponFormBonus={weaponFormBonus}
         showMagicStar={data.showMagicItemStar}
         magicItemStyle={data.magicItemStyle}
         magicItemColor={data.magicItemColor}
@@ -392,12 +394,6 @@ export function SpellsEquipPanel({
               </span>
               <span className="text-[10px] text-white/40 uppercase tracking-wider">Cantrips</span>
             </div>
-            {!!data.invocationsKnown && (
-              <div className="flex flex-col items-center leading-none gap-0.5">
-                <span className="text-lg font-bold text-white tabular-nums">{data.invocationsKnown}</span>
-                <span className="text-[10px] text-white/40 uppercase tracking-wider">Invocations</span>
-              </div>
-            )}
             {data.castButtonEnabled && onCastSpell && (
               <CastButton theme={theme} spells={spellItems.filter(s => s.castEnabled)} onCast={onCastSpell} />
             )}

@@ -85,6 +85,9 @@ interface FeatureListProps {
   showInfusedToggle?: boolean  // Artificer's Infusions list only — "Infused" checkbox per entry (Feature.infused) + a counter badge, same shape as showAttunement/attuned
   maxInfused?: number
   onChangeMaxInfused?: (n: number) => void
+  showInvocationCount?: boolean  // Eldritch Invocations list only — a "Known N/M" badge (N = entries not flagged freeInvocation, M = invocationMax), same editable-max shape as the Infused/Attuned badges
+  invocationMax?: number
+  onChangeInvocationMax?: (n: number) => void
   perItemIsInfusion?: (f: Feature) => boolean  // forces infusion-style rendering for this entry — no item-extras (rarity/weight/weapon stats — infusions don't receive rarities), its own Infused checkbox, and not draggable — regardless of the list's own showItemExtras/showInfusedToggle. Used by ItemsTab's Equipped list, which merges in currently-infused Infusions (Feature.infused) alongside armor/weapons — same record shown in both places, same look wherever it's shown, exactly like Martial-linked weapons (perItemAccentColor above) already work.
   showItemExtras?: boolean
   showMagicStar?: boolean
@@ -105,6 +108,10 @@ interface FeatureListProps {
   perItemSliderColor?: (f: Feature) => string | undefined  // overrides sliderColor per feature, same fallback rule as perItemAccentColor
   onReorder?: (newOrder: Feature[]) => void  // enables drag-to-reorder — omit to render a plain (non-draggable) list
   showAddButton?: boolean  // default true — false when a caller (ItemsTab) renders one shared "+ Add Item" button above multiple lists instead of one per list
+  formOptions?: { id: string; name: string }[]            // Infusions list only — Forms an infusion can activate
+  conditionalOptions?: { id: string; name: string }[]     // Infusions list only — Conditionals an infusion can trigger
+  weaponFormBonus?: { toHit: number; damage: number }  // weapon-rendering lists only — flat to-hit/damage from any active Form
+  onCopyInfusionToGear?: (f: Feature) => void  // Infusions list only — spins off a plain Gear item from a standalone infusion's stats
 }
 
 // Searchable grid over the same core+homebrew suggestion pool the inline
@@ -265,9 +272,10 @@ function EditableCounterBadge({ label, count, max, onChangeMax, readOnly, positi
   )
 }
 
-export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, hideAttunedBadge, showInfusedToggle, maxInfused, onChangeMaxInfused, perItemIsInfusion, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true }: FeatureListProps) {
+export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, suggestionSource, userId, favorites, onToggleFavorite, onAddPack, showAttunement, maxAttuned, onChangeMaxAttuned, hideAttunedBadge, showInfusedToggle, maxInfused, onChangeMaxInfused, perItemIsInfusion, showItemExtras, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, accentColor, accentStyle, sliderStyle, tagTextColor, bodyTextColor, sliderColor, perItemAccentColor, perItemAccentStyle, perItemSliderColor, onReorder, showAddButton = true, formOptions, conditionalOptions, weaponFormBonus, onCopyInfusionToGear, showInvocationCount, invocationMax, onChangeInvocationMax }: FeatureListProps) {
   const attunedCount = showAttunement ? items.filter(f => f.attuned).length : 0
   const infusedCount = showInfusedToggle ? items.filter(f => f.infused).length : 0
+  const invocationCount = showInvocationCount ? items.filter(f => !f.freeInvocation).length : 0
   const sensors = useDragSensors()
   // Which item is currently being dragged — drives the floating
   // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
@@ -287,7 +295,10 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
   // Shared by the normal list render below AND the DragOverlay clone, so the
   // floating "picked up" copy is pixel-identical to the row it came from.
   function renderCard(f: Feature) {
-    const isInfusion = perItemIsInfusion?.(f) ?? false
+    // Two ways a row is an infusion: this list IS the Infusions list
+    // (showInfusedToggle), or it's a mixed list — ItemsTab's Equipped — that
+    // flags its infusion rows one by one (perItemIsInfusion).
+    const isInfusion = (perItemIsInfusion?.(f) ?? false) || !!showInfusedToggle
     return (
       <FeatureEntry
         feature={f}
@@ -303,7 +314,15 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
         onAddPack={onAddPack ? packItems => onAddPack(f.id, packItems) : undefined}
         showAttunement={showAttunement}
         showInfusedToggle={isInfusion ? true : showInfusedToggle}
-        showItemExtras={isInfusion ? false : showItemExtras}
+        formOptions={formOptions}
+        conditionalOptions={conditionalOptions}
+        weaponFormBonus={weaponFormBonus}
+        onCopyToGear={isInfusion && (f.infusionStandalone ?? true) && onCopyInfusionToGear ? () => onCopyInfusionToGear(f) : undefined}
+        // A standalone infusion IS a discrete piece of gear (a weapon, armor,
+        // a wondrous item) — give it the full weapon/armor/item editor, same
+        // as anything in Gear. A non-standalone one only modifies gear you
+        // already have, so it keeps the trimmed infusion-only card.
+        showItemExtras={isInfusion ? (f.infusionStandalone ?? true) : showItemExtras}
         showMagicStar={showMagicStar}
         magicItemStyle={magicItemStyle}
         magicItemColor={magicItemColor}
@@ -337,6 +356,11 @@ export function FeatureList({ items, allFeatures, label, onAdd, onChange, onRemo
           <EditableCounterBadge label="Infused" count={infusedCount} max={maxInfused ?? 0}
             onChangeMax={onChangeMaxInfused ?? (() => {})} readOnly={readOnly || !onChangeMaxInfused}
             positiveClass="bg-amber-500/15 text-amber-300" />
+        )}
+        {showInvocationCount && (
+          <EditableCounterBadge label="Known" count={invocationCount} max={invocationMax ?? 0}
+            onChangeMax={onChangeInvocationMax ?? (() => {})} readOnly={readOnly || !onChangeInvocationMax}
+            positiveClass="bg-indigo-500/15 text-indigo-300" />
         )}
         {!readOnly && showAddButton && (
           <button type="button" onClick={onAdd}
@@ -405,9 +429,10 @@ export interface ContainerItemsListProps {
   perItemAccentColor?: (f: Feature) => string | undefined  // overrides accentColor per feature — used for Martial-linked weapons; falls back to accentColor when it returns undefined
   perItemAccentStyle?: (f: Feature) => CardStyle | undefined  // overrides accentStyle per feature, same fallback rule as perItemAccentColor
   bodyTextColor?: "black" | "white"  // Settings — global override for each card's own description text color
+  weaponFormBonus?: { toHit: number; damage: number }  // flat to-hit/damage from any active Form, applied to every weapon here
 }
 
-export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle, bodyTextColor }: ContainerItemsListProps) {
+export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemove, onLinkToggle, theme, card, readOnly, pb, statMods, userId, favorites, onToggleFavorite, showMagicStar, magicItemStyle, magicItemColor, magicItemSliderStyle, magicItemColorsByRarity, magicItemRarityColors, magicItemRaritySliderColors, pendingItemId, onAutoEditConsumed, showAddButton = true, onAddPack, onReorder, accentColor, accentStyle, perItemAccentColor, perItemAccentStyle, bodyTextColor, weaponFormBonus }: ContainerItemsListProps) {
   const sensors = useDragSensors()
   // Which item is currently being dragged — drives the floating
   // DragOverlayCard clone (see SortableItem.tsx for why the in-place row
@@ -539,6 +564,7 @@ export function ContainerItemsList({ items, allFeatures, onAdd, onChange, onRemo
         accentColor={perItemAccentColor?.(f) ?? accentColor}
         accentStyle={perItemAccentStyle?.(f) ?? accentStyle}
         bodyTextColor={bodyTextColor}
+        weaponFormBonus={weaponFormBonus}
         containerOptions={containerOptions}
         onMoveToContainer={containerId => onChange(f.id, { parentId: containerId })}
         containerContentsOpen={f.isContainer ? contentsOpen : undefined}
@@ -856,11 +882,19 @@ function ProficiencyList({ label, value, onChange, readOnly, card }: {
 // moved in here to make room — see CharacterSheet.tsx's Tab bar.
 const SUB_TABS: [InfoSubTab, string][] = [
   ["overview",   "Overview"],
-  ["raceFeats",  "Race & Feats"],
-  ["features",   "Features"],
+  ["raceFeats",  "Race & Feats"],  // relabelled per class in the render — see raceFeatsTabLabel
+  ["features",   "Class Features"],
   ["familiars",  "Familiars"],
   ["profs",      "Proficiencies"]
 ]
+
+// The "Race & Feats" subtab also holds Invocations (Warlock) and Infusions
+// (Artificer), so its label calls them out: "Race, Feats & Invocations",
+// "Race, Feats & Infusions", or "Race, Feats, Invocations & Infusions".
+function raceFeatsTabLabel(isWarlock: boolean, isArtificer: boolean): string {
+  const parts = ["Race", "Feats", ...(isWarlock ? ["Invocations"] : []), ...(isArtificer ? ["Infusions"] : [])]
+  return parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} & ${parts[parts.length - 1]}`
+}
 
 export function InfoTab({
   data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, userId,
@@ -974,7 +1008,7 @@ export function InfoTab({
             className={`px-3 py-1 text-[10px] uppercase tracking-widest rounded-full font-semibold transition-colors ${
               subTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"
             }`}>
-            {label}
+            {tab === "raceFeats" ? raceFeatsTabLabel(isWarlock, isArtificer) : label}
           </button>
         ))}
       </div>
@@ -1105,7 +1139,9 @@ export function InfoTab({
               favorites={favorites} onToggleFavorite={onToggleFavorite}
               accentColor={favAccentColor("invocation")} accentStyle={favAccentStyle("invocation")} sliderStyle={favSliderStyle("invocation")}
               tagTextColor={tagTextColor} sliderColor={favSliderColor("invocation")}
-            bodyTextColor={bodyTextColor}
+              bodyTextColor={bodyTextColor}
+              showInvocationCount invocationMax={data.invocationsKnown}
+              onChangeInvocationMax={n => update({ invocationsKnown: n })}
               onReorder={newOrder => update({ invocations: newOrder })}
             />
           )}
@@ -1130,6 +1166,26 @@ export function InfoTab({
               accentColor={favAccentColor("infusion")} accentStyle={favAccentStyle("infusion")} sliderStyle={favSliderStyle("infusion")}
               tagTextColor={tagTextColor} sliderColor={favSliderColor("infusion")}
               bodyTextColor={bodyTextColor}
+              // Infusion config in each row's edit form: the Form/Conditional
+              // it fires while infused + on-self (see FeatureEntry's infusion
+              // block). The Form is where +to-hit / +damage / AC / etc. live.
+              formOptions={(data.forms ?? []).map(fm => ({ id: fm.id, name: fm.name || "Unnamed Form" }))}
+              conditionalOptions={(data.conditionals ?? []).map(c => ({ id: c.id, name: c.name || "Unnamed Conditional" }))}
+              // "+ Gear item" on a standalone infusion — spins its stats off
+              // into a real inventory item (a one-time copy, not linked).
+              onCopyInfusionToGear={f => update({ items: [...(data.items ?? []), {
+                id: nanoid(),
+                name: f.name || "Infused Item",
+                description: f.description,
+                category: f.equipKind ? "armor" : (f.category ?? "item"),
+                equipKind: f.equipKind,
+                itemMeta: f.itemMeta ? { ...f.itemMeta } : undefined,
+                weight: f.weight,
+                value: f.value,
+                rarity: f.rarity,
+                isMagicItem: f.isMagicItem ?? true,
+                requiresAttunement: f.requiresAttunement,
+              }] })}
               // Attunement's real, editable count+max now lives on the Items
               // tab's Equipped list (which merges in infused Infusions —
               // see ItemsTab.tsx) — showAttunement here just keeps each

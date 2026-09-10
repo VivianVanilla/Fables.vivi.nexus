@@ -26,13 +26,14 @@ interface ItemsTabProps {
   readOnly: boolean
   pb: number
   statMods: Record<string, number>
+  weaponFormBonus?: { toHit: number; damage: number }  // flat to-hit/damage from any active Form, applied to every weapon
   userId?: string | null
   favorites: FavoriteRef[]
   onToggleFavorite: (id: string, label: string) => void
 }
 
 export function ItemsTab({
-  data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, pb, statMods, userId,
+  data, update, onChangeFeature, onRemoveFeature, onLinkToggle, theme, card, readOnly, pb, statMods, weaponFormBonus, userId,
   favorites, onToggleFavorite,
 }: ItemsTabProps) {
   // Opens a newly-added Carried Item straight into its edit form instead of
@@ -128,7 +129,10 @@ export function ItemsTab({
   // a favorite pointing at one when that happens.
   const equippedItems = [
     ...(data.items ?? []).filter(i => i.category === "armor" && i.equipped && !i.martialOnly),
-    ...(data.infusions ?? []).filter(f => f.infused),
+    // Only infusions flagged as a discrete piece of gear (Feature.infusionStandalone,
+    // unset = true for back-compat) — a "+1 to armor I already wear" infusion
+    // stays out of the Equipped list so it doesn't read as its own item.
+    ...(data.infusions ?? []).filter(f => f.infused && (f.infusionStandalone ?? true)),
   ]
 
   // Settings' "Modules and Font Size" — sheet-wide text color switch
@@ -169,6 +173,9 @@ export function ItemsTab({
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle} perItemSliderColor={martialSliderColor}
           bodyTextColor={bodyTextColor}
+          weaponFormBonus={weaponFormBonus}
+          formOptions={(data.forms ?? []).map(fm => ({ id: fm.id, name: fm.name || "Unnamed Form" }))}
+          conditionalOptions={(data.conditionals ?? []).map(c => ({ id: c.id, name: c.name || "Unnamed Conditional" }))}
           onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => i.category === "armor" && !!i.equipped && !i.martialOnly, newOrder.filter(f => !infusionIds.has(f.id))) })}
         />
         {/* Everything not equipped lands here — armor/weapons you own but
@@ -189,6 +196,7 @@ export function ItemsTab({
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}
           bodyTextColor={bodyTextColor}
+          weaponFormBonus={weaponFormBonus}
           pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}
           onReorder={newOrder => update({ items: reorderSubset(data.items ?? [], i => !(i.category === "armor" && !!i.equipped) && !i.martialOnly, newOrder) })}
         />

@@ -88,7 +88,7 @@ export function SpellcastingModal({
           <div className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">Known / Prepared</p>
             <div className="grid grid-cols-4 gap-3">
-              {([["Cantrips", "cantripsKnown"], ["Known", "spellsKnown"], ["Prepared", "spellsPrepared"], ["Invocations", "invocationsKnown"]] as const).map(([label, key]) => (
+              {([["Cantrips", "cantripsKnown"], ["Known", "spellsKnown"], ["Prepared", "spellsPrepared"]] as const).map(([label, key]) => (
                 <label key={key} className="flex flex-col gap-1">
                   <span className="text-xs text-white/40">{label}</span>
                   <NumInput value={(data[key] as number | undefined) ?? ""} disabled={readOnly}

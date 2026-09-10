@@ -72,7 +72,7 @@ export function ConditionsCard({ card, conditions, readOnly, onShowPicker, onRem
         {!readOnly && (
           <button type="button" onClick={onShowPicker}
             className="text-xs px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors">
-            + Add
+            + 
           </button>
         )}
       </div>
