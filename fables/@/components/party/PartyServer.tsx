@@ -18,6 +18,7 @@ import { MAP_PARTY_CODE } from "@/components/shared/constants"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
 import { usePartyVitals } from "./usePartyVitals"
+import { useOnResume } from "@/components/shared/useOnResume"
 import { ChatPane } from "./ChatPane"
 import { MapOverlay } from "../map/MapOverlay"
 import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
@@ -47,42 +48,62 @@ export function PartyServer({
   accentColor?: string
 }) {
   const { updateObject } = useUserContext()
-  const { channels, members, dmUserId } = usePartyRoster(partyCode, { presetCampaign: campaign, presetMembers: partyMembers })
+  // `activeCampaign` resolves to the prop when the DM opens this from the
+  // campaign view, or to the row usePartyRoster fetches when a player opens
+  // it from their sheet (the prop is undefined there). Everything below reads
+  // `activeCampaign`, not the raw `campaign` prop — using the prop directly
+  // is why discreet mode did nothing on the player side.
+  const { channels, members, dmUserId, campaign: activeCampaign } =
+    usePartyRoster(partyCode, { presetCampaign: campaign, presetMembers: partyMembers })
   const { messages, sendMessage, deleteMessage, editMessage } = usePartyMessages(partyCode, currentUserId)
   const vitals = usePartyVitals(partyCode)
   const suffix = useChannelSuffix()
 
-  // "Discreet" characters (map campaign, DM-controlled — see PartyRosterPanel).
-  // Stored on the campaign object; the DM's copy of `campaign` updates
-  // through context immediately, other players get it via this realtime sub
-  // since nothing else subscribes to the campaign row.
-  const campaignDiscreet = ((safeParseJson(campaign?.data) as { discreetCharacterIds?: string[] })?.discreetCharacterIds) ?? []
+  // "Discreet" characters (map campaign, DM-controlled). Stored on the
+  // campaign object; the DM's copy updates through context immediately,
+  // other players get it via this realtime sub since usePartyRoster fetches
+  // the campaign row only once and nothing else subscribes to it.
+  const campaignDiscreet = ((safeParseJson(activeCampaign?.data) as { discreetCharacterIds?: string[] })?.discreetCharacterIds) ?? []
   const [liveDiscreet, setLiveDiscreet] = useState<string[] | null>(null)
   const discreetIds = isDM ? campaignDiscreet : (liveDiscreet ?? campaignDiscreet)
 
   useEffect(() => {
-    if (!campaign?.id) return
+    const campaignId = activeCampaign?.id
+    if (!campaignId) return
     const ch = supabase
-      .channel(`party-campaign:${campaign.id}:${suffix}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "objects", filter: `id=eq.${campaign.id}` },
+      .channel(`party-campaign:${campaignId}:${suffix}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "objects", filter: `id=eq.${campaignId}` },
         payload => {
           const d = safeParseJson((payload.new as { data: unknown }).data) as { discreetCharacterIds?: string[] }
           setLiveDiscreet(d.discreetCharacterIds ?? [])
         })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [campaign?.id, suffix])
+  }, [activeCampaign?.id, suffix])
+
+  // Safety net for the realtime sub above (campaign-row events to a
+  // non-owner player can be dropped while the socket was down) — re-pull the
+  // discreet list whenever the tab/app comes back into view.
+  useOnResume(() => {
+    const campaignId = activeCampaign?.id
+    if (!campaignId || isDM) return
+    supabase.from("objects").select("data").eq("id", campaignId).maybeSingle().then(({ data: row }) => {
+      if (!row) return
+      const d = safeParseJson((row as { data: unknown }).data) as { discreetCharacterIds?: string[] }
+      setLiveDiscreet(d.discreetCharacterIds ?? [])
+    })
+  })
 
   const myCharacterId = members.find(m => m.userId === currentUserId)?.characterId
   const iAmDiscreet = !!myCharacterId && discreetIds.includes(myCharacterId)
   const showDiscreetToggle = isDM && partyCode === MAP_PARTY_CODE
 
   function toggleDiscreet(characterId: string) {
-    if (!campaign) return
-    const cd = safeParseJson(campaign.data) as Record<string, unknown>
+    if (!activeCampaign) return
+    const cd = safeParseJson(activeCampaign.data) as Record<string, unknown>
     const cur = (cd.discreetCharacterIds as string[] | undefined) ?? []
     const next = cur.includes(characterId) ? cur.filter(id => id !== characterId) : [...cur, characterId]
-    updateObject(campaign.id, { data: { ...cd, discreetCharacterIds: next } as unknown as JSON }).catch(e => console.error(e))
+    updateObject(activeCampaign.id, { data: { ...cd, discreetCharacterIds: next } as unknown as JSON }).catch(e => console.error(e))
   }
 
   const [activeView, setActiveView] = useState<ActiveView>({ type: "channel", id: DEFAULT_CHANNEL.id })
@@ -155,9 +176,9 @@ export function PartyServer({
   }
 
   function writeChannels(next: Channel[]) {
-    if (!campaign) return
-    const data = safeParseJson(campaign.data) as Record<string, unknown>
-    updateObject(campaign.id, { data: { ...data, channels: next } as unknown as JSON }).catch(e => console.error(e))
+    if (!activeCampaign) return
+    const data = safeParseJson(activeCampaign.data) as Record<string, unknown>
+    updateObject(activeCampaign.id, { data: { ...data, channels: next } as unknown as JSON }).catch(e => console.error(e))
   }
 
   function submitNewChannel() {
