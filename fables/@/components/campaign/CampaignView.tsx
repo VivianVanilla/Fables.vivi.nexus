@@ -3,10 +3,10 @@ import { createPortal } from "react-dom"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { safeParseJson, computeAc, nanoid } from "@/components/shared/utils"
 import type { Feature } from "@/components/shared/types"
-import { SAVE_TO_ABILITY, ALL_CONDITIONS, MAP_PARTY_CODES } from "@/components/shared/constants"
+import { SAVE_TO_ABILITY, ALL_CONDITIONS, MAP_PARTY_CODES, DEFAULT_ACCENT_COLOR, type CardStyle } from "@/components/shared/constants"
 import { CharacterSheet } from "@/components/character/CharacterSheet"
 import { FeatureSuggestionPickerModal } from "@/components/character/tabs/InfoTab"
-import { FeatureEntry, itemPatchFromSuggestion, type Suggestion } from "@/components/character/entries/FeatureEntry"
+import { FeatureEntry, itemPatchFromSuggestion, categoryAccentStyle, type Suggestion } from "@/components/character/entries/FeatureEntry"
 import { DamagePills } from "@/components/character/ui/DamageFields"
 import { computeWeaponDamageSegments } from "@/components/shared/damageTypes"
 import { THEMES, DEFAULT_THEME } from "@/components/shared/themes"
@@ -33,12 +33,48 @@ interface CampaignData {
   // "High Pressure Mode" — a one-off feature for the MAP_PARTY_CODES campaigns
   highPressureModeActive?: boolean
   highPressureDots?: Record<string, number>
-  // The Inventory tab's DM-side holding area (MAP_PARTY_CODES only) — items
-  // picked from documentation but not yet handed to a player, or taken back
-  // from one. Real Feature-shaped items, same as CharData.items — a "give"
-  // moves an entry out of here onto a player's actual character sheet, not a
-  // copy of it. See the Inventory tab section further down.
+  // The Inventory tab is opt-in per campaign, off by default — toggled from
+  // the Party Members header in Overview. GA as of the sub-stash rework
+  // below (used to be hardcoded to MAP_PARTY_CODES campaigns only).
+  inventoryEnabled?: boolean
+  // Named stash containers for the Inventory tab (see the InventoryStash
+  // component) — lets a DM sort loot into groups ("Shop", "Vault", "Quest
+  // Rewards") instead of one flat pile. Real Feature-shaped items, same as
+  // CharData.items — a "give" moves an entry out of a stash onto a player's
+  // actual character sheet, not a copy of it. `dmStash` is the old
+  // single-stash shape from before sub-stashes existed; resolveStashes()
+  // below reads it as a fallback (migrated to a stash named "Stash") for
+  // campaigns that used the tab before this, but every write from here on
+  // goes through `stashes`.
   dmStash?: Feature[]
+  stashes?: ItemStash[]
+  // Campaign Settings (see CampaignSettingsModal) — cosmetic only, no
+  // mechanical effect. `backgroundColor` overrides CampaignView's own
+  // bg-card; unset keeps the normal theme-driven background. `stashStyle`/
+  // `stashAccentColor` apply to every InventoryStash card the same way a
+  // Feature Styling category color applies to its cards on the character
+  // sheet (same categoryAccentStyle helper, see FeatureEntry.tsx).
+  backgroundColor?: string
+  stashStyle?: CardStyle
+  stashAccentColor?: string
+  rosterCardStyle?: CardStyle
+  rosterCardAccentColor?: string
+}
+
+interface ItemStash {
+  id: string
+  name: string
+  items: Feature[]
+}
+
+// Migration shim for campaigns that used the Inventory tab before
+// sub-stashes existed — treats an old flat `dmStash` as one stash named
+// "Stash". Read-only; every mutator in useCampaignRoster always writes
+// `stashes`, so the first write after this lands migrates it for good.
+function resolveStashes(data: CampaignData): ItemStash[] {
+  if (data.stashes) return data.stashes
+  if (data.dmStash?.length) return [{ id: "stash:legacy", name: "Stash", items: data.dmStash }]
+  return []
 }
 
 interface CharData {
@@ -244,10 +280,11 @@ function usePartyActivityStats(partyCode: string) {
 // activity — an owner_id only shows up in the count queries once they've
 // actually done something, so a purely count-driven list would silently
 // drop anyone who hasn't dropped a pin or written a note yet.
-function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
+function PartyActivitySection({ partyCode, partyMembers, currentUserId, cardStyle }: {
   partyCode: string
   partyMembers: SidebarObject[]
   currentUserId: string
+  cardStyle?: React.CSSProperties
 }) {
   const { pingCounts, noteCounts, npcsAddedCounts, loaded } = usePartyActivityStats(partyCode)
   const knownOwnerIds = Array.from(new Set(partyMembers.map(c => c.owner_id).concat(currentUserId ? [currentUserId] : [])))
@@ -266,7 +303,7 @@ function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">Party Activity</span>
-      <div className="rounded-xl bg-muted ring-1 ring-border overflow-hidden">
+      <div className="rounded-xl bg-muted ring-1 ring-border overflow-hidden" style={cardStyle}>
         {!loaded ? (
           <p className="text-xs text-foreground/30 italic text-center py-4">Loading…</p>
         ) : rows.length === 0 ? (
@@ -335,23 +372,62 @@ function useCampaignRoster(campaign: SidebarObject) {
     updateObject(campaign.id, { data: { ...campaignData, highPressureDots: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
   }
 
-  // Inventory tab (MAP_PARTY_CODES only) — the DM stash lives on campaign.data
-  // (same storage pattern as everything else in this hook), but a party
-  // member's items are their REAL CharData.items, written through the same
-  // RLS-backed path as updatePartyMemberHp/addConditionToMember above. A
-  // "give"/"take"/"trade" drag in the tab below is just one or two of these
-  // calls — nothing here decides which; see InventoryTab's moveItem.
-  function addToStash(items: Feature[]) {
-    const current = campaignData.dmStash ?? []
-    updateObject(campaign.id, { data: { ...campaignData, dmStash: [...current, ...items] } as unknown as JSON }).catch(e => console.error(e))
+  // Inventory tab (opt-in, see CampaignData.inventoryEnabled and the toggle
+  // in Overview) — stashes live on campaign.data (same storage pattern as
+  // everything else in this hook), but a party member's items are their
+  // REAL CharData.items, written through the same RLS-backed path as
+  // updatePartyMemberHp/addConditionToMember above. A "give"/"take"/"trade"
+  // drag in the tab below is just one or two of these calls — nothing here
+  // decides which; see InventoryTab's moveItem.
+  function toggleInventoryEnabled() {
+    updateObject(campaign.id, { data: { ...campaignData, inventoryEnabled: !campaignData.inventoryEnabled } as unknown as JSON }).catch(e => console.error(e))
   }
-  function removeFromStash(itemId: string) {
-    const current = campaignData.dmStash ?? []
-    updateObject(campaign.id, { data: { ...campaignData, dmStash: current.filter(i => i.id !== itemId) } as unknown as JSON }).catch(e => console.error(e))
+  function addStash(name: string) {
+    const stashes = resolveStashes(campaignData)
+    const stash: ItemStash = { id: `stash:${nanoid()}`, name, items: [] }
+    updateObject(campaign.id, { data: { ...campaignData, stashes: [...stashes, stash] } as unknown as JSON }).catch(e => console.error(e))
   }
-  function updateStashItem(item: Feature) {
-    const current = campaignData.dmStash ?? []
-    updateObject(campaign.id, { data: { ...campaignData, dmStash: current.map(i => i.id === item.id ? item : i) } as unknown as JSON }).catch(e => console.error(e))
+  function renameStash(stashId: string, name: string) {
+    const stashes = resolveStashes(campaignData)
+    updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.map(s => s.id === stashId ? { ...s, name } : s) } as unknown as JSON }).catch(e => console.error(e))
+  }
+  // Guarded here, not just by InventoryStash's disabled button — a stash's
+  // items would otherwise vanish along with it with no undo, and a button
+  // being disabled in the UI today is no guarantee some other caller won't
+  // reach this function directly later.
+  function deleteStash(stashId: string) {
+    const stashes = resolveStashes(campaignData)
+    const stash = stashes.find(s => s.id === stashId)
+    if (!stash || stash.items.length > 0) return
+    updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.filter(s => s.id !== stashId) } as unknown as JSON }).catch(e => console.error(e))
+  }
+  // Campaign Settings — cosmetic, see CampaignData's own comment above.
+  function updateBackgroundColor(color: string | undefined) {
+    updateObject(campaign.id, { data: { ...campaignData, backgroundColor: color } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateStashStyle(style: CardStyle) {
+    updateObject(campaign.id, { data: { ...campaignData, stashStyle: style } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateStashAccentColor(color: string) {
+    updateObject(campaign.id, { data: { ...campaignData, stashAccentColor: color } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateRosterCardStyle(style: CardStyle) {
+    updateObject(campaign.id, { data: { ...campaignData, rosterCardStyle: style } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateRosterCardAccentColor(color: string) {
+    updateObject(campaign.id, { data: { ...campaignData, rosterCardAccentColor: color } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function addToStash(stashId: string, items: Feature[]) {
+    const stashes = resolveStashes(campaignData)
+    updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.map(s => s.id === stashId ? { ...s, items: [...s.items, ...items] } : s) } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function removeFromStash(stashId: string, itemId: string) {
+    const stashes = resolveStashes(campaignData)
+    updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.map(s => s.id === stashId ? { ...s, items: s.items.filter(i => i.id !== itemId) } : s) } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateStashItem(stashId: string, item: Feature) {
+    const stashes = resolveStashes(campaignData)
+    updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.map(s => s.id === stashId ? { ...s, items: s.items.map(i => i.id === item.id ? item : i) } : s) } as unknown as JSON }).catch(e => console.error(e))
   }
   async function setMemberItems(characterId: string, items: Feature[]) {
     const char = partyMembers.find(c => c.id === characterId)
@@ -495,6 +571,9 @@ function useCampaignRoster(campaign: SidebarObject) {
     campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
     updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
     toggleHighPressureMode, updateHighPressureDots,
+    toggleInventoryEnabled, addStash, renameStash, deleteStash,
+    updateBackgroundColor, updateStashStyle, updateStashAccentColor,
+    updateRosterCardStyle, updateRosterCardAccentColor,
     addToStash, removeFromStash, updateStashItem, setMemberItems,
   }
 }
@@ -503,16 +582,48 @@ export function CampaignView({ campaign }: Props) {
   const { user } = useUserContext()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<CampaignTab>("overview")
+  const [showSettings, setShowSettings] = useState(false)
+  // Items picked/created from the Inventory tab's top-level "+" buttons,
+  // waiting to be dragged onto a stash or player — see the floating cluster
+  // in the Inventory tab render below. Lifted up here (not local to
+  // InventoryTab) so switching to another tab and back doesn't lose them;
+  // still lost on an actual page reload, same as any other in-progress,
+  // not-yet-saved-anywhere draft.
+  const [floatingItems, setFloatingItems] = useState<Feature[]>([])
   const {
     campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
     updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
     toggleHighPressureMode, updateHighPressureDots,
+    toggleInventoryEnabled, addStash, renameStash, deleteStash,
+    updateBackgroundColor, updateStashStyle, updateStashAccentColor,
+    updateRosterCardStyle, updateRosterCardAccentColor,
     addToStash, removeFromStash, updateStashItem, setMemberItems,
   } = useCampaignRoster(campaign)
 
-  const tabs: CampaignTab[] = MAP_PARTY_CODES.includes(partyCode)
+  const stashes = resolveStashes(campaignData)
+  const rosterCardStyle = categoryAccentStyle(campaignData.rosterCardAccentColor, campaignData.rosterCardStyle)
+  // Campaign Settings' background color — applied uniformly to the header,
+  // tabs bar, and every plain card in Overview (Party Code, the "no
+  // characters" placeholder, Party Activity), not just the root behind
+  // them, so picking a background actually recolors the whole view instead
+  // of only the strip of it those opaque bg-card/bg-muted surfaces don't
+  // cover. Player roster cards and stash shelves keep their own separate
+  // style controls (Settings' Party Card / Stash Appearance) rather than
+  // picking this up too.
+  const customBgStyle = campaignData.backgroundColor ? { backgroundColor: campaignData.backgroundColor } : undefined
+
+  // Inventory is opt-in per campaign (GA — any campaign can turn it on, not
+  // just MAP_PARTY_CODES) via the toggle in Overview below.
+  const tabs: CampaignTab[] = campaignData.inventoryEnabled
     ? ["overview", "initiative", "inventory", "chat"]
     : ["overview", "initiative", "chat"]
+
+  // If a DM turns the setting off while sitting on the tab, there'd be no
+  // button left to get back to it — bounce to Overview instead of leaving
+  // it stranded.
+  useEffect(() => {
+    if (activeTab === "inventory" && !campaignData.inventoryEnabled) setActiveTab("overview")
+  }, [activeTab, campaignData.inventoryEnabled])
 
   const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
   const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
@@ -567,17 +678,35 @@ export function CampaignView({ campaign }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 text-foreground bg-card rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 text-foreground bg-card rounded-xl overflow-hidden"
+      style={customBgStyle}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-foreground/10 bg-card shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-foreground/10 bg-card shrink-0" style={customBgStyle}>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold tracking-wide truncate">{campaign.name}</p>
           <p className="text-[10px] text-foreground/40 uppercase tracking-widest">Campaign · DM</p>
         </div>
+        <button type="button" onClick={() => setShowSettings(true)} title="Campaign Settings"
+          className="text-foreground/40 hover:text-foreground text-sm p-1 flex items-center justify-center rounded-md hover:bg-foreground/10 transition-colors ">
+          Settings
+        </button>
       </div>
 
+      {showSettings && (
+        <CampaignSettingsModal
+          campaignData={campaignData}
+          onToggleInventory={toggleInventoryEnabled}
+          onChangeBackground={updateBackgroundColor}
+          onChangeStashStyle={updateStashStyle}
+          onChangeStashAccentColor={updateStashAccentColor}
+          onChangeRosterCardStyle={updateRosterCardStyle}
+          onChangeRosterCardAccentColor={updateRosterCardAccentColor}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b border-foreground/10 bg-card shrink-0">
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-foreground/10 bg-card shrink-0" style={customBgStyle}>
         {tabs.map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-foreground/20 text-foreground" : "text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5"}`}>
@@ -594,12 +723,19 @@ export function CampaignView({ campaign }: Props) {
         <InitiativeTracker campaign={campaign} partyMembers={partyMembers} onUpdateCharacterHp={updatePartyMemberHp} />
       )}
 
-      {/* Inventory tab (KOQK21 only) */}
+      {/* Inventory tab (opt-in, see the toggle in Overview) */}
       {activeTab === "inventory" && (
         <InventoryTab
           partyMembers={partyMembers}
-          dmStash={campaignData.dmStash ?? []}
+          stashes={stashes}
+          stashStyle={campaignData.stashStyle}
+          stashAccentColor={campaignData.stashAccentColor}
+          floatingItems={floatingItems}
+          setFloatingItems={setFloatingItems}
           userId={user?.id}
+          addStash={addStash}
+          renameStash={renameStash}
+          deleteStash={deleteStash}
           addToStash={addToStash}
           removeFromStash={removeFromStash}
           updateStashItem={updateStashItem}
@@ -631,7 +767,7 @@ export function CampaignView({ campaign }: Props) {
       {activeTab === "overview" && <div className="flex flex-col gap-4 p-4 overflow-auto flex-1">
 
         {/* Party Code card */}
-        <div className="rounded-xl bg-muted ring-1 ring-border p-4 flex flex-col gap-2">
+        <div className="rounded-xl bg-muted ring-1 ring-border p-4 flex flex-col gap-2" style={customBgStyle}>
           <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">Party Code</span>
           {partyCode ? (
             <div className="flex items-center gap-3">
@@ -677,7 +813,7 @@ export function CampaignView({ campaign }: Props) {
           )}
 
           {partyCode !== "" && partyMembers.length === 0 && (
-            <div className="rounded-xl bg-muted ring-1 ring-border p-4 text-center">
+            <div className="rounded-xl bg-muted ring-1 ring-border p-4 text-center" style={customBgStyle}>
               <p className="text-xs text-foreground/40 italic">No characters have joined yet.</p>
               <p className="text-[10px] text-foreground/30 mt-1">Share the party code above with your players.</p>
             </div>
@@ -702,12 +838,13 @@ export function CampaignView({ campaign }: Props) {
               onKick={() => kickMember(char.id)}
               onAddCondition={name => addConditionToMember(char.id, name)}
               onRemoveCondition={id => removeConditionFromMember(char.id, id)}
+              cardStyle={rosterCardStyle}
             />
           ))}
         </div>
 
         {user?.email === ACTIVITY_STATS_EMAIL && (
-          <PartyActivitySection partyCode={partyCode} partyMembers={partyMembers} currentUserId={user?.id ?? ""} />
+          <PartyActivitySection partyCode={partyCode} partyMembers={partyMembers} currentUserId={user?.id ?? ""} cardStyle={customBgStyle} />
         )}
       </div>}
     </div>
@@ -716,22 +853,134 @@ export function CampaignView({ campaign }: Props) {
 
 
 
-function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromStash, updateStashItem, setMemberItems, notifyItemTaken }: {
+// ── Campaign Settings modal ──────────────────────────────────────────────
+// Cosmetic + feature-flag controls that don't belong cluttering the
+// Overview body — Inventory on/off (was a small toggle button buried in the
+// Party Members row; moved here so it isn't the one settings control just
+// hanging out unlabeled among the roster tools), and the Inventory tab's
+// own look (per-stash accent, and the campaign view's own background).
+const CARD_STYLES: { value: CardStyle; label: string }[] = [
+  { value: "none", label: "Plain" },
+  { value: "outline", label: "Outline" },
+  { value: "galaxy", label: "Background" },
+]
+
+// Style-buttons + color-swatch row shared by Stash Appearance and Party
+// Card Appearance below — same "none/outline/galaxy" + accent color shape
+// as a character sheet's own Feature Styling category (categoryAccentStyle
+// is what actually applies whatever gets picked here to the real cards).
+function CardStylePicker({ style, color, onChangeStyle, onChangeColor }: {
+  style: CardStyle
+  color?: string
+  onChangeStyle: (style: CardStyle) => void
+  onChangeColor: (color: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {CARD_STYLES.map(s => (
+        <button key={s.value} type="button" onClick={() => onChangeStyle(s.value)}
+          className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${style === s.value ? "bg-white/20 text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}>
+          {s.label}
+        </button>
+      ))}
+      <input type="color" value={color ?? DEFAULT_ACCENT_COLOR} onChange={e => onChangeColor(e.target.value)}
+        title="Accent color" className="size-7 rounded-md border border-white/15 bg-transparent cursor-pointer" />
+    </div>
+  )
+}
+
+function CampaignSettingsModal({ campaignData, onToggleInventory, onChangeBackground, onChangeStashStyle, onChangeStashAccentColor, onChangeRosterCardStyle, onChangeRosterCardAccentColor, onClose }: {
+  campaignData: CampaignData
+  onToggleInventory: () => void
+  onChangeBackground: (color: string | undefined) => void
+  onChangeStashStyle: (style: CardStyle) => void
+  onChangeStashAccentColor: (color: string) => void
+  onChangeRosterCardStyle: (style: CardStyle) => void
+  onChangeRosterCardAccentColor: (color: string) => void
+  onClose: () => void
+}) {
+  return (
+    <Modal onClose={onClose}>
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(480px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+          <p className="text-sm font-bold text-white">Campaign Settings</p>
+          <button type="button" onClick={onClose}
+            className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-5 overflow-y-auto">
+          <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <div>
+              <p className="text-sm font-semibold text-white">Inventory Tab</p>
+              <p className="text-xs text-white/40 mt-0.5">Adds an Inventory tab for sorting and handing out party loot.</p>
+            </div>
+            <input type="checkbox" checked={!!campaignData.inventoryEnabled} onChange={onToggleInventory}
+              className="size-5 accent-violet-500 shrink-0 cursor-pointer" />
+          </label>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-semibold text-white">Stash Appearance</p>
+            <CardStylePicker style={campaignData.stashStyle ?? "none"} color={campaignData.stashAccentColor}
+              onChangeStyle={onChangeStashStyle} onChangeColor={onChangeStashAccentColor} />
+            <p className="text-[10px] text-white/30">Applies to every stash shelf in the Inventory tab.</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-semibold text-white">Party Card Appearance</p>
+            <CardStylePicker style={campaignData.rosterCardStyle ?? "none"} color={campaignData.rosterCardAccentColor}
+              onChangeStyle={onChangeRosterCardStyle} onChangeColor={onChangeRosterCardAccentColor} />
+            <p className="text-[10px] text-white/30">Applies to every party member's card in Overview and the compact roster panel.</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-semibold text-white">Campaign Background</p>
+            <div className="flex items-center gap-2">
+              <input type="color" value={campaignData.backgroundColor ?? "#18181b"}
+                onChange={e => onChangeBackground(e.target.value)}
+                title="Campaign background color"
+                className="size-7 rounded-md border border-white/15 bg-transparent cursor-pointer" />
+              {campaignData.backgroundColor && (
+                <button type="button" onClick={() => onChangeBackground(undefined)}
+                  className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-white/50 hover:text-white/80 transition-colors">
+                  Reset to default
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, floatingItems, setFloatingItems, userId, addStash, renameStash, deleteStash, addToStash, removeFromStash, updateStashItem, setMemberItems, notifyItemTaken }: {
   partyMembers: SidebarObject[]
-  dmStash: Feature[]
+  stashes: ItemStash[]
+  stashStyle?: CardStyle
+  stashAccentColor?: string
+  floatingItems: Feature[]
+  setFloatingItems: React.Dispatch<React.SetStateAction<Feature[]>>
   userId?: string | null
-  addToStash: (items: Feature[]) => void
-  removeFromStash: (itemId: string) => void
-  updateStashItem: (item: Feature) => void
+  addStash: (name: string) => void
+  renameStash: (stashId: string, name: string) => void
+  deleteStash: (stashId: string) => void
+  addToStash: (stashId: string, items: Feature[]) => void
+  removeFromStash: (stashId: string, itemId: string) => void
+  updateStashItem: (stashId: string, item: Feature) => void
   setMemberItems: (characterId: string, items: Feature[]) => void
   notifyItemTaken: (ownerId: string) => void
 }) {
   const [showPicker, setShowPicker] = useState(false)
-  // Non-null while the "+ Custom Item" modal is open, editing this
-  // in-progress draft — same blank-Feature-then-edit flow ItemsTab.tsx uses
-  // for its own "+ Add Item", just surfaced in a modal here since there's no
-  // underlying list card for it to expand into yet.
+  // Non-null while the item-editor modal is open. `creatingItemStashId`
+  // says where the item being edited actually lives right now: null = a
+  // brand-new draft that hasn't landed anywhere yet (Save adds it to the
+  // floating cluster below), "floating" = an existing floating item being
+  // tweaked in place, "stash:<id>" = an existing item in that stash. Same
+  // blank-Feature-then-edit flow ItemsTab.tsx uses for its own "+ Add
+  // Item", just surfaced in a modal here since there's no underlying list
+  // card for it to expand into yet.
   const [creatingItem, setCreatingItem] = useState<Feature | null>(null)
+  const [creatingItemStashId, setCreatingItemStashId] = useState<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
   // The item mid-drag, kept in a ref rather than state — a drag gesture
   // fires dragover continuously, and re-rendering on every one of those
@@ -740,21 +989,27 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
   const dragRef = useRef<{ item: Feature; from: string } | null>(null)
 
   const memberItems = (m: SidebarObject) => (safeParseJson(m.data) as CharData).items ?? []
+  // Stash ids are always "stash:<nanoid>" (see addStash) — character ids
+  // never look like that, so this is enough to tell a drag's endpoint apart
+  // without threading a separate "kind" flag through drag state. Floating
+  // items use the literal id "floating" — there's only ever one such spot.
+  const isStash = (id: string) => id.startsWith("stash:")
 
   function moveItem(item: Feature, from: string, to: string) {
     if (from === to) return
-    if (from === "stash") removeFromStash(item.id)
+    if (from === "floating") setFloatingItems(prev => prev.filter(i => i.id !== item.id))
+    else if (isStash(from)) removeFromStash(from, item.id)
     else {
       const src = partyMembers.find(m => m.id === from)
       if (src) {
         setMemberItems(from, memberItems(src).filter(i => i.id !== item.id))
-        // Whatever it went to — the stash, or straight to another player —
+        // Whatever it went to — a stash, or straight to another player —
         // this player's pack is lighter by one item, so they get the notice
         // either way.
         notifyItemTaken(src.owner_id)
       }
     }
-    if (to === "stash") addToStash([item])
+    if (isStash(to)) addToStash(to, [item])
     else {
       const dst = partyMembers.find(m => m.id === to)
       if (dst) setMemberItems(to, [...memberItems(dst), item])
@@ -763,9 +1018,9 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
 
   // Mirrors ItemsTab.tsx's addItemFromSuggestion/addPackToInventory exactly
   // (same conversion, same pack-explosion into one Feature per pack item),
-  // just landing in the stash instead of a character's own `items` — so a
-  // magic weapon/armor picked here carries its full stat block, not just a
-  // name.
+  // just landing in the floating cluster instead of a character's own
+  // `items` — so a magic weapon/armor picked here carries its full stat
+  // block, not just a name.
   function pickToFeatures(s: Suggestion): Feature[] {
     if (s.meta?.item_type === "pack" && s.meta.pack_items) {
       return s.meta.pack_items.map(pi => ({
@@ -777,6 +1032,37 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
     const blank: Feature = { id: nanoid(), name: s.name, category: "item" }
     const patch = itemPatchFromSuggestion("item", s, blank)
     return [{ ...blank, description: s.description, ...patch }]
+  }
+
+  function openNewItem() {
+    setCreatingItem({ id: nanoid(), name: "", category: "item" })
+    setCreatingItemStashId(null)
+  }
+  function openFloatingItem(item: Feature) {
+    setCreatingItem(item)
+    setCreatingItemStashId("floating")
+  }
+  function openStashItem(stashId: string, item: Feature) {
+    setCreatingItem(item)
+    setCreatingItemStashId(stashId)
+  }
+  function closeItemEditor() {
+    setCreatingItem(null)
+    setCreatingItemStashId(null)
+  }
+  function saveItemEditor() {
+    if (!creatingItem) return
+    if (creatingItemStashId === null) setFloatingItems(prev => [...prev, creatingItem])
+    else if (creatingItemStashId === "floating") setFloatingItems(prev => prev.map(i => i.id === creatingItem.id ? creatingItem : i))
+    else updateStashItem(creatingItemStashId, creatingItem)
+    closeItemEditor()
+  }
+  function removeFromItemEditor() {
+    if (!creatingItem) return
+    if (creatingItemStashId === "floating") setFloatingItems(prev => prev.filter(i => i.id !== creatingItem.id))
+    else if (creatingItemStashId) removeFromStash(creatingItemStashId, creatingItem.id)
+    // null (never saved anywhere) — nothing to remove, just close.
+    closeItemEditor()
   }
 
   function startDrag(item: Feature, from: string) {
@@ -793,31 +1079,48 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
     if (d) moveItem(d.item, d.from, colId)
   }
 
+  const stashCardStyle = categoryAccentStyle(stashAccentColor, stashStyle)
+
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-4 gap-3">
+    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto p-4 gap-4">
       <div className="flex items-center justify-between gap-3 shrink-0">
-        
+        <div>
+          <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold block">Party Inventory</span>
+          <p className="text-[10px] text-foreground/30 mt-0.5">
+            Drag an item between a stash and a player's column to give, take, or trade it — changes write straight to each player's real Items tab.
+            Only use this if your players consent to playing with these rules; otherwise, having items appear or vanish without warning can feel intrusive.
+          </p>
+        </div>
         <div className="flex items-center gap-2 shrink-0">
           <button type="button" onClick={() => setShowPicker(true)}
             className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 text-foreground/80 font-semibold transition-colors">
             + From Documentation
           </button>
-          <button type="button" onClick={() => setCreatingItem({ id: nanoid(), name: "", category: "item" })}
+          <button type="button" onClick={openNewItem}
             className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 text-foreground/80 font-semibold transition-colors">
             + Custom Item
           </button>
         </div>
       </div>
 
-      {/* DM Stash — a full-width shelf above the players, not just another
-          column among them, since it's where every hand-out starts and
-          every take-back ends up. */}
-      <InventoryStash items={dmStash}
-        isDragOver={dragOverCol === "stash"} onDragOverCol={setDragOverCol} onDrop={dropOn}
-        onStartDrag={startDrag} onEndDrag={endDrag}
-        onEdit={setCreatingItem} />
+      {/* Stashes — sortable groupings ("Shop", "Vault", "Quest Rewards"),
+          not just one flat pile — wrap onto multiple lines rather than
+          scrolling, since there's no fixed count of these the way there is
+          for players. */}
+      <div className="flex flex-wrap items-start gap-3 shrink-0">
+        {stashes.map(stash => (
+          <InventoryStash key={stash.id} stash={stash} cardStyle={stashCardStyle}
+            isDragOver={dragOverCol === stash.id} onDragOverCol={setDragOverCol} onDrop={dropOn}
+            onStartDrag={startDrag} onEndDrag={endDrag}
+            onEdit={openStashItem} onRename={renameStash} onDelete={deleteStash} />
+        ))}
+        <button type="button" onClick={() => addStash(`Stash ${stashes.length + 1}`)}
+          className="w-64 h-24 rounded-xl ring-1 ring-dashed ring-border flex items-center justify-center text-xs text-foreground/40 hover:text-foreground/70 hover:ring-foreground/30 transition-colors">
+          + New Stash
+        </button>
+      </div>
 
-      <div className="flex-1 min-h-0 flex items-start gap-3 overflow-x-auto overflow-y-hidden pb-2">
+      <div className="flex items-start gap-3 overflow-x-auto shrink-0 pb-2">
         {partyMembers.map(m => (
           <InventoryColumn key={m.id} id={m.id} title={m.name} items={memberItems(m)}
             isDragOver={dragOverCol === m.id} onDragOverCol={setDragOverCol} onDrop={dropOn}
@@ -825,42 +1128,62 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
         ))}
       </div>
 
+      {/* Floating cluster — where "+ From Documentation"/"+ Custom Item"
+          actually land. Not attached to any stash or player yet; drag one
+          of these chips onto a stash or player to place it, which is the
+          only thing that actually persists it (the cluster itself lives
+          only in CampaignView's component state — see floatingItems). */}
+      {floatingItems.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2 p-3 rounded-xl bg-popover text-popover-foreground border border-border shadow-2xl w-64">
+          <p className="text-[10px] text-foreground/50">Drag onto a stash or player to place {floatingItems.length > 1 ? "them" : "it"}.</p>
+          <div className="flex flex-col gap-1.5">
+            {floatingItems.map(item => (
+              <div key={item.id} className="relative">
+                <InventoryItemRow item={item} from="floating" onStartDrag={startDrag} onEndDrag={endDrag}
+                  onEdit={openFloatingItem} />
+                <button type="button" onClick={() => setFloatingItems(prev => prev.filter(i => i.id !== item.id))}
+                  title="Discard" className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-background border border-border text-foreground/50 hover:text-red-400 flex items-center justify-center text-[9px] leading-none">
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showPicker && (
         <FeatureSuggestionPickerModal
           label="Item" suggestionSource="item" userId={userId}
-          existingNames={dmStash.map(f => f.name)}
-          onPick={s => addToStash(pickToFeatures(s))}
+          existingNames={floatingItems.map(f => f.name)}
+          onPick={s => setFloatingItems(prev => [...prev, ...pickToFeatures(s)])}
           onClose={() => setShowPicker(false)}
         />
       )}
 
-      {/* Custom item creation — the exact same editor a character's own
-          Items tab uses (FeatureEntry), so weapon/armor stats, weight,
+      {/* Custom item creation/editing — the exact same editor a character's
+          own Items tab uses (FeatureEntry), so weapon/armor stats, weight,
           value, attunement, everything is available here too, not a
           trimmed-down lookalike. `pb`/`statMods` are neutral placeholders
           (this item isn't attached to any character yet, so there's no real
           to-hit/damage to preview) and `allFeatures`/link-options are empty
           for the same reason — nothing else exists yet to link or trigger. */}
       {creatingItem && (() => {
-        // Same modal for both flows — "+ Custom Item" opens it on a fresh
-        // blank draft (id not in dmStash yet), clicking an existing stash
-        // item opens it on that item instead. Whether it's already in the
-        // stash is what tells Save/Remove which of add-vs-update and
-        // discard-vs-delete they should actually do.
-        const isExisting = dmStash.some(i => i.id === creatingItem.id)
+        const isNew = creatingItemStashId === null
+        const targetStash = creatingItemStashId && creatingItemStashId !== "floating" ? stashes.find(s => s.id === creatingItemStashId) : null
+        const title = isNew ? "New Item" : creatingItemStashId === "floating" ? "Edit Item (unplaced)" : `Edit Item${targetStash ? ` — ${targetStash.name}` : ""}`
         return (
-          <Modal onClose={() => setCreatingItem(null)}>
+          <Modal onClose={closeItemEditor}>
             <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(560px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-                <p className="text-sm font-bold text-white">{isExisting ? "Edit Item" : "New Item"}</p>
-                <button type="button" onClick={() => setCreatingItem(null)}
+                <p className="text-sm font-bold text-white">{title}</p>
+                <button type="button" onClick={closeItemEditor}
                   className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
               </div>
               <div className="p-4 overflow-y-auto">
                 <FeatureEntry
                   feature={creatingItem}
                   onChange={patch => setCreatingItem(f => f ? { ...f, ...patch } : f)}
-                  onRemove={() => { if (isExisting) removeFromStash(creatingItem.id); setCreatingItem(null) }}
+                  onRemove={removeFromItemEditor}
                   onLinkToggle={() => {}}
                   allFeatures={[]}
                   theme={THEMES[DEFAULT_THEME]}
@@ -871,12 +1194,11 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
                 />
               </div>
               <div className="flex justify-end gap-2 px-5 py-3 border-t border-white/10 shrink-0">
-                <button type="button" onClick={() => setCreatingItem(null)}
+                <button type="button" onClick={closeItemEditor}
                   className="px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white">Cancel</button>
-                <button type="button" disabled={!creatingItem.name.trim()}
-                  onClick={() => { isExisting ? updateStashItem(creatingItem) : addToStash([creatingItem]); setCreatingItem(null) }}
+                <button type="button" disabled={!creatingItem.name.trim()} onClick={saveItemEditor}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500/80 hover:bg-violet-500 text-white disabled:opacity-40">
-                  {isExisting ? "Save Changes" : "Add to Stash"}
+                  {isNew ? "Add" : "Save Changes"}
                 </button>
               </div>
             </div>
@@ -887,35 +1209,57 @@ function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromSta
   )
 }
 
-// The stash's own shape — a wide wrapping shelf of item chips rather than
-// InventoryColumn's narrow vertical list, since it sits full-width above
-// the players instead of sharing their row.
-function InventoryStash({ items, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag, onEdit }: {
-  items: Feature[]
+// A named, wide wrapping shelf of item chips rather than InventoryColumn's
+// narrow vertical list — stashes wrap onto their own row(s) above the
+// players instead of sharing their (horizontally-scrolling, fixed-count)
+// row. Its name is editable in place (commits on blur, same pattern as
+// MysteriousPagesOverlay's page title); the delete button only ever
+// actually works while empty — moving/deleting every item first avoids
+// silently discarding loot along with the grouping.
+function InventoryStash({ stash, cardStyle, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag, onEdit, onRename, onDelete }: {
+  stash: ItemStash
+  cardStyle?: React.CSSProperties
   isDragOver: boolean
   onDragOverCol: (id: string | null) => void
   onDrop: (id: string) => void
   onStartDrag: (item: Feature, from: string) => void
   onEndDrag: () => void
-  onEdit: (item: Feature) => void
+  onEdit: (stashId: string, item: Feature) => void
+  onRename: (stashId: string, name: string) => void
+  onDelete: (stashId: string) => void
 }) {
   return (
     <div
-      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol("stash") }}
-      onDrop={e => { e.preventDefault(); onDrop("stash") }}
-      className={`shrink-0 rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"}`}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol(stash.id) }}
+      onDrop={e => { e.preventDefault(); onDrop(stash.id) }}
+      // While actively dragged over, the highlight ring needs to win —
+      // cardStyle's own ring color is an inline style, which would
+      // otherwise always beat the ring-primary utility class on specificity
+      // alone, masking the drop feedback with whatever accent was picked.
+      style={isDragOver ? undefined : cardStyle}
+      className={`w-64 shrink-0 rounded-xl bg-muted ring-1 p-2 flex flex-col gap-1.5 transition-colors ${isDragOver ? "ring-primary" : cardStyle ? "" : "ring-border"}`}
     >
-      <div className="flex items-center justify-between px-1 pb-1.5 gap-1">
-        <span className="text-[10px] uppercase tracking-widest font-semibold text-foreground/50">DM Stash</span>
-        <span className="text-[9px] text-foreground/30 tabular-nums shrink-0">{items.length}</span>
+      <div className="flex items-center gap-1 pb-0.5">
+        <input
+          key={stash.id} defaultValue={stash.name}
+          onBlur={e => { const v = e.currentTarget.value.trim(); if (v && v !== stash.name) onRename(stash.id, v) }}
+          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur() }}
+          className="flex-1 min-w-0 bg-transparent text-[10px] uppercase tracking-widest font-semibold text-foreground/50 outline-none border-b border-transparent focus:border-border py-0.5"
+        />
+        <span className="text-[9px] text-foreground/30 tabular-nums shrink-0">{stash.items.length}</span>
+        <button type="button" onClick={() => onDelete(stash.id)} disabled={stash.items.length > 0}
+          title={stash.items.length > 0 ? "Empty this stash before deleting it" : "Delete this stash"}
+          className="shrink-0 size-5 flex items-center justify-center rounded text-foreground/30 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-foreground/30 transition-colors">
+          ✕
+        </button>
       </div>
-      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-        {items.length === 0 ? (
-          <p className="text-[10px] italic text-foreground/25 py-2 px-1">Empty — pick something with + Add Item, or drag an item here from a player to take it back.</p>
-        ) : items.map(item => (
+      <div className="flex flex-wrap gap-1.5 min-h-14 max-h-40 overflow-y-auto">
+        {stash.items.length === 0 ? (
+          <p className="text-[10px] italic text-foreground/25 py-2 px-1">Empty — drag an item here to place it.</p>
+        ) : stash.items.map(item => (
           <div key={item.id} className="w-40">
-            <InventoryItemRow item={item} from="stash" onStartDrag={onStartDrag} onEndDrag={onEndDrag}
-              onEdit={onEdit} />
+            <InventoryItemRow item={item} from={stash.id} onStartDrag={onStartDrag} onEndDrag={onEndDrag}
+              onEdit={item => onEdit(stash.id, item)} />
           </div>
         ))}
       </div>
@@ -937,7 +1281,7 @@ function InventoryColumn({ id, title, items, isDragOver, onDragOverCol, onDrop, 
     <div
       onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol(id) }}
       onDrop={e => { e.preventDefault(); onDrop(id) }}
-      className={`flex flex-col gap-1.5 w-56 shrink-0 h-full rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"}`}
+      className={`flex flex-col gap-1.5 w-56 shrink-0 max-h-80 rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"}`}
     >
       <div className="flex items-center justify-between px-1 pb-1 gap-1 shrink-0">
         <span className="text-[10px] uppercase tracking-widest font-semibold text-foreground/50 truncate">{title}</span>
@@ -1079,6 +1423,7 @@ export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
             onExpand={() => onOpenCharacter(char.id)}
             onAddCondition={name => addConditionToMember(char.id, name)}
             onRemoveCondition={id => removeConditionFromMember(char.id, id)}
+            cardStyle={categoryAccentStyle(campaignData.rosterCardAccentColor, campaignData.rosterCardStyle)}
           />
         ))}
       </div>
@@ -1155,6 +1500,7 @@ function PartyMemberCard({
   highPressureValue, onChangeHighPressure,
   onExpand, onKickConfirm, onKickCancel, onKick,
   onAddCondition, onRemoveCondition,
+  cardStyle,
   compact = false,
 }: {
   char: SidebarObject
@@ -1173,6 +1519,7 @@ function PartyMemberCard({
   onKick?: () => void
   onAddCondition: (name: string) => void
   onRemoveCondition: (id: string) => void
+  cardStyle?: React.CSSProperties  // Campaign Settings' "Party Card Appearance" — see categoryAccentStyle
   compact?: boolean
 }) {
   const [showConditionMenu, setShowConditionMenu] = useState(false)
@@ -1187,7 +1534,8 @@ function PartyMemberCard({
   const conditions = charData.conditions ?? []
 
   return (
-    <div className="rounded-xl bg-muted ring-1 ring-border hover:ring-border transition-all overflow-hidden">
+    <div style={cardStyle}
+      className={`rounded-xl bg-muted ring-1 hover:ring-border transition-all overflow-hidden ${cardStyle ? "" : "ring-border"}`}>
       {/* Top row — name + arrow (portrait/kick only in the full, non-compact card) */}
       <div className={`${compact ? "p-2 gap-2" : "p-3 gap-3"} flex items-center cursor-pointer`} onClick={onExpand}>
         {!compact && (
