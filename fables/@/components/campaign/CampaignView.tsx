@@ -3,9 +3,15 @@ import { createPortal } from "react-dom"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { safeParseJson, computeAc, nanoid } from "@/components/shared/utils"
 import type { Feature } from "@/components/shared/types"
-import { SAVE_TO_ABILITY, ALL_CONDITIONS, MAP_PARTY_CODE } from "@/components/shared/constants"
+import { SAVE_TO_ABILITY, ALL_CONDITIONS, MAP_PARTY_CODES } from "@/components/shared/constants"
 import { CharacterSheet } from "@/components/character/CharacterSheet"
+import { FeatureSuggestionPickerModal } from "@/components/character/tabs/InfoTab"
+import { FeatureEntry, itemPatchFromSuggestion, type Suggestion } from "@/components/character/entries/FeatureEntry"
+import { DamagePills } from "@/components/character/ui/DamageFields"
+import { computeWeaponDamageSegments } from "@/components/shared/damageTypes"
+import { THEMES, DEFAULT_THEME } from "@/components/shared/themes"
 import { FloatingPanel } from "@/components/shared/ui/FloatingPanel"
+import { Modal } from "@/components/shared/ui/Modal"
 import { PartyServer } from "@/components/party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "@/components/party/unread"
 import { InitiativeTracker } from "./InitiativeTracker"
@@ -22,18 +28,17 @@ interface DmDeathSaves {
 interface CampaignData {
   partyCode?: string
   description?: string
-  rosterFields?: Partial<Record<RosterFieldKey, boolean>>  // DM's per-campaign choice of what shows on each party member's preview card
-  // The DM's own death save tally per character, kept on the campaign object
-  // (not the character's own data) so it's genuinely independent of — and
-  // invisible to — whatever the player is tracking on their own sheet.
+  rosterFields?: Partial<Record<RosterFieldKey, boolean>>  
   dmDeathSaves?: Record<string, DmDeathSaves>
-  // "High Pressure Mode" — a one-off feature for the MAP_PARTY_CODE campaign
-  // only (see constants.ts). DM toggles it on/off for the whole campaign;
-  // while on, every character's roster card shows a plain 3-dot tracker
-  // (HighPressureTracker below), independent per character, same storage
-  // shape/reasoning as dmDeathSaves above.
+  // "High Pressure Mode" — a one-off feature for the MAP_PARTY_CODES campaigns
   highPressureModeActive?: boolean
   highPressureDots?: Record<string, number>
+  // The Inventory tab's DM-side holding area (MAP_PARTY_CODES only) — items
+  // picked from documentation but not yet handed to a player, or taken back
+  // from one. Real Feature-shaped items, same as CharData.items — a "give"
+  // moves an entry out of here onto a player's actual character sheet, not a
+  // copy of it. See the Inventory tab section further down.
+  dmStash?: Feature[]
 }
 
 interface CharData {
@@ -283,7 +288,7 @@ function PartyActivitySection({ partyCode, partyMembers, currentUserId }: {
   )
 }
 
-type CampaignTab = "overview" | "initiative" | "chat"
+type CampaignTab = "overview" | "initiative" | "inventory" | "chat"
 
 // Everything about a campaign's live roster — fetching, realtime sync, and
 // the DM write-through actions (HP, conditions, kick) — factored out so both
@@ -319,7 +324,7 @@ function useCampaignRoster(campaign: SidebarObject) {
     updateObject(campaign.id, { data: { ...campaignData, dmDeathSaves: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
   }
 
-  // "High Pressure Mode" (MAP_PARTY_CODE campaign only, see constants.ts) —
+  // "High Pressure Mode" (MAP_PARTY_CODES campaigns only, see constants.ts) —
   // same storage shape as updateDmDeathSaves above, just a single 0-3 count
   // per character instead of a successes/failures pair.
   function toggleHighPressureMode() {
@@ -328,6 +333,34 @@ function useCampaignRoster(campaign: SidebarObject) {
   function updateHighPressureDots(characterId: string, next: number) {
     const current = campaignData.highPressureDots ?? {}
     updateObject(campaign.id, { data: { ...campaignData, highPressureDots: { ...current, [characterId]: next } } as unknown as JSON }).catch(e => console.error(e))
+  }
+
+  // Inventory tab (MAP_PARTY_CODES only) — the DM stash lives on campaign.data
+  // (same storage pattern as everything else in this hook), but a party
+  // member's items are their REAL CharData.items, written through the same
+  // RLS-backed path as updatePartyMemberHp/addConditionToMember above. A
+  // "give"/"take"/"trade" drag in the tab below is just one or two of these
+  // calls — nothing here decides which; see InventoryTab's moveItem.
+  function addToStash(items: Feature[]) {
+    const current = campaignData.dmStash ?? []
+    updateObject(campaign.id, { data: { ...campaignData, dmStash: [...current, ...items] } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function removeFromStash(itemId: string) {
+    const current = campaignData.dmStash ?? []
+    updateObject(campaign.id, { data: { ...campaignData, dmStash: current.filter(i => i.id !== itemId) } as unknown as JSON }).catch(e => console.error(e))
+  }
+  function updateStashItem(item: Feature) {
+    const current = campaignData.dmStash ?? []
+    updateObject(campaign.id, { data: { ...campaignData, dmStash: current.map(i => i.id === item.id ? item : i) } as unknown as JSON }).catch(e => console.error(e))
+  }
+  async function setMemberItems(characterId: string, items: Feature[]) {
+    const char = partyMembers.find(c => c.id === characterId)
+    if (!char) return
+    const charData = safeParseJson(char.data) as CharData
+    try {
+      const updated = await updateSharedObject(characterId, { data: { ...charData, items } as unknown as JSON })
+      setPartyMembers(prev => prev.map(c => c.id === characterId ? (updated as unknown as SidebarObject) : c))
+    } catch (e) { console.error(e) }
   }
 
   // Polls every 20s as a safety net on top of the realtime subscription below —
@@ -462,6 +495,7 @@ function useCampaignRoster(campaign: SidebarObject) {
     campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
     updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
     toggleHighPressureMode, updateHighPressureDots,
+    addToStash, removeFromStash, updateStashItem, setMemberItems,
   }
 }
 
@@ -473,7 +507,12 @@ export function CampaignView({ campaign }: Props) {
     campaignData, partyCode, partyMembers, kickConfirmId, setKickConfirmId, kicking,
     updateRosterFields, updateDmDeathSaves, updatePartyMemberHp, addConditionToMember, removeConditionFromMember, kickMember,
     toggleHighPressureMode, updateHighPressureDots,
+    addToStash, removeFromStash, updateStashItem, setMemberItems,
   } = useCampaignRoster(campaign)
+
+  const tabs: CampaignTab[] = MAP_PARTY_CODES.includes(partyCode)
+    ? ["overview", "initiative", "inventory", "chat"]
+    : ["overview", "initiative", "chat"]
 
   const enabledStatCells = STAT_CELL_FIELDS.filter(f => isRosterFieldOn(campaignData.rosterFields, f.key))
   const showConditions = isRosterFieldOn(campaignData.rosterFields, "conditions")
@@ -487,6 +526,23 @@ export function CampaignView({ campaign }: Props) {
 
   function copyCode() {
     if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
+  }
+
+  // A private "something just left your pack" flavor notice, sent whenever
+  // the Inventory tab's drag removes an item from a player (taken to the
+  // stash, or traded to someone else) — deliberately vague about WHAT was
+  // taken, just that something was. A plain one-off insert into the same
+  // `messages` table PartyServer's own private-message system uses, rather
+  // than pulling in usePartyMessages here (its full fetch + realtime
+  // subscription would be pure overhead for a view that never renders a
+  // message list).
+  async function notifyItemTaken(ownerId: string) {
+    if (!user?.id || !partyCode) return
+    const { error } = await supabase.from("messages").insert({
+      party_code: partyCode, sender_id: user.id, sender_name: "Dungeon Master",
+      body: "You feel lighter...", image_url: null, recipient_id: ownerId, channel: null, type: "message", payload: null,
+    })
+    if (error) console.error("item-taken notice error:", error)
   }
 
   if (expandedId) {
@@ -522,10 +578,10 @@ export function CampaignView({ campaign }: Props) {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 px-4 py-2 border-b border-foreground/10 bg-card shrink-0">
-        {(["overview", "initiative", "chat"] as CampaignTab[]).map(tab => (
+        {tabs.map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`relative px-4 py-1.5 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-foreground/20 text-foreground" : "text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5"}`}>
-            {tab === "overview" ? "Overview" : tab === "initiative" ? "Initiative" : "Party Chat"}
+            {tab === "overview" ? "Overview" : tab === "initiative" ? "Initiative" : tab === "inventory" ? "Inventory" : "Party Chat"}
             {tab === "chat" && chatUnread && (
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
             )}
@@ -536,6 +592,20 @@ export function CampaignView({ campaign }: Props) {
       {/* Initiative tracker */}
       {activeTab === "initiative" && (
         <InitiativeTracker campaign={campaign} partyMembers={partyMembers} onUpdateCharacterHp={updatePartyMemberHp} />
+      )}
+
+      {/* Inventory tab (KOQK21 only) */}
+      {activeTab === "inventory" && (
+        <InventoryTab
+          partyMembers={partyMembers}
+          dmStash={campaignData.dmStash ?? []}
+          userId={user?.id}
+          addToStash={addToStash}
+          removeFromStash={removeFromStash}
+          updateStashItem={updateStashItem}
+          setMemberItems={setMemberItems}
+          notifyItemTaken={notifyItemTaken}
+        />
       )}
 
       {/* Chat panel */}
@@ -589,7 +659,7 @@ export function CampaignView({ campaign }: Props) {
             </span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-foreground/30">{partyMembers.length} character{partyMembers.length !== 1 ? "s" : ""}</span>
-              {partyCode === MAP_PARTY_CODE && (
+              {MAP_PARTY_CODES.includes(partyCode) && (
                 <button type="button" onClick={toggleHighPressureMode}
                   title="Shows a 3-dot tracker on every character's card"
                   className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${
@@ -625,7 +695,7 @@ export function CampaignView({ campaign }: Props) {
               dmDeathSaves={campaignData.dmDeathSaves?.[char.id] ?? { successes: 0, failures: 0 }}
               onChangeDmDeathSaves={next => updateDmDeathSaves(char.id, next)}
               highPressureValue={campaignData.highPressureDots?.[char.id]}
-              onChangeHighPressure={partyCode === MAP_PARTY_CODE && campaignData.highPressureModeActive ? next => updateHighPressureDots(char.id, next) : undefined}
+              onChangeHighPressure={MAP_PARTY_CODES.includes(partyCode) && campaignData.highPressureModeActive ? next => updateHighPressureDots(char.id, next) : undefined}
               onExpand={() => setExpandedId(char.id)}
               onKickConfirm={() => setKickConfirmId(char.id)}
               onKickCancel={() => setKickConfirmId(null)}
@@ -640,6 +710,301 @@ export function CampaignView({ campaign }: Props) {
           <PartyActivitySection partyCode={partyCode} partyMembers={partyMembers} currentUserId={user?.id ?? ""} />
         )}
       </div>}
+    </div>
+  )
+}
+
+
+
+function InventoryTab({ partyMembers, dmStash, userId, addToStash, removeFromStash, updateStashItem, setMemberItems, notifyItemTaken }: {
+  partyMembers: SidebarObject[]
+  dmStash: Feature[]
+  userId?: string | null
+  addToStash: (items: Feature[]) => void
+  removeFromStash: (itemId: string) => void
+  updateStashItem: (item: Feature) => void
+  setMemberItems: (characterId: string, items: Feature[]) => void
+  notifyItemTaken: (ownerId: string) => void
+}) {
+  const [showPicker, setShowPicker] = useState(false)
+  // Non-null while the "+ Custom Item" modal is open, editing this
+  // in-progress draft — same blank-Feature-then-edit flow ItemsTab.tsx uses
+  // for its own "+ Add Item", just surfaced in a modal here since there's no
+  // underlying list card for it to expand into yet.
+  const [creatingItem, setCreatingItem] = useState<Feature | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+  // The item mid-drag, kept in a ref rather than state — a drag gesture
+  // fires dragover continuously, and re-rendering on every one of those
+  // (rather than just when the highlighted column actually changes) would
+  // fight the browser's own drag tracking for no benefit.
+  const dragRef = useRef<{ item: Feature; from: string } | null>(null)
+
+  const memberItems = (m: SidebarObject) => (safeParseJson(m.data) as CharData).items ?? []
+
+  function moveItem(item: Feature, from: string, to: string) {
+    if (from === to) return
+    if (from === "stash") removeFromStash(item.id)
+    else {
+      const src = partyMembers.find(m => m.id === from)
+      if (src) {
+        setMemberItems(from, memberItems(src).filter(i => i.id !== item.id))
+        // Whatever it went to — the stash, or straight to another player —
+        // this player's pack is lighter by one item, so they get the notice
+        // either way.
+        notifyItemTaken(src.owner_id)
+      }
+    }
+    if (to === "stash") addToStash([item])
+    else {
+      const dst = partyMembers.find(m => m.id === to)
+      if (dst) setMemberItems(to, [...memberItems(dst), item])
+    }
+  }
+
+  // Mirrors ItemsTab.tsx's addItemFromSuggestion/addPackToInventory exactly
+  // (same conversion, same pack-explosion into one Feature per pack item),
+  // just landing in the stash instead of a character's own `items` — so a
+  // magic weapon/armor picked here carries its full stat block, not just a
+  // name.
+  function pickToFeatures(s: Suggestion): Feature[] {
+    if (s.meta?.item_type === "pack" && s.meta.pack_items) {
+      return s.meta.pack_items.map(pi => ({
+        id: nanoid(), name: pi.name, category: "item" as const,
+        amount: pi.amount, trackAmount: pi.amount > 1,
+        weight: pi.weight || undefined, value: pi.value || undefined,
+      }))
+    }
+    const blank: Feature = { id: nanoid(), name: s.name, category: "item" }
+    const patch = itemPatchFromSuggestion("item", s, blank)
+    return [{ ...blank, description: s.description, ...patch }]
+  }
+
+  function startDrag(item: Feature, from: string) {
+    dragRef.current = { item, from }
+  }
+  function endDrag() {
+    dragRef.current = null
+    setDragOverCol(null)
+  }
+  function dropOn(colId: string) {
+    const d = dragRef.current
+    dragRef.current = null
+    setDragOverCol(null)
+    if (d) moveItem(d.item, d.from, colId)
+  }
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-4 gap-3">
+      <div className="flex items-center justify-between gap-3 shrink-0">
+        
+        <div className="flex items-center gap-2 shrink-0">
+          <button type="button" onClick={() => setShowPicker(true)}
+            className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 text-foreground/80 font-semibold transition-colors">
+            + From Documentation
+          </button>
+          <button type="button" onClick={() => setCreatingItem({ id: nanoid(), name: "", category: "item" })}
+            className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 text-foreground/80 font-semibold transition-colors">
+            + Custom Item
+          </button>
+        </div>
+      </div>
+
+      {/* DM Stash — a full-width shelf above the players, not just another
+          column among them, since it's where every hand-out starts and
+          every take-back ends up. */}
+      <InventoryStash items={dmStash}
+        isDragOver={dragOverCol === "stash"} onDragOverCol={setDragOverCol} onDrop={dropOn}
+        onStartDrag={startDrag} onEndDrag={endDrag}
+        onEdit={setCreatingItem} />
+
+      <div className="flex-1 min-h-0 flex items-start gap-3 overflow-x-auto overflow-y-hidden pb-2">
+        {partyMembers.map(m => (
+          <InventoryColumn key={m.id} id={m.id} title={m.name} items={memberItems(m)}
+            isDragOver={dragOverCol === m.id} onDragOverCol={setDragOverCol} onDrop={dropOn}
+            onStartDrag={startDrag} onEndDrag={endDrag} />
+        ))}
+      </div>
+
+      {showPicker && (
+        <FeatureSuggestionPickerModal
+          label="Item" suggestionSource="item" userId={userId}
+          existingNames={dmStash.map(f => f.name)}
+          onPick={s => addToStash(pickToFeatures(s))}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+
+      {/* Custom item creation — the exact same editor a character's own
+          Items tab uses (FeatureEntry), so weapon/armor stats, weight,
+          value, attunement, everything is available here too, not a
+          trimmed-down lookalike. `pb`/`statMods` are neutral placeholders
+          (this item isn't attached to any character yet, so there's no real
+          to-hit/damage to preview) and `allFeatures`/link-options are empty
+          for the same reason — nothing else exists yet to link or trigger. */}
+      {creatingItem && (() => {
+        // Same modal for both flows — "+ Custom Item" opens it on a fresh
+        // blank draft (id not in dmStash yet), clicking an existing stash
+        // item opens it on that item instead. Whether it's already in the
+        // stash is what tells Save/Remove which of add-vs-update and
+        // discard-vs-delete they should actually do.
+        const isExisting = dmStash.some(i => i.id === creatingItem.id)
+        return (
+          <Modal onClose={() => setCreatingItem(null)}>
+            <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(560px,calc(100vw-2rem))] max-h-[85vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+                <p className="text-sm font-bold text-white">{isExisting ? "Edit Item" : "New Item"}</p>
+                <button type="button" onClick={() => setCreatingItem(null)}
+                  className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
+              </div>
+              <div className="p-4 overflow-y-auto">
+                <FeatureEntry
+                  feature={creatingItem}
+                  onChange={patch => setCreatingItem(f => f ? { ...f, ...patch } : f)}
+                  onRemove={() => { if (isExisting) removeFromStash(creatingItem.id); setCreatingItem(null) }}
+                  onLinkToggle={() => {}}
+                  allFeatures={[]}
+                  theme={THEMES[DEFAULT_THEME]}
+                  pb={2} statMods={{}}
+                  showItemExtras showAttunement
+                  suggestionSource="item" userId={userId}
+                  autoEdit onAutoEditConsumed={() => {}}
+                />
+              </div>
+              <div className="flex justify-end gap-2 px-5 py-3 border-t border-white/10 shrink-0">
+                <button type="button" onClick={() => setCreatingItem(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white">Cancel</button>
+                <button type="button" disabled={!creatingItem.name.trim()}
+                  onClick={() => { isExisting ? updateStashItem(creatingItem) : addToStash([creatingItem]); setCreatingItem(null) }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500/80 hover:bg-violet-500 text-white disabled:opacity-40">
+                  {isExisting ? "Save Changes" : "Add to Stash"}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
+    </div>
+  )
+}
+
+// The stash's own shape — a wide wrapping shelf of item chips rather than
+// InventoryColumn's narrow vertical list, since it sits full-width above
+// the players instead of sharing their row.
+function InventoryStash({ items, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag, onEdit }: {
+  items: Feature[]
+  isDragOver: boolean
+  onDragOverCol: (id: string | null) => void
+  onDrop: (id: string) => void
+  onStartDrag: (item: Feature, from: string) => void
+  onEndDrag: () => void
+  onEdit: (item: Feature) => void
+}) {
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol("stash") }}
+      onDrop={e => { e.preventDefault(); onDrop("stash") }}
+      className={`shrink-0 rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"}`}
+    >
+      <div className="flex items-center justify-between px-1 pb-1.5 gap-1">
+        <span className="text-[10px] uppercase tracking-widest font-semibold text-foreground/50">DM Stash</span>
+        <span className="text-[9px] text-foreground/30 tabular-nums shrink-0">{items.length}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+        {items.length === 0 ? (
+          <p className="text-[10px] italic text-foreground/25 py-2 px-1">Empty — pick something with + Add Item, or drag an item here from a player to take it back.</p>
+        ) : items.map(item => (
+          <div key={item.id} className="w-40">
+            <InventoryItemRow item={item} from="stash" onStartDrag={onStartDrag} onEndDrag={onEndDrag}
+              onEdit={onEdit} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function InventoryColumn({ id, title, items, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag }: {
+  id: string
+  title: string
+  items: Feature[]
+  isDragOver: boolean
+  onDragOverCol: (id: string | null) => void
+  onDrop: (id: string) => void
+  onStartDrag: (item: Feature, from: string) => void
+  onEndDrag: () => void
+}) {
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol(id) }}
+      onDrop={e => { e.preventDefault(); onDrop(id) }}
+      className={`flex flex-col gap-1.5 w-56 shrink-0 h-full rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"}`}
+    >
+      <div className="flex items-center justify-between px-1 pb-1 gap-1 shrink-0">
+        <span className="text-[10px] uppercase tracking-widest font-semibold text-foreground/50 truncate">{title}</span>
+        <span className="text-[9px] text-foreground/30 tabular-nums shrink-0">{items.length}</span>
+      </div>
+      <div className="flex flex-col gap-1 flex-1 min-h-16 overflow-y-auto">
+        {items.length === 0 ? (
+          <p className="text-[10px] italic text-foreground/25 text-center py-4">Empty</p>
+        ) : items.map(item => (
+          <InventoryItemRow key={item.id} item={item} from={id} onStartDrag={onStartDrag} onEndDrag={onEndDrag} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// `onEdit` is only ever passed for stash items (InventoryStash) — editing a
+// player's real item straight from this overview, without going through the
+// take-to-stash drag first, wasn't asked for, so InventoryColumn (player
+// items) just omits it and the row falls back to drag-only. Deleting a stash
+// item now lives only inside that edit modal (FeatureEntry's own remove
+// icon — see InventoryTab's onRemove wiring), not as a second button here.
+function InventoryItemRow({ item, from, onStartDrag, onEndDrag, onEdit }: {
+  item: Feature
+  from: string
+  onStartDrag: (item: Feature, from: string) => void
+  onEndDrag: () => void
+  onEdit?: (item: Feature) => void
+}) {
+  // Same weapon-damage/armor-AC quick facts the character sheet's own item
+  // cards show (FeatureEntry.tsx) — statMods deliberately empty and pb 0
+  // here since this item isn't attached to any one character's stats yet;
+  // only its own intrinsic dice/bonus show, not a wielder-specific to-hit.
+  const meta = item.itemMeta ?? {}
+  const isWeapon = item.equipKind === "weapon"
+  const dmgSegments = isWeapon ? computeWeaponDamageSegments(meta, {}, 0) : []
+  const acBase = item.category === "armor" && (item.equipKind ?? "armor") === "armor" && meta.armorMode === "base" && meta.armorBaseAc != null
+  const acBonus = item.category === "armor" && (item.equipKind ?? "armor") === "armor" && (meta.armorMode ?? "bonus") === "bonus" && !!meta.acBonus
+  const hasQuickFacts = dmgSegments.length > 0 || acBase || acBonus
+
+  return (
+    <div
+      draggable
+      onDragStart={e => { onStartDrag(item, from); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", item.name) }}
+      onDragEnd={onEndDrag}
+      onClick={() => onEdit?.(item)}
+      title={onEdit ? "Click to edit — drag onto another column to give, take, or trade" : "Drag onto another column to give, take, or trade"}
+      className={`flex flex-col gap-1 px-2 py-1.5 rounded-lg bg-foreground/5 hover:bg-foreground/10 cursor-grab active:cursor-grabbing transition-colors ${onEdit ? "cursor-pointer" : ""}`}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="flex-1 min-w-0 text-xs text-foreground truncate">{item.name || "Unnamed item"}</span>
+        {(item.amount ?? 1) > 1 && <span className="text-[9px] text-foreground/40 tabular-nums shrink-0">×{item.amount}</span>}
+        {item.value ? <span className="text-[9px] text-foreground/30 tabular-nums shrink-0">{item.value}gp</span> : null}
+      </div>
+      {hasQuickFacts && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {acBase && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/60 shrink-0">
+              AC {meta.armorBaseAc}{meta.armorDexMode === "none" ? " (no dex)" : meta.armorDexMode === "half" ? " (½ dex)" : ""}
+            </span>
+          )}
+          {acBonus && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground/60 shrink-0">+{meta.acBonus} AC</span>
+          )}
+          <DamagePills segments={dmgSegments} size="xs" />
+        </div>
+      )}
     </div>
   )
 }
@@ -710,7 +1075,7 @@ export function CampaignRosterSidebar({ campaign, onClose, onOpenCharacter }: {
             dmDeathSaves={campaignData.dmDeathSaves?.[char.id] ?? { successes: 0, failures: 0 }}
             onChangeDmDeathSaves={next => updateDmDeathSaves(char.id, next)}
             highPressureValue={campaignData.highPressureDots?.[char.id]}
-            onChangeHighPressure={partyCode === MAP_PARTY_CODE && campaignData.highPressureModeActive ? next => updateHighPressureDots(char.id, next) : undefined}
+            onChangeHighPressure={MAP_PARTY_CODES.includes(partyCode) && campaignData.highPressureModeActive ? next => updateHighPressureDots(char.id, next) : undefined}
             onExpand={() => onOpenCharacter(char.id)}
             onAddCondition={name => addConditionToMember(char.id, name)}
             onRemoveCondition={id => removeConditionFromMember(char.id, id)}
@@ -761,7 +1126,7 @@ function DmDeathSaveTracker({ saves, onChange }: { saves: DmDeathSaves; onChange
   )
 }
 
-// "High Pressure Mode" — MAP_PARTY_CODE campaign only (see constants.ts).
+// "High Pressure Mode" — MAP_PARTY_CODES campaigns only (see constants.ts).
 // Deliberately plain/neutral (no color-coding, no glyph) unlike
 // DmDeathSaveTracker above — just 3 dots, filled or empty, same toggle
 // semantics (click fills one more; clicking the last filled dot un-fills it).

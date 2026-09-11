@@ -13,7 +13,7 @@ import { Plus, Pencil, Trash2, X, Check, ImagePlus, Loader2, BookOpen, MapPin, S
 import { Markdown } from "../ui/Markdown"
 import { uploadUserImage, loadUserImages, type GalleryImage } from "../shared/imageGallery"
 import { PortraitModal } from "../shared/PortraitModal"
-import { MAP_PARTY_CODE } from "../shared/constants"
+import { MAP_PARTY_CODES } from "../shared/constants"
 import { MapNotesPanel } from "../map/MapNotesPanel"
 import { linkifyMentions } from "../shared/wikiLinks"
 import { useObjects } from "../../../src/contexts/UserContext"
@@ -66,7 +66,7 @@ export function NpcTrackerOverlay({
 
   const sorted = [...npcs].sort((a, b) => a.name.localeCompare(b.name))
   const expanded = sorted.find(n => n.id === expandedId) ?? null
-  const showLocation = partyCode === MAP_PARTY_CODE
+  const showLocation = MAP_PARTY_CODES.includes(partyCode)
   const detailNotesNpc = sorted.find(n => n.id === detailNotesId) ?? null
   const quickViewNpc = sorted.find(n => n.id === quickViewId) ?? null
 
@@ -205,7 +205,7 @@ export function NpcTrackerOverlay({
                     )}
                     {/* Detail Notes (the full sticky-note corkboard) is one of
                         the map-campaign-only NPC Tracker extras, alongside "Last
-                        Seen At" and "Goal" below — see MAP_PARTY_CODE in
+                        Seen At" and "Goal" below — see MAP_PARTY_CODES in
                         shared/constants.ts. Every other party gets just the
                         inline Details blurb above. */}
                     {showLocation && (

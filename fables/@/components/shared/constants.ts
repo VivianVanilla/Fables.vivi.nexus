@@ -1,12 +1,14 @@
 // Static lookup tables for ability scores and saving throws
 
-// This one campaign gets a handful of one-off features scoped to it alone
+// These campaigns get a handful of one-off features scoped to them alone
 // rather than general per-party tools: the Hjolland interactive map (gates
 // the Map button in party/PartyServer.tsx, and map-only NPC Tracker fields
 // like "last seen at" in npcTracker/NpcTrackerOverlay.tsx, which reference
-// map pins that don't exist for any other party) and "High Pressure Mode"
-// (campaign/CampaignView.tsx's HighPressureTracker).
-export const MAP_PARTY_CODE = "KOQK21"
+// map pins that don't exist for any other party), "High Pressure Mode"
+// (campaign/CampaignView.tsx's HighPressureTracker), and the Inventory tab
+// (also CampaignView.tsx). Every gate on this checks membership — as
+// `MAP_PARTY_CODES.includes(partyCode)` — never `===`, since this is a list.
+export const MAP_PARTY_CODES = ["KOQK21", "VOTA08"]
 
 export const ABILITY_KEYS = [
   "strength", "dexterity", "constitution",

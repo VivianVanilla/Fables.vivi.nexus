@@ -9,7 +9,7 @@
 // INSERT/UPDATE/DELETE sync, optimistic local writes, a resume refetch for
 // mobile socket gaps. Every row is party-shared (no per-user gating beyond
 // `owner_id`, kept only for display). Scoped to one party — the KOQK21 map
-// campaign; see MAP_PARTY_CODE and the rail button in party/PartyServer.tsx.
+// campaigns; see MAP_PARTY_CODES and the rail button in party/PartyServer.tsx.
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react"
@@ -33,6 +33,9 @@ export interface MysteriousPage {
 // `anchor_*` = the point on the page the connector line points at.
 // `note_*`   = where the sticky card itself sits. Both normalized 0..1
 // against the rendered page box, so they survive any display size.
+// `width`/`height` = the card's own footprint in CSS px, independent of
+// zoom — nullable so notes created before resizing existed just fall back
+// to DEFAULT_NOTE_WIDTH/HEIGHT on the client (see MysteriousPagesOverlay).
 export interface MysteriousPageNote {
   id: string
   page_id: string
@@ -45,12 +48,17 @@ export interface MysteriousPageNote {
   anchor_y: number
   note_x: number
   note_y: number
+  width: number | null
+  height: number | null
   created_at: string
   updated_at: string
 }
 
+export const DEFAULT_NOTE_WIDTH = 176
+export const DEFAULT_NOTE_HEIGHT = 160
+
 export type PageNotePatch = Partial<Pick<MysteriousPageNote,
-  "content" | "color" | "anchor_x" | "anchor_y" | "note_x" | "note_y">>
+  "content" | "color" | "anchor_x" | "anchor_y" | "note_x" | "note_y" | "width" | "height">>
 
 const bySort = (a: MysteriousPage, b: MysteriousPage) =>
   a.position - b.position || a.created_at.localeCompare(b.created_at)
@@ -170,6 +178,7 @@ export function useMysteriousPages(partyCode: string, currentUserId: string) {
     const { data, error } = await supabase.from("mysterious_page_notes").insert({
       page_id: pageId, party_code: partyCode, owner_id: currentUserId, owner_name: ownerName,
       content: "", color, anchor_x: 0.5, anchor_y: 0.5, note_x: 0.5, note_y: 0.16,
+      width: DEFAULT_NOTE_WIDTH, height: DEFAULT_NOTE_HEIGHT,
     }).select().single()
     if (error) { console.error("add page note error:", error); return null }
     const row = data as MysteriousPageNote

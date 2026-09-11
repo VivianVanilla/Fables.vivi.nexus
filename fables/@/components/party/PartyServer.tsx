@@ -14,7 +14,7 @@ import { Hash, Plus, X, Menu, Mountain, BookOpen, NotebookPen, Eye, EyeOff } fro
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { supabase } from "../../../src/supabase"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
-import { MAP_PARTY_CODE } from "@/components/shared/constants"
+import { MAP_PARTY_CODES } from "@/components/shared/constants"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
 import { usePartyVitals } from "./usePartyVitals"
@@ -96,7 +96,7 @@ export function PartyServer({
 
   const myCharacterId = members.find(m => m.userId === currentUserId)?.characterId
   const iAmDiscreet = !!myCharacterId && discreetIds.includes(myCharacterId)
-  const showDiscreetToggle = isDM && partyCode === MAP_PARTY_CODE
+  const showDiscreetToggle = isDM && MAP_PARTY_CODES.includes(partyCode)
 
   function toggleDiscreet(characterId: string) {
     if (!activeCampaign) return
@@ -271,7 +271,7 @@ export function PartyServer({
           </button>
         </div>
 
-        {partyCode === MAP_PARTY_CODE && (
+        {MAP_PARTY_CODES.includes(partyCode) && (
           <div className="px-3 pt-1 pb-1.5 shrink-0 border-t border-border flex flex-col gap-0.5">
             <button type="button" onClick={() => setMapOpen(true)}
               className="w-full flex items-center gap-1.5 text-[12px] px-2 py-1.5 rounded-md transition-colors mt-1.5 text-foreground/60 hover:bg-foreground/8 hover:text-foreground">

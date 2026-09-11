@@ -29,7 +29,7 @@ export interface NpcTracker {
   // "Last seen at" — a live link to a map pin, not freeform text (that's
   // what this replaced: two DMs had been typing the pin's name in by hand,
   // which drifts the moment that pin gets renamed). Only meaningful for the
-  // one party with map access — see MAP_PARTY_CODE.
+  // parties with map access — see MAP_PARTY_CODES.
   location_pin_id: string | null
   owner_id: string
   created_at: string
