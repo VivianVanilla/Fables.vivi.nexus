@@ -120,13 +120,15 @@ export function ItemsTab({
   const martialSliderColor = (f: Feature) => isInfusionFeature(f)
     ? (data.favoriteCategorySliderColors?.infusion ?? data.favoriteCategoryColors?.infusion) : undefined
 
-  // With Settings → "Infusions in inventory" on, an infused infusion is shown
-  // in the Gear tab while it's infused — same record, not a copy — and its
-  // own Equip toggle (default on: you infuse something to wear it) decides
-  // which list it sits in, exactly like a real armour piece. Un-infusing it
-  // (from here or the Infusions list) drops it out on its own; it never leaves
-  // data.infusions, so nothing here is ever deleted.
-  const showsInInventory = (f: Feature) => !!f.infused && !!data.infusionsInInventory
+  // An infused infusion flagged Standalone (it's a real item, e.g. Repeating
+  // Shot — not just a passive effect like Enhanced Defense) is shown in the
+  // Gear tab while it's infused — same record, not a copy — and its own
+  // Equip toggle (default on: you infuse something to wear it) decides which
+  // list it sits in, exactly like a real armour piece. Un-infusing it (from
+  // here or the Infusions list) drops it out on its own; it never leaves
+  // data.infusions, so nothing here is ever deleted. A non-Standalone
+  // infusion never shows up here — it's just an effect, nothing to equip.
+  const showsInInventory = (f: Feature) => !!f.infused && !!f.infusionStandalone
   const infEquipped = (data.infusions ?? []).filter(f => showsInInventory(f) && (f.equipped ?? true))
   const infCarried  = (data.infusions ?? []).filter(f => showsInInventory(f) && !(f.equipped ?? true))
   const equippedItems = [
@@ -173,7 +175,6 @@ export function ItemsTab({
           showAttunement maxAttuned={data.maxAttunedItems} onChangeMaxAttuned={n => update({ maxAttunedItems: n })}
           showItemExtras
           perItemIsInfusion={isInfusionFeature}
-          infusionInventoryEnabled={!!data.infusionsInInventory}
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle} perItemSliderColor={martialSliderColor}
           bodyTextColor={bodyTextColor}
@@ -199,7 +200,6 @@ export function ItemsTab({
           showMagicStar={data.showMagicItemStar} magicItemStyle={data.magicItemStyle} magicItemColor={data.magicItemColor} magicItemSliderStyle={data.magicItemSliderStyle} magicItemColorsByRarity={data.magicItemColorsByRarity} magicItemRarityColors={data.magicItemRarityColors} magicItemRaritySliderColors={data.magicItemRaritySliderColors}
           perItemAccentColor={martialAccentColor} perItemAccentStyle={martialAccentStyle}
           perItemIsInfusion={isInfusionFeature}
-          infusionInventoryEnabled={!!data.infusionsInInventory}
           bodyTextColor={bodyTextColor}
           weaponFormBonus={weaponFormBonus}
           pendingItemId={pendingItemId} onAutoEditConsumed={() => setPendingItemId(null)}

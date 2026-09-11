@@ -1,10 +1,11 @@
 import { useState, useRef } from "react"
 import { Modal } from "@/components/shared/ui/Modal"
 import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
+import { StyleToggle } from "@/components/shared/ui/StyleToggle"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import type { CharacterData } from "@/components/shared/types"
 import { THEMES, DEFAULT_THEME, CUSTOM_THEME_KEY, SLOT_THEMES, DEFAULT_SLOT_THEME, CUSTOM_SLOT_THEME_KEY, BG_OPTIONS, DEFAULT_BG_THEME, BG_IMAGE_THEMES, CUSTOM_BG_IMAGE_KEY, DEFAULT_BG_IMAGE_OPACITY, BG_IMAGE_POSITIONS } from "@/components/shared/themes"
-import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, DEFAULT_RARITY_HEX, UI_SCALES, TEXT_COLOR_OPTIONS, type CardStyle } from "@/components/shared/constants"
+import { FAVORITE_CATEGORY_LABELS, STYLING_CATEGORIES, DEFAULT_ACCENT_COLOR, DEFAULT_RARITY_HEX, UI_SCALES, TEXT_COLOR_OPTIONS } from "@/components/shared/constants"
 import { deriveCharacterClassNames, classLabel } from "@/components/shared/classColors"
 import { nanoid } from "@/components/shared/utils"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "@/components/shared/imageGallery"
@@ -18,32 +19,6 @@ interface Props {
   characterId: string   // for building the /share/<id>/<token> link below
   card: string           // this character's own card styling (theme.box + ring) — this modal's shell inherits it instead of a fixed generic look
   userId: string | null  // for uploading/picking a custom Background Image below
-}
-
-// One None/Outline(or Flat)/Background(or Hue Shift) toggle group, shared by
-// every Feature Styling row's Background and Tracking Slider sub-controls —
-// "outline" reads as "Flat" for the slider since there's no border to
-// outline there. The 3rd option ("galaxy" — the picked color, no darken/
-// lighten blend toward the sheet's theme or toward black/white) reads as
-// "Background" for the card, since that's a flat fill there — but the same
-// value drives a hue-cycling shimmer on the Tracking Slider bar
-// (accentShimmerGradient in themes.ts), not a flat fill, so it reads as
-// "Hue Shift" there instead, since that's what it actually does.
-function StyleToggle({ label, value, onChange, slider, dark }: { label: string; value: CardStyle; onChange: (s: CardStyle) => void; slider?: boolean; dark?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-2 pl-2">
-      <span className={`text-[10px] ${dark ? "text-black/50" : "text-white/40"} shrink-0`}>{label}</span>
-      <div className="flex items-center gap-1 rounded-full bg-white/10 p-0.5">
-        {(["none", "outline", "galaxy"] as CardStyle[]).map(s => (
-          <button key={s} type="button"
-            onClick={() => onChange(s)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${value === s ? "bg-purple-500/30 text-purple-200" : "text-white/40 hover:text-white/70"}`}>
-            {s === "none" ? "None" : s === "outline" ? (slider ? "Flat" : "Outline") : (slider ? "Hue Shift" : "Background")}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer, characterId, card, userId }: Props) {
@@ -176,14 +151,6 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 className="accent-primary size-4 rounded" />
               <span className={`text-sm ${c70}`}>Add vision tracker (Darkvision, etc.)</span>
             </label>
-            {isArtificer && (
-              <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
-                <input type="checkbox" checked={data.infusionsInInventory ?? false}
-                  onChange={e => onUpdate({ infusionsInInventory: e.target.checked })}
-                  className="accent-primary size-4 rounded" />
-                <span className={`text-sm ${c70}`}>Show infused infusions in Gear (equip them like any item)</span>
-              </label>
-            )}
             <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
               <input type="checkbox" checked={data.hideSpellsSection ?? false}
                 onChange={e => onUpdate({ hideSpellsSection: e.target.checked })}
@@ -195,6 +162,15 @@ export function SettingsModal({ data, onUpdate, onClose, isWarlock, isArtificer,
                 onChange={e => onUpdate({ hideMartialSection: e.target.checked })}
                 className="accent-primary size-4 rounded" />
               <span className={`text-sm ${c70}`}>Hide Martial (spellcaster-only character)</span>
+            </label>
+            <label className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-white/5 cursor-pointer select-none">
+              <input type="checkbox" checked={data.allowDmItemChanges ?? true}
+                onChange={e => onUpdate({ allowDmItemChanges: e.target.checked })}
+                className="accent-primary size-4 rounded" />
+              <span className={`text-sm ${c70}`}>
+                Allow DM to change your Items
+                <span className={`block text-[10px] ${c30}`}>Lets a DM give, take, or trade real items with you from Campaign → Inventory.</span>
+              </span>
             </label>
           </div>
 

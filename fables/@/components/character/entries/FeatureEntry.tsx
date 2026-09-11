@@ -272,7 +272,6 @@ interface FeatureEntryProps {
   onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
   showInfusedToggle?: boolean           // only true for the Infusions list — shows an "Infused" checkbox, no gating field needed (every infusion is eligible, unlike Attuned which needs requiresAttunement first). Also unlocks the infusion config block in edit mode (standalone / on-me / Form + Conditional links).
-  infusionInventoryEnabled?: boolean    // Settings → "Infusions in inventory" — only then does an infused infusion get an "Equip" toggle (Equipped vs Carried); off = infusions never enter Gear so the toggle would be meaningless
   formOptions?:      { id: string; name: string }[]  // Infusions list only — Forms an infusion can activate while active-on-self (feature.triggerFormId)
   conditionalOptions?: { id: string; name: string }[]  // Infusions list only — Conditionals an infusion can trigger when it becomes active (feature.triggerConditionalId)
   weaponFormBonus?: { toHit: number; damage: number }  // weapon rows only — flat to-hit/damage from any active Form (FormStatOverrides.weaponToHitBonus/weaponDamageBonus); folded into the displayed/computed to-hit & damage, not persisted
@@ -382,7 +381,7 @@ function BulkRegainRow({ label, onRegain }: { label?: string; onRegain: (amount:
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, statMods = {}, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, infusionInventoryEnabled, showItemExtras, showWeightColumn,
+  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, showItemExtras, showWeightColumn,
   formOptions, conditionalOptions, weaponFormBonus,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
@@ -572,6 +571,14 @@ export function FeatureEntry({
         {showInfusedToggle && (
           <div className="flex flex-col gap-2.5 text-xs border-t border-white/10 pt-2">
             <div className="flex flex-col gap-2">
+              <label className="flex items-start gap-2 text-white/60 cursor-pointer select-none">
+                <input type="checkbox" className="mt-0.5" checked={feature.infusionStandalone ?? false}
+                  onChange={e => onChange({ infusionStandalone: e.target.checked })} />
+                <span>
+                  Standalone item
+                  <span className="block text-[10px] text-white/30">On = a real item — while infused, it shows up in your Gear tab (Equipped/Carried) too, same record, so its weapon/armor stats and weight count for real. Off = just an effect — never enters Gear.</span>
+                </span>
+              </label>
               <label className="flex items-start gap-2 text-white/60 cursor-pointer select-none">
                 <input type="checkbox" className="mt-0.5" checked={feature.infusionTrackLocation ?? false}
                   onChange={e => onChange({ infusionTrackLocation: e.target.checked })} />
@@ -1333,11 +1340,10 @@ export function FeatureEntry({
           {/* At the trailing edge, alongside Weight, rather than crowding the
               name — this toggle also determines which list the item sits in
               (Equipped vs Carried), so it reads better as its own aside. For
-              an armour item it defaults off; for an infused infusion shown in
-              the inventory (Settings → "Infusions in inventory") it defaults ON
-              — you infuse something to wear it — and moves it between the two
-              lists. */}
-          {showItemExtras && ((showInfusedToggle && feature.infused && infusionInventoryEnabled) || (!showInfusedToggle && feature.category === "armor")) && (
+              an armour item it defaults off; for an infused infusion flagged
+              Standalone below it defaults ON — you infuse something to wear
+              it — and moves it between the two lists. */}
+          {showItemExtras && ((showInfusedToggle && feature.infused && feature.infusionStandalone) || (!showInfusedToggle && feature.category === "armor")) && (
             <label className={`flex items-center gap-1 shrink-0 text-[10px] font-bold cursor-pointer ${theme.color}`} onClick={e => e.stopPropagation()} title={showInfusedToggle ? "Equipped — uncheck to move it to Carried Items" : "Equipped"}>
               <input type="checkbox" checked={feature.equipped ?? !!showInfusedToggle} disabled={readOnly}
                 onChange={e => onChange({ equipped: e.target.checked })}

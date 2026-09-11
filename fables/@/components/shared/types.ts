@@ -133,6 +133,7 @@ export interface Feature {
   infusionTrackLocation?: boolean // opt-in — the infused item might not be on this character (given to a party member), so track its whereabouts. Off (default) = assume it's on you, no "On me" control shown anywhere.
   infusionOnSelf?: boolean       // only meaningful when infusionTrackLocation is on — the infused item is currently carried/worn by THIS character, not handed to someone else. Gates this infusion's automation (triggerFormId/triggerConditionalId). Unset = true (assume on you).
   infusionHeldBy?: string        // only meaningful when infusionTrackLocation is on and infusionOnSelf is false — free-text note of who has the infused item ("Liam")
+  infusionStandalone?: boolean   // opt-in — this infusion is its own standalone item (e.g. Repeating Shot), not just a passive effect. On = while infused, shows up in the Gear tab (Equipped/Carried) like any other piece of gear — same record, not a copy. Off (default) = just an effect (e.g. Enhanced Defense) — never enters Gear.
   equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
   isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight
@@ -354,7 +355,6 @@ export interface CharacterData {
   resistances?: string[]         // damage type names (from DAMAGE_TYPES) this character has resistance to
   vulnerabilities?: string[]     // damage type names this character has vulnerability to
   showVisionTracker?: boolean    // opt-in (default off) — shows the Vision panel on the Combat tab
-  infusionsInInventory?: boolean // opt-in (default off) — Artificer: while infused, an infusion also appears in the Gear tab (Equipped or Carried, via its own Equip toggle) so its weapon/armour stats and weight count for real
   visionTypes?: Record<string, number> // this character's own (non-Form) special senses — key from VISION_TYPES
                                         // (Darkvision/Blindsight/Tremorsense/Truesight), value = range in feet.
                                         // A Form active at the same time can push a type higher (never lower —
@@ -491,6 +491,7 @@ export interface CharacterData {
   deathSaves?: { successes: number; failures: number; dead?: boolean }
   // Party / multiclass
   partyCode?: string
+  allowDmItemChanges?: boolean  // opt-in, default true (allowed) — the DM's Campaign → Inventory tab can drag real items into/out of this character's own Items tab. Off = that column shows a 🔒 and the DM can't give, take, or trade anything with this character — see CampaignView.tsx's InventoryColumn/moveItem.
   multiclass?: boolean
   classes?: Array<{ cls: string; level: number }>
   subrace?: string

@@ -12,6 +12,8 @@ import { computeWeaponDamageSegments } from "@/components/shared/damageTypes"
 import { THEMES, DEFAULT_THEME } from "@/components/shared/themes"
 import { FloatingPanel } from "@/components/shared/ui/FloatingPanel"
 import { Modal } from "@/components/shared/ui/Modal"
+import { StyleToggle } from "@/components/shared/ui/StyleToggle"
+import { ColorSwatchInput } from "@/components/shared/ui/ColorSwatchInput"
 import { PartyServer } from "@/components/party/PartyServer"
 import { usePartyLatestMessageAt, isPartyUnread } from "@/components/party/unread"
 import { InitiativeTracker } from "./InitiativeTracker"
@@ -89,6 +91,7 @@ interface CharData {
   acAbility2?: "str" | "dex" | "con" | "int" | "wis" | "cha"
   acMiscBonus?: number
   items?: Feature[]
+  allowDmItemChanges?: boolean  // Settings (character-side) — default true. Off = the Inventory tab's column for this character is locked (🔒), see InventoryColumn/moveItem below.
   speed?: number
   wisdom?: number
   intelligence?: number
@@ -425,6 +428,21 @@ function useCampaignRoster(campaign: SidebarObject) {
     const stashes = resolveStashes(campaignData)
     updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.map(s => s.id === stashId ? { ...s, items: s.items.filter(i => i.id !== itemId) } : s) } as unknown as JSON }).catch(e => console.error(e))
   }
+  // Moving an item between two stashes must be ONE write against the same
+  // `stashes` array — see moveItem's comment in InventoryTab. Calling
+  // removeFromStash then addToStash back-to-back races two updateObject
+  // calls that each independently read this same `campaignData` snapshot,
+  // and whichever one's write lands second overwrites the other's change,
+  // voiding the item.
+  function moveBetweenStashes(fromStashId: string, toStashId: string, item: Feature) {
+    const stashes = resolveStashes(campaignData)
+    const next = stashes.map(s => {
+      if (s.id === fromStashId) return { ...s, items: s.items.filter(i => i.id !== item.id) }
+      if (s.id === toStashId) return { ...s, items: [...s.items, item] }
+      return s
+    })
+    updateObject(campaign.id, { data: { ...campaignData, stashes: next } as unknown as JSON }).catch(e => console.error(e))
+  }
   function updateStashItem(stashId: string, item: Feature) {
     const stashes = resolveStashes(campaignData)
     updateObject(campaign.id, { data: { ...campaignData, stashes: stashes.map(s => s.id === stashId ? { ...s, items: s.items.map(i => i.id === item.id ? item : i) } : s) } as unknown as JSON }).catch(e => console.error(e))
@@ -574,7 +592,7 @@ function useCampaignRoster(campaign: SidebarObject) {
     toggleInventoryEnabled, addStash, renameStash, deleteStash,
     updateBackgroundColor, updateStashStyle, updateStashAccentColor,
     updateRosterCardStyle, updateRosterCardAccentColor,
-    addToStash, removeFromStash, updateStashItem, setMemberItems,
+    addToStash, removeFromStash, moveBetweenStashes, updateStashItem, setMemberItems,
   }
 }
 
@@ -597,7 +615,7 @@ export function CampaignView({ campaign }: Props) {
     toggleInventoryEnabled, addStash, renameStash, deleteStash,
     updateBackgroundColor, updateStashStyle, updateStashAccentColor,
     updateRosterCardStyle, updateRosterCardAccentColor,
-    addToStash, removeFromStash, updateStashItem, setMemberItems,
+    addToStash, removeFromStash, moveBetweenStashes, updateStashItem, setMemberItems,
   } = useCampaignRoster(campaign)
 
   const stashes = resolveStashes(campaignData)
@@ -637,23 +655,6 @@ export function CampaignView({ campaign }: Props) {
 
   function copyCode() {
     if (partyCode) navigator.clipboard.writeText(partyCode).catch(() => {})
-  }
-
-  // A private "something just left your pack" flavor notice, sent whenever
-  // the Inventory tab's drag removes an item from a player (taken to the
-  // stash, or traded to someone else) — deliberately vague about WHAT was
-  // taken, just that something was. A plain one-off insert into the same
-  // `messages` table PartyServer's own private-message system uses, rather
-  // than pulling in usePartyMessages here (its full fetch + realtime
-  // subscription would be pure overhead for a view that never renders a
-  // message list).
-  async function notifyItemTaken(ownerId: string) {
-    if (!user?.id || !partyCode) return
-    const { error } = await supabase.from("messages").insert({
-      party_code: partyCode, sender_id: user.id, sender_name: "Dungeon Master",
-      body: "You feel lighter...", image_url: null, recipient_id: ownerId, channel: null, type: "message", payload: null,
-    })
-    if (error) console.error("item-taken notice error:", error)
   }
 
   if (expandedId) {
@@ -738,9 +739,9 @@ export function CampaignView({ campaign }: Props) {
           deleteStash={deleteStash}
           addToStash={addToStash}
           removeFromStash={removeFromStash}
+          moveBetweenStashes={moveBetweenStashes}
           updateStashItem={updateStashItem}
           setMemberItems={setMemberItems}
-          notifyItemTaken={notifyItemTaken}
         />
       )}
 
@@ -859,32 +860,30 @@ export function CampaignView({ campaign }: Props) {
 // Party Members row; moved here so it isn't the one settings control just
 // hanging out unlabeled among the roster tools), and the Inventory tab's
 // own look (per-stash accent, and the campaign view's own background).
-const CARD_STYLES: { value: CardStyle; label: string }[] = [
-  { value: "none", label: "Plain" },
-  { value: "outline", label: "Outline" },
-  { value: "galaxy", label: "Background" },
-]
-
-// Style-buttons + color-swatch row shared by Stash Appearance and Party
-// Card Appearance below — same "none/outline/galaxy" + accent color shape
-// as a character sheet's own Feature Styling category (categoryAccentStyle
-// is what actually applies whatever gets picked here to the real cards).
-function CardStylePicker({ style, color, onChangeStyle, onChangeColor }: {
+// Label + accent-color swatch + StyleToggle, one self-contained row — the
+// exact same shape as a character sheet's own Feature Styling category row
+// (SettingsModal.tsx), right down to reusing StyleToggle/ColorSwatchInput
+// themselves rather than a DM-only lookalike, since both ultimately just
+// pick a CardStyle + color for categoryAccentStyle to apply.
+function CardStylePicker({ label, hint, style, color, onChangeStyle, onChangeColor }: {
+  label: string
+  hint?: string
   style: CardStyle
   color?: string
   onChangeStyle: (style: CardStyle) => void
   onChangeColor: (color: string) => void
 }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {CARD_STYLES.map(s => (
-        <button key={s.value} type="button" onClick={() => onChangeStyle(s.value)}
-          className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${style === s.value ? "bg-white/20 text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}>
-          {s.label}
-        </button>
-      ))}
-      <input type="color" value={color ?? DEFAULT_ACCENT_COLOR} onChange={e => onChangeColor(e.target.value)}
-        title="Accent color" className="size-7 rounded-md border border-white/15 bg-transparent cursor-pointer" />
+    <div className="flex flex-col gap-1 px-1 py-1.5 rounded-lg bg-white/5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-white/70 shrink-0">{label}</span>
+        <label className="flex flex-col items-center gap-0.5 cursor-pointer">
+          <ColorSwatchInput value={color ?? DEFAULT_ACCENT_COLOR} title="Accent color" onChange={onChangeColor} />
+          <span className="text-[8px] text-white/30">Color</span>
+        </label>
+      </div>
+      <StyleToggle label="Style" value={style} onChange={onChangeStyle} />
+      {hint && <p className="text-[10px] text-white/30 pl-2">{hint}</p>}
     </div>
   )
 }
@@ -918,27 +917,20 @@ function CampaignSettingsModal({ campaignData, onToggleInventory, onChangeBackgr
               className="size-5 accent-violet-500 shrink-0 cursor-pointer" />
           </label>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-white">Stash Appearance</p>
-            <CardStylePicker style={campaignData.stashStyle ?? "none"} color={campaignData.stashAccentColor}
-              onChangeStyle={onChangeStashStyle} onChangeColor={onChangeStashAccentColor} />
-            <p className="text-[10px] text-white/30">Applies to every stash shelf in the Inventory tab.</p>
-          </div>
+          <CardStylePicker label="Stash Appearance" hint="Applies to every stash shelf in the Inventory tab."
+            style={campaignData.stashStyle ?? "none"} color={campaignData.stashAccentColor}
+            onChangeStyle={onChangeStashStyle} onChangeColor={onChangeStashAccentColor} />
 
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-white">Party Card Appearance</p>
-            <CardStylePicker style={campaignData.rosterCardStyle ?? "none"} color={campaignData.rosterCardAccentColor}
-              onChangeStyle={onChangeRosterCardStyle} onChangeColor={onChangeRosterCardAccentColor} />
-            <p className="text-[10px] text-white/30">Applies to every party member's card in Overview and the compact roster panel.</p>
-          </div>
+          <CardStylePicker label="Party Card Appearance" hint="Applies to every party member's card in Overview and the compact roster panel."
+            style={campaignData.rosterCardStyle ?? "none"} color={campaignData.rosterCardAccentColor}
+            onChangeStyle={onChangeRosterCardStyle} onChangeColor={onChangeRosterCardAccentColor} />
 
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-white">Campaign Background</p>
-            <div className="flex items-center gap-2">
-              <input type="color" value={campaignData.backgroundColor ?? "#18181b"}
-                onChange={e => onChangeBackground(e.target.value)}
-                title="Campaign background color"
-                className="size-7 rounded-md border border-white/15 bg-transparent cursor-pointer" />
+          <div className="flex flex-col gap-2 px-1 py-1.5 rounded-lg bg-white/5">
+            <span className="text-sm text-white/70">Campaign Background</span>
+            <div className="flex items-center gap-2 text-xs text-white/50">
+              <span>Custom color</span>
+              <ColorSwatchInput value={campaignData.backgroundColor ?? "#18181b"} title="Campaign background color"
+                onChange={onChangeBackground} />
               {campaignData.backgroundColor && (
                 <button type="button" onClick={() => onChangeBackground(undefined)}
                   className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-white/50 hover:text-white/80 transition-colors">
@@ -953,7 +945,7 @@ function CampaignSettingsModal({ campaignData, onToggleInventory, onChangeBackgr
   )
 }
 
-function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, floatingItems, setFloatingItems, userId, addStash, renameStash, deleteStash, addToStash, removeFromStash, updateStashItem, setMemberItems, notifyItemTaken }: {
+function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, floatingItems, setFloatingItems, userId, addStash, renameStash, deleteStash, addToStash, removeFromStash, moveBetweenStashes, updateStashItem, setMemberItems }: {
   partyMembers: SidebarObject[]
   stashes: ItemStash[]
   stashStyle?: CardStyle
@@ -966,9 +958,9 @@ function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, flo
   deleteStash: (stashId: string) => void
   addToStash: (stashId: string, items: Feature[]) => void
   removeFromStash: (stashId: string, itemId: string) => void
+  moveBetweenStashes: (fromStashId: string, toStashId: string, item: Feature) => void
   updateStashItem: (stashId: string, item: Feature) => void
   setMemberItems: (characterId: string, items: Feature[]) => void
-  notifyItemTaken: (ownerId: string) => void
 }) {
   const [showPicker, setShowPicker] = useState(false)
   // Non-null while the item-editor modal is open. `creatingItemStashId`
@@ -994,20 +986,38 @@ function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, flo
   // without threading a separate "kind" flag through drag state. Floating
   // items use the literal id "floating" — there's only ever one such spot.
   const isStash = (id: string) => id.startsWith("stash:")
+  // Character's own Settings → "Allow DM to change your Items" (default on).
+  // Returns false for stash/floating ids too, since only a real character id
+  // can ever match a partyMembers entry — the lock only ever applies there.
+  const isMemberLocked = (id: string) => {
+    const m = partyMembers.find(pm => pm.id === id)
+    return !!m && (safeParseJson(m.data) as CharData).allowDmItemChanges === false
+  }
 
   function moveItem(item: Feature, from: string, to: string) {
     if (from === to) return
+    // Enforced here too, not just by disabling the drag/drop UI below — the
+    // one place that actually writes to a character's items should never
+    // trust the UI alone to have kept a locked column untouched.
+    if (isMemberLocked(from) || isMemberLocked(to)) return
+    // Stash → stash goes through the one combined write in moveBetweenStashes
+    // instead of removeFromStash + addToStash back-to-back. Those two each
+    // independently read `campaignData` and overwrite the whole `stashes`
+    // array from that same stale snapshot — firing both races two
+    // updateObject calls against each other, and whichever lands second wins
+    // outright, discarding the other's change. That's a lost update, not
+    // just a rare glitch: the item comes out of `from` in one write and
+    // never makes it into `to` in the other (or vice versa), so it just
+    // vanishes.
+    if (isStash(from) && isStash(to)) {
+      moveBetweenStashes(from, to, item)
+      return
+    }
     if (from === "floating") setFloatingItems(prev => prev.filter(i => i.id !== item.id))
     else if (isStash(from)) removeFromStash(from, item.id)
     else {
       const src = partyMembers.find(m => m.id === from)
-      if (src) {
-        setMemberItems(from, memberItems(src).filter(i => i.id !== item.id))
-        // Whatever it went to — a stash, or straight to another player —
-        // this player's pack is lighter by one item, so they get the notice
-        // either way.
-        notifyItemTaken(src.owner_id)
-      }
+      if (src) setMemberItems(from, memberItems(src).filter(i => i.id !== item.id))
     }
     if (isStash(to)) addToStash(to, [item])
     else {
@@ -1123,6 +1133,7 @@ function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, flo
       <div className="flex items-start gap-3 overflow-x-auto shrink-0 pb-2">
         {partyMembers.map(m => (
           <InventoryColumn key={m.id} id={m.id} title={m.name} items={memberItems(m)}
+            locked={isMemberLocked(m.id)}
             isDragOver={dragOverCol === m.id} onDragOverCol={setDragOverCol} onDrop={dropOn}
             onStartDrag={startDrag} onEndDrag={endDrag} />
         ))}
@@ -1267,10 +1278,11 @@ function InventoryStash({ stash, cardStyle, isDragOver, onDragOverCol, onDrop, o
   )
 }
 
-function InventoryColumn({ id, title, items, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag }: {
+function InventoryColumn({ id, title, items, locked, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag }: {
   id: string
   title: string
   items: Feature[]
+  locked?: boolean  // this character's own Settings → "Allow DM to change your Items" is off — no drop in, no drag out, just a 🔒 next to their name
   isDragOver: boolean
   onDragOverCol: (id: string | null) => void
   onDrop: (id: string) => void
@@ -1279,19 +1291,23 @@ function InventoryColumn({ id, title, items, isDragOver, onDragOverCol, onDrop, 
 }) {
   return (
     <div
-      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol(id) }}
-      onDrop={e => { e.preventDefault(); onDrop(id) }}
-      className={`flex flex-col gap-1.5 w-56 shrink-0 max-h-80 rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"}`}
+      onDragOver={e => { if (locked) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol(id) }}
+      onDrop={e => { if (locked) return; e.preventDefault(); onDrop(id) }}
+      title={locked ? `${title} has turned off "Allow DM to change your Items" in Settings` : undefined}
+      className={`flex flex-col gap-1.5 w-56 shrink-0 max-h-80 rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"} ${locked ? "opacity-60" : ""}`}
     >
       <div className="flex items-center justify-between px-1 pb-1 gap-1 shrink-0">
-        <span className="text-[10px] uppercase tracking-widest font-semibold text-foreground/50 truncate">{title}</span>
+        <span className="flex items-center gap-1 min-w-0">
+          {locked && <span className="text-[10px] shrink-0" aria-hidden>🔒</span>}
+          <span className="text-[10px] uppercase tracking-widest font-semibold text-foreground/50 truncate">{title}</span>
+        </span>
         <span className="text-[9px] text-foreground/30 tabular-nums shrink-0">{items.length}</span>
       </div>
       <div className="flex flex-col gap-1 flex-1 min-h-16 overflow-y-auto">
         {items.length === 0 ? (
           <p className="text-[10px] italic text-foreground/25 text-center py-4">Empty</p>
         ) : items.map(item => (
-          <InventoryItemRow key={item.id} item={item} from={id} onStartDrag={onStartDrag} onEndDrag={onEndDrag} />
+          <InventoryItemRow key={item.id} item={item} from={id} locked={locked} onStartDrag={onStartDrag} onEndDrag={onEndDrag} />
         ))}
       </div>
     </div>
@@ -1304,9 +1320,10 @@ function InventoryColumn({ id, title, items, isDragOver, onDragOverCol, onDrop, 
 // items) just omits it and the row falls back to drag-only. Deleting a stash
 // item now lives only inside that edit modal (FeatureEntry's own remove
 // icon — see InventoryTab's onRemove wiring), not as a second button here.
-function InventoryItemRow({ item, from, onStartDrag, onEndDrag, onEdit }: {
+function InventoryItemRow({ item, from, locked, onStartDrag, onEndDrag, onEdit }: {
   item: Feature
   from: string
+  locked?: boolean  // this row's own column is locked (see InventoryColumn) — not draggable out
   onStartDrag: (item: Feature, from: string) => void
   onEndDrag: () => void
   onEdit?: (item: Feature) => void
@@ -1324,12 +1341,12 @@ function InventoryItemRow({ item, from, onStartDrag, onEndDrag, onEdit }: {
 
   return (
     <div
-      draggable
-      onDragStart={e => { onStartDrag(item, from); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", item.name) }}
+      draggable={!locked}
+      onDragStart={locked ? undefined : e => { onStartDrag(item, from); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", item.name) }}
       onDragEnd={onEndDrag}
       onClick={() => onEdit?.(item)}
-      title={onEdit ? "Click to edit — drag onto another column to give, take, or trade" : "Drag onto another column to give, take, or trade"}
-      className={`flex flex-col gap-1 px-2 py-1.5 rounded-lg bg-foreground/5 hover:bg-foreground/10 cursor-grab active:cursor-grabbing transition-colors ${onEdit ? "cursor-pointer" : ""}`}
+      title={locked ? "Locked — this player has turned off \"Allow DM to change your Items\" in Settings" : onEdit ? "Click to edit — drag onto another column to give, take, or trade" : "Drag onto another column to give, take, or trade"}
+      className={`flex flex-col gap-1 px-2 py-1.5 rounded-lg bg-foreground/5 transition-colors ${locked ? "cursor-default" : `hover:bg-foreground/10 cursor-grab active:cursor-grabbing ${onEdit ? "cursor-pointer" : ""}`}`}
     >
       <div className="flex items-center gap-1.5">
         <span className="flex-1 min-w-0 text-xs text-foreground truncate">{item.name || "Unnamed item"}</span>
