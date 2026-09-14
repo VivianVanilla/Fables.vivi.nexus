@@ -1,50 +1,12 @@
-// Shared drag-reorder wrapper for FeatureList, ContainerItemsList, and
-// SpellsEquipPanel's Martial/Spells lists — press-and-hold anywhere on the
-// row (not a dedicated side handle) to pick it up, on both mouse and touch.
-// A quick tap/click still reaches the row's own onClick (expand, edit,
-// buttons) untouched: dnd-kit's PointerSensor only takes over once the
-// activation delay elapses, so a plain click resolves before that and is
-// never intercepted; moving before the delay elapses cancels the pending
-// drag instead of starting one, which is also what keeps an ordinary
-// scroll-swipe from being mistaken for a drag.
-//
-// This — and DropZone below — is what replaced generic items' native
-// drag-to-container (InfoTab.tsx's ContainerItemsList) with dnd-kit.
-// Native HTML5 drag doesn't work on touch in an Android WebView at all,
-// which is why drag-to-container needed a button fallback in the first
-// place, and why it silently stopped working *at all* (even on desktop)
-// once this same delay-based PointerSensor started listening on the same
-// rows for reordering — dnd-kit's activation timer competes with the
-// browser's own native-drag arming for the same pointer gesture, and
-// reliably loses on Chromium. dnd-kit drives container drops through
-// Pointer Events instead, which is what actually makes dropping onto
-// something work on the phone too, not just the desktop mouse.
-//
-// Drag-to-Favorites (FeatureEntry.tsx/SpellEntry.tsx's own `dragAttrs`,
-// consumed by FavoritesPanel.tsx's onDragOver/onDrop) still uses the old
-// native mechanism, deliberately not migrated here yet — doing that needs
-// one shared DndContext lifted above SpellsEquipPanel/FavoritesPanel
-// (currently two separate components each with their own local
-// DndContext), a bigger structural change than this pass. It very likely
-// has the same silent-conflict problem as drag-to-container did, on any
-// row that's also SortableItem-reorderable (Spells/Martial) — flagging
-// rather than leaving unmentioned.
 
+
+import { GripVertical } from "lucide-react"
 import { useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core"
 import type { PointerEvent as ReactPointerEvent } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
-// dnd-kit's stock PointerSensor activator only checks isPrimary/button — it
-// has no notion of "this pointerdown landed on a text field," so a
-// press-and-hold to select text inside a row's MarkdownTextarea (or any
-// input) arms the exact same activation timer as picking the row up to drag
-// it. A deliberate text-selection hold routinely outlasts the 250ms delay
-// below, so the drag wins the race and drags the whole card instead of
-// selecting text — worse on mobile, where selecting text IS a press-and-hold
-// gesture. Refusing activation whenever the down event started on an
-// editable element keeps that gesture free for text selection everywhere,
-// while every non-editable part of the row still arms the drag as before.
+
 function isTextEditTarget(target: EventTarget | null): boolean {
   let el = target as HTMLElement | null
   while (el) {
@@ -67,15 +29,9 @@ export function useDragSensors() {
   return useSensors(useSensor(RowPointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }))
 }
 
-// The row stays in its list slot while dragging (as a faint placeholder) —
-// it does NOT visually follow the pointer itself. The thing that actually
-// tracks your finger/cursor 1:1, with no easing lag and unclipped by any
-// scrolling parent, is the DragOverlayCard below, rendered by each
-// DndContext owner inside a <DragOverlay> keyed to whichever id is
-// currently being dragged. Without that overlay, a plain in-place transform
-// can look laggy or "stuck" — see DragOverlayCard's own comment.
+
 export function SortableItem({ id, disabled, children }: { id: string; disabled?: boolean; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
 
   if (disabled) return <>{children}</>
 
@@ -89,21 +45,37 @@ export function SortableItem({ id, disabled, children }: { id: string; disabled?
         transition,
         opacity: isDragging ? 0.35 : 1,
         // `pan-y`, NOT `none`: the row still has to be scrollable past with a
-        // vertical swipe — these lists fill the screen, so `none` here meant
-        // the page could only be scrolled by dragging on the gaps between
-        // rows. `pan-y` hands a vertical swipe straight to the browser's
-        // scroller while still leaving every other gesture (the press-and-
-        // hold that arms RowPointerSensor's 250ms delay) for dnd-kit. The
-        // `tolerance: 8` on the activation constraint cancels a pending drag
-        // the moment a swipe moves the pointer, so a scroll never turns into
-        // a pickup; once a real drag HAS activated, dnd-kit calls
-        // preventDefault on the move events itself, so the page won't scroll
-        // out from under an in-progress drag either.
+        // vertical swipe — see the file header on why `none` isn't an option
+        // here, and why that's what the touch-only handle below is for.
         touchAction: "pan-y",
+        WebkitTouchCallout: "none",
       }}
-      className="cursor-grab active:cursor-grabbing"
+      className="relative cursor-grab active:cursor-grabbing select-none"
     >
       {children}
+      {/* Touch-only second pickup point — see file header. An overlay INSIDE
+          the card's own corner rather than a separate column beside it, so
+          it doesn't add width to every row or push card content over —
+          `absolute`, not part of layout flow, on top of whatever's under it
+          (the dark chip background keeps it legible regardless). `hidden`
+          by default, switched to `flex` under `pointer: coarse` (the
+          device's PRIMARY pointer is touch, i.e. a phone/tablet — never a
+          mouse, so this stays invisible on desktop even with a touchscreen
+          monitor attached). Its own onPointerDown stops the event from also
+          bubbling to the row's identical listener above — without that, a
+          touch starting on the handle would fire dnd-kit's activation logic
+          twice for the same gesture. */}
+      <button
+        type="button"
+        ref={setActivatorNodeRef}
+        {...attributes}
+        onPointerDown={e => { e.stopPropagation(); listeners?.onPointerDown?.(e) }}
+        aria-label="Drag to reorder"
+        style={{ touchAction: "none", WebkitTouchCallout: "none" }}
+        className="hidden pointer-coarse:flex absolute pr-1  left-0.9 top-2 z-10 items-center justify-center size-5 text-white/40 active:text-white cursor-grab active:cursor-grabbing select-none transition-colors"
+      >
+        <GripVertical className="size-4.5" />
+      </button>
     </div>
   )
 }
