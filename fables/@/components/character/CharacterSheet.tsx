@@ -1759,7 +1759,7 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
         {(["main", "details", "items", ...(data.partyCode && !readOnly ? ["chat"] : [])] as Tab[]).map(tab => (
           <button key={tab} type="button" onClick={() => setActiveTab(tab)}
             className={`relative px-3 py-1 text-xs uppercase tracking-widest rounded-full font-semibold transition-colors ${activeTab === tab ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"}`}>
-            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "items" ? "Armor & Items" : "Chat"}
+            {tab === "main" ? "Main" : tab === "details" ? "Details" : tab === "items" ? "Armor & Items" : "Party"}
             {tab === "chat" && partyChatUnread && (
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500" />
             )}
@@ -1800,6 +1800,9 @@ export function CharacterSheet({ character, readOnly = false }: Props) {
             currentUserName={character.name || "Adventurer"}
             isDM={false}
             accentColor={theme.accent}
+            characterId={character.id}
+            characterData={data}
+            onUpdateCharacter={update}
           />
         )}
       </div>

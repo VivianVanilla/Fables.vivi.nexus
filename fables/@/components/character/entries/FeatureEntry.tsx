@@ -271,6 +271,7 @@ interface FeatureEntryProps {
   onToggleFavorite?: () => void        // omit to hide the star
   onAddPack?:        (packItems: PackItem[]) => void  // only wired for the Items tab — replaces this (in-progress) feature with every item a picked pack suggestion contains
   showAttunement?:   boolean            // only true for the Items tab — shows the "Requires Attunement" toggle, and the "Attuned" checkbox once that's on
+  showShopFields?:   boolean            // only true for the Shops tab — shows the "Hidden from players" toggle + a cover-name input (feature.shopHidden/shopDisplayName), letting a DM disguise an item's true identity until they reveal it
   showInfusedToggle?: boolean           // only true for the Infusions list — shows an "Infused" checkbox, no gating field needed (every infusion is eligible, unlike Attuned which needs requiresAttunement first). Also unlocks the infusion config block in edit mode (standalone / on-me / Form + Conditional links).
   formOptions?:      { id: string; name: string }[]  // Infusions list only — Forms an infusion can activate while active-on-self (feature.triggerFormId)
   conditionalOptions?: { id: string; name: string }[]  // Infusions list only — Conditionals an infusion can trigger when it becomes active (feature.triggerConditionalId)
@@ -397,7 +398,7 @@ function BackpackIcon() {
 
 export function FeatureEntry({
   feature, allFeatures, onChange, onRemove, onLinkToggle, theme, readOnly = false, pb, statMods = {}, suggestionSource, userId,
-  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, showItemExtras, showWeightColumn,
+  isFavorite, onToggleFavorite, onAddPack, showAttunement, showInfusedToggle, showItemExtras, showWeightColumn, showShopFields,
   formOptions, conditionalOptions, weaponFormBonus,
   containerOptions, onMoveToContainer, containerContentsOpen, onToggleContainerContents,
   showMagicStar = true, magicItemStyle = "galaxy", magicItemColor, magicItemSliderStyle,
@@ -567,6 +568,26 @@ export function FeatureEntry({
                   className="accent-white"
                 />
                 Attuned
+              </label>
+            </PopTransition>
+          </div>
+        )}
+
+        {showShopFields && (
+          <div className="flex flex-col gap-2 text-xs border-t border-white/10 pt-2">
+            <label className="flex items-center gap-2 text-white/60 cursor-pointer select-none">
+              <input type="checkbox" checked={feature.shopHidden ?? false}
+                onChange={e => onChange({ shopHidden: e.target.checked })}
+              />
+              Hidden from players
+            </label>
+            <PopTransition show={!!feature.shopHidden}>
+              <label className="flex flex-col gap-1">
+                <span className="text-white/40">Displayed as</span>
+                <input type="text" value={feature.shopDisplayName ?? ""} placeholder="e.g. Big Belt"
+                  onChange={e => onChange({ shopDisplayName: e.target.value })}
+                  className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white outline-none focus:border-white/30 placeholder:text-white/20" />
+                <span className="text-[10px] text-white/30">Shown instead of the real name/description until you uncheck "Hidden" — the item itself is unchanged.</span>
               </label>
             </PopTransition>
           </div>

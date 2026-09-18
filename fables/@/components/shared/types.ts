@@ -134,6 +134,9 @@ export interface Feature {
   infusionOnSelf?: boolean       // only meaningful when infusionTrackLocation is on — the infused item is currently carried/worn by THIS character, not handed to someone else. Gates this infusion's automation (triggerFormId/triggerConditionalId). Unset = true (assume on you).
   infusionHeldBy?: string        // only meaningful when infusionTrackLocation is on and infusionOnSelf is false — free-text note of who has the infused item ("Liam")
   infusionStandalone?: boolean   // opt-in — this infusion is its own standalone item (e.g. Repeating Shot), not just a passive effect. On = while infused, shows up in the Gear tab (Equipped/Carried) like any other piece of gear — same record, not a copy. Off (default) = just an effect (e.g. Enhanced Defense) — never enters Gear.
+  // ── Shops tab only (entries in a Shop's `items`) ──────────────────────────
+  shopHidden?: boolean        // DM toggle — true = players browsing the shop see shopDisplayName (and no description/stats) instead of this item's real identity; the item itself is unchanged, so once bought it shows its real name/stats normally on the buyer's own sheet
+  shopDisplayName?: string    // the "cover" name shown while shopHidden is on (e.g. "Big Belt" for a disguised Belt of Hill Giant Strength)
   equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
   isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight

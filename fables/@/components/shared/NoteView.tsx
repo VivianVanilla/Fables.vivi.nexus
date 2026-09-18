@@ -235,7 +235,7 @@ export function NoteView({ note }: NoteViewProps) {
            <span className="font-mono ">  *italic*   | </span>  <span className="font-mono">`code`   | </span>  <span className="font-mono">- lists  |</span>  <span className="font-mono">tables   |</span> 
             <span className="font-mono">  images (copy and paste)  | </span> 
             <span className="font-mono">[[links]]   |</span>  
-           <span className="font-mono"> &lt;!--pagebreak--!&gt;</span> (Dual Page &amp; Multiple Pages settings)   |  
+           <span className="font-mono"> &lt;!--pagebreak--!&gt;</span> (Dual Column &amp; Multiple Pages settings)   |  
             <span  className="font-mono font-bold text-xs "> Shortcuts:</span>
             <span className="font-mono">  Ctrl/Cmd+B/I/U/E</span> 
         </p>
@@ -364,11 +364,19 @@ function PagedBody({ text, previewClass, zoom, onInternalLink }: {
         ;(child as HTMLElement).style.display = (i >= current.start && i < current.end) ? "" : "none"
       })
     })
+    // A new page starts scrolled wherever the last one left off otherwise —
+    // only matters for the overflow-y-auto safety net below, but jumping to
+    // the top on every page change reads as a bug either way.
+    if (pageBoxRef.current) pageBoxRef.current.scrollTop = 0
   }, [pages, page])
 
   return (
     <div className="flex-1 min-h-0 flex flex-col p-5 gap-2">
-      <div ref={pageBoxRef} className="flex-1 min-h-0 overflow-hidden">
+      {/* overflow-y-auto, not hidden — recompute() sizes pages to fit
+          exactly, so this never shows a scrollbar in the normal case, but a
+          single element too tall for one page (a big image/table) can't be
+          split further, and would otherwise just get silently clipped. */}
+      <div ref={pageBoxRef} className="flex-1 min-h-0 overflow-y-auto">
         <div ref={outerRef} style={{ zoom } as React.CSSProperties}>
           {sections.map((section, i) => (
             <div key={i}>
@@ -430,8 +438,8 @@ function NoteViewSettingsModal({ settings, onChange, onClose }: {
               <SegButton active={settings.viewMode === "wide"} onClick={() => onChange({ viewMode: "wide" })} title="Wide — text fills the available width">
                 <StretchHorizontal className="size-3.5" /> Wide
               </SegButton>
-              <SegButton active={settings.viewMode === "dual"} onClick={() => onChange({ viewMode: "dual" })} title="Dual Page — two scrollable columns">
-                <Columns2 className="size-3.5" /> Dual Page
+              <SegButton active={settings.viewMode === "dual"} onClick={() => onChange({ viewMode: "dual" })} title="Dual Column — two scrollable columns (Knonw as Dual Pag ewithin the codebase)">
+                <Columns2 className="size-3.5" /> Dual Column
               </SegButton>
               <SegButton active={settings.viewMode === "paged"} onClick={() => onChange({ viewMode: "paged" })} title="Multiple Pages — click through page by page">
                 <BookOpen className="size-3.5" /> Pages

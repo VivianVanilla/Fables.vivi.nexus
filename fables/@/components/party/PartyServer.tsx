@@ -10,12 +10,13 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react"
-import { Hash, Plus, X, Menu, Mountain, BookOpen, NotebookPen, Eye, EyeOff } from "lucide-react"
+import { Hash, Plus, X, Menu, Mountain, BookOpen, NotebookPen, Eye, EyeOff, Store } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { supabase } from "../../../src/supabase"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
 import { MAP_PARTY_CODES } from "@/components/shared/constants"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
+import type { CharacterData } from "@/components/shared/types"
 import { usePartyRoster, usePartyMessages } from "./usePartyServer"
 import { usePartyVitals } from "./usePartyVitals"
 import { useOnResume } from "@/components/shared/useOnResume"
@@ -23,6 +24,7 @@ import { ChatPane } from "./ChatPane"
 import { MapOverlay } from "../map/MapOverlay"
 import { NpcTrackerOverlay } from "../npcTracker/NpcTrackerOverlay"
 import { MysteriousPagesOverlay } from "../mysteriousPages/MysteriousPagesOverlay"
+import { ShopOverlay } from "../shops/ShopOverlay"
 import { markThreadSeen, isThreadUnread } from "./unread"
 import { channelThreadKey, dmThreadKey, DEFAULT_CHANNEL, useChannelSuffix, type Channel, type PartyMember } from "./partyTypes"
 
@@ -35,6 +37,7 @@ const hpColor = (pct: number) => (pct > 50 ? "#22c55e" : pct > 25 ? "#eab308" : 
 export function PartyServer({
   partyCode, currentUserId, currentUserName, isDM,
   campaign = null, partyMembers, accentColor,
+  characterId, characterData, onUpdateCharacter,
 }: {
   partyCode: string
   currentUserId: string
@@ -46,6 +49,16 @@ export function PartyServer({
   // header when Party Chat is opened from a player's sheet. Unset when the
   // DM opens it from the campaign view (no single character's theme to use).
   accentColor?: string
+  // Only set when a player opens this from their own character sheet — lets
+  // the Shop rail button below read their gold/inventory and write through
+  // the sheet's own live-state updater (so a shop purchase can never clobber
+  // some other unsaved edit elsewhere on the sheet with a stale snapshot).
+  // The DM has no single "character," so these stay unset for their own
+  // Party Chat tab and the Shop button just doesn't show — shops are
+  // managed from the DM's own Shops tab in CampaignView.tsx instead.
+  characterId?: string
+  characterData?: CharacterData
+  onUpdateCharacter?: (patch: Partial<CharacterData>) => void
 }) {
   const { updateObject } = useUserContext()
   // `activeCampaign` resolves to the prop when the DM opens this from the
@@ -115,6 +128,7 @@ export function PartyServer({
   const [mapOpen, setMapOpen] = useState(false)
   const [npcTrackerOpen, setNpcTrackerOpen] = useState(false)
   const [pagesOpen, setPagesOpen] = useState(false)
+  const [shopOpen, setShopOpen] = useState(false)
 
   // Everyone in the party can DM everyone else — the rest of the player
   // roster (from `members`, minus yourself) plus the DM, unless you *are*
@@ -269,6 +283,17 @@ export function PartyServer({
             <BookOpen className="size-3.5 shrink-0 opacity-70" />
             NPC Tracker
           </button>
+          {/* DM-only? No — the reverse: shops are DM-*managed* from
+              CampaignView.tsx's own Shops tab, but *browsed/bought from*
+              here, by players, using their own character's gold/inventory —
+              hence gated on having those (isDM never does). */}
+          {!isDM && characterId && characterData && onUpdateCharacter && (
+            <button type="button" onClick={() => setShopOpen(true)}
+              className="w-full flex items-center gap-1.5 text-[12px] px-2 py-1.5 rounded-md transition-colors text-foreground/60 hover:bg-foreground/8 hover:text-foreground">
+              <Store className="size-3.5 shrink-0 opacity-70" />
+              Shop
+            </button>
+          )}
         </div>
 
         {MAP_PARTY_CODES.includes(partyCode) && (
@@ -397,6 +422,17 @@ export function PartyServer({
           currentUserId={currentUserId}
           currentUserName={currentUserName}
           onClose={() => setPagesOpen(false)}
+        />
+      )}
+
+      {shopOpen && characterId && characterData && onUpdateCharacter && (
+        <ShopOverlay
+          partyCode={partyCode}
+          characterId={characterId}
+          characterName={currentUserName}
+          characterData={characterData}
+          onUpdateCharacter={onUpdateCharacter}
+          onClose={() => setShopOpen(false)}
         />
       )}
     </div>

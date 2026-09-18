@@ -2,11 +2,9 @@ import { useState } from "react"
 import { Settings2, X } from "lucide-react"
 import { Modal } from "@/components/shared/ui/Modal"
 import type { CharacterData } from "@/components/shared/types"
+import { type CoinKey, type CurrencyMode, CP_VALUE, orderFor, calcSpend } from "@/components/shared/currencyMath"
 
 // ── Types & constants ─────────────────────────────────────────────────────────
-
-type CoinKey      = "pp" | "gp" | "ep" | "sp" | "cp"
-type CurrencyMode = "classic" | "simple" | "custom"
 
 const SLOTS: { key: CoinKey; defaultLabel: string; abbrev: string; color: string; bg: string }[] = [
   { key: "pp", defaultLabel: "Platinum", abbrev: "PP", color: "text-violet-300", bg: "bg-violet-500/10" },
@@ -19,77 +17,10 @@ const SLOTS: { key: CoinKey; defaultLabel: string; abbrev: string; color: string
 const NAME_INDEX: Record<CoinKey, number> = { cp: 0, sp: 1, ep: 2, gp: 3, pp: 4 }
 const DEFAULT_NAMES = ["Copper", "Silver", "Electrum", "Gold", "Platinum"]
 
-// CP value of each denomination (standard 5e)
-const CP_VALUE: Record<CoinKey, number> = { cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 }
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number) { return n.toLocaleString("en-US") }
 function parseRaw(s: string) { return Math.max(0, parseInt(s.replace(/,/g, "").replace(/[^0-9]/g, "")) || 0) }
-
-function orderFor(mode: CurrencyMode): CoinKey[] {
-  return mode === "simple" ? ["pp", "gp", "sp", "cp"] : ["pp", "gp", "ep", "sp", "cp"]
-}
-
-interface SpendResult {
-  canAfford: true
-  spent:  Partial<Record<CoinKey, number>>
-  change: Partial<Record<CoinKey, number>>
-  needsBreaking: boolean
-}
-
-function calcSpend(
-  coins: Partial<Record<CoinKey, number>>,
-  amountCP: number,
-  order: CoinKey[],
-): { canAfford: false } | SpendResult {
-  const totalCP = order.reduce((s, k) => s + (coins[k] ?? 0) * CP_VALUE[k], 0)
-  if (amountCP > totalCP) return { canAfford: false }
-
-  let remaining = amountCP
-  const spent: Partial<Record<CoinKey, number>> = {}
-
-  // Pass 1: use exact coins highest→lowest
-  for (const k of order) {
-    if (remaining <= 0) break
-    const have = coins[k] ?? 0
-    const use  = Math.min(have, Math.floor(remaining / CP_VALUE[k]))
-    if (use > 0) { spent[k] = use; remaining -= use * CP_VALUE[k] }
-  }
-
-  // Pass 2: if still remaining, overpay with smallest coin that covers it
-  if (remaining > 0) {
-    for (const k of [...order].reverse()) {
-      const have = (coins[k] ?? 0) - (spent[k] ?? 0)
-      if (have > 0 && CP_VALUE[k] >= remaining) {
-        spent[k] = (spent[k] ?? 0) + 1
-        remaining -= CP_VALUE[k]
-        break
-      }
-    }
-    // Fallback: use largest available (shouldn't reach here since totalCP was enough)
-    if (remaining > 0) {
-      for (const k of order) {
-        const have = (coins[k] ?? 0) - (spent[k] ?? 0)
-        if (have > 0) { spent[k] = (spent[k] ?? 0) + 1; remaining -= CP_VALUE[k] }
-        if (remaining <= 0) break
-      }
-    }
-  }
-
-  // Change = overpayment
-  const changeCP = -remaining
-  const change: Partial<Record<CoinKey, number>> = {}
-  if (changeCP > 0) {
-    let left = changeCP
-    for (const k of order) {
-      const val = CP_VALUE[k]
-      if (left >= val) { change[k] = Math.floor(left / val); left -= change[k]! * val }
-    }
-  }
-
-  return { canAfford: true, spent, change, needsBreaking: changeCP > 0 }
-}
 
 // ── SpendGainModal ────────────────────────────────────────────────────────────
 
