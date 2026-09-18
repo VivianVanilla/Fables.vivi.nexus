@@ -5,6 +5,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useRef } from "react"
+import type { CoinKey, CurrencyMode } from "@/components/shared/currencyMath"
 
 // Supabase's RealtimeClient.channel(topic) dedupes by topic string — a
 // second call with the same topic returns the SAME already-subscribed
@@ -24,6 +25,14 @@ export interface PartyMember {
   userId: string
   name: string
   characterId?: string
+  // Wallet snapshot from the character row's own `data` — populated by
+  // usePartyRoster so the Shops feature's always-visible party wallet strip
+  // doesn't need its own separate roster fetch. Undefined until the roster
+  // fetch/subscription actually parses a `currency` field (e.g. a member
+  // with no gold set yet).
+  currency?: Partial<Record<CoinKey, number>>
+  currencyMode?: CurrencyMode
+  currencyNames?: string[]
 }
 
 export interface Channel {

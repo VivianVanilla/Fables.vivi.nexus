@@ -1,10 +1,9 @@
 // ════════════════════════════════════════════════════════════════════════════
 // ShopOverlay.tsx — the player-side counterpart to the DM's Shops tab in
-// CampaignView.tsx. Shows whichever shop the DM has marked "current" (or a
-// friendly empty state if none), lets the player buy an item with their own
-// gold (see currencyMath.ts for the coin math CurrencyTracker.tsx's wallet
-// itself uses), and respects each item's hidden/disguise setting and each
-// shop's confirmation-required setting.
+// CampaignView.tsx. Handles data-fetching/realtime/writes and the full-screen
+// portal chrome; the actual "what does the shop look like" rendering (header,
+// party wallets strip, item bubbles, buy popup) lives in ShopFront.tsx so the
+// DM's ShopPlayerPreview can render byte-for-byte the same thing, read-only.
 //
 // Writes to the campaign row here (stock/history on an instant purchase, or
 // a pending request on a confirmation-required shop) rely on an RLS policy
@@ -13,18 +12,18 @@
 // the (pre-existing, opposite-direction) DM→player write-through.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Store, ShoppingCart } from "lucide-react"
+import { X, Store } from "lucide-react"
 import { useUserContext } from "../../../src/contexts/UserContext"
 import { supabase } from "../../../src/supabase"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
 import type { CharacterData, Feature } from "@/components/shared/types"
-import { categoryAccentStyle } from "@/components/character/entries/FeatureEntry"
-import { orderFor, calcSpend, type CoinKey } from "@/components/shared/currencyMath"
+import { orderFor, calcSpend, CP_VALUE, type CoinKey } from "@/components/shared/currencyMath"
 import { usePartyRoster } from "@/components/party/usePartyServer"
 import { useChannelSuffix } from "@/components/party/partyTypes"
 import type { Shop, ShopPurchaseRecord, ShopPurchaseRequest } from "@/components/shops/shopTypes"
+import { ShopFront, type ShopWallet } from "@/components/shops/ShopFront"
 
 // Only the campaign-data fields this overlay actually reads/writes — the
 // full CampaignData shape lives in CampaignView.tsx (not exported), and this
@@ -35,6 +34,7 @@ interface CampaignShopData {
   shops?: Shop[]
   currentShopId?: string | null
   shopHistory?: ShopPurchaseRecord[]
+  rosterCardAccentColor?: string  // Campaign Settings' "Default Card Appearance" — fallback color for shops/items with no color of their own
 }
 
 export function ShopOverlay({
@@ -48,7 +48,7 @@ export function ShopOverlay({
   onClose: () => void
 }) {
   const { updateSharedObject } = useUserContext()
-  const { campaign } = usePartyRoster(partyCode)
+  const { campaign, members } = usePartyRoster(partyCode)
   const suffix = useChannelSuffix()
   // Realtime-sourced overrides only (never written to synchronously from an
   // effect body) — `liveData` below falls back to the one-time `campaign`
@@ -57,6 +57,15 @@ export function ShopOverlay({
   const [override, setOverride] = useState<CampaignShopData | null>(null)
   const [buyingItemId, setBuyingItemId] = useState<string | null>(null)
   const [justRequestedId, setJustRequestedId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+
+  function showToast(message: string) {
+    setToast(message)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 4000)
+  }
 
   // usePartyRoster only fetches the campaign row once — this subscription is
   // what keeps stock, the current shop, and hidden/reveal changes live
@@ -77,13 +86,24 @@ export function ShopOverlay({
   const liveData: CampaignShopData | null = override ?? (campaign ? (safeParseJson(campaign.data) as CampaignShopData) : null)
   const shops = liveData?.shops ?? []
   const shop = shops.find(s => s.id === liveData?.currentShopId)
-  const cardStyle = shop ? categoryAccentStyle(shop.accentColor, shop.cardStyle) : undefined
 
   const mode = characterData.currencyMode ?? "classic"
   const coins = characterData.currency ?? {}
 
-  function affordable(priceGp: number): boolean {
-    return calcSpend(coins, priceGp * 100, orderFor(mode)).canAfford
+  // Every party member's own wallet, always visible — never summed. The
+  // viewer's own row always comes from `characterData` (freshest local
+  // state, no roster-fetch/realtime round-trip lag) rather than whatever
+  // usePartyRoster last fetched for this same character.
+  const wallets: ShopWallet[] = [
+    { id: characterId, name: characterName, currency: coins, currencyMode: mode, currencyNames: characterData.currencyNames, isYou: true },
+    ...members.filter(m => m.characterId !== characterId).map(m => ({
+      id: m.characterId ?? m.userId, name: m.name, currency: m.currency ?? {}, currencyMode: m.currencyMode ?? "classic", currencyNames: m.currencyNames,
+    })),
+  ]
+
+  function affordable(item: Feature): boolean {
+    const unit = item.priceUnit ?? "gp"
+    return calcSpend(coins, (item.value ?? 0) * CP_VALUE[unit], orderFor(mode)).canAfford
   }
 
   async function buy(item: Feature) {
@@ -91,20 +111,22 @@ export function ShopOverlay({
     setBuyingItemId(item.id)
     try {
       const label = item.shopHidden ? (item.shopDisplayName || "Mystery Item") : item.name
+      const unit = item.priceUnit ?? "gp"
       if (shop.requireConfirmation) {
         // Nothing changes yet — stock, gold, and the buyer's inventory all
         // wait for the DM's Approve (see CampaignView.tsx's approveShopRequest).
         const request: ShopPurchaseRequest = {
           id: nanoid(), itemId: item.id, characterId, characterName,
-          itemLabel: label, price: item.value ?? 0, quantity: 1, requestedAt: new Date().toISOString(),
+          itemLabel: label, price: item.value ?? 0, priceUnit: unit, quantity: 1, requestedAt: new Date().toISOString(),
         }
         const nextShops = shops.map(s => s.id === shop.id ? { ...s, pendingRequests: [...(s.pendingRequests ?? []), request] } : s)
         const nextData = { ...liveData, shops: nextShops }
         await updateSharedObject(campaign.id, { data: nextData as unknown as JSON })
         setOverride(nextData)
         setJustRequestedId(item.id)
+        showToast(`Requested ${label} — waiting on the DM to confirm.`)
       } else {
-        const spend = calcSpend(coins, (item.value ?? 0) * 100, orderFor(mode))
+        const spend = calcSpend(coins, (item.value ?? 0) * CP_VALUE[unit], orderFor(mode))
         if (!spend.canAfford) return
         const nextCoins = { ...coins }
         for (const [k, v] of Object.entries(spend.spent) as [CoinKey, number][]) nextCoins[k] = (nextCoins[k] ?? 0) - v
@@ -114,7 +136,7 @@ export function ShopOverlay({
         const nextItemAmount = stockTracked ? Math.max(0, (item.amount ?? 0) - 1) : item.amount
         const record: ShopPurchaseRecord = {
           id: nanoid(), shopId: shop.id, shopName: shop.name, characterId, characterName,
-          itemLabel: label, price: item.value ?? 0, quantity: 1, at: new Date().toISOString(),
+          itemLabel: label, price: item.value ?? 0, priceUnit: unit, quantity: 1, at: new Date().toISOString(),
         }
         const nextShops = shops.map(s => s.id === shop.id ? {
           ...s, items: s.items.map(i => i.id === item.id ? { ...i, amount: nextItemAmount } : i),
@@ -130,75 +152,56 @@ export function ShopOverlay({
           currency: nextCoins,
           items: [...(characterData.items ?? []), { ...item, id: nanoid(), amount: 1, shopHidden: undefined, shopDisplayName: undefined }],
         })
+        showToast(`Added ${label} to your bag!`)
       }
     } catch (e) { console.error(e) } finally { setBuyingItemId(null) }
   }
 
+  // Covers the whole screen — header included — not just the padded content
+  // column, so a shop's background image actually reads as "you're standing
+  // in this place" rather than a small framed picture inside the page.
+  const bgStyle: React.CSSProperties | undefined = shop?.backgroundImageUrl ? {
+    backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.6)), url(${shop.backgroundImageUrl})`,
+    backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed",
+  } : undefined
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      <div className="px-4 py-3 border-b border-border shrink-0 flex items-center gap-2">
-        <Store className="size-4 text-muted-foreground" />
-        <span className="text-sm font-bold text-foreground">{shop?.name ?? "Shop"}</span>
+    <div className={`fixed inset-0 z-50 flex flex-col ${bgStyle ? "" : "bg-background"}`} style={bgStyle}>
+      <div className={`px-4 py-3 shrink-0 flex items-center gap-2 border-b ${bgStyle ? "border-white/10" : "border-border"}`}>
+        <Store className={`size-4 ${bgStyle ? "text-white/70" : "text-muted-foreground"}`} />
+        <span className={`text-sm font-bold ${bgStyle ? "text-white" : "text-foreground"}`}>{shop?.name ?? "Shop"}</span>
         <div className="flex-1" />
         <button type="button" onClick={onClose} title="Close"
-          className="size-7 flex items-center justify-center rounded-lg bg-foreground/8 hover:bg-foreground/15 text-foreground/70 transition-colors">
+          className={`size-7 flex items-center justify-center rounded-lg transition-colors ${bgStyle ? "bg-white/10 hover:bg-white/20 text-white/70" : "bg-foreground/8 hover:bg-foreground/15 text-foreground/70"}`}>
           <X className="size-4" />
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-        <div className="max-w-lg mx-auto flex flex-col gap-3">
-          {!shop ? (
-            <p className="text-sm text-muted-foreground/60 italic text-center mt-10">You are not currently at a shop! Visit a shopkeeper soon :)</p>
-          ) : (
-            <>
-              <div className="rounded-xl bg-muted ring-1 ring-border p-4 flex items-center gap-3" style={cardStyle}>
-                {shop.portraitUrl && <img src={shop.portraitUrl} alt="" className="size-12 rounded-full object-cover border border-border shrink-0" />}
-                <div>
-                  <p className="text-sm font-bold text-foreground">{shop.name}</p>
-                  <p className="text-[10px] text-foreground/40">
-                    {shop.requireConfirmation ? "The shopkeeper confirms every sale before handing anything over." : "Buy items directly — gold and goods change hands immediately."}
-                  </p>
-                </div>
-              </div>
-
-              {shop.items.length === 0 ? (
-                <p className="text-xs text-foreground/30 italic text-center py-6">Nothing for sale right now.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {shop.items.map(item => {
-                    const label = item.shopHidden ? (item.shopDisplayName || "Mystery Item") : item.name
-                    const price = item.value ?? 0
-                    const stockTracked = item.trackAmount || item.amount != null
-                    const outOfStock = stockTracked && (item.amount ?? 0) <= 0
-                    const canAfford = affordable(price)
-                    const requested = justRequestedId === item.id
-                    return (
-                      <div key={item.id} className="rounded-xl bg-muted ring-1 ring-border p-3 flex items-center gap-3" style={cardStyle}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{label || "Unnamed item"}</p>
-                          {!item.shopHidden && item.description && (
-                            <p className="text-[11px] text-foreground/40 line-clamp-2 mt-0.5">{item.description}</p>
-                          )}
-                          <p className="text-[10px] text-foreground/40 mt-1">
-                            {price}gp{stockTracked && <> · {Math.max(0, item.amount ?? 0)} left</>}
-                          </p>
-                        </div>
-                        <button type="button" disabled={outOfStock || !canAfford || buyingItemId === item.id || requested}
-                          onClick={() => buy(item)}
-                          className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-colors disabled:opacity-30 disabled:hover:bg-amber-500/20">
-                          <ShoppingCart className="size-3.5" />
-                          {requested ? "Requested" : outOfStock ? "Sold Out" : !canAfford ? "Can't Afford" : buyingItemId === item.id ? "…" : "Buy"}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </>
-          )}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4">
+        {/* Wide cap, not a phone-width column — a shop with several items
+            was leaving most of a desktop screen empty and squeezing names
+            into a narrow strip for no reason. On mobile there's no cap to
+            fight, so the shop just fills the (already full-screen) overlay. */}
+        <div className="max-w-5xl mx-auto">
+          <ShopFront
+            shop={shop}
+            wallets={wallets}
+            defaultAccentColor={liveData?.rosterCardAccentColor}
+            viewerMode={mode}
+            viewerNames={characterData.currencyNames}
+            interactive={{ affordable, onBuy: buy, buyingItemId, justRequestedId }}
+          />
         </div>
       </div>
+
+      {toast && (
+        // Full-width banner near the bottom on mobile (a corner toast is a
+        // desktop-notification pattern that reads as an afterthought on a
+        // phone); a normal compact corner toast once there's room for one.
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-xs z-[60] px-3 py-2 rounded-lg bg-zinc-900 border border-white/15 text-white text-xs shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {toast}
+        </div>
+      )}
     </div>,
     document.body,
   )

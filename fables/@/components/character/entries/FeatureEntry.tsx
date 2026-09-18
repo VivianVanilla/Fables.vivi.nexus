@@ -590,6 +590,29 @@ export function FeatureEntry({
                 <span className="text-[10px] text-white/30">Shown instead of the real name/description until you uncheck "Hidden" — the item itself is unchanged.</span>
               </label>
             </PopTransition>
+
+            <div className="flex flex-col gap-1.5 pt-1">
+              <span className="text-white/40">Display overrides (this item only)</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {([
+                  ["shopShowPrice", "Price"],
+                  ["shopShowStock", "Stock"],
+                  ["shopShowDescription", "Description"],
+                ] as const).map(([field, fieldLabel]) => (
+                  <label key={field} className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
+                    {fieldLabel}
+                    <select
+                      value={feature[field] === undefined ? "inherit" : feature[field] ? "show" : "hide"}
+                      onChange={e => onChange({ [field]: e.target.value === "inherit" ? undefined : e.target.value === "show" } as Partial<Feature>)}
+                      className="bg-zinc-800 rounded px-1.5 py-1 text-white outline-none">
+                      <option value="inherit" className="bg-zinc-800 text-white">Shop default</option>
+                      <option value="show" className="bg-zinc-800 text-white">Show</option>
+                      <option value="hide" className="bg-zinc-800 text-white">Hide</option>
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -982,11 +1005,20 @@ export function FeatureEntry({
                   className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
               </label>
               <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
-                Value (gp)
+                {showShopFields ? "Price" : "Value (gp)"}
                 <NumInput min={0} step="0.01" value={feature.value ?? ""}
                   onChange={e => onChange({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
                   placeholder="0"
                   className="w-16 bg-white/10 rounded px-2 py-1 text-center text-white outline-none" />
+                {showShopFields && (
+                  <select value={feature.priceUnit ?? "gp"}
+                    onChange={e => onChange({ priceUnit: e.target.value as Feature["priceUnit"] })}
+                    className="bg-zinc-800 rounded px-1.5 py-1 text-white outline-none">
+                    {(["cp", "sp", "ep", "gp", "pp"] as const).map(u => (
+                      <option key={u} value={u} className="bg-zinc-800 text-white">{u}</option>
+                    ))}
+                  </select>
+                )}
               </label>
               <label className="flex items-center gap-1.5 text-white/50 whitespace-nowrap">
                 Rarity

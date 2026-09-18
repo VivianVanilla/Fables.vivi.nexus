@@ -18,6 +18,38 @@ export function orderFor(mode: CurrencyMode): CoinKey[] {
   return mode === "simple" ? ["pp", "gp", "sp", "cp"] : ["pp", "gp", "ep", "sp", "cp"]
 }
 
+// ── Shared coin metadata ─────────────────────────────────────────────────────
+// Single source of truth for denomination display (label/abbrev/color), used
+// by CurrencyTracker.tsx's own wallet UI as well as the Shops feature's
+// wallet chips and price-unit picker — previously duplicated inside
+// CurrencyTracker.tsx alone.
+
+export const SLOTS: { key: CoinKey; defaultLabel: string; abbrev: string; color: string; bg: string }[] = [
+  { key: "pp", defaultLabel: "Platinum", abbrev: "PP", color: "text-violet-300", bg: "bg-violet-500/10" },
+  { key: "gp", defaultLabel: "Gold",     abbrev: "GP", color: "text-amber-400",  bg: "bg-amber-500/10"  },
+  { key: "ep", defaultLabel: "Electrum", abbrev: "EP", color: "text-cyan-300",   bg: "bg-cyan-500/10"   },
+  { key: "sp", defaultLabel: "Silver",   abbrev: "SP", color: "text-slate-300",  bg: "bg-slate-500/10"  },
+  { key: "cp", defaultLabel: "Copper",   abbrev: "CP", color: "text-orange-400", bg: "bg-orange-500/10" },
+]
+
+export const NAME_INDEX: Record<CoinKey, number> = { cp: 0, sp: 1, ep: 2, gp: 3, pp: 4 }
+export const DEFAULT_NAMES = ["Copper", "Silver", "Electrum", "Gold", "Platinum"]
+
+// mode !== "custom" → the standard abbreviation (GP, SP, …); "custom" → the
+// campaign's own name for that slot (truncated to fit a compact chip/select),
+// falling back to the standard name if that slot was never renamed.
+export function coinLabel(key: CoinKey, mode: CurrencyMode, names?: string[]): string {
+  const slot = SLOTS.find(s => s.key === key)!
+  if (mode !== "custom") return slot.abbrev
+  const name = names?.[NAME_INDEX[key]] ?? slot.defaultLabel
+  return name.length <= 4 ? name : name.slice(0, 3).toUpperCase()
+}
+
+// e.g. formatPrice(3, "sp", "classic") → "3 SP"
+export function formatPrice(amount: number, unit: CoinKey, mode: CurrencyMode, names?: string[]): string {
+  return `${amount.toLocaleString("en-US")} ${coinLabel(unit, mode, names)}`
+}
+
 interface SpendResult {
   canAfford: true
   spent:  Partial<Record<CoinKey, number>>

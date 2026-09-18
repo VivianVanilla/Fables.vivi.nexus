@@ -2,6 +2,7 @@
 
 import type { FavoriteCategory, CardStyle } from "./constants"
 import type { EquipmentItem } from "./deprecated/legacyEquipment"  // DEPRECATED — see deprecated/legacyEquipment.ts
+import type { CoinKey } from "./currencyMath"
 
 // One damage instance ("2d6" fire, "1d4" cold, etc.) — the base damage/damageType
 // fields on weapons/actions/items stay as the single/primary instance for backward
@@ -137,6 +138,12 @@ export interface Feature {
   // ── Shops tab only (entries in a Shop's `items`) ──────────────────────────
   shopHidden?: boolean        // DM toggle — true = players browsing the shop see shopDisplayName (and no description/stats) instead of this item's real identity; the item itself is unchanged, so once bought it shows its real name/stats normally on the buyer's own sheet
   shopDisplayName?: string    // the "cover" name shown while shopHidden is on (e.g. "Big Belt" for a disguised Belt of Hill Giant Strength)
+  priceUnit?: CoinKey         // which denomination `value` (below) is priced in when this item is sold from a shop — undefined = "gp" (preserves every item priced before this field existed)
+  shopShowPrice?: boolean       // per-item override of the shop's own "Show Prices" Display setting — undefined = inherit the shop's setting
+  shopShowStock?: boolean       // per-item override of "Show Stock" — undefined = inherit
+  shopShowDescription?: boolean // per-item override of "Show Description" — undefined = inherit. Ignored (always false) while shopHidden is on, same as before this field existed.
+  shopSectionId?: string      // which of the shop's ShopSection groups this item belongs to — unset/stale (section deleted) just falls into an "Other" bucket wherever sections render
+  shopMaxAmount?: number      // the shelf's original stock count when the DM last set/restocked it — `amount` (above) is what's actually left; stock shows as "current/max" when this is set instead of just "current"
   equipped?: boolean         // currently worn/wielded/carried-in-hand — any item can be equipped, not just armor. Applies itemMeta.acBonus to AC when it's an armor-kind item; equipped or attuned items show under the character sheet's Equipped list, everything else lands in Carried Items
   isMagicItem?: boolean      // cosmetic flag — no mechanical effect. The visual treatment itself (None/Outline/Galaxy) is a sheet-wide Settings choice (CharacterData.magicItemStyle), not per item
   weight?: number            // lb — rolled into the character's total carried weight

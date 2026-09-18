@@ -2,20 +2,12 @@ import { useState } from "react"
 import { Settings2, X } from "lucide-react"
 import { Modal } from "@/components/shared/ui/Modal"
 import type { CharacterData } from "@/components/shared/types"
-import { type CoinKey, type CurrencyMode, CP_VALUE, orderFor, calcSpend } from "@/components/shared/currencyMath"
+import { type CoinKey, type CurrencyMode, CP_VALUE, orderFor, calcSpend, SLOTS, NAME_INDEX, DEFAULT_NAMES, coinLabel as sharedCoinLabel } from "@/components/shared/currencyMath"
 
 // ── Types & constants ─────────────────────────────────────────────────────────
-
-const SLOTS: { key: CoinKey; defaultLabel: string; abbrev: string; color: string; bg: string }[] = [
-  { key: "pp", defaultLabel: "Platinum", abbrev: "PP", color: "text-violet-300", bg: "bg-violet-500/10" },
-  { key: "gp", defaultLabel: "Gold",     abbrev: "GP", color: "text-amber-400",  bg: "bg-amber-500/10"  },
-  { key: "ep", defaultLabel: "Electrum", abbrev: "EP", color: "text-cyan-300",   bg: "bg-cyan-500/10"   },
-  { key: "sp", defaultLabel: "Silver",   abbrev: "SP", color: "text-slate-300",  bg: "bg-slate-500/10"  },
-  { key: "cp", defaultLabel: "Copper",   abbrev: "CP", color: "text-orange-400", bg: "bg-orange-500/10" },
-]
-
-const NAME_INDEX: Record<CoinKey, number> = { cp: 0, sp: 1, ep: 2, gp: 3, pp: 4 }
-const DEFAULT_NAMES = ["Copper", "Silver", "Electrum", "Gold", "Platinum"]
+// SLOTS/NAME_INDEX/DEFAULT_NAMES now live in currencyMath.ts (shared with the
+// Shops feature's wallet chips and price-unit picker) — re-imported here
+// rather than redefined.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -188,10 +180,7 @@ export function CurrencyTracker({ card, data, readOnly, update }: Props) {
   const visibleSlots = SLOTS.filter(s => mode !== "simple" || s.key !== "ep")
 
   function getLabel(key: CoinKey) {
-    const s = SLOTS.find(sl => sl.key === key)!
-    if (mode !== "custom") return s.abbrev
-    const name = customNames[NAME_INDEX[key]] ?? s.defaultLabel
-    return name.length <= 4 ? name : name.slice(0, 3).toUpperCase()
+    return sharedCoinLabel(key, mode, customNames)
   }
 
   function setAmount(key: CoinKey, raw: string) {

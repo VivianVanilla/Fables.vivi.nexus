@@ -9,7 +9,22 @@ import { supabase } from "../../../src/supabase"
 import { safeParseJson, nanoid } from "@/components/shared/utils"
 import { useOnResume } from "@/components/shared/useOnResume"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
+import type { CoinKey, CurrencyMode } from "@/components/shared/currencyMath"
 import { DEFAULT_CHANNEL, useChannelSuffix, type Channel, type Message, type PartyMember, type SharePayload } from "./partyTypes"
+
+// Only the fields a character row's `data` carries that the roster itself
+// cares about (wallet snapshot for PartyMember) — the full CharacterData
+// shape lives in shared/types.ts, not needed just to read these three.
+interface CharWalletData {
+  currency?: Partial<Record<CoinKey, number>>
+  currencyMode?: CurrencyMode
+  currencyNames?: string[]
+}
+
+function toPartyMember(row: SidebarObject): PartyMember {
+  const d = safeParseJson(row.data) as CharWalletData
+  return { userId: row.owner_id, name: row.name, characterId: row.id, currency: d.currency, currencyMode: d.currencyMode, currencyNames: d.currencyNames }
+}
 
 // ── Roster (campaign + members + channels) ───────────────────────────────────
 
@@ -53,11 +68,38 @@ export function usePartyRoster(
         if (cancelled) return
         if (error) { console.error("party roster fetch error:", error); return }
         const chars = (data ?? []) as SidebarObject[]
-        setFetchedMembers(chars.map(c => ({ userId: c.owner_id, name: c.name, characterId: c.id })))
+        setFetchedMembers(chars.map(toPartyMember))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyCode, needMembers])
+
+  // Keeps each member's wallet (and name/HP/etc., though only the wallet
+  // fields are read here) live once fetched — same "broad subscribe, filter
+  // by partyCode client-side" idiom CampaignView.tsx's own roster
+  // subscription and ShopOverlay.tsx's campaign-row subscription both use,
+  // since `objects` has no partyCode column to filter on server-side. This
+  // is what lets the Shops feature's always-visible party wallet strip
+  // reflect a purchase the moment it lands, not just on next mount.
+  const suffix = useChannelSuffix()
+  useEffect(() => {
+    if (!needMembers || !partyCode) return
+    const ch = supabase
+      .channel(`party-roster-wallets:${partyCode}:${suffix}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "objects", filter: "type=eq.character" }, payload => {
+        const row = payload.new as SidebarObject
+        const pc = (safeParseJson(row.data) as { partyCode?: string }).partyCode
+        if (pc !== partyCode) return
+        setFetchedMembers(prev => {
+          const member = toPartyMember(row)
+          return prev.some(m => m.characterId === row.id)
+            ? prev.map(m => m.characterId === row.id ? member : m)
+            : [...prev, member]
+        })
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [partyCode, needMembers, suffix])
 
   const campaign = opts?.presetCampaign ?? fetchedCampaign
   const members = opts?.presetMembers ?? fetchedMembers

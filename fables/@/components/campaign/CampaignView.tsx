@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Store, Coins, EyeOff, Eye, ImageIcon } from "lucide-react"
+import { DndContext, DragOverlay, closestCenter, pointerWithin, useDraggable, type DragEndEvent, type CollisionDetection } from "@dnd-kit/core"
+import { DropZone, DragOverlayCard, useDragSensors } from "@/components/shared/SortableItem"
+import { Store, Eye, ImageIcon, Settings2, ChevronDown, ChevronUp, Pencil, Plus, Check } from "lucide-react"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { safeParseJson, computeAc, nanoid } from "@/components/shared/utils"
 import type { Feature } from "@/components/shared/types"
@@ -22,8 +24,10 @@ import { useUserContext } from "../../../src/contexts/UserContext"
 import { usePopoverPosition, useClickOutside } from "@/components/shared/usePortalMenu"
 import { useChannelSuffix } from "@/components/party/partyTypes"
 import { supabase } from "../../../src/supabase"
-import { type CoinKey, type CurrencyMode, CP_VALUE, orderFor, calcSpend } from "@/components/shared/currencyMath"
-import { type Shop, type ShopPurchaseRecord, resolveShops } from "@/components/shops/shopTypes"
+import { type CoinKey, type CurrencyMode, CP_VALUE, orderFor, calcSpend, formatPrice, DEFAULT_NAMES } from "@/components/shared/currencyMath"
+import { type Shop, type ShopSection, type ShopPurchaseRecord, resolveShops, resolveItemColor, shopCardStyle, groupItemsBySection } from "@/components/shops/shopTypes"
+import { ShopPlayerPreview } from "@/components/shops/ShopPlayerPreview"
+import { WalletChips } from "@/components/shared/ui/WalletChips"
 import { PortraitModal } from "@/components/shared/PortraitModal"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "@/components/shared/imageGallery"
 
@@ -559,7 +563,8 @@ function useCampaignRoster(campaign: SidebarObject) {
 
     const buyerData = safeParseJson(buyer.data) as CharData
     const mode = buyerData.currencyMode ?? "classic"
-    const spend = calcSpend(buyerData.currency ?? {}, request.price * 100, orderFor(mode))
+    const unit = request.priceUnit ?? "gp"
+    const spend = calcSpend(buyerData.currency ?? {}, request.price * CP_VALUE[unit], orderFor(mode))
     if (!spend.canAfford) { console.warn("Shop purchase approval: buyer can no longer afford it — left pending."); return }
     const nextCoins = { ...(buyerData.currency ?? {}) }
     for (const [k, v] of Object.entries(spend.spent) as [CoinKey, number][]) nextCoins[k] = (nextCoins[k] ?? 0) - v
@@ -570,7 +575,7 @@ function useCampaignRoster(campaign: SidebarObject) {
 
     const record: ShopPurchaseRecord = {
       id: nanoid(), shopId, shopName: shop.name, characterId: buyer.id, characterName: buyer.name,
-      itemLabel: request.itemLabel, price: request.price, quantity: request.quantity, at: new Date().toISOString(),
+      itemLabel: request.itemLabel, price: request.price, priceUnit: unit, quantity: request.quantity, at: new Date().toISOString(),
     }
     try {
       const updatedBuyer = await updateSharedObject(buyer.id, {
@@ -890,6 +895,7 @@ export function CampaignView({ campaign }: Props) {
           stashes={stashes}
           stashStyle={campaignData.stashStyle}
           stashAccentColor={campaignData.stashAccentColor}
+          rosterCardStyle={rosterCardStyle}
           floatingItems={floatingItems}
           setFloatingItems={setFloatingItems}
           userId={user?.id}
@@ -912,6 +918,8 @@ export function CampaignView({ campaign }: Props) {
           shopHistory={campaignData.shopHistory ?? []}
           partyMembers={partyMembers}
           userId={user?.id}
+          defaultAccentColor={campaignData.rosterCardAccentColor}
+          rosterCardStyle={rosterCardStyle}
           addShop={addShop}
           renameShop={renameShop}
           deleteShop={deleteShop}
@@ -1112,7 +1120,7 @@ function CampaignSettingsModal({ campaignData, onToggleInventory, onToggleShops,
             style={campaignData.stashStyle ?? "none"} color={campaignData.stashAccentColor}
             onChangeStyle={onChangeStashStyle} onChangeColor={onChangeStashAccentColor} />
 
-          <CardStylePicker label="Party Card Appearance" hint="Applies to every party member's card in Overview and the compact roster panel."
+          <CardStylePicker label="Default Card Appearance" hint="Every party member's card in Overview/the roster panel, plus the fallback color for any shop or item that hasn't picked its own — stashes keep their own separate Appearance above."
             style={campaignData.rosterCardStyle ?? "none"} color={campaignData.rosterCardAccentColor}
             onChangeStyle={onChangeRosterCardStyle} onChangeColor={onChangeRosterCardAccentColor} />
 
@@ -1136,11 +1144,12 @@ function CampaignSettingsModal({ campaignData, onToggleInventory, onToggleShops,
   )
 }
 
-function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, floatingItems, setFloatingItems, userId, addStash, renameStash, deleteStash, addToStash, removeFromStash, moveBetweenStashes, updateStashItem, setMemberItems }: {
+function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, rosterCardStyle, floatingItems, setFloatingItems, userId, addStash, renameStash, deleteStash, addToStash, removeFromStash, moveBetweenStashes, updateStashItem, setMemberItems }: {
   partyMembers: SidebarObject[]
   stashes: ItemStash[]
   stashStyle?: CardStyle
   stashAccentColor?: string
+  rosterCardStyle?: React.CSSProperties  // Campaign Settings' "Default Card Appearance" — applied to each player's own column here, same as everywhere else a party member's card shows
   floatingItems: Feature[]
   setFloatingItems: React.Dispatch<React.SetStateAction<Feature[]>>
   userId?: string | null
@@ -1324,7 +1333,7 @@ function InventoryTab({ partyMembers, stashes, stashStyle, stashAccentColor, flo
       <div className="flex items-start gap-3 overflow-x-auto shrink-0 pb-2">
         {partyMembers.map(m => (
           <InventoryColumn key={m.id} id={m.id} title={m.name} items={memberItems(m)}
-            locked={isMemberLocked(m.id)}
+            locked={isMemberLocked(m.id)} cardStyle={rosterCardStyle}
             isDragOver={dragOverCol === m.id} onDragOverCol={setDragOverCol} onDrop={dropOn}
             onStartDrag={startDrag} onEndDrag={endDrag} />
         ))}
@@ -1469,11 +1478,12 @@ function InventoryStash({ stash, cardStyle, isDragOver, onDragOverCol, onDrop, o
   )
 }
 
-function InventoryColumn({ id, title, items, locked, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag }: {
+function InventoryColumn({ id, title, items, locked, cardStyle, isDragOver, onDragOverCol, onDrop, onStartDrag, onEndDrag }: {
   id: string
   title: string
   items: Feature[]
   locked?: boolean  // this character's own Settings → "Allow DM to change your Items" is off — no drop in, no drag out, just a 🔒 next to their name
+  cardStyle?: React.CSSProperties  // Campaign Settings' "Default Card Appearance" — see InventoryStash's own cardStyle for the identical reasoning
   isDragOver: boolean
   onDragOverCol: (id: string | null) => void
   onDrop: (id: string) => void
@@ -1485,6 +1495,10 @@ function InventoryColumn({ id, title, items, locked, isDragOver, onDragOverCol, 
       onDragOver={e => { if (locked) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverCol(id) }}
       onDrop={e => { if (locked) return; e.preventDefault(); onDrop(id) }}
       title={locked ? `${title} has turned off "Allow DM to change your Items" in Settings` : undefined}
+      // Drag-over highlight wins over cardStyle's own inline ring color, same
+      // reasoning as InventoryStash — an inline style always beats a
+      // ring-primary utility class on specificity alone.
+      style={isDragOver ? undefined : cardStyle}
       className={`flex flex-col gap-1.5 w-56 shrink-0 max-h-80 rounded-xl bg-muted ring-1 p-2 transition-colors ${isDragOver ? "ring-primary" : "ring-border"} ${locked ? "opacity-60" : ""}`}
     >
       <div className="flex items-center justify-between px-1 pb-1 gap-1 shrink-0">
@@ -1894,7 +1908,7 @@ function StatCell({ label, value, compact = false }: { label: string; value: str
 // Unlike stashes, a shop item's price/quantity ARE the item's own
 // value/amount fields — no separate shop-specific price field.
 function ShopsTab({
-  shops, currentShopId, shopHistory, partyMembers, userId,
+  shops, currentShopId, shopHistory, partyMembers, userId, defaultAccentColor, rosterCardStyle,
   addShop, renameShop, deleteShop, updateShopSettings, setCurrentShop,
   addItemsToShop, removeItemFromShop, updateShopItem, approveShopRequest, denyShopRequest,
   applyWalletSettingsToAll,
@@ -1904,6 +1918,8 @@ function ShopsTab({
   shopHistory: ShopPurchaseRecord[]
   partyMembers: SidebarObject[]
   userId?: string | null
+  defaultAccentColor?: string  // Campaign Settings' "Default Card Appearance" — fallback color for any shop/item that hasn't picked its own
+  rosterCardStyle?: React.CSSProperties  // same "Default Card Appearance", pre-resolved to real CSS (respecting none/outline/galaxy) — applied to History/Party Wallets, the two generic (not per-shop) cards here, same as InventoryColumn/InventoryStash
   addShop: (name: string) => void
   renameShop: (shopId: string, name: string) => void
   deleteShop: (shopId: string) => void
@@ -1916,23 +1932,73 @@ function ShopsTab({
   denyShopRequest: (shopId: string, requestId: string) => void
   applyWalletSettingsToAll: (mode: CurrencyMode, names: string[]) => void
 }) {
-  const [expandedShopId, setExpandedShopId] = useState<string | null>(null)
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
   const [renamingShopId, setRenamingShopId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState("")
+  const [addingShop, setAddingShop] = useState(false)
   const [newShopName, setNewShopName] = useState("")
   const [creatingItemShopId, setCreatingItemShopId] = useState<string | null>(null)
   const [creatingItem, setCreatingItem] = useState<Feature | null>(null)
   const [settingsShopId, setSettingsShopId] = useState<string | null>(null)
   const [bulkImportShopId, setBulkImportShopId] = useState<string | null>(null)
-  const [showGoldPanel, setShowGoldPanel] = useState(false)
+  const [showWalletSettings, setShowWalletSettings] = useState(false)
+  const [playerViewShopId, setPlayerViewShopId] = useState<string | null>(null)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [addingSection, setAddingSection] = useState(false)
+  const [newSectionName, setNewSectionName] = useState("")
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
+  const dragSensors = useDragSensors()
+
+  // Dropping directly over a section's own DropZone always wins (even
+  // though it visually overlaps the item cards inside it) — otherwise
+  // dropping on empty space within a section would fall through to
+  // whatever item card is nearest, which might be in a different section.
+  function shopItemCollision(args: Parameters<CollisionDetection>[0]) {
+    const within = pointerWithin(args)
+    const zone = within.find(c => typeof c.id === "string" && c.id.startsWith("shopSection:"))
+    if (zone) return [zone]
+    return closestCenter(args)
+  }
+
+  // Drop onto a section's own zone (including its "Other" bucket) → that
+  // section. Drop onto another item card → inherit THAT item's section
+  // (the natural "drop it next to this one" gesture). Either way this is a
+  // pure re-tag, not a reorder — items within a section aren't sorted.
+  function handleItemDragEnd(shop: Shop, event: DragEndEvent) {
+    setDraggingItemId(null)
+    const { active, over } = event
+    if (!over) return
+    const activeId = String(active.id)
+    const overId = String(over.id)
+    if (activeId === overId) return
+    const zoneMatch = /^shopSection:(.+)$/.exec(overId)
+    let targetSectionId: string | undefined
+    if (zoneMatch) {
+      targetSectionId = zoneMatch[1] === "none" ? undefined : zoneMatch[1]
+    } else {
+      const overItem = shop.items.find(i => i.id === overId)
+      if (!overItem) return
+      targetSectionId = overItem.shopSectionId
+    }
+    const activeItem = shop.items.find(i => i.id === activeId)
+    if (!activeItem || activeItem.shopSectionId === targetSectionId) return
+    updateShopItem(shop.id, { ...activeItem, shopSectionId: targetSectionId })
+  }
 
   const allPendingRequests = shops.flatMap(s => (s.pendingRequests ?? []).map(r => ({ shop: s, request: r })))
+  const selectedShop = shops.find(s => s.id === selectedShopId)
+  const playerViewShop = shops.find(s => s.id === playerViewShopId)
 
   function submitNewShop() {
     const name = newShopName.trim()
     if (!name) return
     addShop(name)
     setNewShopName("")
+    setAddingShop(false)
+  }
+  function cancelNewShop() {
+    setNewShopName("")
+    setAddingShop(false)
   }
   function submitRename() {
     if (renamingShopId && renameValue.trim()) renameShop(renamingShopId, renameValue.trim())
@@ -1957,20 +2023,104 @@ function ShopsTab({
     else updateShopItem(creatingItemShopId, creatingItem)
     closeItemEditor()
   }
+  // Sections are just Shop.sections — no dedicated campaign-level mutator
+  // needed since updateShopSettings already patches any Shop field.
+  const SECTION_COLORS = ["#ef4444", "#f59e0b", "#22c55e", "#06b6d4", "#8b5cf6", "#ec4899"]
+  function addSection(shopId: string) {
+    const name = newSectionName.trim()
+    if (!name) return
+    const shop = shops.find(s => s.id === shopId)
+    const sections = shop?.sections ?? []
+    const color = SECTION_COLORS[sections.length % SECTION_COLORS.length]
+    updateShopSettings(shopId, { sections: [...sections, { id: `section:${nanoid()}`, name, color }] })
+    setNewSectionName("")
+    setAddingSection(false)
+  }
+  function updateSection(shopId: string, sectionId: string, patch: Partial<ShopSection>) {
+    const shop = shops.find(s => s.id === shopId)
+    if (!shop) return
+    updateShopSettings(shopId, { sections: (shop.sections ?? []).map(s => s.id === sectionId ? { ...s, ...patch } : s) })
+  }
+  function deleteSection(shopId: string, sectionId: string) {
+    const shop = shops.find(s => s.id === shopId)
+    if (!shop) return
+    updateShopSettings(shopId, { sections: (shop.sections ?? []).filter(s => s.id !== sectionId) })
+    // Items in the deleted section fall back to "Other" automatically
+    // (groupItemsBySection treats any unmatched shopSectionId that way) —
+    // no need to touch the items themselves.
+  }
   function removeFromItemEditor() {
     if (!creatingItemShopId || !creatingItem) return
     removeItemFromShop(creatingItemShopId, creatingItem.id)
     closeItemEditor()
   }
 
+  const visibleHistory = [...shopHistory].reverse().slice(0, historyExpanded ? undefined : 5)
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">Shops</span>
-        <button type="button" onClick={() => setShowGoldPanel(true)}
-          className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors">
-          <Coins className="size-3" /> Party Gold
-        </button>
+      </div>
+
+      {/* History (left, wider) + Party Wallets (right, skinny) side by side
+          on a wide screen — stacked full-width on mobile instead, where a
+          fixed 208px sidebar squeezed next to a flex-1 column left almost no
+          room for either (a purchase row's name/timestamp were getting
+          crushed down to a couple of characters). Wallets stay always
+          visible — each character's own full coin breakdown, never summed
+          into one "party total" — and dense/compact either way. */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">History</span>
+            {shopHistory.length > 5 && (
+              <button type="button" onClick={() => setHistoryExpanded(v => !v)}
+                className="flex items-center gap-1 text-[10px] text-foreground/40 hover:text-foreground/70 transition-colors">
+                {historyExpanded ? <>Show recent only <ChevronUp className="size-3" /></> : <>Show older purchases <ChevronDown className="size-3" /></>}
+              </button>
+            )}
+          </div>
+          {shopHistory.length === 0 ? (
+            <p className="text-[11px] text-foreground/30 italic py-1">No purchases yet.</p>
+          ) : (
+            <div className={`rounded-xl bg-muted ring-1 ring-border overflow-hidden overflow-y-auto ${historyExpanded ? "max-h-96" : "max-h-40"}`} style={rosterCardStyle}>
+              {visibleHistory.map(r => (
+                <div key={r.id} className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 px-3 py-1.5 text-[11px] border-b border-border/30 last:border-0">
+                  <span className="flex-1 min-w-0 text-foreground/60 truncate">
+                    <span className="font-semibold text-foreground/80">{r.characterName}</span> bought <span className="font-semibold">{r.itemLabel}</span> from {r.shopName} for {formatPrice(r.price * r.quantity, r.priceUnit ?? "gp", "classic")}
+                  </span>
+                  <span className="text-foreground/30 shrink-0">{new Date(r.at).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="w-full sm:w-52 shrink-0 rounded-lg bg-muted ring-1 ring-border p-2 flex flex-col gap-1" style={rosterCardStyle}>
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-widest text-foreground/50 font-semibold">Party Wallets</span>
+            <button type="button" onClick={() => setShowWalletSettings(true)} title="Wallet settings for everyone"
+              className="size-4 flex items-center justify-center rounded text-foreground/30 hover:text-foreground/70 transition-colors">
+              <Settings2 className="size-3" />
+            </button>
+          </div>
+          {partyMembers.length === 0 ? (
+            <p className="text-[11px] text-foreground/30 italic py-0.5">No party members yet.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {partyMembers.map(m => {
+                const d = safeParseJson(m.data) as CharData
+                return (
+                  <div key={m.id} className="flex flex-col gap-0.5">
+                    <span className="text-[11px] text-foreground/70 truncate">{m.name}</span>
+                    <WalletChips coins={d.currency ?? {}} mode={d.currencyMode ?? "classic"} names={d.currencyNames} dense />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Pending purchase requests — only shops with requireConfirmation ever populate this */}
@@ -1980,7 +2130,7 @@ function ShopsTab({
           {allPendingRequests.map(({ shop, request }) => (
             <div key={request.id} className="flex items-center gap-2 text-xs">
               <span className="flex-1 min-w-0 text-foreground/80 truncate">
-                <span className="font-semibold">{request.characterName}</span> wants <span className="font-semibold">{request.itemLabel}</span> from {shop.name} for {request.price * request.quantity}gp
+                <span className="font-semibold">{request.characterName}</span> wants <span className="font-semibold">{request.itemLabel}</span> from {shop.name} for {formatPrice(request.price * request.quantity, request.priceUnit ?? "gp", "classic")}
               </span>
               <button type="button" onClick={() => approveShopRequest(shop.id, request.id)}
                 className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors">Approve</button>
@@ -1991,128 +2141,177 @@ function ShopsTab({
         </div>
       )}
 
-      {/* New shop */}
-      <div className="flex items-center gap-2">
-        <input value={newShopName} onChange={e => setNewShopName(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") submitNewShop() }}
-          placeholder="New shop name…"
-          className="flex-1 min-w-0 text-xs bg-foreground/5 border border-foreground/10 rounded-lg px-3 py-1.5 outline-none focus:border-foreground/30 placeholder:text-foreground/30" />
-        <button type="button" onClick={submitNewShop}
-          className="text-xs px-3 py-1.5 rounded-lg bg-foreground/10 hover:bg-foreground/20 text-foreground/70 hover:text-foreground transition-colors">+ Shop</button>
-      </div>
-
-      {shops.length === 0 && (
-        <p className="text-xs text-foreground/30 italic text-center py-6">No shops yet — create one above.</p>
+      {shops.length === 0 && !addingShop && (
+        <p className="text-xs text-foreground/30 italic text-center py-6">No shops yet — add one below.</p>
       )}
 
-      {/* Shop list */}
-      <div className="flex flex-col gap-2">
+      {/* Shop bubbles — click one to manage it below, instead of an
+          ever-taller stack of accordion rows. A "+" bubble opens a small
+          inline add-shop form instead of a permanent full-width input. */}
+      <div className="flex flex-wrap gap-2 items-center">
         {shops.map(shop => {
-          const expanded = expandedShopId === shop.id
           const isCurrent = currentShopId === shop.id
-          const cardStyle = categoryAccentStyle(shop.accentColor, shop.cardStyle)
+          const selected = selectedShopId === shop.id
+          const color = shop.accentColor ?? defaultAccentColor
           return (
-            <div key={shop.id} className="rounded-xl bg-muted ring-1 ring-border overflow-hidden" style={cardStyle}>
-              <div className="flex items-center gap-2 px-3 py-2.5">
-                {shop.portraitUrl && (
-                  <img src={shop.portraitUrl} alt="" className="size-8 rounded-full object-cover border border-border shrink-0" />
-                )}
-                {renamingShopId === shop.id ? (
-                  <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
-                    onBlur={submitRename} onKeyDown={e => { if (e.key === "Enter") submitRename(); if (e.key === "Escape") setRenamingShopId(null) }}
-                    className="flex-1 min-w-0 text-sm font-semibold bg-transparent outline-none border-b border-foreground/30 text-foreground" />
-                ) : (
-                  <button type="button" onClick={() => setExpandedShopId(expanded ? null : shop.id)}
-                    onDoubleClick={() => { setRenamingShopId(shop.id); setRenameValue(shop.name) }}
-                    title="Click to expand, double-click to rename"
-                    className="flex-1 min-w-0 text-left text-sm font-semibold text-foreground truncate">
-                    {shop.name}
-                  </button>
-                )}
-                {isCurrent && (
-                  <span className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 shrink-0">Live</span>
-                )}
-                <button type="button" onClick={() => setCurrentShop(isCurrent ? null : shop.id)}
-                  title={isCurrent ? "Stop showing this shop to players" : "Show this shop to players"}
-                  className={`text-[10px] px-2 py-1 rounded-full shrink-0 transition-colors ${isCurrent ? "bg-foreground/15 text-foreground/70 hover:bg-foreground/20" : "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"}`}>
-                  {isCurrent ? "Close Shop" : "Open Shop"}
-                </button>
-                <button type="button" onClick={() => setSettingsShopId(shop.id)} title="Shop appearance"
-                  className="size-6 flex items-center justify-center rounded-md text-foreground/40 hover:text-foreground hover:bg-foreground/10 transition-colors shrink-0">
-                  <Store className="size-3.5" />
-                </button>
-              </div>
-
-              {expanded && (
-                <div className="px-3 pb-3 flex flex-col gap-2 border-t border-border/50 pt-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button type="button" onClick={() => openNewItem(shop.id)}
-                      className="text-[10px] px-2.5 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors">+ Item</button>
-                    <button type="button" onClick={() => setBulkImportShopId(shop.id)}
-                      className="text-[10px] px-2.5 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors">Bulk Import</button>
-                    <label className="flex items-center gap-1.5 text-[10px] text-foreground/50 ml-auto cursor-pointer select-none">
-                      <input type="checkbox" checked={!!shop.requireConfirmation}
-                        onChange={e => updateShopSettings(shop.id, { requireConfirmation: e.target.checked })} />
-                      Require DM confirmation
-                    </label>
-                    {shop.items.length === 0 && (
-                      <button type="button" onClick={() => deleteShop(shop.id)}
-                        className="text-[10px] px-2 py-1 rounded-full text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors">Delete</button>
-                    )}
-                  </div>
-
-                  {shop.items.length === 0 ? (
-                    <p className="text-[11px] text-foreground/30 italic py-2">No items yet.</p>
-                  ) : (
-                    <div className="flex flex-col gap-1">
-                      {shop.items.map(item => (
-                        <div key={item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-foreground/5 text-xs">
-                          <button type="button" onClick={() => updateShopItem(shop.id, { ...item, shopHidden: !item.shopHidden })}
-                            title={item.shopHidden ? "Hidden — click to reveal to players" : "Visible — click to hide"}
-                            className={`shrink-0 ${item.shopHidden ? "text-amber-400" : "text-foreground/30"} hover:text-foreground/70 transition-colors`}>
-                            {item.shopHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                          </button>
-                          <span className="flex-1 min-w-0 text-foreground/80 truncate">
-                            {item.name || "Unnamed"}
-                            {item.shopHidden && item.shopDisplayName && <span className="text-foreground/30"> (shown as "{item.shopDisplayName}")</span>}
-                          </span>
-                          <span className="text-foreground/40 tabular-nums shrink-0">{item.value ?? 0}gp</span>
-                          <span className="text-foreground/30 tabular-nums shrink-0 w-16 text-right">
-                            {item.trackAmount || item.amount != null ? `${item.amount ?? 0} left` : "∞"}
-                          </span>
-                          <button type="button" onClick={() => openEditItem(shop.id, item)}
-                            className="text-foreground/30 hover:text-foreground/70 shrink-0">Edit</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+            <button key={shop.id} type="button" onClick={() => setSelectedShopId(selected ? null : shop.id)}
+              onDoubleClick={() => { setRenamingShopId(shop.id); setRenameValue(shop.name) }}
+              title="Click to manage, double-click to rename"
+              className={`flex items-center gap-2.5 pl-2 pr-4 py-2 rounded-full ring-1 transition-colors ${selected ? "ring-foreground/40 bg-foreground/10" : "ring-border bg-muted hover:bg-foreground/10"}`}
+              style={selected ? undefined : categoryAccentStyle(color, "galaxy")}>
+              <span className="relative size-10 rounded-full overflow-hidden bg-foreground/10 flex items-center justify-center shrink-0"
+                style={color ? { backgroundColor: `${color}55` } : undefined}>
+                {shop.portraitUrl ? <img src={shop.portraitUrl} alt="" className="size-full object-cover" /> : <Store className="size-4.5 text-foreground/50" />}
+              </span>
+              {renamingShopId === shop.id ? (
+                <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  onBlur={submitRename} onKeyDown={e => { if (e.key === "Enter") submitRename(); if (e.key === "Escape") setRenamingShopId(null) }}
+                  className="text-sm font-semibold bg-transparent outline-none border-b border-foreground/30 text-foreground w-24" />
+              ) : (
+                <span className="text-sm font-semibold text-foreground">{shop.name}</span>
               )}
-            </div>
+              {isCurrent && (
+                <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 shrink-0">Live</span>
+              )}
+            </button>
           )
         })}
+
+        {addingShop ? (
+          <div className="flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded-full ring-1 ring-foreground/30 bg-muted">
+            <input autoFocus value={newShopName} onChange={e => setNewShopName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") submitNewShop(); if (e.key === "Escape") cancelNewShop() }}
+              placeholder="Shop name…"
+              className="text-sm bg-transparent outline-none text-foreground placeholder:text-foreground/30 w-28" />
+            <button type="button" onClick={submitNewShop} disabled={!newShopName.trim()} title="Create"
+              className="size-6 flex items-center justify-center rounded-full text-emerald-400 hover:bg-emerald-500/15 disabled:opacity-30 transition-colors">
+              <Check className="size-3.5" />
+            </button>
+            <button type="button" onClick={cancelNewShop} title="Cancel"
+              className="size-6 flex items-center justify-center rounded-full text-foreground/40 hover:bg-foreground/10 transition-colors">✕</button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setAddingShop(true)} title="New shop"
+            className="size-10 flex items-center justify-center rounded-full ring-1 ring-dashed ring-border text-foreground/40 hover:text-foreground/70 hover:ring-foreground/40 transition-colors">
+            <Plus className="size-4" />
+          </button>
+        )}
       </div>
 
-      {/* Sale history — campaign-wide, survives a shop being deleted */}
-      {shopHistory.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-foreground/50 font-semibold">History</span>
-          <div className="rounded-xl bg-muted ring-1 ring-border overflow-hidden max-h-40 overflow-y-auto">
-            {[...shopHistory].reverse().map(r => (
-              <div key={r.id} className="flex items-center gap-2 px-3 py-1.5 text-[11px] border-b border-border/30 last:border-0">
-                <span className="flex-1 min-w-0 text-foreground/60 truncate">
-                  <span className="font-semibold text-foreground/80">{r.characterName}</span> bought <span className="font-semibold">{r.itemLabel}</span> from {r.shopName} for {r.price * r.quantity}gp
-                </span>
-                <span className="text-foreground/30 shrink-0">{new Date(r.at).toLocaleString()}</span>
+      {/* Selected shop's management panel */}
+      {selectedShop && (
+        <div className="rounded-xl bg-muted ring-1 ring-border p-3 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex-1 min-w-0 text-sm font-semibold text-foreground truncate">{selectedShop.name}</span>
+            <button type="button" onClick={() => setPlayerViewShopId(selectedShop.id)} title="See exactly what party members would see in this shop"
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors shrink-0">
+              <Eye className="size-3" /> Player View
+            </button>
+            <button type="button" onClick={() => setCurrentShop(currentShopId === selectedShop.id ? null : selectedShop.id)}
+              title={currentShopId === selectedShop.id ? "Stop showing this shop to players" : "Show this shop to players"}
+              className={`text-[10px] px-2 py-1 rounded-full shrink-0 transition-colors ${currentShopId === selectedShop.id ? "bg-foreground/15 text-foreground/70 hover:bg-foreground/20" : "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"}`}>
+              {currentShopId === selectedShop.id ? "Close Shop" : "Open Shop"}
+            </button>
+            <button type="button" onClick={() => setSettingsShopId(selectedShop.id)} title="Appearance & Display settings"
+              className="size-6 flex items-center justify-center rounded-md text-foreground/40 hover:text-foreground hover:bg-foreground/10 transition-colors shrink-0">
+              <Settings2 className="size-3.5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button type="button" onClick={() => openNewItem(selectedShop.id)}
+              className="text-[10px] px-2.5 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors">+ Item</button>
+            <button type="button" onClick={() => setBulkImportShopId(selectedShop.id)}
+              className="text-[10px] px-2.5 py-1 rounded-full bg-foreground/10 hover:bg-foreground/20 text-foreground/60 hover:text-foreground transition-colors">Bulk Import</button>
+            {selectedShop.items.length === 0 && (
+              <button type="button" onClick={() => { deleteShop(selectedShop.id); setSelectedShopId(null) }}
+                className="text-[10px] px-2 py-1 rounded-full text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors ml-auto">Delete</button>
+            )}
+          </div>
+
+          {/* Sections — purely organizational groups with their own color,
+              so a shop full of potions/weapons/scrolls reads as distinct
+              colored bands instead of one flat wall of bubbles. */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(selectedShop.sections ?? []).map(section => (
+              <div key={section.id} className="flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-full bg-foreground/10">
+                <ColorSwatchInput value={section.color ?? DEFAULT_ACCENT_COLOR} size="size-5" title="Section color"
+                  onChange={color => updateSection(selectedShop.id, section.id, { color })} />
+                <input value={section.name} onChange={e => updateSection(selectedShop.id, section.id, { name: e.target.value })}
+                  className="text-[10px] bg-transparent outline-none border-b border-transparent focus:border-foreground/30 text-foreground/70 w-16" />
+                <button type="button" onClick={() => deleteSection(selectedShop.id, section.id)} title="Delete section (items fall back to Other)"
+                  className="text-foreground/30 hover:text-red-400 transition-colors">✕</button>
               </div>
             ))}
+            {addingSection ? (
+              <div className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-foreground/10">
+                <input autoFocus value={newSectionName} onChange={e => setNewSectionName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addSection(selectedShop.id); if (e.key === "Escape") { setAddingSection(false); setNewSectionName("") } }}
+                  placeholder="Section name…" className="text-[10px] bg-transparent outline-none text-foreground placeholder:text-foreground/30 w-20" />
+                <button type="button" onClick={() => addSection(selectedShop.id)} disabled={!newSectionName.trim()}
+                  className="text-emerald-400 hover:text-emerald-300 disabled:opacity-30"><Check className="size-3" /></button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAddingSection(true)}
+                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full text-foreground/40 hover:text-foreground/70 hover:bg-foreground/10 transition-colors">
+                <Plus className="size-3" /> Section
+              </button>
+            )}
           </div>
+
+          {selectedShop.items.length === 0 ? (
+            <p className="text-[11px] text-foreground/30 italic py-2">No items yet.</p>
+          ) : (
+            <DndContext sensors={dragSensors} collisionDetection={shopItemCollision}
+              onDragStart={e => setDraggingItemId(String(e.active.id))}
+              onDragEnd={e => handleItemDragEnd(selectedShop, e)}
+              onDragCancel={() => setDraggingItemId(null)}>
+              <div className="flex flex-col gap-2">
+                {groupItemsBySection(selectedShop).map(group => (
+                  <div key={group.id} className="flex flex-col gap-1">
+                    {group.name && (
+                      <span className="text-[9px] uppercase tracking-widest font-semibold flex items-center gap-1.5"
+                        style={{ color: group.color ?? "var(--color-foreground)", opacity: group.color ? 1 : 0.4 }}>
+                        {group.color && <span className="size-1.5 rounded-full" style={{ backgroundColor: group.color }} />}
+                        {group.name}
+                      </span>
+                    )}
+                    {/* Drag onto this zone (its header, its empty space, or
+                        any item card already inside it) to move an item
+                        into this section — see handleItemDragEnd above. */}
+                    <DropZone id={`shopSection:${group.id === "__other" ? "none" : group.id}`}>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5">
+                        {group.items.map(item => (
+                          <ShopItemCard key={item.id} shop={selectedShop} item={item} defaultAccentColor={defaultAccentColor}
+                            onEdit={() => openEditItem(selectedShop.id, item)}
+                            onUpdate={patch => updateShopItem(selectedShop.id, { ...item, ...patch })} />
+                        ))}
+                      </div>
+                    </DropZone>
+                  </div>
+                ))}
+              </div>
+              <DragOverlay>
+                {(() => {
+                  const activeItem = draggingItemId ? selectedShop.items.find(i => i.id === draggingItemId) : undefined
+                  return activeItem ? (
+                    <DragOverlayCard>
+                      <div className="w-32">
+                        <ShopItemCardBody shop={selectedShop} item={activeItem} defaultAccentColor={defaultAccentColor} onEdit={() => {}} onUpdate={() => {}} />
+                      </div>
+                    </DragOverlayCard>
+                  ) : null
+                })()}
+              </DragOverlay>
+            </DndContext>
+          )}
         </div>
       )}
 
       {/* Item editor modal — the exact same FeatureEntry flow InventoryTab
           uses for its own items, plus showShopFields for the hidden/reveal
-          toggle. */}
+          toggle, price denomination, and per-item display overrides. */}
       {creatingItem && creatingItemShopId && (() => {
         const isNew = !shops.find(s => s.id === creatingItemShopId)?.items.some(i => i.id === creatingItem.id)
         return (
@@ -2170,46 +2369,151 @@ function ShopsTab({
         />
       )}
 
-      {showGoldPanel && (
-        <GoldPanel partyMembers={partyMembers} onApplyToAll={applyWalletSettingsToAll} onClose={() => setShowGoldPanel(false)} />
+      {showWalletSettings && (
+        <WalletSettingsModal onApplyToAll={applyWalletSettingsToAll} onClose={() => setShowWalletSettings(false)} />
+      )}
+
+      {playerViewShop && (
+        <ShopPlayerPreview shop={playerViewShop} isLive={playerViewShop.id === currentShopId} partyMembers={partyMembers}
+          defaultAccentColor={defaultAccentColor} onClose={() => setPlayerViewShopId(null)} />
       )}
     </div>
   )
 }
 
-// Shopkeeper portrait + per-shop card style/color — same upload flow
-// MarkdownTextarea.tsx's image button uses (loadUserImages/uploadUserImage +
-// a hidden file input), just landing in Shop.portraitUrl instead of markdown.
+// The actual card content — pure presentation, no drag behavior — shared by
+// the real (draggable) grid card below and the floating DragOverlay clone,
+// so the clone is pixel-identical to the row it was picked up from.
+function ShopItemCardBody({ shop, item, defaultAccentColor, onEdit, onUpdate }: {
+  shop: Shop
+  item: Feature
+  defaultAccentColor?: string
+  onEdit: () => void
+  onUpdate: (patch: Partial<Feature>) => void
+}) {
+  const color = resolveItemColor(shop, item, defaultAccentColor)
+  return (
+    <div className="rounded-md ring-1 ring-border bg-foreground/5 p-1.5 flex flex-col gap-1 text-[10px]" style={shopCardStyle(color)}>
+      <div className="flex items-center gap-1">
+        <span className="flex-1 min-w-0 font-semibold text-foreground/80 truncate text-[11px]">{item.name || "Unnamed"}</span>
+        <button type="button" onClick={onEdit} title="Open full editor"
+          className="shrink-0 text-foreground/30 hover:text-foreground/70 transition-colors">
+          <Pencil className="size-3" />
+        </button>
+      </div>
+      {(shop.sections ?? []).length > 0 && (
+        <select value={item.shopSectionId ?? ""} onChange={e => onUpdate({ shopSectionId: e.target.value || undefined })}
+          className="bg-zinc-800 rounded px-1 py-0.5 outline-none text-white text-[9px]">
+          <option value="" className="bg-zinc-800 text-white">No section</option>
+          {(shop.sections ?? []).map(s => <option key={s.id} value={s.id} className="bg-zinc-800 text-white">{s.name}</option>)}
+        </select>
+      )}
+      {item.shopHidden ? (
+        <div className="flex items-center gap-0.5">
+          <input value={item.shopDisplayName ?? ""} placeholder="Shown as…"
+            onChange={e => onUpdate({ shopDisplayName: e.target.value })}
+            className="flex-1 min-w-0 text-[9px] bg-foreground/10 rounded px-1 py-0.5 outline-none text-foreground/70 placeholder:text-foreground/30" />
+          <button type="button" onClick={() => onUpdate({ shopHidden: false })}
+            title="Un-hide — players will see the real name" className="shrink-0 text-[9px] text-amber-400 hover:text-amber-300 whitespace-nowrap">
+            Un-hide
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => onUpdate({ shopHidden: true })}
+          className="text-[9px] text-foreground/40 hover:text-foreground/70 transition-colors self-start">
+          Show as…
+        </button>
+      )}
+      <div className="flex items-center gap-0.5 flex-wrap text-foreground/40">
+        <input type="number" min={0} step="0.01" value={item.value ?? ""}
+          onChange={e => onUpdate({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
+          placeholder="0" className="w-9 bg-foreground/10 rounded px-1 py-0.5 text-center outline-none text-foreground" />
+        <select value={item.priceUnit ?? "gp"}
+          onChange={e => onUpdate({ priceUnit: e.target.value as Feature["priceUnit"] })}
+          className="w-11 shrink-0 bg-zinc-800 rounded px-0.5 py-0.5 outline-none text-white">
+          {(["cp", "sp", "ep", "gp", "pp"] as const).map(u => <option key={u} value={u} className="bg-zinc-800 text-white">{u}</option>)}
+        </select>
+        <label className="flex items-center gap-1 shrink-0" title="Current stock">
+          Qty
+          <input type="number" min={0} value={item.amount ?? ""} placeholder="∞"
+            onChange={e => onUpdate({ amount: e.target.value ? Math.max(0, parseInt(e.target.value) || 0) : undefined, trackAmount: e.target.value !== "" })}
+            className="w-9 bg-foreground/10 rounded px-1 py-0.5 text-center outline-none text-foreground" />
+        </label>
+        <label className="flex items-center gap-1 shrink-0" title="Original stock count — shows as current/max instead of just current">
+          /
+          <input type="number" min={0} value={item.shopMaxAmount ?? ""} placeholder="∞"
+            onChange={e => onUpdate({ shopMaxAmount: e.target.value ? Math.max(0, parseInt(e.target.value) || 0) : undefined })}
+            className="w-9 bg-foreground/10 rounded px-1 py-0.5 text-center outline-none text-foreground" />
+        </label>
+        {item.shopMaxAmount != null && (
+          <button type="button" onClick={() => onUpdate({ amount: item.shopMaxAmount, trackAmount: true })}
+            title="Restock to max" className="text-foreground/30 hover:text-emerald-400 transition-colors">
+            Restock
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Wraps the card body in a drag source — grabbing anywhere on the card
+// except its own inputs/selects (useDragSensors' RowPointerSensor excludes
+// text-edit targets) picks it up; dropping it on a section's DropZone or
+// another item's card re-tags its shopSectionId (see handleItemDragEnd).
+function ShopItemCard(props: { shop: Shop; item: Feature; defaultAccentColor?: string; onEdit: () => void; onUpdate: (patch: Partial<Feature>) => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: props.item.id })
+  return (
+    <div ref={setNodeRef} {...attributes} {...listeners}
+      style={{ opacity: isDragging ? 0.35 : 1, touchAction: "pan-y" }}
+      className="cursor-grab active:cursor-grabbing select-none">
+      <ShopItemCardBody {...props} />
+    </div>
+  )
+}
+
+// Shopkeeper portrait + bubble accent color + the Display section (what
+// players see by default) — same upload flow MarkdownTextarea.tsx's image
+// button uses (loadUserImages/uploadUserImage + a hidden file input), just
+// landing in Shop.portraitUrl instead of markdown. No none/outline/galaxy
+// picker here — a shop's color always renders via categoryAccentStyle's
+// "galaxy"/Background formula (see ShopItemCardBody, ShopFront.tsx), the
+// same solid-fill look every other "card style" in the app uses; "outline"
+// never did anything worth exposing as its own option here.
 function ShopSettingsModal({ shop, userId, onChange, onClose }: {
   shop: Shop
   userId?: string | null
   onChange: (patch: Partial<Shop>) => void
   onClose: () => void
 }) {
-  const [showPortraitPicker, setShowPortraitPicker] = useState(false)
+  // One shared picker for both images (portrait, background) — which field a
+  // chosen/uploaded image lands in depends on which button opened it.
+  const [picker, setPicker] = useState<"portrait" | "background" | null>(null)
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  async function openPortraitPicker() {
-    setShowPortraitPicker(true)
+  async function openPicker(target: "portrait" | "background") {
+    setPicker(target)
     if (!userId) return
     setGalleryLoading(true)
     setGalleryImages(await loadUserImages(userId))
     setGalleryLoading(false)
   }
-  async function handlePortraitFile(file: File) {
-    if (!userId) return
+  async function handleFile(file: File) {
+    if (!userId || !picker) return
     const url = await uploadUserImage(userId, file)
-    if (url) onChange({ portraitUrl: url })
-    setShowPortraitPicker(false)
+    if (url) onChange(picker === "portrait" ? { portraitUrl: url } : { backgroundImageUrl: url })
+    setPicker(null)
   }
 
   return (
     <Modal onClose={onClose}>
+      {/* Deliberately plain — tinting/texturing this dialog with the shop's
+          own material looked cluttered against the form controls inside it.
+          The texture swatches below already preview each material directly. */}
       <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,92vw)] max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-          <p className="text-sm font-bold text-white">{shop.name} — Appearance</p>
+          <p className="text-sm font-bold text-white">{shop.name} — Settings</p>
           <button type="button" onClick={onClose}
             className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
         </div>
@@ -2223,7 +2527,7 @@ function ShopSettingsModal({ shop, userId, onChange, onClose }: {
               </div>
             )}
             <div className="flex flex-col gap-1.5">
-              <button type="button" onClick={openPortraitPicker}
+              <button type="button" onClick={() => openPicker("portrait")}
                 className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors self-start">
                 {shop.portraitUrl ? "Change Portrait" : "Set Shopkeeper Portrait"}
               </button>
@@ -2232,29 +2536,89 @@ function ShopSettingsModal({ shop, userId, onChange, onClose }: {
                   className="text-[10px] text-white/30 hover:text-white/60 transition-colors self-start">Remove</button>
               )}
             </div>
+            <label className="flex flex-col items-center gap-0.5 cursor-pointer ml-auto">
+              <ColorSwatchInput value={shop.accentColor ?? DEFAULT_ACCENT_COLOR} title="Bubble color" onChange={color => onChange({ accentColor: color })} />
+              <span className="text-[8px] text-white/30">Bubble Color</span>
+            </label>
+          </div>
+          <p className="text-[10px] text-white/30 -mt-3">Tints this shop's own bubble, and every item in it that isn't in a colored Section (set from the shop's own panel).</p>
+
+          <div className="flex items-center gap-3">
+            {shop.backgroundImageUrl ? (
+              <img src={shop.backgroundImageUrl} alt="" className="size-14 rounded-lg object-cover border border-white/15" />
+            ) : (
+              <div className="size-14 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/20">
+                <ImageIcon className="size-5" />
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-white/70">Shop Background</span>
+              <button type="button" onClick={() => openPicker("background")}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors self-start">
+                {shop.backgroundImageUrl ? "Change Background" : "Set Background Image"}
+              </button>
+              {shop.backgroundImageUrl && (
+                <button type="button" onClick={() => onChange({ backgroundImageUrl: undefined })}
+                  className="text-[10px] text-white/30 hover:text-white/60 transition-colors self-start">Remove</button>
+              )}
+            </div>
           </div>
 
-          <CardStylePicker label="Shop Appearance" hint="This shop's own card look, wherever it shows — the DM's Shops tab and players' Shop panel."
-            style={shop.cardStyle ?? "none"} color={shop.accentColor}
-            onChangeStyle={style => onChange({ cardStyle: style })} onChangeColor={color => onChange({ accentColor: color })} />
+          <label className="flex items-center justify-between gap-3 cursor-pointer select-none px-1 py-1.5 rounded-lg bg-white/5">
+            <div>
+              <p className="text-xs font-semibold text-white/70">Require DM confirmation</p>
+              <p className="text-[10px] text-white/30 mt-0.5">A buy only requests the purchase — nothing changes until you approve it from the Shops tab.</p>
+            </div>
+            <input type="checkbox" checked={!!shop.requireConfirmation}
+              onChange={e => onChange({ requireConfirmation: e.target.checked })}
+              className="size-4 accent-violet-500 cursor-pointer shrink-0" />
+          </label>
+
+          <div className="flex flex-col gap-2 px-1 py-1.5 rounded-lg bg-white/5">
+            <span className="text-sm text-white/70">Display</span>
+            <p className="text-[10px] text-white/30">What players see by default in this shop — any item can override these individually from its own editor.</p>
+            {([
+              ["showPrices", "Show Prices"],
+              ["showStock", "Show Stock"],
+              ["showDescriptions", "Show Descriptions"],
+            ] as const).map(([field, fieldLabel]) => (
+              <label key={field} className="flex items-center justify-between gap-3 cursor-pointer select-none">
+                <span className="text-xs text-white/60">{fieldLabel}</span>
+                <input type="checkbox" checked={shop.display?.[field] ?? true}
+                  onChange={e => onChange({ display: { ...shop.display, [field]: e.target.checked } })}
+                  className="size-4 accent-violet-500 cursor-pointer" />
+              </label>
+            ))}
+          </div>
         </div>
       </div>
 
-      {showPortraitPicker && (
+      {picker && (
         <PortraitModal
-          title="Shopkeeper Portrait"
-          currentPortrait={shop.portraitUrl}
+          title={picker === "portrait" ? "Shopkeeper Portrait" : "Shop Background"}
+          currentPortrait={picker === "portrait" ? shop.portraitUrl : shop.backgroundImageUrl}
           galleryImages={galleryImages}
           galleryLoading={galleryLoading}
-          onChoose={url => { onChange({ portraitUrl: url }); setShowPortraitPicker(false) }}
+          onChoose={url => { onChange(picker === "portrait" ? { portraitUrl: url } : { backgroundImageUrl: url }); setPicker(null) }}
           onUploadClick={() => fileInputRef.current?.click()}
-          onClose={() => setShowPortraitPicker(false)}
+          onClose={() => setPicker(null)}
         />
       )}
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handlePortraitFile(f) }} />
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
     </Modal>
   )
+}
+
+// Pulls a denomination (cp/sp/ep/gp/pp, case-insensitive) out of a pasted
+// price like "10 gp" or "3sp" — defaults to gp when none is written, same as
+// every price before priceUnit existed.
+const COIN_UNIT_RE = /\b(cp|sp|ep|gp|pp)\b/i
+function parsePriceAndUnit(raw?: string): { price?: number; unit: CoinKey } {
+  if (!raw) return { unit: "gp" }
+  const unit = (raw.match(COIN_UNIT_RE)?.[1].toLowerCase() as CoinKey | undefined) ?? "gp"
+  const price = parseFloat(raw.replace(/[^0-9.]/g, "")) || undefined
+  return { price, unit }
 }
 
 // Paste "Name: Price: Quantity" lines → Feature[]. A name that exactly
@@ -2280,16 +2644,17 @@ function BulkImportModal({ userId, onImport, onClose }: {
       const items: Feature[] = lines.map(line => {
         const [rawName, rawPrice, rawQty] = line.split(":").map(p => p.trim())
         const name = rawName ?? line
-        const price = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, "")) || undefined : undefined
+        const { price, unit } = parsePriceAndUnit(rawPrice)
         const qty = rawQty ? parseInt(rawQty.replace(/[^0-9]/g, ""), 10) || undefined : undefined
-        const blank: Feature = { id: nanoid(), name, category: "item", value: price, amount: qty, trackAmount: !!qty }
+        const blank: Feature = { id: nanoid(), name, category: "item", value: price, priceUnit: unit, amount: qty, trackAmount: !!qty }
         const match = byName.get(name.toLowerCase())
         if (!match) return blank
         const patch = itemPatchFromSuggestion("item", match, blank)
-        // Price/quantity from the pasted line always win over the reference
-        // item's own listed cost — a shop's price is deliberately independent
-        // of an item's "real" value (that's the whole point of a shop).
-        return { ...blank, description: match.description, ...patch, value: price ?? patch.value, amount: qty, trackAmount: !!qty }
+        // Price/quantity/unit from the pasted line always win over the
+        // reference item's own listed cost — a shop's price is deliberately
+        // independent of an item's "real" value (that's the whole point of a
+        // shop).
+        return { ...blank, description: match.description, ...patch, value: price ?? patch.value, priceUnit: unit, amount: qty, trackAmount: !!qty }
       })
       onImport(items)
       onClose()
@@ -2308,11 +2673,11 @@ function BulkImportModal({ userId, onImport, onClose }: {
         </div>
         <div className="p-5 flex flex-col gap-3 overflow-y-auto">
           <p className="text-xs text-white/40">
-            One item per line: <span className="font-mono text-white/60">Name: Price: Quantity</span>.
+            One item per line: <span className="font-mono text-white/60">Name: Price: Quantity</span>. Include a denomination in the price (cp/sp/ep/gp/pp) — plain numbers default to gp.
             A name that exactly matches an item in Documentation imports its full stats/description automatically.
           </p>
           <textarea value={text} onChange={e => setText(e.target.value)} rows={10}
-            placeholder={"Big Belt: 50: 3\nLongsword: 15: 1"}
+            placeholder={"Big Belt: 50 gp: 3\nPotion of Healing: 10 gp: 2\nTorch: 1 sp: 5"}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono outline-none focus:border-white/30 placeholder:text-white/20 resize-none" />
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-white/10 shrink-0">
@@ -2328,73 +2693,49 @@ function BulkImportModal({ userId, onImport, onClose }: {
   )
 }
 
-// Every party member's current balance + wallet mode at a glance, plus a
-// bulk-apply control — sets currencyMode/currencyNames on every current
-// party member at once, same fields CurrencyTracker.tsx's own per-character
-// Wallet Settings modal writes, just fanned out DM-side.
-function GoldPanel({ partyMembers, onApplyToAll, onClose }: {
-  partyMembers: SidebarObject[]
+// Bulk-apply control for wallet mode/names — sets currencyMode/currencyNames
+// on every current party member at once, same fields CurrencyTracker.tsx's
+// own per-character Wallet Settings modal writes, just fanned out DM-side.
+// Balances themselves now show inline, always, in ShopsTab's own Party
+// Wallets panel — this modal is just the (rarely used) bulk-apply action.
+function WalletSettingsModal({ onApplyToAll, onClose }: {
   onApplyToAll: (mode: CurrencyMode, names: string[]) => void
   onClose: () => void
 }) {
   const [mode, setMode] = useState<CurrencyMode>("classic")
-  const [names, setNames] = useState<string[]>(["Copper", "Silver", "Electrum", "Gold", "Platinum"])
-
-  function totalGp(charData: CharData): number {
-    const coins = charData.currency ?? {}
-    const cpTotal = (Object.entries(coins) as [CoinKey, number][]).reduce((s, [k, v]) => s + v * CP_VALUE[k], 0)
-    return cpTotal / 100
-  }
+  const [names, setNames] = useState<string[]>([...DEFAULT_NAMES])
 
   return (
     <Modal onClose={onClose}>
-      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(420px,92vw)] max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl w-[min(380px,92vw)] max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
-          <p className="text-sm font-bold text-white">Party Gold</p>
+          <p className="text-sm font-bold text-white">Wallet Settings</p>
           <button type="button" onClick={onClose}
             className="size-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/40 hover:text-white">✕</button>
         </div>
-        <div className="p-5 flex flex-col gap-5 overflow-y-auto">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Current Balances</span>
-            {partyMembers.length === 0 ? (
-              <p className="text-xs text-white/30 italic py-2">No party members yet.</p>
-            ) : partyMembers.map(m => {
-              const d = safeParseJson(m.data) as CharData
-              return (
-                <div key={m.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-white/5">
-                  <span className="text-white/70">{m.name}</span>
-                  <span className="text-white/40 capitalize">{d.currencyMode ?? "classic"}</span>
-                  <span className="text-amber-300 font-semibold tabular-nums">{totalGp(d).toLocaleString()}gp</span>
-                </div>
-              )
-            })}
+        <div className="p-5 flex flex-col gap-2 overflow-y-auto">
+          <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Set Wallet System For Everyone</span>
+          <div className="flex gap-2">
+            {(["classic", "simple", "custom"] as CurrencyMode[]).map(m => (
+              <button key={m} type="button" onClick={() => setMode(m)}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors capitalize ${mode === m ? "bg-amber-500/20 border border-amber-500/40 text-amber-300" : "bg-white/5 border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/10"}`}>
+                {m}
+              </button>
+            ))}
           </div>
-
-          <div className="flex flex-col gap-2">
-            <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Set Wallet System For Everyone</span>
-            <div className="flex gap-2">
-              {(["classic", "simple", "custom"] as CurrencyMode[]).map(m => (
-                <button key={m} type="button" onClick={() => setMode(m)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors capitalize ${mode === m ? "bg-amber-500/20 border border-amber-500/40 text-amber-300" : "bg-white/5 border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/10"}`}>
-                  {m}
-                </button>
+          {mode === "custom" && (
+            <div className="flex flex-col gap-1.5 mt-1">
+              {names.map((n, i) => (
+                <input key={i} value={n} onChange={e => setNames(prev => prev.map((x, xi) => xi === i ? e.target.value : x))}
+                  className="bg-white/8 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-amber-500/40" />
               ))}
             </div>
-            {mode === "custom" && (
-              <div className="flex flex-col gap-1.5 mt-1">
-                {names.map((n, i) => (
-                  <input key={i} value={n} onChange={e => setNames(prev => prev.map((x, xi) => xi === i ? e.target.value : x))}
-                    className="bg-white/8 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-amber-500/40" />
-                ))}
-              </div>
-            )}
-            <button type="button" onClick={() => onApplyToAll(mode, names)}
-              className="text-xs px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-colors mt-1">
-              Apply to All Players
-            </button>
-            <p className="text-[10px] text-white/30">Overwrites every current party member's own wallet setting — they won't need to change it themselves.</p>
-          </div>
+          )}
+          <button type="button" onClick={() => onApplyToAll(mode, names)}
+            className="text-xs px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-colors mt-1">
+            Apply to All Players
+          </button>
+          <p className="text-[10px] text-white/30">Overwrites every current party member's own wallet setting — they won't need to change it themselves.</p>
         </div>
       </div>
     </Modal>
