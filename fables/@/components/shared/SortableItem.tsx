@@ -72,7 +72,7 @@ export function SortableItem({ id, disabled, children }: { id: string; disabled?
         onPointerDown={e => { e.stopPropagation(); listeners?.onPointerDown?.(e) }}
         aria-label="Drag to reorder"
         style={{ touchAction: "none", WebkitTouchCallout: "none" }}
-        className="hidden pointer-coarse:flex absolute pr-1  left-0.9 top-2 z-10 items-center justify-center size-5 text-white/40 active:text-white cursor-grab active:cursor-grabbing select-none transition-colors"
+        className="hidden pointer-coarse:flex absolute pr-1  left-0.5 top-2 z-10 items-center justify-center size-5 text-white/40 active:text-white cursor-grab active:cursor-grabbing select-none transition-colors"
       >
         <GripVertical className="size-4.5" />
       </button>

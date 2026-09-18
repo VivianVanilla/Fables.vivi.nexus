@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useRef, useState, forwardRef, useImperativeHandle } from "react"
 import { Bold, Italic, Underline, Code as CodeIcon, Table2, ImageIcon, Loader2 } from "lucide-react"
 import { loadUserImages, uploadUserImage, type GalleryImage } from "@/components/shared/imageGallery"
 import { PortraitModal } from "@/components/shared/PortraitModal"
@@ -24,6 +24,17 @@ interface MarkdownTextareaProps {
   // caller layer in its own bindings (e.g. Ctrl+Enter to submit) without
   // fighting the built-in ones.
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  // Lets a caller add its own toolbar button(s) after the built-in ones,
+  // without this shared component needing to know what they're for (e.g.
+  // NoteView.tsx's page/column-break marker). Plain JSX, not a render-prop —
+  // the caller drives its own button via the imperative handle below
+  // (`ref.current.insertAtCursor(...)` in its own onClick), rather than this
+  // component handing out a ref-reading closure during render.
+  extraTools?: React.ReactNode
+}
+
+export interface MarkdownTextareaHandle {
+  insertAtCursor: (text: string) => void
 }
 
 // Wraps (or unwraps) the current selection with `open`/`close` — e.g.
@@ -92,17 +103,21 @@ function handleListEnter(el: HTMLTextAreaElement, value: string, onChange: (v: s
   return true
 }
 
-export function MarkdownTextarea({
+export const MarkdownTextarea = forwardRef<MarkdownTextareaHandle, MarkdownTextareaProps>(function MarkdownTextarea({
   value, onChange, placeholder, rows = 4,
   className = "", wrapperClassName, autoFocus, variant = "docs",
-  userId, onPaste, onKeyDown: onKeyDownProp,
-}: MarkdownTextareaProps) {
+  userId, onPaste, onKeyDown: onKeyDownProp, extraTools,
+}, ref) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showImagePicker, setShowImagePicker] = useState(false)
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
+
+  useImperativeHandle(ref, () => ({
+    insertAtCursor: (text: string) => insertAtCursor(innerRef.current, value, onChange, text),
+  }), [value, onChange])
 
   function insertTable() {
     const el = innerRef.current
@@ -186,6 +201,7 @@ export function MarkdownTextarea({
               onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f) }} />
           </>
         )}
+        {extraTools}
       </div>
       {showImagePicker && (
         <PortraitModal
@@ -210,4 +226,4 @@ export function MarkdownTextarea({
       />
     </div>
   )
-}
+})
