@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { DndContext, DragOverlay, closestCenter, pointerWithin, useDraggable, type DragEndEvent, type CollisionDetection } from "@dnd-kit/core"
 import { DropZone, DragOverlayCard, useDragSensors } from "@/components/shared/SortableItem"
-import { Store, Eye, ImageIcon, Settings2, ChevronDown, ChevronUp, Pencil, Plus, Check } from "lucide-react"
+import { Store, Eye, ImageIcon, Settings2, ChevronDown, ChevronUp, Pencil, Plus, Check, RotateCcw } from "lucide-react"
 import type { SidebarObject } from "@/components/shell/sidebar-utils"
 import { safeParseJson, computeAc, nanoid } from "@/components/shared/utils"
 import type { Feature } from "@/components/shared/types"
@@ -2006,7 +2006,11 @@ function ShopsTab({
   }
   function openNewItem(shopId: string) {
     setCreatingItemShopId(shopId)
-    setCreatingItem({ id: nanoid(), name: "", category: "item" })
+    // 1 in stock out of a shelf of 1, not untracked/infinite — a DM adding
+    // a new item almost always means "I have one of these to sell," and
+    // infinite-by-default meant every new item silently never ran out
+    // until the DM noticed and set a real count.
+    setCreatingItem({ id: nanoid(), name: "", category: "item", amount: 1, trackAmount: true, shopMaxAmount: 1 })
   }
   function openEditItem(shopId: string, item: Feature) {
     setCreatingItemShopId(shopId)
@@ -2392,10 +2396,14 @@ function ShopItemCardBody({ shop, item, defaultAccentColor, onEdit, onUpdate }: 
   onUpdate: (patch: Partial<Feature>) => void
 }) {
   const color = resolveItemColor(shop, item, defaultAccentColor)
+  // Native number-input spinner arrows on a field this small leave almost no
+  // room for the digits themselves — every numeric field below hides them
+  // (same trick shared/ui/NumInput.tsx uses) so the value is actually legible.
+  const numClass = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
   return (
-    <div className="rounded-md ring-1 ring-border bg-foreground/5 p-1.5 flex flex-col gap-1 text-[10px]" style={shopCardStyle(color)}>
-      <div className="flex items-center gap-1">
-        <span className="flex-1 min-w-0 font-semibold text-foreground/80 truncate text-[11px]">{item.name || "Unnamed"}</span>
+    <div className="rounded-lg ring-1 ring-border bg-foreground/5 p-2.5 flex flex-col gap-1.5 text-[10px]" style={shopCardStyle(color)}>
+      <div className="flex items-center gap-1.5">
+        <span className="flex-1 min-w-0 font-semibold text-foreground/90 truncate text-xs">{item.name || "Unnamed"}</span>
         <button type="button" onClick={onEdit} title="Open full editor"
           className="shrink-0 text-foreground/30 hover:text-foreground/70 transition-colors">
           <Pencil className="size-3" />
@@ -2403,16 +2411,16 @@ function ShopItemCardBody({ shop, item, defaultAccentColor, onEdit, onUpdate }: 
       </div>
       {(shop.sections ?? []).length > 0 && (
         <select value={item.shopSectionId ?? ""} onChange={e => onUpdate({ shopSectionId: e.target.value || undefined })}
-          className="bg-zinc-800 rounded px-1 py-0.5 outline-none text-white text-[9px]">
+          className="bg-zinc-800 rounded-md px-1.5 py-1 outline-none text-white text-[9px]">
           <option value="" className="bg-zinc-800 text-white">No section</option>
           {(shop.sections ?? []).map(s => <option key={s.id} value={s.id} className="bg-zinc-800 text-white">{s.name}</option>)}
         </select>
       )}
       {item.shopHidden ? (
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <input value={item.shopDisplayName ?? ""} placeholder="Shown as…"
             onChange={e => onUpdate({ shopDisplayName: e.target.value })}
-            className="flex-1 min-w-0 text-[9px] bg-foreground/10 rounded px-1 py-0.5 outline-none text-foreground/70 placeholder:text-foreground/30" />
+            className="flex-1 min-w-0 text-[9px] bg-foreground/10 rounded-md px-1.5 py-1 outline-none text-foreground/70 placeholder:text-foreground/30" />
           <button type="button" onClick={() => onUpdate({ shopHidden: false })}
             title="Un-hide — players will see the real name" className="shrink-0 text-[9px] text-amber-400 hover:text-amber-300 whitespace-nowrap">
             Un-hide
@@ -2424,33 +2432,38 @@ function ShopItemCardBody({ shop, item, defaultAccentColor, onEdit, onUpdate }: 
           Show as…
         </button>
       )}
-      <div className="flex items-center gap-0.5 flex-wrap text-foreground/40">
-        <input type="number" min={0} step="0.01" value={item.value ?? ""}
-          onChange={e => onUpdate({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
-          placeholder="0" className="w-9 bg-foreground/10 rounded px-1 py-0.5 text-center outline-none text-foreground" />
-        <select value={item.priceUnit ?? "gp"}
-          onChange={e => onUpdate({ priceUnit: e.target.value as Feature["priceUnit"] })}
-          className="w-11 shrink-0 bg-zinc-800 rounded px-0.5 py-0.5 outline-none text-white">
-          {(["cp", "sp", "ep", "gp", "pp"] as const).map(u => <option key={u} value={u} className="bg-zinc-800 text-white">{u}</option>)}
-        </select>
-        <label className="flex items-center gap-1 shrink-0" title="Current stock">
-          Qty
+      {/* Price and stock as two distinct pill "tags" instead of a bare row
+          of naked inputs — reads at a glance instead of blurring together. */}
+      <div className="flex items-center gap-1.5 flex-wrap mt-auto pt-0.5">
+        <div className="flex items-center gap-0.5 rounded-full bg-amber-500/15 pl-2 pr-1 py-1">
+          {/* Width grows with the number itself (in `ch`, so it tracks
+              actual digit count) instead of a fixed box that clipped/
+              scrolled a 5-figure price down to a couple of visible digits. */}
+          <input type="number" min={0} step="0.01" value={item.value ?? ""}
+            onChange={e => onUpdate({ value: e.target.value ? parseFloat(e.target.value) || 0 : undefined })}
+            placeholder="0" style={{ width: `${Math.max(2, String(item.value ?? "0").length + 1)}ch` }}
+            className={`bg-transparent outline-none text-amber-200 font-semibold ${numClass}`} />
+          <select value={item.priceUnit ?? "gp"}
+            onChange={e => onUpdate({ priceUnit: e.target.value as Feature["priceUnit"] })}
+            className="bg-transparent outline-none text-amber-300/80">
+            {(["cp", "sp", "ep", "gp", "pp"] as const).map(u => <option key={u} value={u} className="bg-zinc-800 text-white">{u}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-0.5 rounded-full bg-foreground/10 pl-2 pr-1 py-1 text-foreground/60" title="Stock: current / max">
           <input type="number" min={0} value={item.amount ?? ""} placeholder="∞"
             onChange={e => onUpdate({ amount: e.target.value ? Math.max(0, parseInt(e.target.value) || 0) : undefined, trackAmount: e.target.value !== "" })}
-            className="w-9 bg-foreground/10 rounded px-1 py-0.5 text-center outline-none text-foreground" />
-        </label>
-        <label className="flex items-center gap-1 shrink-0" title="Original stock count — shows as current/max instead of just current">
-          /
+            className={`w-7 bg-transparent outline-none text-center text-foreground ${numClass}`} />
+          <span>/</span>
           <input type="number" min={0} value={item.shopMaxAmount ?? ""} placeholder="∞"
             onChange={e => onUpdate({ shopMaxAmount: e.target.value ? Math.max(0, parseInt(e.target.value) || 0) : undefined })}
-            className="w-9 bg-foreground/10 rounded px-1 py-0.5 text-center outline-none text-foreground" />
-        </label>
-        {item.shopMaxAmount != null && (
-          <button type="button" onClick={() => onUpdate({ amount: item.shopMaxAmount, trackAmount: true })}
-            title="Restock to max" className="text-foreground/30 hover:text-emerald-400 transition-colors">
-            Restock
-          </button>
-        )}
+            className={`w-7 bg-transparent outline-none text-center text-foreground ${numClass}`} />
+          {item.shopMaxAmount != null && (
+            <button type="button" onClick={() => onUpdate({ amount: item.shopMaxAmount, trackAmount: true })}
+              title="Restock to max" className="shrink-0 text-foreground/40 hover:text-emerald-400 transition-colors pl-0.5">
+              <RotateCcw className="size-3" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -2645,8 +2658,13 @@ function BulkImportModal({ userId, onImport, onClose }: {
         const [rawName, rawPrice, rawQty] = line.split(":").map(p => p.trim())
         const name = rawName ?? line
         const { price, unit } = parsePriceAndUnit(rawPrice)
-        const qty = rawQty ? parseInt(rawQty.replace(/[^0-9]/g, ""), 10) || undefined : undefined
-        const blank: Feature = { id: nanoid(), name, category: "item", value: price, priceUnit: unit, amount: qty, trackAmount: !!qty }
+        // 1 in stock, not untracked/infinite, when no quantity is written —
+        // same reasoning as the "+ Item" default: a pasted line almost
+        // always means "I have this many," and an omitted count is far more
+        // likely a DM who just didn't bother typing "1" than one who meant
+        // unlimited stock.
+        const qty = rawQty ? parseInt(rawQty.replace(/[^0-9]/g, ""), 10) || 1 : 1
+        const blank: Feature = { id: nanoid(), name, category: "item", value: price, priceUnit: unit, amount: qty, trackAmount: true, shopMaxAmount: qty }
         const match = byName.get(name.toLowerCase())
         if (!match) return blank
         const patch = itemPatchFromSuggestion("item", match, blank)
@@ -2654,7 +2672,7 @@ function BulkImportModal({ userId, onImport, onClose }: {
         // reference item's own listed cost — a shop's price is deliberately
         // independent of an item's "real" value (that's the whole point of a
         // shop).
-        return { ...blank, description: match.description, ...patch, value: price ?? patch.value, priceUnit: unit, amount: qty, trackAmount: !!qty }
+        return { ...blank, description: match.description, ...patch, value: price ?? patch.value, priceUnit: unit, amount: qty, trackAmount: true, shopMaxAmount: qty }
       })
       onImport(items)
       onClose()
